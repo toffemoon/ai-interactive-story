@@ -1,0 +1,620 @@
+"""自动识别 —— 把用户贴进来的散文设定,抽取成结构化 Card V2。
+
+核心一步:用户不用手填字段,扔文档进来,AI 自己拆。
+设计原则:不做纯黑箱,识别结果要回给用户确认/微调。
+"""
+
+import io
+import json
+import re
+
+from .llm import chat_messages
+from .models import (
+    CharacterBoundary,
+    CharacterCard,
+    CharacterData,
+    Ending,
+    PlayerCard,
+    StoryBook,
+    StoryEvent,
+    WorldBook,
+    WorldEntry,
+)
+
+_SYSTEM = """你是一个角色设定解析器。用户会给你一段关于某个角色的设定文字(可能是散文、小作文、夹杂梗和黑话)。
+你的任务是把它抽取成结构化 JSON,字段如下:
+
+- name: 角色名(必填;找不到就根据内容起一个最贴切的)
+- description: 角色主设定(背景、外貌、身份、经历)
+- personality: 性格摘要
+- scenario: 当前所处的情境或故事背景(没有就留空字符串)
+- first_mes: 一句符合人设的开场白(角色对玩家说的第一句话;原文没有就你来写一句)
+- mes_example: 一两句能体现该角色说话语气的范例对话
+- speech_rules: 数组,3-6 条该角色说话/行为的硬规则,用来锁住语气不漂
+  (例如 "说话简短,从不用感叹号"、"自称'本座'"、"绝不主动示弱")
+- tags: 数组,几个标签
+
+要求:
+- 严格忠于原设定,不要自行扩写人物经历;原文没写的经历不要编。
+- speech_rules 要具体、可执行,是"怎么说话"而不是"性格如何"。
+- 只输出 JSON,不要任何解释。"""
+
+
+def identify(text: str) -> CharacterCard:
+    """把一段设定文字识别成 Card V2。解析失败会抛异常(上层捕获回传)。"""
+    raw = chat_messages(
+        [
+            {"role": "system", "content": _SYSTEM},
+            {"role": "user", "content": text.strip()},
+        ],
+        json_mode=True,
+        max_tokens=2048,
+    )
+    obj = json.loads(raw)
+    data = CharacterData(**obj)
+    return CharacterCard(data=data)
+
+
+_WORLD_SYSTEM = """你是一个世界观解析器。用户会给你一段关于某个虚构世界的设定文字
+(地理、势力、规则、历史、种族、重要地点/物品等)。
+把它拆成若干"世界书条目",每条聚焦一个主题,输出 JSON:
+
+{"entries": [
+  {"keys": ["触发关键词1", "关键词2"], "content": "该主题的设定内容", "comment": "条目标题"},
+  ...
+]}
+
+要求:
+- 每条 keys 是玩家对话里一旦出现、就该让 AI"想起"这条设定的词(地名、势力名、术语等)。
+- content 要自包含,是会被注入给角色 AI 的背景知识,简洁准确。
+- 忠于原文,不要编造原文没有的设定。
+- 拆 3-12 条为宜。只输出 JSON。"""
+
+
+# 提取 keys 时跳过的通用小标题词(它们是结构词,不是触发关键词)
+_KEY_STOP = {
+    "代表星神", "相关势力", "相关群体", "相关事件", "相关种族", "相关角色", "相关机构",
+    "特点", "职责", "注意", "示例", "核心矛盾", "角色扮演语气", "角色扮演注意",
+    "标注", "目标", "原因", "表现", "社会结构", "主要势力", "核心地点", "重要机构",
+    "语言风格", "关键词", "可用方向", "态度关键词", "可用表达", "可用句式",
+}
+
+
+def _split_markdown_sections(text: str) -> list[dict]:
+    """按 ## / ### 标题把 markdown 切成段。# 一级标题作为上层分组,不单独成条。"""
+    sections, cur, group = [], None, ""
+    for line in text.split("\n"):
+        h = re.match(r"^(#{1,})\s+(.*)", line)
+        if h:
+            level, title = len(h.group(1)), h.group(2).strip()
+            if level == 1:
+                group = re.sub(r"^[一二三四五六七八九十\d、.\s]+", "", title)  # 去"一、"前缀
+                continue
+            if cur:
+                sections.append(cur)
+            cur = {"title": title, "group": group, "lines": []}
+        elif cur is not None:
+            cur["lines"].append(line)
+    if cur:
+        sections.append(cur)
+    return sections
+
+
+def _extract_keys(title: str, content: str) -> list[str]:
+    """从标题 + 正文加粗术语里抽触发关键词。"""
+    keys = []
+    def add(tok):
+        tok = tok.strip(" *（）()【】「」:：.，、")
+        if len(tok) < 2 or tok in _KEY_STOP or tok in keys:
+            return
+        if tok.lower() in {"the", "of", "and", "with", "for"}:  # 英文停用词
+            return
+        if re.match(r"^[\d.]+$", tok):  # 纯数字/编号如 "0."
+            return
+        keys.append(tok)
+    splitter = r"[\s/、,，:：;；（）()\[\]「」【】·\-—]+"
+    for tok in re.split(splitter, title):
+        add(tok)
+    for bold in re.findall(r"\*\*(.+?)\*\*", content):
+        for tok in re.split(splitter, bold):
+            add(tok)
+    return keys[:10]
+
+
+def worldbook_from_markdown(text: str, name: str = "世界书") -> WorldBook:
+    """对已是 markdown 标题结构的文档,按 ## 直接切成精细条目,不经 LLM 压缩。"""
+    entries = []
+    for sec in _split_markdown_sections(text):
+        content = "\n".join(sec["lines"]).strip()
+        if len(content) < 10:  # 跳过空段/纯过渡段
+            continue
+        keys = _extract_keys(sec["title"], content) or [sec["title"][:20]]
+        comment = f'{sec["group"]} · {sec["title"]}' if sec["group"] else sec["title"]
+        entries.append(WorldEntry(keys=keys, content=content, comment=comment))
+    return WorldBook(name=_infer_book_name(text, entries, name), entries=entries)
+
+
+def identify_worldbook(text: str, name: str = "世界书") -> WorldBook:
+    """世界观文字 → 世界书。已结构化的 markdown 按标题切(不压缩);散文走 LLM 识别。"""
+    if len(re.findall(r"^#{2,}\s", text, re.M)) >= 8:
+        return worldbook_from_markdown(text, name)
+    raw = chat_messages(
+        [
+            {"role": "system", "content": _WORLD_SYSTEM},
+            {"role": "user", "content": text.strip()},
+        ],
+        json_mode=True,
+        max_tokens=3072,
+    )
+    obj = json.loads(raw)
+    entries = [WorldEntry(**e) for e in obj.get("entries", [])]
+    return WorldBook(name=_infer_book_name(text, entries, name), entries=entries)
+
+
+def _infer_book_name(text: str, entries: list[WorldEntry], fallback: str = "世界书") -> str:
+    """给世界书/设定卡自动命名。优先文档标题,再按内容特征判断类型。"""
+    title = re.search(r"^#\s+(.+)", text, re.M)
+    if title:
+        clean = title.group(1).strip().strip("《》")
+        clean = re.sub(r"^《(.+)》", r"\1", clean)
+        if clean:
+            if any(word in clean for word in ["世界观", "世界书"]):
+                return "世界书"
+            if any(word in clean for word in ["角色", "人物"]):
+                return clean
+            if any(word in clean for word in ["组织", "公司", "派系", "势力", "空间站", "设定"]):
+                return clean
+            return clean[:32]
+
+    sample = text[:6000]
+    known = [
+        ("星际和平公司", "星际和平公司设定卡"),
+        ("IPC", "星际和平公司设定卡"),
+        ("黑塔空间站", "黑塔空间站设定卡"),
+        ("天才俱乐部", "天才俱乐部设定卡"),
+        ("战略投资部", "战略投资部设定卡"),
+        ("石心十人", "石心十人设定卡"),
+        ("仙舟联盟", "仙舟联盟设定卡"),
+        ("星穹列车", "星穹列车设定卡"),
+    ]
+    for needle, label in known:
+        if needle in sample:
+            return label
+
+    joined_comments = " ".join(e.comment for e in entries[:8])
+    if any(word in sample or word in joined_comments for word in ["派系", "势力", "组织", "阵营"]):
+        return "组织/派系设定卡"
+    if any(word in sample or word in joined_comments for word in ["地点", "空间站", "城市", "星球"]):
+        return "地点设定卡"
+    if any(word in sample or word in joined_comments for word in ["规则", "机制", "术语", "命途"]):
+        return "规则/术语设定卡"
+    return fallback
+
+
+_PLAYER_SYSTEM = """你是玩家设定卡解析器。用户会给一段玩家/主角/自设角色的设定。
+请抽取成 JSON:
+{
+  "name": "玩家名或代号",
+  "role": "玩家在故事中的身份",
+  "background": "背景摘要",
+  "goals": ["目标"],
+  "abilities": ["能力/资源"],
+  "constraints": ["限制/禁忌/弱点"],
+  "known_facts": ["玩家开局知道的事实"]
+}
+要求忠于原文,不要扩写经历。只输出 JSON。"""
+
+
+def identify_player(text: str) -> PlayerCard:
+    raw = chat_messages(
+        [
+            {"role": "system", "content": _PLAYER_SYSTEM},
+            {"role": "user", "content": text.strip()},
+        ],
+        json_mode=True,
+        max_tokens=1536,
+    )
+    return PlayerCard(**json.loads(raw))
+
+
+_STORY_SYSTEM = """你是互动故事书解析器。用户给的可能是完整大纲,也可能只是几个离散点子/设定碎片。
+把它解析并补全成结构化 JSON。缺的字段可以基于已有素材合理推断,但凡是推断出来(原文没明说)的,
+都要在 needs_confirm 里列一句说明,让作者回去确认。
+
+输出 JSON:
+{
+  "title": "故事书标题",
+  "premise": "故事前提(一两句)",
+  "timeline": ["按时间顺序的关键节点"],
+  "main_plot": ["主线阶段"],
+  "freedom_rules": ["保证玩家自由度的规则"],
+  "clock_start": 0,                  // 开局故事内时间(分钟,从 0 起算;有"傍晚/第三天"等线索可换算,默认 0)
+  "pacing": ["全局节奏/时间提示,例如 账单每过几故事小时增殖一次"],
+  "events": [
+    {
+      "event_id": "短英文或拼音 ID", "title": "事件标题", "summary": "事件内容",
+      "trigger_keywords": ["玩家提到这些词可能触发"],
+      "trigger_flags": ["需要已有状态 flag 才触发"],
+      "reveal_after": ["需要先披露/完成的事件 ID"],
+      "location": "地点", "characters": ["相关角色"],
+      "choices_hint": ["适合给玩家的行动选项"], "consequences": ["可能后果"],
+      "status": "pending",
+      "due_clock": null,             // 故事内时钟(分钟)到此值该事件主动恶化/登场;纯时间驱动的才填,否则 null
+      "escalate_after_idle": null,   // 主线静默这么多分钟后该事件升级催促;盯人/施压类填,否则 null
+      "severity": 2                  // 1-5,事件恶化烈度/优先级
+    }
+  ],
+  "endings": [
+    {"ending_id":"短ID","title":"结局名","summary":"结局梗概","conditions":["触发条件,自然语言为主"],"tone":"好结局/悲剧/开放/隐藏"}
+  ],
+  "character_boundaries": [
+    {"character":"角色名","public":["公开可知"],"hidden":["未披露前不能由角色说出"],"hard_limits":["身份/实力/能力上限"]}
+  ],
+  "needs_confirm": ["哪些字段是你推断的、建议作者确认,一句一条"]
+}
+
+原则:
+- 事件节点要可触发,不要只写文学摘要;离散点子也尽量补成可玩的事件/结局。
+- endings 给 1-3 个不同走向(好结局/坏结局/隐藏等),各自写清触发条件。
+- 时间字段(clock_start / due_clock / escalate_after_idle)只在素材有时间线索、或事件本就该随时间恶化时填,
+  拿不准就留默认(0/null)并在 needs_confirm 标注。
+- character_boundaries 把"角色知道什么、瞒着什么、能力到哪"单列,供一致性防护用,只列主要角色。
+- 未在原文出现的硬事实不要编造;凡推断必进 needs_confirm。保留玩家自由度,不要一本道。
+- 输出务必精简且 JSON 完整闭合:events 控制在 12 条内、每条文字简短,绝不要写到一半被截断。只输出 JSON。"""
+
+
+def _coerce_int(v, default=None):
+    """把模型可能给的 "5"/"5小时"/5.0 等容错成 int;拿不到就用 default。"""
+    if v is None or isinstance(v, bool):
+        return default
+    if isinstance(v, int):
+        return v
+    if isinstance(v, float):
+        return int(v)
+    if isinstance(v, str):
+        m = re.search(r"-?\d+", v)
+        return int(m.group()) if m else default
+    return default
+
+
+def _story_event_from(e: dict) -> StoryEvent:
+    """从模型给的事件 dict 构造 StoryEvent,对新增时间字段做类型容错。"""
+    e = dict(e)
+    e["due_clock"] = _coerce_int(e.get("due_clock"), None)
+    e["escalate_after_idle"] = _coerce_int(e.get("escalate_after_idle"), None)
+    sev = _coerce_int(e.get("severity"), 2)
+    e["severity"] = max(1, min(5, sev if sev is not None else 2))
+    if e.get("status") not in {"pending", "active", "resolved", "locked"}:
+        e["status"] = "pending"
+    try:
+        return StoryEvent(**e)
+    except Exception:
+        # 个别字段类型不对时,只用已知安全字段重建,别让整本故事书识别失败。
+        def _l(x):
+            return [str(i) for i in x] if isinstance(x, list) else ([str(x)] if x else [])
+        return StoryEvent(
+            event_id=str(e.get("event_id") or ""), title=str(e.get("title") or ""),
+            summary=str(e.get("summary") or ""),
+            trigger_keywords=_l(e.get("trigger_keywords")), trigger_flags=_l(e.get("trigger_flags")),
+            reveal_after=_l(e.get("reveal_after")), location=str(e.get("location") or ""),
+            characters=_l(e.get("characters")), choices_hint=_l(e.get("choices_hint")),
+            consequences=_l(e.get("consequences")),
+            due_clock=e["due_clock"], escalate_after_idle=e["escalate_after_idle"], severity=e["severity"],
+        )
+
+
+def _model_from(cls, item: dict):
+    try:
+        return cls(**item) if isinstance(item, dict) else None
+    except Exception:
+        return None
+
+
+def _loads_tolerant(raw: str) -> dict:
+    """容错解析 LLM 的 JSON:剥 markdown fence、中文引号、尾逗号;失败抛 JSONDecodeError 让上层重试。"""
+    raw = (raw or "").strip()
+    if raw.startswith("```"):
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        start, end = raw.find("{"), raw.rfind("}")
+        if start < 0 or end <= start:
+            raise
+        cand = raw[start:end + 1]
+        cand = cand.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
+        cand = re.sub(r",\s*([}\]])", r"\1", cand)
+        return json.loads(cand)
+
+
+def _story_llm(text: str, concise: bool) -> dict | None:
+    """调一次故事书识别。8000 token 给丰富故事留余量;concise=True 时再压一压防大故事截断。"""
+    system = _STORY_SYSTEM
+    if concise:
+        system += ("\n\n【再次强调】上次输出过长被截断。这次务必更精简:events ≤8 条、每字段一句话、"
+                   "endings 1-3 个、character_boundaries 只列 2-3 个主要角色,确保整个 JSON 完整闭合。")
+    raw = chat_messages(
+        [
+            {"role": "system", "content": system},
+            {"role": "user", "content": text.strip()[:16000]},
+        ],
+        json_mode=True,
+        max_tokens=8000,
+    )
+    try:
+        return _loads_tolerant(raw)
+    except json.JSONDecodeError:
+        return None
+
+
+def identify_storybook(text: str) -> StoryBook:
+    """故事书文字 → 结构化 StoryBook(含多结局 / 时间字段 / 角色边界 / 待确认标注)。
+
+    大故事书输出可能很长,8000 token 仍截断时,用更精简的指令重试一次,再不行才抛错。
+    """
+    obj = _story_llm(text, concise=False)
+    if obj is None:
+        obj = _story_llm(text, concise=True)
+    if obj is None:
+        raise ValueError("故事书解析失败:模型输出过长或非合法 JSON,建议把素材拆短再试")
+    events = [_story_event_from(e) for e in obj.get("events", []) if isinstance(e, dict)]
+    endings = [m for e in obj.get("endings", []) if (m := _model_from(Ending, e))]
+    bounds = [m for b in obj.get("character_boundaries", []) if (m := _model_from(CharacterBoundary, b))]
+    return StoryBook(
+        title=obj.get("title") or "故事书",
+        premise=obj.get("premise") or "",
+        timeline=obj.get("timeline") or [],
+        main_plot=obj.get("main_plot") or [],
+        freedom_rules=obj.get("freedom_rules") or [],
+        events=events,
+        endings=endings,
+        clock_start=_coerce_int(obj.get("clock_start"), 0) or 0,
+        pacing=obj.get("pacing") or [],
+        character_boundaries=bounds,
+        needs_confirm=[str(x) for x in (obj.get("needs_confirm") or []) if str(x).strip()],
+    )
+
+
+_CLASSIFY_SYSTEM = """你是上传内容分类器。用户贴一段设定文字,你判断它最适合归到哪一类:
+- character:某个角色/人物的设定卡(名字、性格、外貌、说话方式、经历)
+- world:世界观 / 设定卡(地理、势力、组织、规则、地点、术语、历史、机构)
+- story:互动故事书(时间线、主线、事件节点、结局、剧情大纲、案件)
+- player:玩家 / 主角自设(玩家扮演谁、身份、目标、能力、限制、开局已知)
+
+判断依据:character 聚焦"某一个人是谁、怎么说话";player 是"我作为玩家扮演谁、要做什么";
+world 是"这个世界/组织/地点的客观设定";story 是"会发生什么、按什么线索推进、有哪些结局"。
+输出 JSON:{"kind":"character|world|story|player","confidence":0到1的小数,"reason":"一句话依据"}。只输出 JSON。"""
+
+_KINDS = {"character", "world", "story", "player"}
+
+
+def classify_text(text: str) -> dict:
+    """判断一段设定文字属于 角色/世界/故事/玩家 哪一类。返回 {kind, confidence, reason}。"""
+    raw = chat_messages(
+        [
+            {"role": "system", "content": _CLASSIFY_SYSTEM},
+            {"role": "user", "content": text.strip()[:8000]},
+        ],
+        json_mode=True,
+        max_tokens=256,
+    )
+    try:
+        obj = _loads_tolerant(raw)
+    except Exception:
+        obj = {}
+    kind = obj.get("kind")
+    if kind not in _KINDS:
+        kind = "character"  # 兜底:拿不准当角色卡(最常见),用户可在前端改判
+    try:
+        conf = float(obj.get("confidence"))
+    except (TypeError, ValueError):
+        conf = 0.0
+    return {"kind": kind, "confidence": max(0.0, min(1.0, conf)), "reason": str(obj.get("reason") or "")}
+
+
+def identify_auto(text: str, kind: str | None = None) -> dict:
+    """统一识别入口:先判类型(或用调用方指定的 kind 改判)再路由到对应解析器。
+
+    只统一"识别入口",底层三种卡结构不变(强行统一会丢 keys / 事件触发等解析钩子)。
+    返回 {kind, confidence, reason, data}(data 是对应卡的 model_dump)。
+    """
+    if kind in _KINDS:
+        cls = {"kind": kind, "confidence": 1.0, "reason": "用户指定类型"}
+    else:
+        cls = classify_text(text)
+    k = cls["kind"]
+    if k == "character":
+        data = identify(text).model_dump()
+    elif k == "world":
+        data = identify_worldbook(text).model_dump()
+    elif k == "story":
+        data = identify_storybook(text).model_dump()
+    else:  # player
+        data = identify_player(text).model_dump()
+    return {"kind": k, "confidence": cls["confidence"], "reason": cls["reason"], "data": data}
+
+
+_BUILD_SYSTEM = """你是「对话式角色建卡」助手。陪用户(可能完全不会写设定)通过轻松聊天,一步步建出一张角色卡(Card V2)。
+
+工作方式:
+- 一次只问一两个问题,别一股脑灌;像朋友聊天,顺着用户的话往下挖。
+- 挖得比"性格几个词"更深:这个人怎么看世界(心智模型)、压力下怎么做决定(决策启发式)、
+  说话有什么独特腔调/口头禅/句式(表达 DNA)。把这些提炼进卡的【现有字段】,不要另造新字段。
+- 用户说不清时,给 2-3 个具体选项让他挑,或用例子启发;不替他拍板人物的核心。
+- 不编造用户没给的硬经历;可以提议,但在 reply 里标清"这是我猜的,你来定"。
+
+产出仍是标准 Card V2 的 data,字段:
+- name:角色名
+- description:背景、身份、外貌、经历(把世界观/心智模型写进这里)
+- personality:性格 + 决策启发式(压力下怎么选)
+- scenario:当前情境(没有可留空)
+- first_mes:一句符合人设的开场白
+- mes_example:一两句体现说话腔调的范例
+- speech_rules:3-6 条具体可执行的说话/行为硬规则(把表达 DNA 化成规则,如"自称'本座'""从不用感叹号")
+- tags:几个标签
+
+每轮严格输出 JSON:
+{
+ "reply":"对用户这轮的自然回应(像聊天,别罗列字段)",
+ "draft":{上面 Card V2 的 data 字段,逐步填充,把目前已知的都填上},
+ "next_question":"下一个引导问题(完成时可留空)",
+ "done":false,
+ "filled":["本轮新填或更新的字段名"]
+}
+收尾规则:
+- 当 name / description / personality / speech_rules(≥3 条)/ mes_example 都已合理填好,
+  或用户明确表示完成("可以了""就这样""定下来""差不多了""够了"),done 置 true、
+  next_question 留空、不要再追问,reply 里告诉用户"卡差不多齐了,可以进编辑器微调"。
+- 别重复你上一轮已经问过的问题;用户没正面回答时,换个角度或先填别的字段,别原地打转。
+只输出 JSON。"""
+
+
+_BUILD_PLAYER = """你是「对话式主角卡建卡」助手。陪用户(可能不会写设定)聊出他在故事里要扮演的主角(玩家卡)。
+
+工作方式:一次问一两个,顺着聊;说不清就给 2-3 个选项让他挑;不替他拍板核心、不编没说的硬设定。
+要挖清:玩家扮演谁、什么身份、进故事想做什么(目标)、有什么能力/资源、有什么限制/禁忌/弱点、开局就知道哪些事。
+
+产出 PlayerCard 的 data,字段:name / role(身份)/ background(背景)/ goals(目标,数组)/
+abilities(能力·资源,数组)/ constraints(限制·禁忌·弱点,数组)/ known_facts(开局已知,数组)。
+
+每轮严格输出 JSON:{"reply":"自然回应","draft":{上面字段逐步填},"next_question":"下一个问题","done":false,"filled":["本轮填的字段"]}。
+当 name / role / background / 至少一个 goal 都填好,或用户表示完成("可以了""就这样"),done 置 true、停止追问。只输出 JSON。"""
+
+_BUILD_WORLD = """你是「对话式世界书/设定卡建卡」助手。陪用户聊出一个世界或设定卡:地理、势力、组织、地点、规则、术语、历史、种族等。
+
+工作方式:一次聚焦一个主题往下挖;每聊清一块,就整理成一条「世界书条目」。说不清给方向;不编没说的设定。
+一条条目 = keys(触发关键词:地名/势力名/术语,玩家对话里一出现就该让 AI 想起这条)+ content(会注入给 AI 的背景知识,自包含、简洁准确)+ comment(条目标题)。
+
+产出 WorldBook 的 data,字段:name(这套设定卡的名字)+ entries(数组,每条 {"keys":[...],"content":"...","comment":"..."})。
+
+每轮严格输出 JSON:{"reply":"自然回应","draft":{"name":"...","entries":[...]},"next_question":"下一个问题","done":false,"filled":["本轮新增/更新的条目"]}。
+当有了名字 + 至少 3 条条目,或用户表示完成,done 置 true、停止追问。只输出 JSON。"""
+
+_BUILD_STORY = """你是「对话式故事书建卡」助手。陪用户聊出一个互动故事的故事书。
+
+工作方式:一次问一两个,顺着挖:故事前提是什么、主线想怎么走、会发生哪些关键事件、有哪些可能结局(及触发条件)、有没有时间线索。
+缺的字段可合理推断,但凡推断(原文没明说)的,在 needs_confirm 里列一句让用户确认。不编没说的硬事实。
+
+产出 StoryBook 的 data,字段:title / premise(前提)/ timeline(时间线,数组)/ main_plot(主线阶段,数组)/
+freedom_rules(自由度规则,数组)/ events(事件,数组,每个 {"event_id","title","summary","trigger_keywords":[],"choices_hint":[],"consequences":[]})/
+endings(结局,数组,每个 {"ending_id","title","summary","conditions":[],"tone"})/ needs_confirm(数组)。
+
+每轮严格输出 JSON:{"reply":"自然回应","draft":{上面字段逐步填},"next_question":"下一个问题","done":false,"filled":["本轮填的字段"]}。
+当 title / premise / 至少一个主线阶段 / 至少一个结局 都有,或用户表示完成,done 置 true、停止追问。只输出 JSON。"""
+
+_BUILD_SYSTEMS = {
+    "characters": _BUILD_SYSTEM,
+    "players": _BUILD_PLAYER,
+    "worlds": _BUILD_WORLD,
+    "stories": _BUILD_STORY,
+}
+
+
+def _validate_build_draft(kind: str, raw_draft: dict, prev: dict | None) -> dict:
+    """把模型给的草稿按 kind 校验成对应卡的合法 data。失败回退上一版草稿。"""
+    rd = raw_draft if isinstance(raw_draft, dict) else {}
+    prev = prev or {}
+    try:
+        if kind == "players":
+            clean = {k: v for k, v in rd.items() if k in PlayerCard.model_fields}
+            return PlayerCard(**clean).model_dump()
+        if kind == "worlds":
+            entries = []
+            for e in rd.get("entries") or []:
+                if not isinstance(e, dict):
+                    continue
+                keys = [str(x) for x in (e.get("keys") or []) if str(x).strip()]
+                entries.append(WorldEntry(
+                    keys=keys, content=str(e.get("content") or ""),
+                    comment=str(e.get("comment") or (keys[0] if keys else "")),
+                ))
+            return WorldBook(name=str(rd.get("name") or prev.get("name") or "世界书"), entries=entries).model_dump()
+        if kind == "stories":
+            events = [_story_event_from(e) for e in rd.get("events", []) if isinstance(e, dict)]
+            endings = [m for e in rd.get("endings", []) if (m := _model_from(Ending, e))]
+            return StoryBook(
+                title=str(rd.get("title") or prev.get("title") or "故事书"),
+                premise=str(rd.get("premise") or ""),
+                timeline=[str(x) for x in (rd.get("timeline") or [])],
+                main_plot=[str(x) for x in (rd.get("main_plot") or [])],
+                freedom_rules=[str(x) for x in (rd.get("freedom_rules") or [])],
+                events=events, endings=endings,
+                clock_start=_coerce_int(rd.get("clock_start"), 0) or 0,
+                pacing=[str(x) for x in (rd.get("pacing") or [])],
+                needs_confirm=[str(x) for x in (rd.get("needs_confirm") or []) if str(x).strip()],
+            ).model_dump()
+        # characters(默认)
+        clean = {k: v for k, v in rd.items() if k in CharacterData.model_fields}
+        clean.setdefault("name", prev.get("name") or "")
+        return CharacterData(**clean).model_dump()
+    except Exception:
+        return prev or ({"name": ""} if kind != "stories" else {"title": ""})
+
+
+def build_card(kind: str, messages: list[dict], draft: dict | None = None, seed: str = "") -> dict:
+    """对话式建卡一轮(无状态),kind ∈ characters/players/worlds/stories。
+
+    messages:[{role, content}] 至今的对话(前端维护);draft:当前草稿(对应卡的 data);
+    seed:可选,已有资料/旧卡文本(完善模式,针对空/弱字段定向追问)。
+    把对话历史折进 system(避免 DeepSeek json_mode 遇多轮 assistant 散文吐空白),只发 [system, user]。
+    返回 {reply, draft, next_question, done, filled};draft 一定是对应卡的合法 data。
+    """
+    kind = kind if kind in _BUILD_SYSTEMS else "characters"
+    msgs = messages or []
+    if msgs and msgs[-1].get("role") == "user":
+        history, latest = msgs[:-1], str(msgs[-1].get("content") or "")
+    else:
+        history, latest = msgs, "(开始建卡,请先问我第一个问题)"
+    system = _BUILD_SYSTEMS[kind]
+    if seed and seed.strip():
+        system += "\n\n【用户已有的资料 / 旧卡——基于它来完善,找出空或薄弱的字段定向追问】\n" + seed.strip()[:6000]
+    if draft:
+        system += "\n\n【当前草稿(在它基础上继续填,别推翻用户已确认的)】\n" + json.dumps(draft, ensure_ascii=False)[:4000]
+    recap = "\n".join(
+        ("用户:" if m.get("role") == "user" else "助手:") + str(m.get("content") or "")[:500]
+        for m in history if m.get("content")
+    )
+    if recap:
+        system += "\n\n【已进行的对话】\n" + recap
+
+    raw = chat_messages(
+        [{"role": "system", "content": system}, {"role": "user", "content": latest}],
+        json_mode=True,
+        max_tokens=2400,
+    )
+    try:
+        obj = _loads_tolerant(raw)
+    except Exception:
+        obj = {}
+    raw_draft = obj.get("draft") if isinstance(obj.get("draft"), dict) else (draft or {})
+    return {
+        "reply": str(obj.get("reply") or ""),
+        "draft": _validate_build_draft(kind, raw_draft, draft),
+        "next_question": str(obj.get("next_question") or ""),
+        "done": bool(obj.get("done")),
+        "filled": [str(x) for x in (obj.get("filled") or [])],
+    }
+
+
+def extract_text_from_file(filename: str, raw: bytes) -> str:
+    """从上传文件提取纯文本。支持 .txt / .md / .docx。"""
+    lower = filename.lower()
+    if lower.endswith(".docx"):
+        from docx import Document  # python-docx
+        doc = Document(io.BytesIO(raw))
+        return "\n".join(p.text for p in doc.paragraphs)
+    # .txt / .md / 其它纯文本:按 UTF-8 解码,失败退回 GBK
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("gbk", errors="replace")
+
+
+if __name__ == "__main__":
+    import sys
+    if sys.platform == "win32":
+        sys.stdout.reconfigure(encoding="utf-8")
+    sample = "阿砚,二十出头的剑修,沉默寡言,门派被灭后独自下山复仇。说话很冲,从不解释自己。"
+    card = identify(sample)
+    print(json.dumps(card.model_dump(), ensure_ascii=False, indent=2))
