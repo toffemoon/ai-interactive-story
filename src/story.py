@@ -495,7 +495,7 @@ async def _extract_long_memory(session_id: str, short_items: list[dict]) -> list
         if not text:
             continue
         mid = hashlib.sha1(f"{session_id}:{kind}:{text}".encode("utf-8")).hexdigest()
-        memory.add_memory(session_id, mid, text, kind=kind, importance=importance)
+        await asyncio.to_thread(memory.add_memory, session_id, mid, text, kind=kind, importance=importance)
         out.append({"kind": kind, "text": text, "importance": importance})
     return out
 
@@ -1082,10 +1082,10 @@ async def _save_turn(
     user_msg = {"role": "user", "content": action}
     assistant_msg = {"role": "assistant", "content": assistant_text}
     messages.extend([user_msg, assistant_msg])
-    memory.add_turn(session_id, len(messages) - 2, "user", action)
-    memory.add_turn(session_id, len(messages) - 1, "assistant", assistant_text)
+    await asyncio.to_thread(memory.add_turn, session_id, len(messages) - 2, "user", action)
+    await asyncio.to_thread(memory.add_turn, session_id, len(messages) - 1, "assistant", assistant_text)
     short_memory.extend([user_msg, assistant_msg])
-    _store_memory_writes(session_id, data, turn)
+    await asyncio.to_thread(_store_memory_writes, session_id, data, turn)
     short_memory = await _flush_short_memory(session_id, data, short_memory, mode)
     data["messages"] = messages
     data["short_memory"] = short_memory
@@ -1115,7 +1115,7 @@ async def _save_turn(
     })
     data["turns"] = turns_log[-300:]
     data["updated_at"] = datetime.now(_TZ8).isoformat(timespec="seconds")
-    storage.save_session(session_id, data)
+    await asyncio.to_thread(storage.save_session, session_id, data)
     return turn
 
 
@@ -1162,7 +1162,7 @@ async def _story_turn_impl(
     on_delta=None,
 ) -> StoryTurn:
     mode = "deep" if mode == "deep" else "standard"
-    data = storage.load_session(session_id)
+    data = await asyncio.to_thread(storage.load_session, session_id)
     # 重 roll 快照:回合落盘前先存一份「上一轮之后」的完整会话镜像(排除 _reroll 本身防嵌套膨胀)。
     # 重 roll = 恢复这份镜像 + 用相同输入重跑;覆盖 messages/state/short_memory/long_memory/摘要/累计用量等。
     pre_snapshot = copy.deepcopy({k: v for k, v in data.items() if k != "_reroll"})

@@ -7,6 +7,7 @@
 
 import asyncio
 import json
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -27,11 +28,21 @@ from .chat import reply
 from .models import CharacterCard, PlayerCard, RuntimeState, StoryBook, WorldBook
 from .story import story_turn
 from . import storage
+from . import db
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 
-app = FastAPI(title="AI 互动故事")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 启动: 建 Postgres 连接池 (DATABASE_URL 见 .env)。关闭: 释放池。
+    db.init_pool()
+    yield
+    db.close_pool()
+
+
+app = FastAPI(title="AI 互动故事", lifespan=lifespan)
 
 
 class TextReq(BaseModel):
@@ -294,7 +305,7 @@ async def api_reroll(req: ReRollReq):
 
     卡组取自当前已落盘的 artifacts(即上一轮实际用的卡),输入/模式取自 _reroll 记录。
     """
-    data = storage.load_session(req.session_id)
+    data = await asyncio.to_thread(storage.load_session, req.session_id)
     reroll = data.get("_reroll")
     if not isinstance(reroll, dict) or not isinstance(reroll.get("snapshot"), dict):
         raise HTTPException(400, "当前没有可重新生成的回合")
@@ -311,7 +322,7 @@ async def api_reroll(req: ReRollReq):
         raise HTTPException(500, f"卡组快照解析失败:{e}")
     mode = reroll.get("mode") or art.get("mode") or "standard"
     # 回滚:把会话恢复到上一轮之前的镜像,丢弃刚生成的那一轮(含其 messages/state/累计用量)。
-    storage.save_session(req.session_id, reroll["snapshot"])
+    await asyncio.to_thread(storage.save_session, req.session_id, reroll["snapshot"])
     try:
         out = await story_turn(
             session_id=req.session_id,
@@ -338,12 +349,8 @@ def api_session(session_id: str):
 
 @app.delete("/api/session/{session_id}")
 def api_delete_session(session_id: str):
-    """删除一局存档(存档列表的删除)。只删会话文件;深度模式向量数据留作孤儿(无害、标准模式没有)。"""
-    path = storage.session_path(session_id)
-    existed = path.exists()
-    if existed:
-        path.unlink()
-    return {"deleted": existed}
+    """删除一局存档(存档列表的删除)。删会话 + 级联 messages;深度模式向量数据(memory_vec)留作孤儿(无害)。"""
+    return {"deleted": storage.delete_session(session_id)}
 
 
 _LIB_KINDS = {"characters", "worlds", "stories", "players"}
