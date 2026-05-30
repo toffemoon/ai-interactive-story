@@ -49,17 +49,18 @@ memory_vec (id bigint identity, session_id fk, content,   -- 长期记忆 (深�
 - ✅ 端到端 smoke test：插 session + append 2 messages + card + 512 维向量 → 读回计数正确 + 向量余弦自相似度 = 1.0
 - ✅ session pooler 连接从 psql + .env 验证通过
 
-## 还没做（下一步代码迁移）
+## 代码迁移（2026-05-30 完成）
 
-provision + schema 已就绪，但**引擎代码还没接上**：
+driver 改用 **sync psycopg3 + 连接池**(不是 asyncpg) —— storage 调用 95% 在 sync 上下文(FastAPI sync 端点本就在 threadpool, 不阻塞 event loop), story.py 检索类已用 `asyncio.to_thread` 隔离。全栈 async ripple 大收益低; sync 驱动让 chat.py + 多数端点 + models 序列化一行不改。
 
-- [ ] `requirements.txt` 加 `asyncpg`
-- [ ] 新 `src/db.py`：连接池 init/close（FastAPI lifespan）
-- [ ] 重写 `src/storage.py`：文件读写 → asyncpg repository（接口尽量不变，api.py 少改）
-  - messages 用 append-only INSERT，不再全量重写 session
-- [ ] `src/memory.py`：chromadb → pgvector（embedding 还是本地 bge 算，存进 memory_vec）
-- [ ] 一次性迁移脚本：现有 `data/**/*.json` → Postgres（session blob 拆 sessions + messages 行）
-- [ ] 删 chromadb / sentence-transformers 里只为 chroma 的部分（embedding 仍需 bge）
+- [x] `requirements.txt`: 加 `psycopg[binary]` + `psycopg-pool` + `pgvector`, 删 `chromadb` (sentence-transformers 保留, 仍算 bge embedding)
+- [x] 新 `src/db.py`: psycopg3 ConnectionPool, 每连接 register_vector + dict_row, FastAPI lifespan init/close
+- [x] 重写 `src/storage.py`: 文件 → psycopg, 函数签名不变。**messages append-only**: 快路径只 INSERT 新增几条; reroll/编辑改尾部 → 整段 resync。session 其余字段整体存 sessions.data jsonb (不枚举, 不丢字段)
+- [x] 重写 `src/memory.py`: chromadb → pgvector。3 集合 (turn/lm/kb) 用 memory_vec.scope 区分; 查询向量用 `pgvector.Vector` 包 (避免 list 被当 array)。bge 模型加载机制不变
+- [x] `src/api.py`: lifespan 启停池; `api_reroll` / `api_delete_session` 接上; async 端点裸 DB 调用包 to_thread
+- [x] `src/story.py`: `_save_turn` / `_story_turn_impl` / `_extract_long_memory` 里的写入/读取调用包 `asyncio.to_thread` (跟现有检索调用对称)
+- [x] `_migrate_to_pg.py`: 一次性迁移 `data/**/*.json` → Postgres (session blob 拆 sessions + messages 行)。chromadb 旧向量不迁, 深度模式下次加载 index_history 重建
+- [x] 端到端测试通过 (真实 Supabase): session 往返 / append-only seq / reroll resync / 库+预设 CRUD / 向量三集合检索 + max_turn + visibility 过滤 / 全链 import + lifespan
 
 ## 连接 / 密钥
 
