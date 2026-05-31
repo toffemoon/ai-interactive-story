@@ -92,6 +92,8 @@ class Ending(BaseModel):
     summary: str = ""
     conditions: list[str] = Field(default_factory=list, description="触发条件,自然语言为主,可含 flag 关键词")
     tone: str = Field("", description="基调:好结局/悲剧/开放/隐藏等")
+    required_events: list[str] = Field(default_factory=list, description="代码客观判定:这些 event_id 全部 resolved 即达成本结局(留空则回退模型在 state_update 里给 main_resolved 的判定)")
+    required_facts: list[str] = Field(default_factory=list, description="代码客观判定:这些事实全部已 revealed 即达成本结局(子串匹配;留空则回退模型判定)")
 
 
 class CharacterBoundary(BaseModel):

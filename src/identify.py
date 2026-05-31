@@ -245,7 +245,7 @@ _STORY_SYSTEM = """你是互动故事书解析器。用户给的可能是完整�
     }
   ],
   "endings": [
-    {"ending_id":"短ID","title":"结局名","summary":"结局梗概","conditions":["触发条件,自然语言为主"],"tone":"好结局/悲剧/开放/隐藏"}
+    {"ending_id":"短ID","title":"结局名","summary":"结局梗概","conditions":["触发条件,自然语言为主"],"required_events":["达成本结局必须 resolved 的 event_id(取自上面 events)"],"required_facts":["达成本结局必须已揭示的关键事实"],"tone":"好结局/悲剧/开放/隐藏"}
   ],
   "character_boundaries": [
     {"character":"角色名","public":["公开可知"],"hidden":["未披露前不能由角色说出"],"hard_limits":["身份/实力/能力上限"]}
@@ -255,7 +255,7 @@ _STORY_SYSTEM = """你是互动故事书解析器。用户给的可能是完整�
 
 原则:
 - 事件节点要可触发,不要只写文学摘要;离散点子也尽量补成可玩的事件/结局。
-- endings 给 1-3 个不同走向(好结局/坏结局/隐藏等),各自写清触发条件。
+- endings 给 1-3 个不同走向(好结局/坏结局/隐藏等),各自写清触发条件;尽量在 required_events 填达成该结局必须 resolved 的 event_id(对应上面 events 的 event_id)、required_facts 填必须揭示的关键事实,供引擎客观判定结局(没有合适的就留空数组,引擎会回退到模型判定)。
 - 时间字段(clock_start / due_clock / escalate_after_idle)只在素材有时间线索、或事件本就该随时间恶化时填,
   拿不准就留默认(0/null)并在 needs_confirm 标注。
 - character_boundaries 把"角色知道什么、瞒着什么、能力到哪"单列,供一致性防护用,只列主要角色。
