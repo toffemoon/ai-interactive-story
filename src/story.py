@@ -338,7 +338,7 @@ def _apply_state_update(state: RuntimeState, update: dict[str, Any]) -> RuntimeS
         scene = {"location": scene}
     elif not isinstance(scene, dict):
         scene = {}
-    for key in ("location", "time", "atmosphere"):
+    for key in ("location", "atmosphere"):  # time 不再由 LLM 写,统一在 _save_turn 由权威时钟渲染(根治显示倒退)
         if scene.get(key):
             setattr(state.scene, key, str(scene[key]))
     for key in ("present_characters", "objects", "exits"):
@@ -378,8 +378,18 @@ def _apply_state_update(state: RuntimeState, update: dict[str, Any]) -> RuntimeS
             existing = RelationshipState(character_id=str(cid))
             state.relationships.append(existing)
         for key in ("trust", "tension", "affection"):
-            if isinstance(rel.get(key), int):
-                setattr(existing, key, max(-100, min(100, getattr(existing, key) + rel[key])))
+            v = rel.get(key)
+            if not isinstance(v, int):
+                continue
+            cur = getattr(existing, key)
+            # prompt 要求填本轮 -10~10 增量;模型常误填成绝对值(实测见 -120 / 单轮 +33)。
+            # |v|>20 视为模型给了绝对读数:朝该值收敛(每轮最多移动 10),不叠加、不瞬间撞 ±100 饱和。
+            if abs(v) > 20:
+                target = max(-100, min(100, v))
+                cur += max(-10, min(10, target - cur))
+            else:
+                cur += v
+            setattr(existing, key, max(-100, min(100, cur)))
         _merge_unique(existing.notes, _as_text_list(rel.get("notes")))
 
     for log in update.get("character_logs") or []:
@@ -411,13 +421,36 @@ def _apply_state_update(state: RuntimeState, update: dict[str, Any]) -> RuntimeS
         if item.get("due_hint"):
             existing.due_hint = str(item["due_hint"])
         _merge_unique(existing.notes, _as_text_list(item.get("notes")))
-    # 主线结案标记 + 已达成结局(由模型在主线核心问题解决/某结局条件满足时给出)。
-    if update.get("main_resolved") is True:
-        state.main_resolved = True
-    for eid in _as_text_list(update.get("reached_ending")) + _as_text_list(update.get("reached_endings")):
+    # 主线结案标记 + 已达成结局。**只有模型同时给出某个具名结局 ID 时才认作"达成结局"并锁 main_resolved**——
+    # 否则 /quit、软性"先休整"这类无具名结局的退出会被旧的单向闩锁误锁成结案、永久污染整局(R3 实测 bug)。
+    new_endings = [eid for eid in (_as_text_list(update.get("reached_ending")) + _as_text_list(update.get("reached_endings"))) if eid]
+    for eid in new_endings:
         if eid not in state.reached_endings:
             state.reached_endings.append(eid)
+    if update.get("main_resolved") is True and (new_endings or state.reached_endings):
+        state.main_resolved = True
     return state
+
+
+def _check_ending_predicates(story: StoryBook | None, state: RuntimeState) -> None:
+    """代码侧客观判定结局:某 ending 的 required_events 全部 resolved + required_facts 全部 revealed
+    → 强制达成(置 main_resolved + 记 ending_id),把"是否达成"从模型主观里拿出来。
+    向后兼容:两个谓词都空的 ending 跳过 → 回退到模型在 state_update 里给 main_resolved 的判定。"""
+    if not story or state.main_resolved:
+        return
+    resolved = {t.event_id for t in state.timeline if t.status == "resolved"}
+    revealed = list(state.facts.revealed)
+    for e in story.endings:
+        req_ev = [x for x in (e.required_events or []) if x]
+        req_fa = [x for x in (e.required_facts or []) if x]
+        if not req_ev and not req_fa:
+            continue
+        if all(x in resolved for x in req_ev) and all(any(x in r for r in revealed) for x in req_fa):
+            eid = e.ending_id or storage.slug(e.title, "ending")
+            if eid not in state.reached_endings:
+                state.reached_endings.append(eid)
+            state.main_resolved = True
+            return
 
 
 def _local_long_memory(short_items: list[dict]) -> list[dict]:
@@ -577,6 +610,10 @@ _JUMP_FLOOR_PATTERNS = [
     (rf"{_NUM}\s*天\s*(?:后|过去|之后|以后)", 1440),
     (rf"(?:过了|再过|又过了|等了?|过|经过)\s*{_NUM}\s*个?\s*(?:小时|钟头)", 60),
     (rf"{_NUM}\s*个?\s*(?:小时|钟头)\s*(?:后|过去|之后|以后)", 60),
+    # 容许"X单位 …(几个字)… 过去/过完/没了"(如"一周就这么过去了""三天稀里糊涂过去了"):
+    (rf"{_NUM}\s*个?\s*月[^,。;!?\n]{{0,5}}?(?:过去|过完|没了|溜走)", 43200),
+    (rf"{_NUM}\s*(?:周|星期|礼拜)[^,。;!?\n]{{0,5}}?(?:过去|过完|没了|溜走)", 10080),
+    (rf"{_NUM}\s*天[^,。;!?\n]{{0,5}}?(?:过去|过完|没了|溜走)", 1440),
 ]
 _JUMP_FLOOR_NEXTDAY = re.compile(r"第二天|次日|翌日|隔天|明天|明日")
 _JUMP_FLOOR_NIGHT = re.compile(r"一夜|当晚|过夜|睡了一觉|一觉|天亮|入夜|黎明|清晨")
@@ -691,7 +728,12 @@ def _prompt(
             parts.append("全局节奏/时间:\n- " + "\n- ".join(story.pacing[:6]))
         parts.append(
             "可能结局(当某结局的触发条件被满足时,把剧情自然导向它、并在 reasoning.note 记一句;"
-            "条件没满足就别硬塞,继续保自由度):\n" + endings_text
+            "条件没满足就别硬塞,继续保自由度。"
+            "但反过来同样重要:一旦你判断某结局条件【已经满足】、或剧情已抵达该结局对应的决定性时刻"
+            "(摊牌/开门/真相揭晓/对决的那一刻),就在【本轮】把那一刻真正写出来、让它发生,并按下方规则标记结局——"
+            "不要再插入'最后一步之前的最后一步'式的前置流程(又一道开锁、又一次嗅探、又一遍确认)把它无限拖延。"
+            "玩家可以反复逼近某个高潮,你要么给出实质阻力推迟它、要么就让它发生,但不能用换皮的同义前置步骤原地空耗):\n"
+            + endings_text
         )
         parts.append(
             "角色信息边界(隐藏项在未披露前角色不能说出;硬上限不可被玩家单方面突破,"
@@ -711,6 +753,9 @@ def _prompt(
         + solo_directive +
         "玩家的自由输入就是本轮行动,必须被识别、回应并推进到叙事/角色反应/状态更新中。"
         "如果玩家行动不可执行、信息不足或越过事实边界,要在故事内给出原因和可调查方向,不能无视该输入。\n"
+        "推进要有实质进展:不要每轮只把同一处线索、同一个动作越描越细而场景/主线/关系零变化。"
+        "玩家持续投入时,调查要真的产出新结论、新位置、新关系或新揭示,而不是无限细分同一个发现、反复确认同一件事、"
+        "或让角色用换皮的同义台词把玩家原地留住。一条线索调查充分了就给出它的结论并打开下一步,别在原地空转。\n"
         "每轮必须先生成故事正文,再给 3-4 个玩家行动选项;选项不能替代正文。"
         "narration 必须非空,messages 至少包含一条角色对玩家本轮输入的反应。"
         "玩家可能使用口语、玩梗或不严肃报价,仍要当作故事内行动处理,由角色自然回应。\n\n"
@@ -752,6 +797,19 @@ def _prompt(
         "(催促、施压、事态升级),别等玩家来碰;玩家本轮正面处理了就把它推进或标 resolved。\n"
         "- 当主线核心问题已解决、或某结局触发条件已满足:state_update 标 main_resolved:true,"
         "并把对应结局 ID 填进 reached_ending,叙事给出收束(之后玩家仍可自由游玩尾声)。\n"
+        "  硬性要求:标 main_resolved:true 时【必须】同时在 reached_ending 给出上面【可能结局】列表里某个具名结局的 ID;"
+        "若没有任何具名结局的条件真正满足、填不出 ID,就【不要】标 main_resolved(宁可继续故事)。两者必须成对出现。\n"
+        "  注意:玩家发 /quit、'退出'、'结束游戏'、'不玩了' 这类【游戏外的退出指令】不是故事内的结局意图,"
+        "不要据此标 main_resolved 或写'先休整'式软收尾;按普通输入在故事内轻处理(角色困惑/确认)即可。\n"
+        "  关键:如果你在 reasoning 里已经判定关键揭示/结果/结局发生了(例如'箱子里是X''真相是Y''证据链已闭合、该摊牌了'),"
+        "就【必须】把这个揭示/结果在【本轮 narration】里实际写出来、并据此标记结局,绝不允许只把它留在 reasoning.note 里、"
+        "而 narration 继续停在揭示之前的一步。reasoning 判定本轮要发生的事,正文这一轮就要让它发生。\n"
+        "  结局握手(重要):当玩家明确表达要结束/做个了断/推进到结局/揭晓真相/做最终决定,"
+        "且关键证据或某结局的触发条件已实质齐备时,把这当成【玩家授权你拍板收尾】——你要【自己沿当前剧情最受支持的那条结局路径,"
+        "把高潮和结果直接写进 narration 并置 main_resolved:true + reached_ending】,这不算替玩家做决定(是玩家主动委托收尾)。"
+        "此时绝不能再把'三选一/你来定/你选哪条'这类同一道选择菜单重复抛回给玩家让剧情原地停摆。"
+        "玩家可以反复表达想结束;你每一次要么用世界内的实质阻力说明为何还结不了(并真的推进一步、改变局面),"
+        "要么就替他落子、把结局写出来并标记,二者必居其一,不许用换皮的同义待选菜单空耗一轮。\n"
         "- 玩家已达成的目标放进 state_update.player.completed_goals(会从当前目标里移除)。\n\n"
         "输出严格 JSON,只输出这一个对象,格式:\n"
         "{"
@@ -1075,6 +1133,8 @@ async def _save_turn(
         state.idle_minutes = 0
     else:
         state.idle_minutes += advance
+    # 玩家可见的故事内时间由权威 clock_minutes 渲染(LLM 不再自由写 scene.time),根治显示串倒退/乱跳(R2/R4/R5)。
+    state.scene.time = _fmt_clock(state.clock_minutes)
     # 本回合 token 用量:current_usage() 读 story_turn 开头 collect_usage() 累加器,
     # 已覆盖主回合 + 重试 + 摘要 + 长期记忆抽取等本轮全部 LLM 调用。
     turn.usage = current_usage() or {}
@@ -1350,6 +1410,7 @@ async def _story_turn_impl(
 
     state = _apply_state_update(state, turn.state_update)
     _progress_events(state, turn.triggered_events)
+    _check_ending_predicates(story, state)  # 谓词齐备即代码侧客观达成结局(无谓词的故事回退模型判定)
     state.turn_count += 1
     turn.state = state
     return await _save_turn(session_id, data, messages, short_memory, state, action, turn, mode,
