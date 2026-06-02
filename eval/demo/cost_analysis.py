@@ -27,9 +27,13 @@ def _cost(model, tin, tout):
     return (tin * p["in"] + tout * p["out"]) / 1_000_000
 
 
-def main():
-    playthrough = json.load(open(DEMO / "authored_playthrough.json", encoding="utf-8"))
-    packets = json.load(open(DEMO / "judge_packets.json", encoding="utf-8"))
+def main(target_dir=None):
+    d = Path(target_dir) if target_dir else DEMO
+    pt_file = d / "playthrough.json"
+    if not pt_file.exists():
+        pt_file = d / "authored_playthrough.json"
+    playthrough = json.load(open(pt_file, encoding="utf-8"))
+    packets = json.load(open(d / "judge_packets.json", encoding="utf-8"))
 
     # 生成侧(DeepSeek)
     gen_in = sum(r["engine_output"]["usage"].get("prompt_tokens", 0) for r in playthrough)
@@ -74,8 +78,9 @@ def main():
         "**启示**:生成便宜、评判贵。所以评判分层(Haiku 粗筛 → 只对可疑轮上 Sonnet),",
         "并把规律稳定的 judge 维度毕业成零成本 structural 检查;评测不必每轮全量上贵裁判。",
     ]
-    (DEMO / "cost.md").write_text("\n".join(md_lines) + "\n", encoding="utf-8")
+    (d / "cost.md").write_text("\n".join(md_lines) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    main(sys.argv[1] if len(sys.argv) > 1 else None)

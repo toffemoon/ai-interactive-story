@@ -185,7 +185,7 @@ def render_markdown(report: dict) -> str:
         lines.append(f"- {reg.get('note', '无基线')}")
     else:
         lines.append(f"- 基线 run: `{reg.get('baseline')}`")
-        for f in reg.get("flags", []) or ["- 无显著变化(所有维度 |Δ| < 0.5)"]:
+        for f in reg.get("flags", []) or ["无显著变化(所有维度 |Δ| < 0.5)"]:
             lines.append(f"- {f}")
     # 抽样问题
     flagged = {k: e for k, e in dims.items() if e.get("issue_count")}
