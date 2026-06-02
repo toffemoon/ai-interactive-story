@@ -6,8 +6,13 @@ bge-small-zh-v1.5(轻、快、中文好,512 维),只是存/检索落到 pgvector
 
 三类向量统一放 memory_vec 表, 用 scope 区分:
 - 'turn' —— 对话轮 (ext_id=f"{turn}-{role}", meta={turn, role})
-- 'lm'   —— 结构化长期记忆 (ext_id=memory_id, meta={kind, importance})
+- 'lm'   —— 结构化长期记忆 (ext_id=memory_id, meta={kind, importance, entity})
 - 'kb'   —— 世界书/故事书条目 (ext_id=sha1, meta={source,title,truth_status,visibility})
+
+长程记忆 A 档:lm 的 meta 多带一个 `entity`(挂载的实体角色 ID),为深度模式相似召回
+与后续按实体检索保留依据。**确定性的「按在场实体召回」走会话 JSON 的 long_memory
+(两个记忆模式都生效、不依赖 embedding),不读这张表** —— 标准模式下本表本就是空的
+(is_ready()=False 时 add_memory 是 no-op)。
 
 作用:长对话时不必把全部历史塞进 context —— 近期几轮发原文,更早的内容按
 当前提问相关性检索回来,解决 context window 限制。
@@ -145,13 +150,21 @@ def add_turn(session_id: str, turn: int, role: str, content: str) -> None:
         _mark_unavailable(e)
 
 
-def add_memory(session_id: str, memory_id: str, text: str, *, kind: str = "note", importance: int = 3) -> None:
-    """把结构化抽取出的长期记忆写入(scope='lm')。"""
+def add_memory(session_id: str, memory_id: str, text: str, *, kind: str = "note",
+               importance: int = 3, entity: str = "") -> None:
+    """把结构化抽取出的长期记忆写入(scope='lm')。
+
+    entity:这条记忆挂载的实体(角色 ID),落进 meta 供深度模式相似召回 / 后续按实体检索;
+    空串表示未挂载。注意:标准模式 is_ready()=False 时本函数 no-op,确定性的按实体召回
+    不依赖这张表,而是走会话 JSON 的 long_memory(见 story.py)。"""
     if not text.strip() or not is_ready():
         return
     try:
         emb = _embed([text])[0]
-        _upsert_many([(session_id, "lm", memory_id, text, emb, {"kind": kind, "importance": importance})])
+        meta = {"kind": kind, "importance": importance}
+        if entity:
+            meta["entity"] = entity
+        _upsert_many([(session_id, "lm", memory_id, text, emb, meta)])
     except Exception as e:
         _mark_unavailable(e)
 

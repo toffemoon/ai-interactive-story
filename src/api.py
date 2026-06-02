@@ -234,7 +234,7 @@ async def api_story_turn(req: StoryTurnReq):
     try:
         out = await story_turn(
             session_id=req.session_id,
-            characters=req.characters[:3],
+            characters=req.characters,  # 角色卡上限已解除:用全部上传角色(支持群像剧)
             user=req.user,
             selected_choice=req.selected_choice,
             world=req.world,
@@ -269,7 +269,7 @@ async def api_story_turn_stream(req: StoryTurnReq):
             try:
                 out = await story_turn(
                     session_id=req.session_id,
-                    characters=req.characters[:3],
+                    characters=req.characters,  # 角色卡上限已解除:用全部上传角色(支持群像剧)
                     user=req.user,
                     selected_choice=req.selected_choice,
                     world=req.world,
@@ -314,7 +314,7 @@ async def api_reroll(req: ReRollReq):
     if not raw_chars:
         raise HTTPException(400, "缺少角色卡快照,无法重新生成")
     try:
-        characters = [CharacterCard(**c) for c in raw_chars][:3]
+        characters = [CharacterCard(**c) for c in raw_chars]  # 上限已解除:还原全部角色卡
         world = WorldBook(**art["world"]) if art.get("world") else None
         story = StoryBook(**art["story"]) if art.get("story") else None
         player = PlayerCard(**art["player"]) if art.get("player") else None
