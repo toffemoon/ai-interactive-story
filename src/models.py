@@ -105,6 +105,22 @@ class CharacterBoundary(BaseModel):
     hard_limits: list[str] = Field(default_factory=list, description="硬边界:身份/实力/能力上限,玩家不可单方面突破")
 
 
+class PersonaShift(BaseModel):
+    """长程记忆 B② · 作者预定义的人格切版:谓词满足→给某角色整块提交一个新画像版本。
+
+    红线(设计§五):人格走【离散版本】整块替换,不用逐轮 delta 改;切版由作者谓词触发(确定性、客观),
+    不靠模型自动改写(涌现自动改写是全系统最高风险操作,留作 B④ consolidation + 作者在环)。
+    谓词复用 ending 那套:required_events 全 resolved + required_facts 全 revealed 即触发。"""
+
+    character: str = Field("", description="目标角色:cid 或角色名")
+    required_events: list[str] = Field(default_factory=list, description="这些 event_id 全 resolved 即满足")
+    required_facts: list[str] = Field(default_factory=list, description="这些事实全 revealed 即满足(子串匹配)")
+    new_personality: str = Field("", description="切版后的新性格(整块替换)")
+    new_speech_rules: list[str] = Field(default_factory=list, description="切版后的新说话硬规则(整块替换)")
+    new_description: str = Field("", description="切版后的新设定描述(留空则沿用基线 description)")
+    reason: str = Field("", description="这次转变的说明,记进版本")
+
+
 class StoryBook(BaseModel):
     """故事书:时间线、主线剧情、事件节点、多结局与全局节奏。"""
 
@@ -120,6 +136,8 @@ class StoryBook(BaseModel):
     pacing: list[str] = Field(default_factory=list, description="全局节奏/时间提示,供时钟调度参考")
     character_boundaries: list[CharacterBoundary] = Field(default_factory=list, description="各角色信息边界")
     needs_confirm: list[str] = Field(default_factory=list, description="AI 推断、建议作者确认的字段说明")
+    # 长程记忆 B②:作者预定义的人格切版(谓词触发,整块换画像)
+    persona_shifts: list[PersonaShift] = Field(default_factory=list, description="作者预定义的人格转变(谓词→新画像版本)")
 
 
 class SceneState(BaseModel):
@@ -170,6 +188,30 @@ class EventTimelineItem(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+class PersonaVersion(BaseModel):
+    """长程记忆 B② · 实体活档里的一个人格画像版本(整块,不逐轮改)。v1=上传卡。"""
+
+    version: int = 1
+    personality: str = ""
+    speech_rules: list[str] = Field(default_factory=list)
+    description: str = ""
+    committed_turn: int = Field(0, description="这一版在第几轮提交(v1=0=开局)")
+    reason: str = Field("", description="切到这一版的缘由(作者谓词名 / 提案理由)")
+
+
+class EntityDossier(BaseModel):
+    """长程记忆 B② · 实体活档(per-entity living dossier)。
+
+    = 静态基线(baseline,上传卡,不可变,抗漂移锚)+ versioned 画像(persona_versions,人格整块换版)。
+    属性/事实类 delta 不在这里重存——那是 A 已落地的 entity-tagged long_memory(B④ consolidation 再结构化)。
+    本结构只承「人格随 arc 离散演变」+「基线锚」两件,OOC 对照 current_version(不对初始卡、不对活值)。"""
+
+    entity: str = Field("", description="实体规范键(角色 cid)")
+    baseline: PersonaVersion = Field(default_factory=PersonaVersion, description="v1=上传,不可变抗漂移锚")
+    persona_versions: list[PersonaVersion] = Field(default_factory=list, description="v1..vN,append-only,旧版保留可回退")
+    current_version: int = Field(1, description="当前生效版本号;OOC/char_block 以此版为准")
+
+
 class RuntimeState(BaseModel):
     """运行时自动生成/更新,玩家可查看其中公开部分。"""
 
@@ -185,6 +227,9 @@ class RuntimeState(BaseModel):
     idle_minutes: int = Field(0, description="主线静默累计故事分钟,事件被推进时清零;供 escalate_after_idle")
     main_resolved: bool = Field(False, description="主线核心问题是否已结案(供面板/摘要不再显示进行中)")
     reached_endings: list[str] = Field(default_factory=list, description="已达成的结局 ID")
+    # 长程记忆 B② · 实体活档 + 人格 versioning:
+    dossiers: list[EntityDossier] = Field(default_factory=list, description="各角色实体活档(基线+人格版本)")
+    persona_proposals: list[dict] = Field(default_factory=list, description="模型提的涌现人格转变(记录不自动落,作者在环)")
 
 
 class StoryChoice(BaseModel):

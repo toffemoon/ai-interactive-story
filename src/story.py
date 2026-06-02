@@ -20,9 +20,11 @@ from . import memory, storage
 from .llm import achat_messages, achat_messages_stream, chat_messages, collect_usage, current_usage
 from .models import (
     CharacterCard,
+    EntityDossier,
     EventTimelineItem,
     FactBoundary,
     MemoryWrite,
+    PersonaVersion,
     PlayerCard,
     RelationshipState,
     RuntimeState,
@@ -194,6 +196,100 @@ def _present_location_keys(state: RuntimeState, roster: dict[str, str]) -> set[s
     return keys
 
 
+# ── 长程记忆 B② · 实体活档 + 人格 versioning(整块换版,作者谓词触发,不逐轮改) ──
+
+def _init_dossiers(characters: list[CharacterCard]) -> list[EntityDossier]:
+    """开局给每个角色建实体活档:v1 画像 = 上传卡(既作不可变基线,又作当前版本)。"""
+    out = []
+    for i, c in enumerate(characters):
+        cid = _char_id(c, i)
+        v1 = PersonaVersion(version=1, personality=c.data.personality,
+                            speech_rules=list(c.data.speech_rules), description=c.data.description,
+                            committed_turn=0, reason="上传卡(基线)")
+        out.append(EntityDossier(entity=cid, baseline=v1.model_copy(deep=True),
+                                 persona_versions=[v1], current_version=1))
+    return out
+
+
+def _dossier_for(state: RuntimeState, cid: str) -> EntityDossier | None:
+    return next((d for d in state.dossiers if d.entity == cid), None)
+
+
+def _current_persona(dossier: EntityDossier | None) -> PersonaVersion | None:
+    """活档当前生效的人格版本(char_block / OOC 以此为准,不对初始卡也不对活值)。"""
+    if not dossier or not dossier.persona_versions:
+        return None
+    cur = next((v for v in dossier.persona_versions if v.version == dossier.current_version), None)
+    return cur or dossier.persona_versions[-1]
+
+
+def _check_persona_shifts(story: StoryBook | None, characters: list[CharacterCard],
+                          state: RuntimeState) -> list[str]:
+    """作者预定义人格切版:谓词满足→给目标角色 append 新画像版本并切到它(整块换、append-only、旧版保留)。
+    复用 ending 谓词(required_events 全 resolved + required_facts 全 revealed)。每个 shift 只触发一次。
+    返回本轮切版说明(供日志/调试)。绝不逐轮 delta 改人格、绝不靠模型自动改写——那是设计明令的最高风险操作。"""
+    if not story or not story.persona_shifts or not state.dossiers:
+        return []
+    name2cid: dict[str, str] = {}
+    for i, c in enumerate(characters):
+        cid = _char_id(c, i)
+        name2cid[_norm_entity(cid)] = cid
+        if c.data.name:
+            name2cid[_norm_entity(c.data.name)] = cid
+    resolved = {t.event_id for t in state.timeline if t.status == "resolved"}
+    revealed = list(state.facts.revealed)
+    changed: list[str] = []
+    for idx, sh in enumerate(story.persona_shifts):
+        cid = name2cid.get(_norm_entity(sh.character))
+        dossier = _dossier_for(state, cid) if cid else None
+        if not dossier:
+            continue
+        req_ev = [x for x in (sh.required_events or []) if x]
+        req_fa = [x for x in (sh.required_facts or []) if x]
+        if not req_ev and not req_fa:
+            continue  # 无谓词的切版不自动触发,防误切
+        if not (all(x in resolved for x in req_ev) and all(any(x in r for r in revealed) for x in req_fa)):
+            continue
+        marker = sh.reason or f"persona_shift#{idx}:{sh.character}"
+        if any(v.reason == marker for v in dossier.persona_versions):
+            continue  # 这个 shift 已切过,不重复
+        base = _current_persona(dossier)
+        new_ver = dossier.current_version + 1
+        pv = PersonaVersion(
+            version=new_ver,
+            personality=sh.new_personality or (base.personality if base else ""),
+            speech_rules=list(sh.new_speech_rules) if sh.new_speech_rules else (list(base.speech_rules) if base else []),
+            description=sh.new_description or (base.description if base else ""),
+            committed_turn=state.turn_count,
+            reason=marker,
+        )
+        dossier.persona_versions.append(pv)
+        dossier.current_version = new_ver
+        changed.append(f"{cid}→v{new_ver}({marker})")
+    return changed
+
+
+def _record_persona_proposal(state: RuntimeState, turn: StoryTurn) -> None:
+    """模型若在 state_update.persona_proposal 提议某角色发生【本性/人格】持久转变,只记录进
+    state.persona_proposals 供作者复审——【绝不】据此自动改人格(设计§五:涌现自动改写是全系统最高
+    风险操作,留作 B④ consolidation 高闸门 + 作者在环)。情绪波动/一时冲动不算,模型被要求只在跨多轮的
+    本性转变时才提。"""
+    su = turn.state_update if isinstance(turn.state_update, dict) else {}
+    prop = su.get("persona_proposal")
+    if isinstance(prop, dict):
+        prop = [prop]
+    if not isinstance(prop, list):
+        return
+    for p in prop:
+        if not isinstance(p, dict):
+            continue
+        ch = str(p.get("character", "") or "").strip()
+        obs = str(p.get("observation") or p.get("note") or "").strip()
+        if ch and obs:
+            state.persona_proposals.append({"turn": state.turn_count, "character": ch[:40], "observation": obs[:300]})
+    state.persona_proposals = state.persona_proposals[-30:]
+
+
 def _json_obj(raw: str) -> dict[str, Any]:
     """尽量从模型输出中解析 JSON。
 
@@ -311,6 +407,7 @@ def _init_state(characters: list[CharacterCard], player: PlayerCard | None, stor
         state.player.active_goals = player.goals[:]
         state.player.known_facts = player.known_facts[:]
     state.relationships = [RelationshipState(character_id=cid) for cid in ids]
+    state.dossiers = _init_dossiers(characters)  # B②:开局建实体活档,v1 画像=上传卡
     state.facts = FactBoundary(
         canon=[],
         revealed=player.known_facts[:] if player else [],
@@ -830,10 +927,17 @@ def _prompt(
     for i, card in enumerate(characters):
         d = card.data
         cid = _char_id(card, i)
-        rules = "\n".join(f"- {r}" for r in d.speech_rules)
+        # 长程记忆 B②:角色实力/性格/口吻按【实体活档当前画像版本】渲染(arc 演变后用演变版,不一直拿初始卡)。
+        # 没活档(老存档)或没切过版就等于初始卡。OOC 自检对照的就是这里展示的当前版本。
+        persona = _current_persona(_dossier_for(state, cid))
+        personality = persona.personality if persona else d.personality
+        speech_rules = persona.speech_rules if persona else d.speech_rules
+        description = persona.description if persona else d.description
+        ver_tag = f"(当前画像 v{persona.version}:{persona.reason})" if persona and persona.version > 1 else ""
+        rules = "\n".join(f"- {r}" for r in speech_rules)
         block = (
-            f"## {d.name} ({cid})\n"
-            f"设定:{d.description}\n性格:{d.personality}\n情境:{d.scenario}\n"
+            f"## {d.name} ({cid}){ver_tag}\n"
+            f"设定:{description}\n性格:{personality}\n情境:{d.scenario}\n"
             f"范例:{d.mes_example}\n说话硬规则:\n{rules}\n"
             "主动性要求:根据该角色的身份、性格、利益和当前情境主动反应。"
             "可以追问、打断、试探、拒绝、转移压力、提出条件或推进自己的小目标。"
@@ -958,8 +1062,12 @@ def _prompt(
         "并始终留在故事里、用角色和世界的口吻表现(如“用列车核心囚禁黑塔”→人偶冷笑自毁、本体在别处),"
         "把这条反制写进 reasoning.world_counter,再据此写 narration/messages。不要弹系统报错、不要跳出故事。\n"
         "2. 角色 OOC 风险(角色侧):本轮角色的实力 / 阵营立场 / 心智状态有没有【无前置依据】的突变"
-        "(被无理由神化或恶堕)。只在 reasoning.ooc_risk 里简短记录、并据此让角色保持一致;"
-        "不要为此强行打断或拒绝玩家的正常行动,灰色地带给玩家自由。\n"
+        "(被无理由神化或恶堕)。判断 OOC 的基准是【活跃角色】里该角色当前展示的画像(性格/说话规则)——"
+        "若标了'当前画像 vN'说明该角色的人格已随剧情演变到这一版,就按这一版判一致性,不要拿它最初的样子当 OOC 依据。"
+        "只在 reasoning.ooc_risk 里简短记录、并据此让角色保持一致;不要为此强行打断或拒绝玩家的正常行动,灰色地带给玩家自由。\n"
+        "3. 人格转变提案(只提议,不自己改):若你观察到某角色正在经历【跨多轮的、有充分铺垫的本性/价值观转变】"
+        "(不是一时情绪或单轮冲动),把它写进 state_update.persona_proposal {\"character\":\"角色ID\",\"observation\":\"什么转变、依据\"},"
+        "作为给作者的【建议】。你【绝不】自行改写该角色的性格/说话方式——人格只能由作者预设的转变条件来切换。本轮仍按当前画像演。\n"
         "# 世界时钟(每轮必做)\n"
         "- 在 state_update.time_advance 填本轮经过的【故事内分钟数】:平常对话/调查给小值(几分钟到一两小时);"
         "玩家明确跳时间就给对应大值并在叙事里真的跳过去:一夜≈600,一天=1440,三天=4320,一周=10080,一个月≈43200。\n"
@@ -1002,7 +1110,8 @@ def _prompt(
         '"relationships":[{"character_id":"角色ID","trust":0,"tension":0,"affection":0,"notes":["原因"]}],'
         '"facts":{"canon":[],"revealed":[],"uncertain":[]},'
         '"timeline":[{"event_id":"事件ID","status":"active"}],'
-        '"main_resolved":false,"reached_ending":""'
+        '"main_resolved":false,"reached_ending":"",'
+        '"persona_proposal":null'
         "},"
         '"memory_write":[{"kind":"event|choice|relationship|fact|quest|note","text":"...", "importance":1-5, "entity":"该记忆关乎的角色ID/玩家/地点名(用scene.location原文),挂不上留空"}],'
         '"triggered_events":["event_id"]'
@@ -1417,6 +1526,8 @@ async def _story_turn_impl(
     # 重 roll = 恢复这份镜像 + 用相同输入重跑;覆盖 messages/state/short_memory/long_memory/摘要/累计用量等。
     pre_snapshot = copy.deepcopy({k: v for k, v in data.items() if k != "_reroll"})
     state = _safe_state(data, characters, player, story)
+    if not state.dossiers and characters:  # B②:老存档(无活档)懒初始化,v1 画像=当前卡
+        state.dossiers = _init_dossiers(characters)
     messages = data.get("messages", [])
     if not isinstance(messages, list):
         messages = []
@@ -1610,7 +1721,12 @@ async def _story_turn_impl(
     state = _apply_state_update(state, turn.state_update)
     _progress_events(state, turn.triggered_events)
     _check_ending_predicates(story, state)  # 谓词齐备即代码侧客观达成结局(无谓词的故事回退模型判定)
+    persona_changed = _check_persona_shifts(story, characters, state)  # B②:作者谓词触发的人格切版
+    if persona_changed:
+        data.setdefault("persona_log", []).append({"turn": state.turn_count, "shifts": persona_changed})
+        data["persona_log"] = data["persona_log"][-50:]
+    _record_persona_proposal(state, turn)  # B②:模型提的涌现转变只记录、不自动落(作者在环)
     state.turn_count += 1
     turn.state = state
     return await _save_turn(session_id, data, messages, short_memory, state, action, turn, mode,
-                            player_input=(raw_user or raw_choice))
+                            player_input=(raw_user or raw_choice), roster=roster, entity_labels=ent_labels)
