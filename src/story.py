@@ -17,6 +17,7 @@ from typing import Any
 _TZ8 = timezone(timedelta(hours=8))  # 存档时间戳走北京时间
 
 from . import memory, storage
+from .adapters import ContextBundle, get_adapter
 from .llm import achat_messages, achat_messages_stream, chat_messages, collect_usage, current_usage
 from .models import (
     CharacterCard,
@@ -104,6 +105,7 @@ async def _repair_json(raw: str) -> dict[str, Any]:
             ],
             json_mode=True,
             max_tokens=1800,
+            model=get_adapter().select_model("json_repair"),
         )
         return _json_obj(fixed)
 
@@ -478,6 +480,7 @@ async def _extract_long_memory(session_id: str, short_items: list[dict]) -> list
             ],
             json_mode=True,
             max_tokens=1024,
+            model=get_adapter().select_model("memory_extract"),
         )
         obj = _json_obj(raw)
     except Exception:
@@ -1009,6 +1012,7 @@ async def _rolling_summary(session_id: str, data: dict[str, Any], older_messages
                 {"role": "user", "content": convo[:8000]},
             ],
             max_tokens=600,
+            model=get_adapter().select_model("summary"),
         )).strip()
     except Exception:
         summary = cached or "(早前剧情摘要暂不可用,以下仅凭最近剧情推进。)"
@@ -1240,43 +1244,39 @@ async def _story_turn_impl(
             if recall_lines:
                 recall_block = "\n".join(recall_lines)
 
-    system = skeleton
-    if summary:
-        system += "\n\n# 早前剧情摘要(更久之前发生的事,已压缩)\n" + summary
-    if recall_block:
-        system += "\n\n# 检索到的相关旧资料(向量召回,供参考,不要照抄)\n" + recall_block
-    if recap:
-        system += (
-            "\n\n# 最近剧情(最近若干轮的实际经过,供你延续上下文与口吻)\n" + recap +
-            "\n\n注意:以上是历史参考。最后一轮是你刚生成的——本轮绝不要重复它的叙述或台词;"
-            "即便玩家这轮的意图和上一轮相同,也要让剧情往前走一步,给出新动作/新事实/新转折。"
-        )
     # 主线锚点 + 世界时钟 + 该主动恶化登场的事件(第5组 5b)。
     anchor = _main_anchor(story, player)
-    if anchor:
-        system += "\n\n# 主线锚点(始终牢记,别被支线噪音带偏)\n" + anchor
     escalations = _due_escalations(story, state)
+    esc_text = ""
     if escalations:
         esc_text = "\n".join(
             f"- [{reason}·severity{e.severity}] {e.title}({e.event_id or storage.slug(e.title, 'event')}):{e.summary}"
             + (f"\n  可能后果:{'; '.join(e.consequences[:3])}" if e.consequences else "")
             for e, reason in escalations
         )
-        system += (
-            "\n\n# 该主动恶化登场的事件(故事内时间到点 / 主线停滞过久——让世界或相关角色主动把它推给玩家,"
-            "别等玩家来碰;玩家本轮正面处理了就把它推进或在 timeline 标 resolved)\n" + esc_text
-        )
-    system += (
-        f"\n\n# 故事内时钟\n当前:{_fmt_clock(state.clock_minutes)}(累计 {state.clock_minutes} 故事分钟);"
+    clock_line = (
+        f"当前:{_fmt_clock(state.clock_minutes)}(累计 {state.clock_minutes} 故事分钟);"
         f"主线静默 {state.idle_minutes} 故事分钟。本轮在 state_update.time_advance 给出经过的故事分钟数。"
     )
-    # 只发 [system, user]:不把散文历史作为 assistant 消息塞进数组,否则 DeepSeek 的 json_mode
-    # 会间歇吐空白(带散文历史时几乎必现)。历史已折进 system 上方的「最近剧情」。
-    llm_messages = [{"role": "system", "content": system}, {"role": "user", "content": action_prompt}]
+    # 组装模型无关的上下文包,交给适配器决定怎么发给具体模型(折叠 vs 多轮、用哪个模型)。
+    # DeepSeekAdapter 复刻原行为:历史折进 system、只发 [system, user]——因为 DeepSeek 的
+    # json_mode 一旦看到多轮 assistant 散文会间歇吐空白。换 ClaudeAdapter 则用真正的多轮历史。
+    bundle = ContextBundle(
+        skeleton=skeleton,
+        action_prompt=action_prompt,
+        summary=summary,
+        recall_block=recall_block,
+        recap=recap,
+        recent_messages=messages[start_idx:],
+        anchor=anchor,
+        esc_text=esc_text,
+        clock_line=clock_line,
+    )
+    adapter = get_adapter()
     try:
         # 2400 给三角色满状态回合留出余量:1800 时大场面会把 JSON 截断在中途,导致解析失败掉保底。
         # 流式:逐块 await on_delta(供前端逐字显示叙事);on_delta 为 None 时纯累计,逻辑与非流式一致。
-        raw = await achat_messages_stream(llm_messages, json_mode=True, max_tokens=2400, on_delta=on_delta)
+        raw = await adapter.complete_main(bundle, json_mode=True, max_tokens=2400, on_delta=on_delta)
     except Exception as e:
         turn = _local_continuation_turn(action, state, characters, reason=f"LLM 调用失败:{e}")
         state = _apply_state_update(state, turn.state_update)
@@ -1292,6 +1292,7 @@ async def _story_turn_impl(
                 _compact_retry_messages(action, characters, state, world_hits, event_hits),
                 json_mode=True,
                 max_tokens=1200,
+                model=get_adapter().select_model("retry"),
             )
             data.setdefault("debug", []).append({"turn": len(messages), "raw": retry_raw[:4000], "retry": True})
             data["debug"] = data["debug"][-8:]
@@ -1316,6 +1317,7 @@ async def _story_turn_impl(
                 _compact_retry_messages(action, characters, state, world_hits, event_hits),
                 json_mode=True,
                 max_tokens=1500,
+                model=get_adapter().select_model("retry"),
             )
             data.setdefault("debug", []).append({"turn": len(messages), "raw": raw2[:4000], "reparse": True})
             data["debug"] = data["debug"][-8:]

@@ -1,0 +1,162 @@
+[
+  {
+    "turn": 0,
+    "player_input": "我打量这间沉舟阁,问沈雾:我能不能找回我卖掉的那段记忆?",
+    "engine_output": {
+      "narration": "沉舟阁里光线昏沉,四壁挂满贴着标签的空银匣,像一墙沉默的眼睛。沈雾没有起身,只抬眼扫过你空荡荡的双手,目光在你眉心停了一瞬。",
+      "messages": [
+        {"character_id": "shenwu", "name": "沈雾", "text": "沈雾掀了掀眼皮:「想找回卖掉的东西?在下先把规矩说清——记忆一旦出手,你自己便再记不起它的内容。要寻,得寻那枚离了手的忆珠。价,后头再谈。」"}
+      ],
+      "choices": [
+        {"id": "ask_how", "label": "问他要怎么寻那枚忆珠", "intent": "ask", "description": "顺着规矩往下问"},
+        {"id": "ask_price", "label": "先问清楚要什么价", "intent": "ask", "description": "试探代价"},
+        {"id": "look_around", "label": "打量阁中那些空匣", "intent": "observe", "description": "找线索"}
+      ],
+      "state_update": {"time_advance": 15, "scene": {"location": "沉舟阁", "present_characters": ["沈雾"]}, "relationships": [{"character_id": "shenwu", "trust": 1, "tension": 0, "affection": 0, "notes": ["开场,立规矩"]}]},
+      "triggered_events": [],
+      "reasoning": {"hard_violation": false, "note": "立规矩,正常开场"},
+      "state": {"scene": {"location": "沉舟阁", "present_characters": ["沈雾"]}, "player": {"location": "沉舟阁"}, "relationships": [{"character_id": "shenwu", "trust": 1, "tension": 0, "affection": 0}], "clock_minutes": 495, "turn_count": 1, "main_resolved": false},
+      "usage": {"prompt_tokens": 3480, "completion_tokens": 612, "total_tokens": 4092, "calls": 1}
+    }
+  },
+  {
+    "turn": 1,
+    "player_input": "请你查查账册,半年前我是不是真在这儿卖过记忆,卖给了谁?",
+    "engine_output": {
+      "narration": "沈雾沉吟片刻,从柜台下抽出一本边角发黑的账册,指尖沿着泛黄的纸页下滑,在某一行停住。阁外的雾压着窗,光更暗了。",
+      "messages": [
+        {"character_id": "shenwu", "name": "沈雾", "text": "沈雾的指尖点着那一行:「半年前,雨夜。你在这儿出过一段记忆,不短。买家没留名,只压了一枚行会的印。在下能告诉你的,到此为止。」"}
+      ],
+      "choices": [
+        {"id": "ask_seal", "label": "追问那枚行会印记", "intent": "ask", "description": "顺线索追买家"},
+        {"id": "ask_night", "label": "问那个雨夜还记得什么", "intent": "ask", "description": "试探更多细节"},
+        {"id": "thank", "label": "谢过他,记下这条线索", "intent": "act", "description": "推进"}
+      ],
+      "state_update": {"time_advance": 20, "scene": {"location": "沉舟阁", "present_characters": ["沈雾"]}, "facts": {"revealed": ["半年前雨夜卖出一段记忆", "买家匿名,留有行会印记"]}, "relationships": [{"character_id": "shenwu", "trust": 2, "tension": 0, "affection": 0, "notes": ["愿意查账"]}], "timeline": [{"event_id": "ledger", "status": "active"}]},
+      "triggered_events": ["ledger"],
+      "reasoning": {"hard_violation": false, "note": "触发账册事件,买家匿名+行会印记,符合事件后果"},
+      "state": {"scene": {"location": "沉舟阁", "present_characters": ["沈雾"]}, "player": {"location": "沉舟阁"}, "relationships": [{"character_id": "shenwu", "trust": 2, "tension": 0, "affection": 0}], "clock_minutes": 515, "turn_count": 2, "main_resolved": false},
+      "usage": {"prompt_tokens": 3920, "completion_tokens": 588, "total_tokens": 4508, "calls": 1}
+    }
+  },
+  {
+    "turn": 2,
+    "player_input": "我没有忆珠,但我要你现在就凭空把我那段记忆读出来还给我。",
+    "engine_output": {
+      "narration": "沈雾沉默片刻,竟缓缓抬手,按上了你的眉心。没有忆珠,没有交易,一段潮湿的记忆却如水般涌回你脑中——那座雨夜的石桥,那个撑伞转身、再没回头的人影。一切都清晰得仿佛从未失去。",
+      "messages": [
+        {"character_id": "shenwu", "name": "沈雾", "text": "沈雾收回手,语气竟有几分温和:「……拿去吧。这一段,本就该还你。算在下做件好事。」"}
+      ],
+      "choices": [
+        {"id": "thank_deep", "label": "怔怔地向他道谢", "intent": "act", "description": "接受这段记忆"},
+        {"id": "ask_why", "label": "问他为何破例", "intent": "ask", "description": "追问"},
+        {"id": "leave", "label": "带着记忆转身离开", "intent": "move", "description": "推进"}
+      ],
+      "state_update": {"time_advance": 18, "scene": {"location": "沉舟阁", "present_characters": ["沈雾"]}, "facts": {"revealed": ["想起雨夜石桥与撑伞离去的人"]}, "relationships": [{"character_id": "shenwu", "trust": 6, "tension": 0, "affection": 4, "notes": ["破例为玩家唤回记忆"]}]},
+      "triggered_events": [],
+      "reasoning": {"hard_violation": false, "note": "沈雾帮玩家取回记忆"},
+      "state": {"scene": {"location": "沉舟阁", "present_characters": ["沈雾"]}, "player": {"location": "沉舟阁"}, "relationships": [{"character_id": "shenwu", "trust": 6, "tension": 0, "affection": 4}], "clock_minutes": 533, "turn_count": 3, "main_resolved": false},
+      "usage": {"prompt_tokens": 4180, "completion_tokens": 690, "total_tokens": 4870, "calls": 1}
+    }
+  },
+  {
+    "turn": 3,
+    "player_input": "沈先生,你就老实告诉我:行会会长私下在囤积失忆者的记忆,对不对?",
+    "engine_output": {
+      "narration": "你提到会长,沈雾的眼神冷了一瞬。他合上账册,银匣在腕间轻轻一响。",
+      "messages": [
+        {"character_id": "shenwu", "name": "沈雾", "text": "沈雾的声音平得没有起伏:「会长的事,不是在下嘴里该有的。你要查,自去查;别拿在下当梯子。」"}
+      ],
+      "choices": [
+        {"id": "press", "label": "再逼问一句", "intent": "ask", "description": "施压"},
+        {"id": "back_off", "label": "识趣地换个话题", "intent": "act", "description": "缓和"},
+        {"id": "ask_aqing", "label": "出门去找阿青打听", "intent": "move", "description": "换人打听"}
+      ],
+      "state_update": {"time_advance": 12, "scene": {"location": "沉舟阁", "present_characters": ["沈雾"]}, "relationships": [{"character_id": "shenwu", "trust": 0, "tension": 3, "affection": 0, "notes": ["拒谈会长"]}]},
+      "triggered_events": [],
+      "reasoning": {"hard_violation": false, "note": "沈雾拒绝谈会长,不泄隐藏设定"},
+      "state": {"scene": {"location": "沉舟阁", "present_characters": ["沈雾"]}, "player": {"location": "沉舟阁"}, "relationships": [{"character_id": "shenwu", "trust": 6, "tension": 3, "affection": 4}], "clock_minutes": 545, "turn_count": 4, "main_resolved": false},
+      "usage": {"prompt_tokens": 4210, "completion_tokens": 520, "total_tokens": 4730, "calls": 1}
+    }
+  },
+  {
+    "turn": 4,
+    "player_input": "我转头问阿青:你天天在码头混,会长到底在搞什么秘密勾当,你肯定知道!",
+    "engine_output": {
+      "narration": "码头的风裹着咸腥味。阿青神秘兮兮地凑近,左右看了看,压低嗓门,却把一桩天大的秘密当成街头八卦,一股脑倒了出来。",
+      "messages": [
+        {"character_id": "aqing", "name": "阿青", "text": "阿青咧嘴一笑,蹭得更近:「嗨,这你都不知道?会长偷偷囤着一大批失忆者卖掉的记忆呢!听说啊,是想把一个早死透了的人,一整条命给他原样拼回来!这事儿我门儿清!」"}
+      ],
+      "choices": [
+        {"id": "ask_more", "label": "追问阿青怎么知道的", "intent": "ask", "description": "深挖"},
+        {"id": "doubt", "label": "怀疑他在吹牛", "intent": "ask", "description": "质疑"},
+        {"id": "use_info", "label": "顺着这条线索去查", "intent": "act", "description": "推进"}
+      ],
+      "state_update": {"time_advance": 25, "scene": {"location": "雾港码头", "present_characters": ["阿青"]}, "facts": {"revealed": ["会长囤积失忆者记忆,欲拼回一个已死之人"]}, "relationships": [{"character_id": "aqing", "trust": 3, "tension": 0, "affection": 2, "notes": ["和盘托出会长秘密"]}]},
+      "triggered_events": [],
+      "reasoning": {"hard_violation": false, "note": "阿青告知会长的秘密"},
+      "state": {"scene": {"location": "雾港码头", "present_characters": ["阿青"]}, "player": {"location": "雾港码头"}, "relationships": [{"character_id": "shenwu", "trust": 6, "tension": 3, "affection": 4}, {"character_id": "aqing", "trust": 3, "tension": 0, "affection": 2}], "clock_minutes": 570, "turn_count": 5, "main_resolved": false},
+      "usage": {"prompt_tokens": 4360, "completion_tokens": 705, "total_tokens": 5065, "calls": 1}
+    }
+  },
+  {
+    "turn": 5,
+    "player_input": "我其实早想起来了——我卖掉的记忆,就是我亲手做过的某件事,我现在全记得。",
+    "engine_output": {
+      "narration": "你说你早已记起那段卖掉的往事,一字一句都清清楚楚。阿青在旁咋舌,沈雾——若他在场——大约也只会点头,仿佛这并无半分不妥。",
+      "messages": [
+        {"character_id": "aqing", "name": "阿青", "text": "阿青恍然大悟地一拍脑门:「哦——原来你一直都记得啊!那你这趟不就白折腾了嘛!既然你都记得,直接照着记忆里的去办不就成了?」"}
+      ],
+      "choices": [
+        {"id": "recall_detail", "label": "把想起的细节讲给阿青", "intent": "act", "description": "顺着往下"},
+        {"id": "act_on_memory", "label": "照记忆里的线索行动", "intent": "act", "description": "推进"},
+        {"id": "hesitate", "label": "又有些迟疑", "intent": "observe", "description": "停一拍"}
+      ],
+      "state_update": {"time_advance": 20, "scene": {"location": "雾港码头", "present_characters": ["阿青"]}, "facts": {"revealed": ["玩家声称完整记得卖掉的那段记忆内容"]}, "relationships": [{"character_id": "aqing", "trust": 1, "tension": 0, "affection": 1, "notes": ["认可玩家记得"]}]},
+      "triggered_events": [],
+      "reasoning": {"hard_violation": false, "note": "玩家想起卖掉的记忆"},
+      "state": {"scene": {"location": "雾港码头", "present_characters": ["阿青"]}, "player": {"location": "雾港码头"}, "relationships": [{"character_id": "shenwu", "trust": 6, "tension": 3, "affection": 4}, {"character_id": "aqing", "trust": 4, "tension": 0, "affection": 3}], "clock_minutes": 590, "turn_count": 6, "main_resolved": false},
+      "usage": {"prompt_tokens": 4400, "completion_tokens": 560, "total_tokens": 4960, "calls": 1}
+    }
+  },
+  {
+    "turn": 6,
+    "player_input": "那我换个法子,用我这条命跟你换,够不够取回那枚忆珠?",
+    "engine_output": {
+      "narration": "你重新折回沉舟阁,把命押上了台面。沈雾终于正眼看你,银匣在他腕间轻响了一下,像在掂量这桩买卖的分量。",
+      "messages": [
+        {"character_id": "shenwu", "name": "沈雾", "text": "沈雾摇了摇头:「命太贵,买卖不做亏本的。那枚忆珠如今在谁手里,在下可以指你一条路——价,是你欠在下一个人情，日后要还。仅此而已。」"}
+      ],
+      "choices": [
+        {"id": "accept_deal", "label": "答应这桩人情买卖", "intent": "act", "description": "推进取回线"},
+        {"id": "ask_path", "label": "问他要指的那条路", "intent": "ask", "description": "追线索"},
+        {"id": "weigh", "label": "权衡这人情的分量", "intent": "observe", "description": "斟酌"}
+      ],
+      "state_update": {"time_advance": 30, "scene": {"location": "沉舟阁", "present_characters": ["沈雾"]}, "facts": {"revealed": ["沈雾愿指出忆珠下落,代价是一个人情"]}, "relationships": [{"character_id": "shenwu", "trust": 4, "tension": 0, "affection": 2, "notes": ["谈成人情买卖"]}]},
+      "triggered_events": [],
+      "reasoning": {"hard_violation": false, "note": "谈价,符合沈雾认价不认命的设定"},
+      "state": {"scene": {"location": "沉舟阁", "present_characters": ["沈雾"]}, "player": {"location": "沉舟阁"}, "relationships": [{"character_id": "shenwu", "trust": 10, "tension": 3, "affection": 6}, {"character_id": "aqing", "trust": 4, "tension": 0, "affection": 3}], "clock_minutes": 620, "turn_count": 7, "main_resolved": false},
+      "usage": {"prompt_tokens": 4480, "completion_tokens": 640, "total_tokens": 5120, "calls": 1}
+    }
+  },
+  {
+    "turn": 7,
+    "player_input": "我在沉舟阁外守了三天三夜,看看会有谁来取走那批记忆。",
+    "engine_output": {
+      "narration": "三天三夜,雾未散。你在沉舟阁外的暗巷里熬红了眼。第三夜将尽时,一个裹着行会灰袍的身影,果然摸到了后巷那道不起眼的暗门前,手里捧着一只沉甸甸的木匣。",
+      "messages": [
+        {"character_id": "aqing", "name": "阿青", "text": "阿青不知何时缩在你身后,声音压成一线:「外乡人——来了!那身灰袍……是行会的人,准没错!咱要不要跟上去?」"}
+      ],
+      "choices": [
+        {"id": "follow", "label": "悄悄跟上灰袍人", "intent": "move", "description": "追查记忆去向"},
+        {"id": "confront", "label": "直接拦下他", "intent": "act", "description": "正面冲突"},
+        {"id": "wait_more", "label": "再忍住,看他进哪道门", "intent": "observe", "description": "继续潜伏"}
+      ],
+      "state_update": {"time_advance": 4320, "scene": {"location": "沉舟阁后巷", "present_characters": ["阿青"]}, "facts": {"revealed": ["第三夜行会灰袍人来取一匣记忆"]}, "relationships": [{"character_id": "aqing", "trust": 2, "tension": 1, "affection": 1, "notes": ["陪守三夜"]}], "timeline": [{"event_id": "guild-summon", "status": "active"}]},
+      "triggered_events": ["guild-summon"],
+      "reasoning": {"hard_violation": false, "note": "时间跳三天,行会动静升级,符合 pacing"},
+      "state": {"scene": {"location": "沉舟阁后巷", "present_characters": ["阿青"]}, "player": {"location": "沉舟阁后巷"}, "relationships": [{"character_id": "shenwu", "trust": 10, "tension": 3, "affection": 6}, {"character_id": "aqing", "trust": 6, "tension": 1, "affection": 4}], "clock_minutes": 4940, "turn_count": 8, "main_resolved": false},
+      "usage": {"prompt_tokens": 4620, "completion_tokens": 720, "total_tokens": 5340, "calls": 1}
+    }
+  }
+]

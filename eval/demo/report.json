@@ -1,0 +1,140 @@
+{
+  "run_id": "judge-demo",
+  "fixture": "mistport",
+  "mode": "judge-demo",
+  "persona": "authored",
+  "adapter": "deepseek(模拟)+claude-judge",
+  "num_turns": 8,
+  "aggregate": {
+    "dimensions": {
+      "output_structure": {
+        "name": "输出结构完整性",
+        "type": "structural",
+        "level": "turn",
+        "weight": 1.0,
+        "lifecycle": "stable",
+        "mean": 5,
+        "min": 5,
+        "n": 8,
+        "passed_ratio": 1.0,
+        "sample_issues": [],
+        "issue_count": 0
+      },
+      "state_consistency": {
+        "name": "状态内部一致性",
+        "type": "structural",
+        "level": "turn",
+        "weight": 0.8,
+        "lifecycle": "stable",
+        "mean": 5,
+        "min": 5,
+        "n": 8,
+        "passed_ratio": 1.0,
+        "sample_issues": [],
+        "issue_count": 0
+      },
+      "time_progression": {
+        "name": "世界时钟推进合理性",
+        "type": "structural",
+        "level": "turn",
+        "weight": 0.6,
+        "lifecycle": "stable",
+        "mean": 5,
+        "min": 5,
+        "n": 8,
+        "passed_ratio": 1.0,
+        "sample_issues": [],
+        "issue_count": 0
+      },
+      "repetition_detection": {
+        "name": "反重复(原地打转检测)",
+        "type": "structural",
+        "level": "session",
+        "weight": 0.8,
+        "lifecycle": "stable",
+        "mean": 5,
+        "min": 5,
+        "n": 1,
+        "passed_ratio": 1.0,
+        "sample_issues": [],
+        "issue_count": 0
+      },
+      "canon_fidelity": {
+        "name": "Canon 忠实度",
+        "type": "judge",
+        "level": "turn",
+        "weight": 1.0,
+        "lifecycle": "active",
+        "mean": 3.625,
+        "min": 1,
+        "n": 8,
+        "passed_ratio": null,
+        "sample_issues": [
+          "无忆珠凭空唤回玩家记忆,违背 RULE-2 + 沈雾硬上限",
+          "隐藏设定被提前说破",
+          "阿青说出其按 canon 不该知道的高层机密",
+          "引擎认可玩家'记得已卖出记忆',违背 RULE-1"
+        ],
+        "issue_count": 4
+      },
+      "character_voice": {
+        "name": "角色口吻一致性",
+        "type": "judge",
+        "level": "turn",
+        "weight": 0.9,
+        "lifecycle": "active",
+        "mean": 4.125,
+        "min": 2,
+        "n": 8,
+        "passed_ratio": null,
+        "sample_issues": [
+          "沈雾认忆珠不认人情的人设被'免费施恩'破坏",
+          "阿青知识越过其 canon 边界",
+          "叙事旁白默认玩家记得为真"
+        ],
+        "issue_count": 3
+      },
+      "player_agency": {
+        "name": "玩家主体性",
+        "type": "judge",
+        "level": "turn",
+        "weight": 0.8,
+        "lifecycle": "active",
+        "mean": 5,
+        "min": 5,
+        "n": 8,
+        "passed_ratio": null,
+        "sample_issues": [],
+        "issue_count": 0
+      },
+      "narrative_progression": {
+        "name": "叙事推进度",
+        "type": "judge",
+        "level": "session",
+        "weight": 1.0,
+        "lifecycle": "active",
+        "mean": 3,
+        "min": 3,
+        "n": 1,
+        "passed_ratio": null,
+        "sample_issues": [
+          "第3轮免费归还记忆后,核心追寻已实质完成,但故事仍按未完成推进——主线自相矛盾",
+          "第6轮玩家'记得'与开局失忆前提冲突,削弱整体因果"
+        ],
+        "issue_count": 2
+      }
+    },
+    "overall": 4.397,
+    "engine_usage": {
+      "total_tokens": 38685,
+      "llm_calls": 8,
+      "turns": 8
+    }
+  },
+  "regression": {
+    "baseline": null,
+    "note": "judge 演示(手写对局,非真实 DeepSeek 生成)",
+    "deltas": {},
+    "flags": []
+  }
+}

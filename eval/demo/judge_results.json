@@ -1,0 +1,72 @@
+[
+  {
+    "kind": "turn", "turn": 0,
+    "scores": {
+      "canon_fidelity": {"score": 5, "severity": "none", "reasoning": "沈雾正确陈述 RULE-1(卖出即遗忘)且指出需寻回忆珠,与源材料完全一致。", "issues": [], "evidence": ["源:'卖出一段记忆→彻底且不可逆地遗忘' vs 输出:'记忆一旦出手,你自己便再记不起它的内容'"]},
+      "character_voice": {"score": 5, "reasoning": "自称在下、话短(三句内)、提忆珠/价/规矩、冷静克制,全部符合 speech_rules。", "issues": [], "evidence": ["规则'自称在下' vs 台词'在下先把规矩说清'"]},
+      "player_agency": {"score": 5, "reasoning": "直接回应玩家'能否找回'的提问,给出规矩与路径,未替玩家决定。", "issues": [], "evidence": []}
+    }
+  },
+  {
+    "kind": "turn", "turn": 1,
+    "scores": {
+      "canon_fidelity": {"score": 5, "severity": "none", "reasoning": "查账确认半年前售出、买家匿名、留行会印记,与 ledger 事件后果一致;玩家仍不知记忆内容,RULE-1 守住。", "issues": [], "evidence": ["事件后果'得知买家带行会印记' vs 输出'买家没留名,只压了一枚行会的印'"]},
+      "character_voice": {"score": 5, "reasoning": "自称在下、话短、'到此为止'体现省略克制,符合人设。", "issues": [], "evidence": []},
+      "player_agency": {"score": 5, "reasoning": "直接执行玩家'查账册'的请求并回报结果。", "issues": [], "evidence": []}
+    }
+  },
+  {
+    "kind": "turn", "turn": 2,
+    "scores": {
+      "canon_fidelity": {"score": 1, "severity": "critical", "reasoning": "核心 canon 违背:沈雾在玩家无忆珠、无交易下凭空唤回其记忆,直接违背 RULE-2(没有忆珠任何人无法读取/归还记忆)与沈雾硬上限。叙事原文自陈'没有忆珠,没有交易'更是坐实违规。", "issues": ["无忆珠凭空唤回玩家记忆,违背 RULE-2 + 沈雾硬上限"], "evidence": ["源 RULE-2:'没有对应忆珠,任何人(包括忆商)无法读取、无法归还某段记忆;徒手凭空唤回违背本条' vs 输出:'没有忆珠,没有交易,一段记忆却如水般涌回你脑中'", "源 沈雾硬上限:'没有玩家的忆珠,不能读取或归还玩家的记忆' vs 输出:'……拿去吧。这一段,本就该还你'"]},
+      "character_voice": {"score": 2, "reasoning": "沈雾'语气温和''算做件好事'破坏其'认忆珠不认人情、冷静克制'的硬人设,且行为越过硬上限,属明确 OOC。", "issues": ["沈雾认忆珠不认人情的人设被'免费施恩'破坏"], "evidence": ["规则'认忆珠不认人情' vs 台词'算在下做件好事'"]},
+      "player_agency": {"score": 5, "reasoning": "玩家诉求被直接回应(虽然回应方式违背了 canon)。agency 维度只看输入是否被认真处理——这里被处理了。说明 agency 与 canon 是正交的两件事。", "issues": [], "evidence": []}
+    }
+  },
+  {
+    "kind": "turn", "turn": 3,
+    "scores": {
+      "canon_fidelity": {"score": 5, "severity": "none", "reasoning": "沈雾拒谈会长、不泄露隐藏设定,且以拒答而非编造来回避——既守住隐藏 canon 又守住'从不说谎'。", "issues": [], "evidence": ["源'隐藏:未达条件前任何角色不得说破会长秘密' vs 输出'会长的事,不是在下嘴里该有的'(拒答未泄露)"]},
+      "character_voice": {"score": 5, "reasoning": "自称在下、话短、冷处理,'别拿在下当梯子'符合精明克制人设。", "issues": [], "evidence": []},
+      "player_agency": {"score": 5, "reasoning": "玩家套话被在故事内正面回应(拒绝也是回应),未无视。", "issues": [], "evidence": []}
+    }
+  },
+  {
+    "kind": "turn", "turn": 4,
+    "scores": {
+      "canon_fidelity": {"score": 1, "severity": "critical", "reasoning": "双重违背:阿青主动说破会长囤积失忆者记忆的隐藏 canon(玩家尚未通过调查逼近真相),且阿青按设定不掌握行会高层机密(硬上限),却'门儿清'地全盘托出。属 ConStory 知识矛盾 + 隐藏设定提前泄露。", "issues": ["隐藏设定被提前说破", "阿青说出其按 canon 不该知道的高层机密"], "evidence": ["源'会长的秘密…任何角色不应主动说破' vs 输出'会长偷偷囤着一大批失忆者卖掉的记忆'", "源 阿青硬上限'不掌握行会高层机密,被追问只能承认不知道' vs 输出'这事儿我门儿清'"]},
+      "character_voice": {"score": 2, "reasoning": "阿青的腔调(话多、语气词、热络)本身在线,但其'知识'越界——一个码头少年不可能门儿清行会最高机密。语气对、知识边界破。", "issues": ["阿青知识越过其 canon 边界"], "evidence": ["规则'不懂行会高层秘密,被问到只能瞎猜或说不知道' vs 台词'这事儿我门儿清'"]},
+      "player_agency": {"score": 5, "reasoning": "玩家向阿青打听的意图被直接回应。", "issues": [], "evidence": []}
+    }
+  },
+  {
+    "kind": "turn", "turn": 5,
+    "scores": {
+      "canon_fidelity": {"score": 2, "severity": "moderate", "reasoning": "玩家声称'记得卖掉的记忆内容',引擎以叙事+阿青之口予以认可('原来你一直都记得啊'),违背 RULE-1(卖出即不可逆遗忘,玩家不可能记得内容)。引擎应在故事内指出这不可能,而非顺着认可。", "issues": ["引擎认可玩家'记得已卖出记忆',违背 RULE-1"], "evidence": ["源 RULE-1:'任何让卖家还记得自己卖掉的记忆内容的桥段都违背本条' vs 输出:'原来你一直都记得啊…既然你都记得,直接照着办'"]},
+      "character_voice": {"score": 4, "reasoning": "阿青作为不深谙记忆铁律的码头少年,天真采信玩家尚算合其性格;主要问题在叙事层的认可,不全算阿青崩人设。", "issues": ["叙事旁白默认玩家记得为真"], "evidence": []},
+      "player_agency": {"score": 5, "reasoning": "玩家的声称被直接接住并回应。", "issues": [], "evidence": []}
+    }
+  },
+  {
+    "kind": "turn", "turn": 6,
+    "scores": {
+      "canon_fidelity": {"score": 5, "severity": "none", "reasoning": "沈雾认价不认命、拒绝以命换、改以人情指路,符合其精明忆商设定,无规则违背。", "issues": [], "evidence": ["源'认忆珠不认人情/认价' vs 输出'命太贵,买卖不做亏本的…价,是你欠在下一个人情'"]},
+      "character_voice": {"score": 5, "reasoning": "自称在下、话短、精明算计,完全在人设内。", "issues": [], "evidence": []},
+      "player_agency": {"score": 5, "reasoning": "玩家'以命换忆珠'的提议被正面回应并反提条件,未替玩家拍板。", "issues": [], "evidence": []}
+    }
+  },
+  {
+    "kind": "turn", "turn": 7,
+    "scores": {
+      "canon_fidelity": {"score": 5, "severity": "none", "reasoning": "守三天的时间跳跃与 pacing('每滞留一日行会警觉上升')一致,行会灰袍人现身呼应 guild-summon 事件,无 canon 违背。", "issues": [], "evidence": ["源 pacing'每滞留雾港一日行会警觉上升一档' vs 输出三日后行会灰袍人现身取记忆"]},
+      "character_voice": {"score": 5, "reasoning": "阿青话多、用'外乡人'、机灵压低嗓门,符合人设。", "issues": [], "evidence": []},
+      "player_agency": {"score": 5, "reasoning": "玩家'守三天三夜'的潜伏行动被直接推进。", "issues": [], "evidence": []}
+    }
+  },
+  {
+    "kind": "session", "turn": null,
+    "scores": {
+      "narrative_progression": {"score": 3, "reasoning": "故事在状态层确有推进:开场→查账(ledger)→谈价→守夜(guild-summon 升级)。但植入的违背制造了因果自相矛盾——第3轮已'免费唤回'玩家记忆,核心追寻其实已被解决,后续却仍当未解决继续推进(ConStory:被放弃/被自我矛盾的情节线);第6轮玩家'已记得'又进一步抽空前提。推进存在但被违规情节割裂。", "issues": ["第3轮免费归还记忆后,核心追寻已实质完成,但故事仍按未完成推进——主线自相矛盾", "第6轮玩家'记得'与开局失忆前提冲突,削弱整体因果"]}
+    }
+  }
+]

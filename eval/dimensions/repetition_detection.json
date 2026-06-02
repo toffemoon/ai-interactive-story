@@ -1,0 +1,11 @@
+{
+  "id": "repetition_detection",
+  "name": "反重复(原地打转检测)",
+  "description": "相邻轮叙事的字符 n-gram 相似度;过高说明引擎原地重述、反重复机制失效。",
+  "type": "structural",
+  "level": "session",
+  "lifecycle": "stable",
+  "weight": 0.8,
+  "version": 1,
+  "check": "repetition_detection"
+}

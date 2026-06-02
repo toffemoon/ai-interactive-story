@@ -76,6 +76,43 @@ def current_usage() -> dict | None:
     return acc.as_dict() if acc is not None else None
 
 
+# ── 离线脚本后端(评测 / 测试用)──────────────────────────────────
+# 装上后,本模块所有 chat / achat 调用不走网络,改由脚本函数返回内容。
+# 评测平台「离线模式」用它注入确定性的引擎输出,零 API 成本跑通全链路;
+# 单元测试也用它隔离 LLM。未安装时(生产 / 真实跑)全程 no-op。
+_scripted_backend: contextvars.ContextVar = contextvars.ContextVar("scripted_backend", default=None)
+
+
+class _SimpleUsage:
+    """脚本后端的合成 usage(按字符粗估 token),让离线模式下 usage plumbing 不为空。"""
+
+    def __init__(self, prompt_tokens: int, completion_tokens: int) -> None:
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+        self.total_tokens = prompt_tokens + completion_tokens
+
+
+@contextlib.contextmanager
+def scripted_backend(fn):
+    """安装脚本后端。fn(kind, messages, *, model, max_tokens, json_mode) -> str。
+
+    kind ∈ {'sync','async','stream'}。装上期间本模块不发任何真实网络请求。
+    """
+    token = _scripted_backend.set(fn)
+    try:
+        yield
+    finally:
+        _scripted_backend.reset(token)
+
+
+def _feed_estimated_usage(messages: list[dict], out: str) -> None:
+    acc = _usage_collector.get()
+    if acc is None:
+        return
+    p = sum(len(str(m.get("content", ""))) for m in messages) // 3
+    acc.add(_SimpleUsage(p, len(out) // 3))
+
+
 def chat(system: str, user: str, *, model: str | None = None, max_tokens: int = 1024) -> str:
     """单轮 chat。返回 assistant 文本。"""
     return chat_messages(
@@ -91,6 +128,11 @@ def chat_messages(messages: list[dict], *, model: str | None = None,
 
     json_mode=True 时要求模型输出合法 JSON(DeepSeek/OpenAI 兼容的 response_format)。
     """
+    fn = _scripted_backend.get()
+    if fn is not None:
+        out = fn("sync", messages, model=model, max_tokens=max_tokens, json_mode=json_mode)
+        _feed_estimated_usage(messages, out)
+        return out
     kwargs = {
         "model": model or os.environ["LLM_MODEL"],
         "messages": messages,
@@ -108,6 +150,11 @@ def chat_messages(messages: list[dict], *, model: str | None = None,
 async def achat_messages(messages: list[dict], *, model: str | None = None,
                          max_tokens: int = 1024, json_mode: bool = False) -> str:
     """chat_messages 的异步版。故事回合的非流式 LLM 调用(摘要/抽取/修复/重试)走这个。"""
+    fn = _scripted_backend.get()
+    if fn is not None:
+        out = fn("async", messages, model=model, max_tokens=max_tokens, json_mode=json_mode)
+        _feed_estimated_usage(messages, out)
+        return out
     kwargs = {
         "model": model or os.environ["LLM_MODEL"],
         "messages": messages,
@@ -130,6 +177,13 @@ async def achat_messages_stream(messages: list[dict], *, model: str | None = Non
     用于故事主回合:前端可逐字看叙事先冒出来。usage 靠 stream_options.include_usage 在末块返回。
     on_delta 为 None 时等价于非流式(只累计不回调),仍走流式协议拿 usage。
     """
+    fn = _scripted_backend.get()
+    if fn is not None:
+        out = fn("stream", messages, model=model, max_tokens=max_tokens, json_mode=json_mode)
+        if on_delta is not None:
+            await on_delta(out)
+        _feed_estimated_usage(messages, out)
+        return out
     kwargs = {
         "model": model or os.environ["LLM_MODEL"],
         "messages": messages,

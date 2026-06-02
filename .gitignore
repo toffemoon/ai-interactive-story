@@ -10,6 +10,9 @@ data/
 _validate_report*.json
 _babel.js
 
+# 评测平台的运行输出(报告 / playthrough / judge 包)——不进库
+eval/runs/
+
 # 内部文档 / 含本机绝对路径的本地脚本(不进公开库)
 HANDOFF.md
 _smoke_group5a.py
