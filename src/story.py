@@ -69,6 +69,72 @@ def _char_id(card: CharacterCard, idx: int = 0) -> str:
     return storage.slug(raw, f"char-{idx}")
 
 
+# 长程记忆 A 档:玩家实体在记忆里的规范键(玩家没有 char_block,单独注入到玩家设定块)。
+_PLAYER_ENTITY = "__player__"
+
+
+def _norm_entity(s: Any) -> str:
+    """实体别名归一:去空白 + 小写,供受限词表匹配(角色名/ID、玩家名都先过这里)。"""
+    return str(s or "").strip().lower()
+
+
+def _entity_roster(characters: list[CharacterCard],
+                   player: PlayerCard | None) -> tuple[dict[str, str], list[str]]:
+    """受限词表:返回 (别名→规范键 的映射, 给 prompt 看的可读标签列表)。
+
+    角色:名字 / character_id 两个别名都映射到该角色的 cid;玩家:玩家名 / "玩家" → _PLAYER_ENTITY。
+    模型给 memory_write.entity 选了表外的值(自由发挥)就清空,不让它挂错实体。
+    召回时 present_characters(通常是角色名)也过这张表解析成同一个规范键,确保挂载与召回对得上。
+    """
+    roster: dict[str, str] = {}
+    labels: list[str] = []
+    for i, c in enumerate(characters[:3]):
+        cid = _char_id(c, i)
+        roster[_norm_entity(cid)] = cid
+        if c.data.name:
+            roster[_norm_entity(c.data.name)] = cid
+        labels.append(f"{c.data.name or cid}={cid}")
+    if player and player.name:
+        roster[_norm_entity(player.name)] = _PLAYER_ENTITY
+        roster[_norm_entity("玩家")] = _PLAYER_ENTITY
+        labels.append(f"{player.name}=玩家")
+    return roster, labels
+
+
+def _present_entity_keys(state: RuntimeState, characters: list[CharacterCard],
+                         roster: dict[str, str]) -> set[str]:
+    """本轮在场实体的规范键集合:present_characters(角色名)解析成 cid;空时回退到全部角色卡。"""
+    present_names = state.scene.present_characters or [c.data.name for c in characters[:3]]
+    keys: set[str] = set()
+    for n in present_names:
+        k = roster.get(_norm_entity(n))
+        if k and k != _PLAYER_ENTITY:
+            keys.add(k)
+    return keys
+
+
+def _entity_memory_index(long_memory: list[Any], wanted: set[str],
+                         per_entity: int = 6) -> dict[str, list[str]]:
+    """从会话 long_memory 里取 entity ∈ wanted 的条目,按实体分组(每实体保留最近 per_entity 条)。
+
+    这是 A 档的确定性召回:不靠相似度,只要实体在场就必然把挂在它身上的派生事实取出来。
+    两个记忆模式都走这里(数据落在会话 JSON,不依赖 embedding)。
+    """
+    by_entity: dict[str, list[str]] = {}
+    for item in long_memory or []:
+        if not isinstance(item, dict):
+            continue
+        ent = str(item.get("entity", "") or "")
+        if not ent or ent not in wanted:
+            continue
+        text = str(item.get("text", "") or "").strip()
+        if not text:
+            continue
+        kind = item.get("kind", "note")
+        by_entity.setdefault(ent, []).append(f"[{kind}] {text}")
+    return {ent: lines[-per_entity:] for ent, lines in by_entity.items()}
+
+
 def _json_obj(raw: str) -> dict[str, Any]:
     """尽量从模型输出中解析 JSON。
 
@@ -498,10 +564,19 @@ def _progress_events(state: RuntimeState, triggered: list[str]) -> None:
             item.status = "active"
 
 
-async def _extract_long_memory(session_id: str, short_items: list[dict]) -> list[dict]:
+async def _extract_long_memory(session_id: str, short_items: list[dict],
+                               roster: dict[str, str] | None = None,
+                               entity_labels: list[str] | None = None) -> list[dict]:
+    roster = roster or {}
     convo = "\n".join(
         f"{m.get('role','?')}:{m.get('content','')}" if isinstance(m, dict) else str(m)
         for m in short_items
+    )
+    # 实体轴:给模型一份受限的实体名册,让它【从中选】每条记忆挂在哪个实体上(不自由发挥)。
+    roster_hint = (
+        "为每条记忆标注它主要关乎的实体(entity),只能从下面名册里【选一个等号右边的值】填进 entity;"
+        "关乎玩家就填'玩家';不明确关乎名册里任一实体就留空字符串。\n名册:" + "; ".join(entity_labels or [])
+        if entity_labels else "entity 一律留空字符串。"
     )
     try:
         raw = await achat_messages(
@@ -510,8 +585,8 @@ async def _extract_long_memory(session_id: str, short_items: list[dict]) -> list
                     "role": "system",
                     "content": (
                         "从下面互动故事对话中抽取长期记忆。输出 JSON:"
-                        '{"items":[{"kind":"event|choice|relationship|fact|quest|note","text":"...","importance":1-5}]}。'
-                        "只保留会影响后续剧情、关系、事实边界或任务的内容。"
+                        '{"items":[{"kind":"event|choice|relationship|fact|quest|note","text":"...","importance":1-5,"entity":"实体或空"}]}。'
+                        "只保留会影响后续剧情、关系、事实边界或任务的内容。" + roster_hint
                     ),
                 },
                 {"role": "user", "content": convo},
@@ -529,15 +604,18 @@ async def _extract_long_memory(session_id: str, short_items: list[dict]) -> list
             text = str(item.get("text", "")).strip()
             kind = item.get("kind", "note")
             importance = int(item.get("importance", 3) or 3)
+            entity = roster.get(_norm_entity(item.get("entity")), "")  # 落在受限词表才算数,否则清空
         else:
             text = str(item).strip()
             kind = "note"
             importance = 3
+            entity = ""
         if not text:
             continue
         mid = hashlib.sha1(f"{session_id}:{kind}:{text}".encode("utf-8")).hexdigest()
-        await asyncio.to_thread(memory.add_memory, session_id, mid, text, kind=kind, importance=importance)
-        out.append({"kind": kind, "text": text, "importance": importance})
+        await asyncio.to_thread(memory.add_memory, session_id, mid, text, kind=kind,
+                                importance=importance, entity=entity)
+        out.append({"kind": kind, "text": text, "importance": importance, "entity": entity})
     return out
 
 
@@ -687,19 +765,29 @@ def _prompt(
     kb_hits: list[str],
     long_memory: list[str],
     state: RuntimeState,
+    entity_memory: dict[str, list[str]] | None = None,
 ) -> str:
+    entity_memory = entity_memory or {}
     char_blocks = []
     for i, card in enumerate(characters):
         d = card.data
         cid = _char_id(card, i)
         rules = "\n".join(f"- {r}" for r in d.speech_rules)
-        char_blocks.append(
+        block = (
             f"## {d.name} ({cid})\n"
             f"设定:{d.description}\n性格:{d.personality}\n情境:{d.scenario}\n"
             f"范例:{d.mes_example}\n说话硬规则:\n{rules}\n"
             "主动性要求:根据该角色的身份、性格、利益和当前情境主动反应。"
             "可以追问、打断、试探、拒绝、转移压力、提出条件或推进自己的小目标。"
         )
+        # 长程记忆 A 档:该角色在场 → 把挂在它身上的派生事实/记忆确定性注入它自己的块(不靠相似度)。
+        ent_lines = entity_memory.get(cid)
+        if ent_lines:
+            block += (
+                "\n关于该角色的既有事实/记忆(此前剧情里确立、必须保持一致,不要与之矛盾):\n"
+                + "\n".join(f"- {x}" for x in ent_lines)
+            )
+        char_blocks.append(block)
     # 单角色"场景":判断依据是本轮实际在场的角色数(运行时),不是上传了几张卡。
     # 多角色卡组里和某个角色单独相处的段落也会触发——那种段落最容易退化成一问一答的聊天。
     present = [p for p in (state.scene.present_characters or [c.data.name for c in characters]) if p]
@@ -748,6 +836,14 @@ def _prompt(
             "玩家若强行突破按世界观硬约束走世界内反制):\n" + bounds_text
         )
         story_overview = "\n".join(parts)
+    # 长程记忆 A 档:挂在玩家身上的派生事实(玩家没有 char_block,玩家恒在场 → 始终注入到玩家设定块)。
+    player_mem_lines = entity_memory.get(_PLAYER_ENTITY)
+    player_mem_block = ""
+    if player_mem_lines:
+        player_mem_block = (
+            "\n关于玩家的既有事实/记忆(此前剧情里确立、必须保持一致):\n"
+            + "\n".join(f"- {x}" for x in player_mem_lines)
+        )
     return (
         "你是互动故事引擎,不是普通聊天助手。你要生成一轮可玩的故事推进。\n"
         "严格事实边界:只能使用角色卡、世界书、故事书、玩家卡、运行状态和记忆中提供的事实。"
@@ -768,7 +864,7 @@ def _prompt(
         "narration 必须非空,messages 至少包含一条角色对玩家本轮输入的反应。"
         "玩家可能使用口语、玩梗或不严肃报价,仍要当作故事内行动处理,由角色自然回应。\n\n"
         f"# 活跃角色\n{chr(10).join(char_blocks)}\n\n"
-        f"# 玩家设定\n{json.dumps(player.model_dump(), ensure_ascii=False) if player else '未提供'}\n\n"
+        f"# 玩家设定\n{json.dumps(player.model_dump(), ensure_ascii=False) if player else '未提供'}{player_mem_block}\n\n"
         f"# 故事书总览\n{story_overview}\n\n"
         f"# 当前运行状态\n{json.dumps(_state_digest(state), ensure_ascii=False)}\n\n"
         f"# 命中的世界书/设定卡\n{chr(10).join(world_hits) or '无'}\n\n"
@@ -819,6 +915,11 @@ def _prompt(
         "玩家可以反复表达想结束;你每一次要么用世界内的实质阻力说明为何还结不了(并真的推进一步、改变局面),"
         "要么就替他落子、把结局写出来并标记,二者必居其一,不许用换皮的同义待选菜单空耗一轮。\n"
         "- 玩家已达成的目标放进 state_update.player.completed_goals(会从当前目标里移除)。\n\n"
+        "# 记忆挂载(memory_write,关乎长期一致性)\n"
+        "本轮若玩出了会长期生效的新事实/关系/承诺/能力变化,写进 memory_write。每条尽量挂到它主要关乎的实体上:\n"
+        "- entity 只能从上面【活跃角色】括号里的角色 ID 原文里选(例如 写 大黑塔 的 ID),关乎玩家就填'玩家';\n"
+        "  挂不上名册里任何具体实体(纯氛围/无关琐事)就把 entity 留成空字符串\"\"。不要自己发明名册外的实体名。\n"
+        "- 这条挂载决定了【该实体下次在场时,这条记忆会被必然取回注入】,所以关乎某角色长期设定/状态的事实务必挂上它。\n\n"
         "输出严格 JSON,只输出这一个对象,格式:\n"
         "{"
         '"reasoning":{"hard_violation":false,"violation_detail":"","world_counter":"","ooc_risk":"","recall_check":"","note":"一句话推演"},'
@@ -834,7 +935,7 @@ def _prompt(
         '"timeline":[{"event_id":"事件ID","status":"active"}],'
         '"main_resolved":false,"reached_ending":""'
         "},"
-        '"memory_write":[{"kind":"event|choice|relationship|fact|quest|note","text":"...", "importance":1-5}],'
+        '"memory_write":[{"kind":"event|choice|relationship|fact|quest|note","text":"...", "importance":1-5, "entity":"该记忆关乎的角色ID,关乎玩家填玩家,挂不上留空"}],'
         '"triggered_events":["event_id"]'
         "}"
     )
@@ -1011,7 +1112,8 @@ def _normalize_choices(items: Any) -> list[StoryChoice]:
     return out
 
 
-def _normalize_memory_write(items: Any) -> list[MemoryWrite]:
+def _normalize_memory_write(items: Any, roster: dict[str, str] | None = None) -> list[MemoryWrite]:
+    roster = roster or {}
     out = []
     for item in items or []:
         if isinstance(item, dict):
@@ -1023,7 +1125,9 @@ def _normalize_memory_write(items: Any) -> list[MemoryWrite]:
                 importance = int(item.get("importance", 3) or 3)
             except (TypeError, ValueError):
                 importance = 3
-            out.append(MemoryWrite(kind=kind, text=text, importance=max(1, min(5, importance))))
+            # 实体轴:模型给的 entity 必须落在受限词表里(角色名/ID),否则清空不让它自由发挥挂错。
+            entity = roster.get(_norm_entity(item.get("entity")), "")
+            out.append(MemoryWrite(kind=kind, text=text, importance=max(1, min(5, importance)), entity=entity))
         elif isinstance(item, str) and item.strip():
             out.append(MemoryWrite(kind="note", text=item.strip(), importance=3))
     return out
@@ -1140,19 +1244,26 @@ def _store_memory_writes(session_id: str, data: dict[str, Any], turn: StoryTurn)
     for item in turn.memory_write:
         if isinstance(item, MemoryWrite):
             mid = hashlib.sha1(f"{session_id}:{item.kind}:{item.text}".encode("utf-8")).hexdigest()
-            memory.add_memory(session_id, mid, item.text, kind=item.kind, importance=item.importance)
+            # entity 落进向量表 meta(深度模式相似召回 / 后续按实体检索);model_dump 已带 entity,
+            # 会进会话 JSON long_memory —— 确定性的「按在场实体召回」从那里取(两模式都生效)。
+            memory.add_memory(session_id, mid, item.text, kind=item.kind,
+                              importance=item.importance, entity=item.entity)
             data.setdefault("long_memory", []).append(item.model_dump())
         elif isinstance(item, dict):
             text = str(item.get("text", "")).strip()
             if text:
                 kind = item.get("kind", "note")
                 importance = int(item.get("importance", 3) or 3)
+                entity = str(item.get("entity", "") or "")
                 mid = hashlib.sha1(f"{session_id}:{kind}:{text}".encode("utf-8")).hexdigest()
-                memory.add_memory(session_id, mid, text, kind=kind, importance=importance)
-                data.setdefault("long_memory", []).append({"kind": kind, "text": text, "importance": importance})
+                memory.add_memory(session_id, mid, text, kind=kind, importance=importance, entity=entity)
+                data.setdefault("long_memory", []).append(
+                    {"kind": kind, "text": text, "importance": importance, "entity": entity})
 
 
-async def _flush_short_memory(session_id: str, data: dict[str, Any], short_memory: list[Any], mode: str = "standard") -> list[Any]:
+async def _flush_short_memory(session_id: str, data: dict[str, Any], short_memory: list[Any],
+                              mode: str = "standard", roster: dict[str, str] | None = None,
+                              entity_labels: list[str] | None = None) -> list[Any]:
     if len(short_memory) < SHORT_MEMORY_FLUSH:
         return short_memory
     # 只有深度模式且模型就绪时,抽取的长期记忆才会被向量召回回 prompt,这时才值得花 LLM 抽取;
@@ -1160,7 +1271,7 @@ async def _flush_short_memory(session_id: str, data: dict[str, Any], short_memor
     if mode != "deep" or not memory.is_ready():
         data.setdefault("long_memory", []).extend(_local_long_memory(short_memory))
         return []
-    extracted = await _extract_long_memory(session_id, short_memory)
+    extracted = await _extract_long_memory(session_id, short_memory, roster, entity_labels)
     data.setdefault("long_memory", []).extend(extracted)
     if extracted:
         return []
@@ -1177,6 +1288,8 @@ async def _save_turn(
     turn: StoryTurn,
     mode: str = "standard",
     player_input: str = "",
+    roster: dict[str, str] | None = None,
+    entity_labels: list[str] | None = None,
 ) -> StoryTurn:
     # 世界时钟推进(第5组 5b,所有路径统一在这做,含保底回合也至少 +MIN 防冻住):
     # 模型估的 time_advance 放在 state_update,代码 clamp(玩家显式跳时间才放大);
@@ -1206,7 +1319,7 @@ async def _save_turn(
     await asyncio.to_thread(memory.add_turn, session_id, len(messages) - 1, "assistant", assistant_text)
     short_memory.extend([user_msg, assistant_msg])
     await asyncio.to_thread(_store_memory_writes, session_id, data, turn)
-    short_memory = await _flush_short_memory(session_id, data, short_memory, mode)
+    short_memory = await _flush_short_memory(session_id, data, short_memory, mode, roster, entity_labels)
     data["messages"] = messages
     data["short_memory"] = short_memory
     data["state"] = state.model_dump()
@@ -1380,8 +1493,17 @@ async def _story_turn_impl(
     world_hits = _world_keyword_hits(world, scan_text)
     event_hits = _story_event_hits(story, scan_text, state)
 
+    # 长程记忆 A 档:受限实体词表 + 按在场实体确定性召回。
+    # roster 用于抽取/规整 memory_write.entity(挂载侧);entity_memory 把挂在「本轮在场实体 + 玩家」
+    # 身上的派生事实从会话 long_memory 里确定性取出,注入对应角色/玩家块(standard+deep 都生效,不靠相似度)。
+    roster, ent_labels = _entity_roster(characters, player)
+    wanted_keys = _present_entity_keys(state, characters, roster)
+    if player and player.name:
+        wanted_keys.add(_PLAYER_ENTITY)  # 玩家恒在场,挂玩家的记忆始终注入
+    entity_memory = _entity_memory_index(data.get("long_memory", []), wanted_keys)
+
     # 骨架:角色 + 命中世界书/事件 + 故事总览 + 状态摘要 + 指令。先建好用于度量预算,召回/历史另行追加。
-    skeleton = _prompt(characters, player, story, world_hits, event_hits, [], [], state)
+    skeleton = _prompt(characters, player, story, world_hits, event_hits, [], [], state, entity_memory)
     action_prompt = _action_prompt(action, action_source)
     avail = max(2000, CONTEXT_BUDGET_CHARS - len(skeleton) - len(action_prompt))
 
@@ -1467,7 +1589,7 @@ async def _story_turn_impl(
         state.turn_count += 1
         turn.state = state
         return await _save_turn(session_id, data, messages, short_memory, state, action, turn, mode,
-                            player_input=(raw_user or raw_choice))
+                            player_input=(raw_user or raw_choice), roster=roster, entity_labels=ent_labels)
     data.setdefault("debug", []).append({"turn": len(messages), "raw": raw[:4000]})
     data["debug"] = data["debug"][-8:]
     if not raw.strip():
@@ -1487,7 +1609,7 @@ async def _story_turn_impl(
             state.turn_count += 1
             turn.state = state
             return await _save_turn(session_id, data, messages, short_memory, state, action, turn, mode,
-                            player_input=(raw_user or raw_choice))
+                            player_input=(raw_user or raw_choice), roster=roster, entity_labels=ent_labels)
     try:
         obj = await _repair_json(raw)
     except Exception:
@@ -1515,14 +1637,14 @@ async def _story_turn_impl(
             state.turn_count += 1
             turn.state = state
             return await _save_turn(session_id, data, messages, short_memory, state, action, turn, mode,
-                            player_input=(raw_user or raw_choice))
+                            player_input=(raw_user or raw_choice), roster=roster, entity_labels=ent_labels)
 
     turn = StoryTurn(
         narration=str(obj.get("narration", "")),
         messages=_normalize_messages(obj.get("messages"), characters, world, story),
         choices=_normalize_choices(obj.get("choices")),
         state_update=obj.get("state_update") if isinstance(obj.get("state_update"), dict) else {},
-        memory_write=_normalize_memory_write(obj.get("memory_write")),
+        memory_write=_normalize_memory_write(obj.get("memory_write"), roster),
         triggered_events=[str(x) for x in obj.get("triggered_events", [])],
         reasoning=_normalize_reasoning(obj.get("reasoning")),
     )
