@@ -82,7 +82,7 @@ def _entity_roster(characters: list[CharacterCard],
     """
     roster: dict[str, str] = {}
     labels: list[str] = []
-    for i, c in enumerate(characters[:3]):
+    for i, c in enumerate(characters):
         cid = _char_id(c, i)
         roster[_norm_entity(cid)] = cid
         if c.data.name:
@@ -98,7 +98,7 @@ def _entity_roster(characters: list[CharacterCard],
 def _present_entity_keys(state: RuntimeState, characters: list[CharacterCard],
                          roster: dict[str, str]) -> set[str]:
     """本轮在场实体的规范键集合:present_characters(角色名)解析成 cid;空时回退到全部角色卡。"""
-    present_names = state.scene.present_characters or [c.data.name for c in characters[:3]]
+    present_names = state.scene.present_characters or [c.data.name for c in characters]
     keys: set[str] = set()
     for n in present_names:
         k = roster.get(_norm_entity(n))
@@ -229,7 +229,7 @@ def _local_continuation_turn(action: str, state: RuntimeState, characters: list[
 
 def _init_state(characters: list[CharacterCard], player: PlayerCard | None, story: StoryBook | None) -> RuntimeState:
     ids = [_char_id(c, i) for i, c in enumerate(characters)]
-    first_names = [c.data.name for c in characters[:3]]
+    first_names = [c.data.name for c in characters]
     state = RuntimeState()
     state.scene.present_characters = first_names
     state.scene.location = "故事开场"
@@ -761,7 +761,7 @@ def _prompt(
 ) -> str:
     entity_memory = entity_memory or {}
     char_blocks = []
-    for i, card in enumerate(characters[:3]):
+    for i, card in enumerate(characters):
         d = card.data
         cid = _char_id(card, i)
         rules = "\n".join(f"- {r}" for r in d.speech_rules)
@@ -782,7 +782,7 @@ def _prompt(
         char_blocks.append(block)
     # 单角色"场景":判断依据是本轮实际在场的角色数(运行时),不是上传了几张卡。
     # 多角色卡组里和某个角色单独相处的段落也会触发——那种段落最容易退化成一问一答的聊天。
-    present = [p for p in (state.scene.present_characters or [c.data.name for c in characters[:3]]) if p]
+    present = [p for p in (state.scene.present_characters or [c.data.name for c in characters]) if p]
     solo_directive = ""
     if len(set(present)) <= 1:
         solo_directive = (
@@ -980,7 +980,7 @@ def _compact_retry_messages(
     world_hits: list[str],
     story_hits: list[StoryEvent],
 ) -> list[dict[str, str]]:
-    char_names = "、".join(c.data.name for c in characters[:3] if c.data.name) or "角色"
+    char_names = "、".join(c.data.name for c in characters if c.data.name) or "角色"
     event_titles = "；".join(e.title for e in story_hits[:3] if e.title) or "无"
     world_text = "\n".join(world_hits[:3])[:1200] or "无"
     return [
