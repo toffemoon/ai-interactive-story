@@ -185,6 +185,10 @@ class StructuredFact(BaseModel):
     status: Literal["canon", "revealed", "uncertain", "hidden"] = "revealed"
     derived: bool = Field(False, description="True=玩出来的派生 canon;False=上传设定")
     source_turn: int = 0
+    # 长程记忆 B④ · consolidation 产出的 delta 元信息:
+    confidence: Literal["high", "med", "low"] = Field("med", description="置信:consolidation 评估的可靠度")
+    superseded: bool = Field(False, description="True=已被更新的事实取代(不再注入正文);消解矛盾用")
+    consolidated: bool = Field(False, description="True=经 consolidation 精炼/确认过(非每轮即时捕获的原始项)")
 
 
 class FactBoundary(BaseModel):

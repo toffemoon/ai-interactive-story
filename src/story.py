@@ -344,16 +344,161 @@ def _entity_canon_index(structured: list[Any], wanted: set[str], per_entity: int
         ent = getattr(f, "entity", "")
         status = getattr(f, "status", "revealed")
         text = (getattr(f, "text", "") or "").strip()
-        if not ent or ent not in wanted or not text or status == "hidden":
+        # B④:已取代(superseded)的事实不再注入正文;隐藏未披露的也不进正文
+        if not ent or ent not in wanted or not text or status == "hidden" or getattr(f, "superseded", False):
             continue
         tag = "派生" if getattr(f, "derived", False) else "设定"
-        by.setdefault(ent, []).append(f"[{tag}·{status}] {text}")
+        conf = getattr(f, "confidence", "med")
+        mark = f"{tag}·{status}" + ("·已巩固" if getattr(f, "consolidated", False) else "")
+        by.setdefault(ent, []).append(f"[{mark}] {text}")
     return {k: v[-per_entity:] for k, v in by.items()}
 
 
 def _strip_fact_tag(s: str) -> str:
     """去掉 "[xxx] " 前缀,取正文,用于跨来源(A 记忆 / B③ canon)去重比对。"""
     return s.split("] ", 1)[-1].strip() if s.startswith("[") else s.strip()
+
+
+# ── 长程记忆 B④ · consolidation(把原始 note 精炼成结构化 delta + 消解矛盾,防幻觉) ──
+
+CONSOLIDATE_MIN_NOTES = 3      # 某实体原始 note 少于这个数不值得 consolidate
+CONSOLIDATE_RETURN_GAP_H = 6   # updated_at 距今超过这么多小时 → 判定"用户回来了"→回来时批量精炼
+
+
+def _bigrams(s: str) -> set[str]:
+    s = re.sub(r"\s+", "", str(s or ""))
+    return {s[i:i + 2] for i in range(len(s) - 1)} if len(s) >= 2 else ({s} if s else set())
+
+
+def _grounded(text: str, material: str, thresh: float = 0.5) -> bool:
+    """防幻觉守卫:delta 文本的 2-gram 必须有足够比例出现在原始材料里,否则视为模型凭空编造、丢弃。
+    挡得住"原始材料没有的人名/数字/事件"被新造出来(纯新增内容 2-gram 重叠会很低)。"""
+    bt = _bigrams(text)
+    if not bt:
+        return False
+    return len(bt & _bigrams(material)) / len(bt) >= thresh
+
+
+def _entity_label(key: str, characters: list[CharacterCard]) -> str:
+    """实体规范键→给 consolidation prompt 看的可读名。"""
+    if key == _PLAYER_ENTITY:
+        return "玩家"
+    if key.startswith(_LOC_PREFIX):
+        return "地点:" + key[len(_LOC_PREFIX):]
+    for i, c in enumerate(characters):
+        if _char_id(c, i) == key:
+            return c.data.name or key
+    return key
+
+
+async def _consolidate_entity(label: str, raw_notes: list[str], existing_texts: list[str]) -> list[dict]:
+    """把某实体的【原始记录】精炼成结构化 delta;只整理给定材料、绝不新增(防幻觉),并标出取代了哪些既有事实。
+    返回 [{text,type,confidence,supersedes:[...]}];每条都过 grounding 守卫(无原始依据的丢弃)。"""
+    raw_notes = [t for t in (raw_notes or []) if t.strip()]
+    if len(raw_notes) < CONSOLIDATE_MIN_NOTES:
+        return []
+    material = "\n".join(f"- {t}" for t in raw_notes)
+    existing = "\n".join(f"- {t}" for t in (existing_texts or [])) or "(无)"
+    sys = (
+        "你是长期记忆管理员。把【原始记录】里关于该实体的内容精炼成若干条结构化事实 delta。\n"
+        "硬规则:\n"
+        "1. 只能基于【原始记录】整理 / 去重 / 归并,【绝对禁止】新增任何原始记录里没出现过的信息——"
+        "人名、数字、地点、事件、关系一律不许编造或推断超出材料的内容。宁可少写,不可臆造。\n"
+        "2. 若某条新事实与【既有事实】里某条就同一属性发生冲突(新旧矛盾),在该 delta 的 supersedes 数组里"
+        "列出被它取代的那条既有事实的原文。\n"
+        "3. 每条标 type(设定=往后长期生效的属性/规则;事实=发生过的具体事件)与 confidence"
+        "(原始记录明确肯定=high;带'可能/或许/存疑/不确定'=low;其余=med)。text 要短、自包含、第三人称。\n"
+        '输出 JSON:{"deltas":[{"text":"...","type":"设定|事实","confidence":"high|med|low","supersedes":["被取代的既有事实原文"]}]};'
+        "没有值得沉淀的就给空数组 deltas:[]。"
+    )
+    user = f"实体:{label}\n\n【既有事实】\n{existing}\n\n【原始记录】\n{material}"
+    obj = None
+    for _attempt in range(3):  # DeepSeek/v4-pro json_mode 偶发吐空白,多重试两次兜住(同主回合套路)
+        try:
+            raw = await achat_messages([{"role": "system", "content": sys}, {"role": "user", "content": user}],
+                                       json_mode=True, max_tokens=900)
+            if raw and raw.strip():
+                obj = _json_obj(raw)
+                if isinstance(obj, dict):
+                    break
+        except Exception:
+            obj = None
+    if not isinstance(obj, dict):
+        return []
+    out = []
+    for d in obj.get("deltas", []) if isinstance(obj, dict) else []:
+        if not isinstance(d, dict):
+            continue
+        text = str(d.get("text", "")).strip()
+        if not text or not _grounded(text, material):  # 防幻觉:必须有原始材料依据,否则丢
+            continue
+        out.append({
+            "text": text,
+            "type": d.get("type") if d.get("type") in {"设定", "事实"} else "事实",
+            "confidence": d.get("confidence") if d.get("confidence") in {"high", "med", "low"} else "med",
+            "supersedes": [str(s).strip() for s in (d.get("supersedes") or []) if str(s).strip()],
+        })
+    return out
+
+
+def _apply_consolidation(state: RuntimeState, entity_key: str, deltas: list[dict], turn: int) -> int:
+    """把 consolidation 产出的 delta 落进 state.facts.structured:消解矛盾(取代旧的)+ 去重 + 入新。返回新增条数。"""
+    fb = state.facts
+    applied = 0
+    for d in deltas:
+        # 矛盾消解:把同实体、未取代、与 supersedes 文本互相包含的既有事实标记为已取代
+        for old in d.get("supersedes", []):
+            no = _norm_entity(old)
+            if not no:
+                continue
+            for f in fb.structured:
+                if f.entity == entity_key and not f.superseded:
+                    nf = _norm_entity(f.text)
+                    if nf and (no in nf or nf in no):
+                        f.superseded = True
+        status = "canon" if d["type"] == "设定" else "revealed"
+        dup = next((f for f in fb.structured if f.entity == entity_key and not f.superseded
+                    and _norm_entity(f.text) == _norm_entity(d["text"])), None)
+        if dup:  # 已有同一条:只升级为已巩固 + 更新置信,不重复入库
+            dup.consolidated = True
+            dup.confidence = d["confidence"]
+            continue
+        fb.structured.append(StructuredFact(text=d["text"], entity=entity_key, status=status, derived=True,
+                                            source_turn=turn, confidence=d["confidence"], consolidated=True))
+        applied += 1
+    if len(fb.structured) > 200:
+        fb.structured = fb.structured[-200:]
+    return applied
+
+
+async def _consolidate_entities(state: RuntimeState, long_memory: list[Any], entity_keys: set[str],
+                                turn: int, characters: list[CharacterCard]) -> list[str]:
+    """对给定实体各跑一次 consolidation(原始 note 取自 A 的 entity-tagged long_memory)。
+    贵活,只在事件触发 / 回来时批量调,不每轮跑。返回日志。"""
+    log = []
+    for key in entity_keys:
+        raw = [str(m.get("text", "")).strip() for m in (long_memory or [])
+               if isinstance(m, dict) and m.get("entity") == key and str(m.get("text", "")).strip()]
+        if len(raw) < CONSOLIDATE_MIN_NOTES:
+            continue
+        existing = [f.text for f in state.facts.structured if f.entity == key and not f.superseded]
+        deltas = await _consolidate_entity(_entity_label(key, characters), raw[-12:], existing[-10:])
+        if deltas:
+            n = _apply_consolidation(state, key, deltas, turn)
+            log.append(f"{_entity_label(key, characters)}:+{n}")
+    return log
+
+
+def _hours_since(iso_ts: str) -> float:
+    """data.updated_at(北京时间 ISO)距今多少小时;解析失败返回 0(不触发回来时批量)。"""
+    if not iso_ts:
+        return 0.0
+    try:
+        prev = datetime.fromisoformat(iso_ts)
+        now = datetime.now(_TZ8)
+        return (now - prev).total_seconds() / 3600.0
+    except Exception:
+        return 0.0
 
 
 def _json_obj(raw: str) -> dict[str, Any]:
@@ -1643,6 +1788,17 @@ async def _story_turn_impl(
     wanted_keys = _present_entity_keys(state, characters, roster) | _present_location_keys(state, roster)
     if player and player.name:
         wanted_keys.add(_PLAYER_ENTITY)  # 玩家恒在场,挂玩家的记忆始终注入
+    # B④ consolidation 触发器3「回来时批量精炼」:updated_at 距今超阈值→判定用户回来了,
+    # 对在场实体把原始 note 精炼成结构化 delta(消解矛盾),consolidated_upto 水位线防重复精炼旧的。
+    if _hours_since(data.get("updated_at", "")) >= CONSOLIDATE_RETURN_GAP_H:
+        lm_all = data.get("long_memory", []) or []
+        upto = int(data.get("consolidated_upto", 0) or 0)
+        if len(lm_all) > upto:
+            clog = await _consolidate_entities(state, lm_all, wanted_keys, state.turn_count, characters)
+            data["consolidated_upto"] = len(lm_all)
+            if clog:
+                data.setdefault("consolidation_log", []).append({"turn": state.turn_count, "trigger": "return", "ent": clog})
+                data["consolidation_log"] = data["consolidation_log"][-50:]
     entity_memory = _entity_memory_index(data.get("long_memory", []), wanted_keys)
     # B③:把挂在在场实体身上的结构化 canon 事实并进实体注入(与 A 记忆同块,跨来源去重、封顶)。
     for ent, canon_lines in _entity_canon_index(state.facts.structured, wanted_keys).items():
@@ -1793,6 +1949,7 @@ async def _story_turn_impl(
             StoryChoice(id="act_carefully", label="谨慎采取下一步行动", intent="act"),
         ]
 
+    resolved_before = {t.event_id for t in state.timeline if t.status == "resolved"}  # B④:本轮前已结案事件
     state = _apply_state_update(state, turn.state_update)
     _ingest_structured_facts(state, turn.state_update.get("facts") if isinstance(turn.state_update, dict) else None,
                              roster, state.turn_count)  # B③:本轮新事实结构化入库(挂实体+标派生)
@@ -1803,6 +1960,24 @@ async def _story_turn_impl(
         data.setdefault("persona_log", []).append({"turn": state.turn_count, "shifts": persona_changed})
         data["persona_log"] = data["persona_log"][-50:]
     _record_persona_proposal(state, turn)  # B②:模型提的涌现转变只记录、不自动落(作者在环)
+    # B④ consolidation 触发器2「事件触发」:本轮有故事事件被推进到 resolved → 对受影响实体(该事件角色+地点)
+    # 做一次小巩固(原始 note→结构化 delta + 消解矛盾)。高信号、只在结案时跑,不每轮跑。
+    newly_resolved = {t.event_id for t in state.timeline if t.status == "resolved"} - resolved_before
+    if newly_resolved and story:
+        affected: set[str] = set()
+        for ev in story.events:
+            eid = ev.event_id or storage.slug(ev.title, "event")
+            if eid in newly_resolved:
+                for nm in ev.characters:
+                    if roster.get(_norm_entity(nm)):
+                        affected.add(roster[_norm_entity(nm)])
+                if ev.location and roster.get(_norm_entity(ev.location)):
+                    affected.add(roster[_norm_entity(ev.location)])
+        if affected:
+            clog = await _consolidate_entities(state, data.get("long_memory", []), affected, state.turn_count, characters)
+            if clog:
+                data.setdefault("consolidation_log", []).append({"turn": state.turn_count, "trigger": "event", "ent": clog})
+                data["consolidation_log"] = data["consolidation_log"][-50:]
     state.turn_count += 1
     turn.state = state
     return await _save_turn(session_id, data, messages, short_memory, state, action, turn, mode,
