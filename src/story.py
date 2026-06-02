@@ -33,6 +33,7 @@ from .models import (
     StoryEvent,
     StoryMessage,
     StoryTurn,
+    StructuredFact,
     WorldBook,
 )
 
@@ -288,6 +289,71 @@ def _record_persona_proposal(state: RuntimeState, turn: StoryTurn) -> None:
         if ch and obs:
             state.persona_proposals.append({"turn": state.turn_count, "character": ch[:40], "observation": obs[:300]})
     state.persona_proposals = state.persona_proposals[-30:]
+
+
+# ── 长程记忆 B③ · canon 结构化:扁平事实 → 挂实体 + 标派生(扁平表保留作兼容) ──
+
+def _infer_fact_entity(text: str, roster: dict[str, str]) -> str:
+    """从事实文本推断它主要关乎的实体:命中受限词表里某实体别名(取最长别名,防子串误挂)就挂上,否则 global("")。"""
+    if not text or not roster:
+        return ""
+    low = text.lower()
+    best_alias, best_key = "", ""
+    for alias, key in roster.items():
+        if alias and alias in low and len(alias) > len(best_alias):
+            best_alias, best_key = alias, key
+    return best_key
+
+
+def _migrate_structured_facts(state: RuntimeState, roster: dict[str, str]) -> None:
+    """老存档迁移:structured 为空但扁平表有内容→据扁平表建结构化(实体推断,derived=False 当基线)。
+    幂等(structured 非空即跳过);向后兼容,扁平表不动。"""
+    fb = state.facts
+    if fb.structured:
+        return
+    for status in ("canon", "revealed", "uncertain", "hidden"):
+        for text in getattr(fb, status, []) or []:
+            t = str(text).strip()
+            if t:
+                fb.structured.append(StructuredFact(text=t, entity=_infer_fact_entity(t, roster),
+                                                    status=status, derived=False, source_turn=0))
+
+
+def _ingest_structured_facts(state: RuntimeState, update_facts: Any, roster: dict[str, str], turn: int) -> None:
+    """本轮模型在 state_update.facts 写的新事实→结构化入库(实体推断,derived=True 玩出来的派生 canon)。
+    去重(同 status+文本不重复);扁平表由 _apply_state_update 另行维护;结构化层封顶止血(精炼/消解是 B④)。"""
+    if not isinstance(update_facts, dict):
+        return
+    fb = state.facts
+    seen = {(s.status, s.text.strip()) for s in fb.structured}
+    for status in ("canon", "revealed", "uncertain", "hidden"):
+        for text in _as_text_list(update_facts.get(status)):
+            t = text.strip()
+            if t and (status, t) not in seen:
+                fb.structured.append(StructuredFact(text=t, entity=_infer_fact_entity(t, roster),
+                                                    status=status, derived=True, source_turn=turn))
+                seen.add((status, t))
+    if len(fb.structured) > 200:
+        fb.structured = fb.structured[-200:]
+
+
+def _entity_canon_index(structured: list[Any], wanted: set[str], per_entity: int = 5) -> dict[str, list[str]]:
+    """按在场实体取挂在它身上的结构化 canon 事实(隐藏/未披露的不注入正文),分组、每实体封顶。"""
+    by: dict[str, list[str]] = {}
+    for f in structured or []:
+        ent = getattr(f, "entity", "")
+        status = getattr(f, "status", "revealed")
+        text = (getattr(f, "text", "") or "").strip()
+        if not ent or ent not in wanted or not text or status == "hidden":
+            continue
+        tag = "派生" if getattr(f, "derived", False) else "设定"
+        by.setdefault(ent, []).append(f"[{tag}·{status}] {text}")
+    return {k: v[-per_entity:] for k, v in by.items()}
+
+
+def _strip_fact_tag(s: str) -> str:
+    """去掉 "[xxx] " 前缀,取正文,用于跨来源(A 记忆 / B③ canon)去重比对。"""
+    return s.split("] ", 1)[-1].strip() if s.startswith("[") else s.strip()
 
 
 def _json_obj(raw: str) -> dict[str, Any]:
@@ -1573,10 +1639,19 @@ async def _story_turn_impl(
     # roster 用于抽取/规整 memory_write.entity(挂载侧);entity_memory 把挂在「本轮在场角色 + 玩家 + 当前所在地」
     # 身上的派生事实从会话 long_memory 里确定性取出,注入对应角色/玩家/地点块(standard+deep 都生效,不靠相似度)。
     roster, ent_labels = _entity_roster(characters, player, world, story, state)
+    _migrate_structured_facts(state, roster)  # B③:老存档把扁平 facts 迁成结构化(幂等)
     wanted_keys = _present_entity_keys(state, characters, roster) | _present_location_keys(state, roster)
     if player and player.name:
         wanted_keys.add(_PLAYER_ENTITY)  # 玩家恒在场,挂玩家的记忆始终注入
     entity_memory = _entity_memory_index(data.get("long_memory", []), wanted_keys)
+    # B③:把挂在在场实体身上的结构化 canon 事实并进实体注入(与 A 记忆同块,跨来源去重、封顶)。
+    for ent, canon_lines in _entity_canon_index(state.facts.structured, wanted_keys).items():
+        cur = entity_memory.get(ent, [])
+        bodies = {_norm_entity(_strip_fact_tag(x)) for x in cur}
+        for ln in canon_lines:
+            if _norm_entity(_strip_fact_tag(ln)) not in bodies:
+                cur.append(ln); bodies.add(_norm_entity(_strip_fact_tag(ln)))
+        entity_memory[ent] = cur[-8:]
 
     # 骨架:角色 + 命中世界书/事件 + 故事总览 + 状态摘要 + 指令。先建好用于度量预算,召回/历史另行追加。
     skeleton = _prompt(characters, player, story, world_hits, event_hits, [], [], state, entity_memory)
@@ -1719,6 +1794,8 @@ async def _story_turn_impl(
         ]
 
     state = _apply_state_update(state, turn.state_update)
+    _ingest_structured_facts(state, turn.state_update.get("facts") if isinstance(turn.state_update, dict) else None,
+                             roster, state.turn_count)  # B③:本轮新事实结构化入库(挂实体+标派生)
     _progress_events(state, turn.triggered_events)
     _check_ending_predicates(story, state)  # 谓词齐备即代码侧客观达成结局(无谓词的故事回退模型判定)
     persona_changed = _check_persona_shifts(story, characters, state)  # B②:作者谓词触发的人格切版

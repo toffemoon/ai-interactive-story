@@ -172,12 +172,29 @@ class CharacterLog(BaseModel):
     impressions: list[str] = Field(default_factory=list)
 
 
+class StructuredFact(BaseModel):
+    """长程记忆 B③ · 结构化 canon 事实:扁平字符串事实升级成「挂实体 + 标派生」。
+
+    - entity:这条事实主要关乎的实体规范键(角色 cid / loc 地点键 / 玩家 / 空=global 全局)。
+    - status:真值边界(canon 已确立设定 / revealed 已披露 / uncertain 存疑 / hidden 隐藏未披露)。
+    - derived:False=上传设定的既有事实;True=玩出来的派生 canon(设计§二第三类:需长期生效的新事实)。
+    供按在场实体召回 canon、未来 NPC 知道范围过滤、B④ consolidation 消化矛盾。"""
+
+    text: str = ""
+    entity: str = Field("", description="挂的实体规范键(角色cid/loc键/玩家/空=global)")
+    status: Literal["canon", "revealed", "uncertain", "hidden"] = "revealed"
+    derived: bool = Field(False, description="True=玩出来的派生 canon;False=上传设定")
+    source_turn: int = 0
+
+
 class FactBoundary(BaseModel):
     canon: list[str] = Field(default_factory=list)
     revealed: list[str] = Field(default_factory=list)
     hidden: list[str] = Field(default_factory=list)
     uncertain: list[str] = Field(default_factory=list)
     forbidden: list[str] = Field(default_factory=list)
+    # 长程记忆 B③:挂实体的结构化事实层(扁平表保留作兼容 + 谓词判定;structured 供按实体召回 canon)
+    structured: list[StructuredFact] = Field(default_factory=list, description="挂实体 + 标派生的结构化 canon 事实")
 
 
 class EventTimelineItem(BaseModel):
