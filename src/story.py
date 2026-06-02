@@ -65,6 +65,8 @@ def _char_id(card: CharacterCard, idx: int = 0) -> str:
 
 # 长程记忆 A 档:玩家实体在记忆里的规范键(玩家没有 char_block,单独注入到玩家设定块)。
 _PLAYER_ENTITY = "__player__"
+# 长程记忆 B① 区域召回:地点实体规范键前缀(与角色 cid / 玩家键区分,避免撞键)。
+_LOC_PREFIX = "loc:"
 
 
 def _norm_entity(s: Any) -> str:
@@ -72,13 +74,15 @@ def _norm_entity(s: Any) -> str:
     return str(s or "").strip().lower()
 
 
-def _entity_roster(characters: list[CharacterCard],
-                   player: PlayerCard | None) -> tuple[dict[str, str], list[str]]:
+def _entity_roster(characters: list[CharacterCard], player: PlayerCard | None,
+                   world: WorldBook | None = None, story: StoryBook | None = None,
+                   state: RuntimeState | None = None) -> tuple[dict[str, str], list[str]]:
     """受限词表:返回 (别名→规范键 的映射, 给 prompt 看的可读标签列表)。
 
-    角色:名字 / character_id 两个别名都映射到该角色的 cid;玩家:玩家名 / "玩家" → _PLAYER_ENTITY。
+    角色:名字 / character_id 两个别名都映射到该角色的 cid;玩家:玩家名 / "玩家" → _PLAYER_ENTITY;
+    地点(B①):已知地点别名 → loc 键(见 `_location_aliases`)。
     模型给 memory_write.entity 选了表外的值(自由发挥)就清空,不让它挂错实体。
-    召回时 present_characters(通常是角色名)也过这张表解析成同一个规范键,确保挂载与召回对得上。
+    召回时 present_characters / 当前所在地 也过这张表解析成同一个规范键,确保挂载与召回对得上。
     """
     roster: dict[str, str] = {}
     labels: list[str] = []
@@ -92,6 +96,11 @@ def _entity_roster(characters: list[CharacterCard],
         roster[_norm_entity(player.name)] = _PLAYER_ENTITY
         roster[_norm_entity("玩家")] = _PLAYER_ENTITY
         labels.append(f"{player.name}=玩家")
+    # 地点别名:撞到角色别名时让角色优先(setdefault),避免地名盖掉同名角色。
+    loc_roster, loc_labels = _location_aliases(world, story, state)
+    for k, v in loc_roster.items():
+        roster.setdefault(k, v)
+    labels.extend(loc_labels)
     return roster, labels
 
 
@@ -127,6 +136,62 @@ def _entity_memory_index(long_memory: list[Any], wanted: set[str],
         kind = item.get("kind", "note")
         by_entity.setdefault(ent, []).append(f"[{kind}] {text}")
     return {ent: lines[-per_entity:] for ent, lines in by_entity.items()}
+
+
+# ── 长程记忆 B① 区域/实体召回:把 A 的「按在场角色召回」扩到地点 ──
+
+def _loc_key(name: Any) -> str:
+    """地点规范键:loc: + slug。"""
+    return _LOC_PREFIX + storage.slug(str(name or ""), "loc")
+
+
+def _location_aliases(world: WorldBook | None, story: StoryBook | None,
+                      state: RuntimeState | None) -> tuple[dict[str, str], list[str]]:
+    """已知地点的受限词表:(别名→loc 键, 可读标签)。
+
+    来源:世界书 source=='location' 的条目 + 故事事件 location + 当前 scene/player 所在地。
+    当前所在地每轮都进表,所以「挂在此地」与「回到此地召回」用同一个 loc 键对得上。
+    诚实局限:scene.location 是模型自由文本,同一地点两次措辞不同(正厅 vs 听雪山庄正厅)键就不同、会漏召回;
+    固定来源(世界书/故事)地名稳定,能把模型往规范地名上引。"""
+    roster: dict[str, str] = {}
+    labels: list[str] = []
+    seen: set[str] = set()
+
+    # 占位/默认地点不当真实地点实体(否则默认 player.location="未定地点" 会污染词表 + 误召回)。
+    placeholders = {"未定地点", "未定时间", "故事开场", "现场", "未知", "未知地点", "未定", "-"}
+
+    def add(name: Any) -> None:
+        nm = str(name or "").strip()
+        if not nm or nm in placeholders:
+            return
+        key = _loc_key(nm)
+        roster.setdefault(_norm_entity(nm), key)
+        roster.setdefault(_norm_entity(key), key)  # loc 键自映射(同 cid:既是键也是值),两条抽取路径都对得上
+        if key not in seen:
+            labels.append(f"{nm}={key}")
+            seen.add(key)
+
+    if world:
+        for e in world.entries:
+            if getattr(e, "source", "") == "location":
+                add(e.comment or (e.keys[0] if e.keys else ""))
+    if story:
+        for ev in story.events:
+            add(ev.location)
+    if state:
+        add(state.scene.location)
+        add(state.player.location)
+    return roster, labels
+
+
+def _present_location_keys(state: RuntimeState, roster: dict[str, str]) -> set[str]:
+    """本轮在场地点的规范键:玩家当前所在地 + 场景地点,解析成 loc 键(命中受限词表才算)。"""
+    keys: set[str] = set()
+    for loc in (state.scene.location, state.player.location):
+        k = roster.get(_norm_entity(loc))
+        if k and k.startswith(_LOC_PREFIX):
+            keys.add(k)
+    return keys
 
 
 def _json_obj(raw: str) -> dict[str, Any]:
@@ -568,7 +633,8 @@ async def _extract_long_memory(session_id: str, short_items: list[dict],
     # 实体轴:给模型一份受限的实体名册,让它【从中选】每条记忆挂在哪个实体上(不自由发挥)。
     roster_hint = (
         "为每条记忆标注它主要关乎的实体(entity),只能从下面名册里【选一个等号右边的值】填进 entity;"
-        "关乎玩家就填'玩家';不明确关乎名册里任一实体就留空字符串。\n名册:" + "; ".join(entity_labels or [])
+        "关乎玩家就填'玩家',关乎某地点就填名册里该地点对应的 loc: 值;"
+        "不明确关乎名册里任一实体就留空字符串。\n名册:" + "; ".join(entity_labels or [])
         if entity_labels else "entity 一律留空字符串。"
     )
     try:
@@ -836,6 +902,14 @@ def _prompt(
             "\n关于玩家的既有事实/记忆(此前剧情里确立、必须保持一致):\n"
             + "\n".join(f"- {x}" for x in player_mem_lines)
         )
+    # 长程记忆 B① 区域召回:挂在当前所在地点上的派生事实(地点无 char_block,注入到运行状态旁的地点块)。
+    loc_mem_lines = [x for k, lines in entity_memory.items() if k.startswith(_LOC_PREFIX) for x in lines]
+    location_mem_block = ""
+    if loc_mem_lines:
+        location_mem_block = (
+            "\n\n# 当前地点的既有事实/记忆(此前在玩家当前所在地确立、回到此地必须保持一致)\n"
+            + "\n".join(f"- {x}" for x in loc_mem_lines[:8])
+        )
     return (
         "你是互动故事引擎,不是普通聊天助手。你要生成一轮可玩的故事推进。\n"
         "严格事实边界:只能使用角色卡、世界书、故事书、玩家卡、运行状态和记忆中提供的事实。"
@@ -858,7 +932,7 @@ def _prompt(
         f"# 活跃角色\n{chr(10).join(char_blocks)}\n\n"
         f"# 玩家设定\n{json.dumps(player.model_dump(), ensure_ascii=False) if player else '未提供'}{player_mem_block}\n\n"
         f"# 故事书总览\n{story_overview}\n\n"
-        f"# 当前运行状态\n{json.dumps(_state_digest(state), ensure_ascii=False)}\n\n"
+        f"# 当前运行状态\n{json.dumps(_state_digest(state), ensure_ascii=False)}{location_mem_block}\n\n"
         f"# 命中的世界书/设定卡\n{chr(10).join(world_hits) or '无'}\n\n"
         f"# 命中的故事事件\n{story_block or '无'}\n\n"
         f"# 向量召回资料\n{chr(10).join(kb_hits) or '无'}\n\n"
@@ -909,9 +983,12 @@ def _prompt(
         "- 玩家已达成的目标放进 state_update.player.completed_goals(会从当前目标里移除)。\n\n"
         "# 记忆挂载(memory_write,关乎长期一致性)\n"
         "本轮若玩出了会长期生效的新事实/关系/承诺/能力变化,写进 memory_write。每条尽量挂到它主要关乎的实体上:\n"
-        "- entity 只能从上面【活跃角色】括号里的角色 ID 原文里选(例如 写 大黑塔 的 ID),关乎玩家就填'玩家';\n"
-        "  挂不上名册里任何具体实体(纯氛围/无关琐事)就把 entity 留成空字符串\"\"。不要自己发明名册外的实体名。\n"
-        "- 这条挂载决定了【该实体下次在场时,这条记忆会被必然取回注入】,所以关乎某角色长期设定/状态的事实务必挂上它。\n\n"
+        "- entity 优先从上面【活跃角色】括号里的角色 ID 原文里选(例如 写 大黑塔 的 ID),关乎玩家就填'玩家';\n"
+        "  若这条事实主要关乎某个【地点】(尤其玩家当前所在地,见运行状态 scene.location:某地藏了什么、发生过什么、有何机关/规矩),"
+        "就把 entity 填成那个地点名(用 scene.location 的原文,别另起新名);\n"
+        "  挂不上名册里任何具体角色/玩家/地点(纯氛围/无关琐事)就把 entity 留成空字符串\"\"。不要自己发明名册外的实体名。\n"
+        "- 这条挂载决定了【该实体(角色/玩家/地点)下次在场或玩家再到该地点时,这条记忆会被必然取回注入】,"
+        "所以关乎某角色长期设定/状态、或某地点固有事实的内容务必挂上它。\n\n"
         "输出严格 JSON,只输出这一个对象,格式:\n"
         "{"
         '"reasoning":{"hard_violation":false,"violation_detail":"","world_counter":"","ooc_risk":"","note":"一句话推演"},'
@@ -927,7 +1004,7 @@ def _prompt(
         '"timeline":[{"event_id":"事件ID","status":"active"}],'
         '"main_resolved":false,"reached_ending":""'
         "},"
-        '"memory_write":[{"kind":"event|choice|relationship|fact|quest|note","text":"...", "importance":1-5, "entity":"该记忆关乎的角色ID,关乎玩家填玩家,挂不上留空"}],'
+        '"memory_write":[{"kind":"event|choice|relationship|fact|quest|note","text":"...", "importance":1-5, "entity":"该记忆关乎的角色ID/玩家/地点名(用scene.location原文),挂不上留空"}],'
         '"triggered_events":["event_id"]'
         "}"
     )
@@ -1381,11 +1458,11 @@ async def _story_turn_impl(
     world_hits = _world_keyword_hits(world, scan_text)
     event_hits = _story_event_hits(story, scan_text, state)
 
-    # 长程记忆 A 档:受限实体词表 + 按在场实体确定性召回。
-    # roster 用于抽取/规整 memory_write.entity(挂载侧);entity_memory 把挂在「本轮在场实体 + 玩家」
-    # 身上的派生事实从会话 long_memory 里确定性取出,注入对应角色/玩家块(standard+deep 都生效,不靠相似度)。
-    roster, ent_labels = _entity_roster(characters, player)
-    wanted_keys = _present_entity_keys(state, characters, roster)
+    # 长程记忆 A 档 + B① 区域召回:受限实体词表(角色 + 玩家 + 地点)+ 按在场实体/地点确定性召回。
+    # roster 用于抽取/规整 memory_write.entity(挂载侧);entity_memory 把挂在「本轮在场角色 + 玩家 + 当前所在地」
+    # 身上的派生事实从会话 long_memory 里确定性取出,注入对应角色/玩家/地点块(standard+deep 都生效,不靠相似度)。
+    roster, ent_labels = _entity_roster(characters, player, world, story, state)
+    wanted_keys = _present_entity_keys(state, characters, roster) | _present_location_keys(state, roster)
     if player and player.name:
         wanted_keys.add(_PLAYER_ENTITY)  # 玩家恒在场,挂玩家的记忆始终注入
     entity_memory = _entity_memory_index(data.get("long_memory", []), wanted_keys)
