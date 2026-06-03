@@ -17,7 +17,8 @@ def inspect(run_dir: str, fixture_key: str):
     fx = FIXTURES[fixture_key]()
     probes = {int(p["query_turn"]): p for p in fx.get("memory_probes", [])}
     scripted = {int(t): a for t, a in (fx.get("scripted_actions") or {}).items()}
-    turns = sorted(set(probes) | set(scripted))
+    abst = {int(p["turn"]): p for p in fx.get("abstention_probes", [])}
+    turns = sorted(set(probes) | set(scripted) | set(abst))
 
     by_turn = {r["turn"]: r for r in pt}
     print(f"### {run_dir}  fixture={fixture_key}  共 {len(pt)} 轮\n")
@@ -36,6 +37,8 @@ def inspect(run_dir: str, fixture_key: str):
             tag.append(f"记忆探针[{probes[t]['id']}] 真值={tok!r} {'✅出现' if tok in blob else '❌未现'}")
         if t in scripted:
             tag.append("脚本abstention/canon轮")
+        if t in abst:
+            tag.append(f"无真值abstention探针[{abst[t]['note']}](应认忘不编)")
         print(f"== turn {t} == {' · '.join(tag)}")
         print(f"  玩家: {r.get('player_input','')[:200]}")
         if narr:

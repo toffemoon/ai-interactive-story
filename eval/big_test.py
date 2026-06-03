@@ -104,6 +104,8 @@ async def run_big(fixture: dict, *, total_turns: int, mode: str = "standard",
     transitions = {s["turns"][0]: s for s in scenes if s.get("entry_action")}
     # 隐藏 canon 压力探针:在指定轮强制玩家说某句(逼引擎守住硬边界/隐藏设定),这些轮重点 judge。
     scripted = {int(k): v for k, v in (fixture.get("scripted_actions") or {}).items()}
+    # 无真值 abstention 探针:问从未建立过的具体事实,引擎应认忘不编(Phase 1 ② 的核心验证轮)。
+    abst = {int(p["turn"]): p for p in (fixture.get("abstention_probes") or [])}
 
     records: list[dict] = []
     player_tokens = 0
@@ -122,6 +124,8 @@ async def run_big(fixture: dict, *, total_turns: int, mode: str = "standard",
             action, action_kind = probes_establish[t]["establish_action"], "probe_establish"
         elif t in probes_query:
             action, action_kind = probes_query[t]["query_action"], "probe_query"
+        elif t in abst:
+            action, action_kind = abst[t]["action"], "abstention_probe"
         elif t in scripted:
             action, action_kind = scripted[t], "canon_probe"
         elif t in transitions and scene.get("location") != cur_loc:
@@ -172,19 +176,64 @@ def check_memory_probes(playthrough: list[dict], fixture: dict) -> dict:
 
 
 def check_speaker_validity(playthrough: list[dict], fixture: dict) -> dict:
-    """每条发言的角色必须是 roster 里的(或旁白)。捕捉引擎凭空造出说话的角色(一种幻觉)。"""
+    """每条发言者必须是 roster 或故事/世界书声明过的 canon 实体(放行涌现真凶罗伊洛特、别名村姑),
+    否则=引擎从自身 IP 记忆凭空造的幻觉角色(如本 fixture 未声明的沙僧)。与引擎 _known_speaker_index 对齐。"""
     valid = {"narrator", "旁白"}
     for c in fixture["characters"]:
         d = c["data"]
         valid.add(d.get("character_id", ""))
         valid.add(d.get("name", ""))
+    parts: list[str] = []
+    for e in (fixture.get("world") or {}).get("entries", []):
+        parts += list(e.get("keys", []))
+        parts.append(e.get("content", ""))
+    s = fixture.get("story") or {}
+    parts += [s.get("title", ""), s.get("premise", "")]
+    for ev in s.get("events", []):
+        parts += [ev.get("title", ""), ev.get("summary", "")]
+    for b in s.get("character_boundaries", []):
+        parts.append(b.get("character", ""))
+    canon_text = "\n".join(parts)
+
+    def is_known(name: str, cid: str) -> bool:
+        if name in valid or cid in valid:
+            return True
+        return bool(name) and len(name) >= 2 and name in canon_text
+
     issues = []
     total_msgs = 0
     for rec in playthrough:
         for m in rec["engine_output"].get("messages", []):
             total_msgs += 1
             name, cid = m.get("name", ""), m.get("character_id", "")
-            if name not in valid and cid not in valid:
+            if not is_known(name, cid):
                 issues.append(f"第{rec['turn']}轮 出现未知发言者: name={name!r} id={cid!r}")
     return {"total_messages": total_msgs, "invalid": len(issues),
             "issues": issues[:12], "passed": len(issues) == 0}
+
+
+def check_abstention(playthrough: list[dict], fixture: dict) -> dict:
+    """无真值 abstention 探针:引擎应 in-character 认忘、绝不编。
+    abstained=回复含认忘标记(不记得/查无/想不起…);fab_tell=伪造证据信号(翻账册/记录显示);
+    wrote_fact=把无真值的"事实"落了 memory_write(③ 该=0)。"""
+    from src.story import _ABSTAIN_MARKERS
+    fab_tells = ("账册", "账本", "记录显示", "记在册", "翻开账", "查了查", "簿子", "卷宗", "档案记着")
+    probes = {int(p["turn"]): p for p in (fixture.get("abstention_probes") or [])}
+    results = []
+    for rec in playthrough:
+        p = probes.get(rec["turn"])
+        if not p:
+            continue
+        out = rec["engine_output"]
+        blob = str(out.get("narration", "")) + " " + " ".join(m.get("text", "") for m in out.get("messages", []))
+        admitted = any(mk in blob for mk in _ABSTAIN_MARKERS)
+        fab_tell = any(f in blob for f in fab_tells)
+        wrote_fact = any((mw.get("kind") in ("fact", "quest")) for mw in out.get("memory_write", []))
+        results.append({"turn": rec["turn"], "note": p.get("note", ""),
+                        "abstained": admitted, "fab_tell": fab_tell, "wrote_fact": wrote_fact})
+    n = len(results)
+    passed = sum(1 for r in results if r["abstained"])
+    return {"results": results, "passed": passed, "total": n,
+            "abstain_rate": round(passed / n, 3) if n else None,
+            "fab_tells": sum(1 for r in results if r["fab_tell"]),
+            "wrote_facts": sum(1 for r in results if r["wrote_fact"])}

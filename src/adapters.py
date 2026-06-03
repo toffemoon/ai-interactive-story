@@ -36,6 +36,7 @@ class ContextBundle:
     action_prompt: str                     # 本轮玩家行动 prompt
     summary: str = ""                      # 早前剧情滚动摘要(已压缩)
     recall_block: str = ""                 # 向量召回片段(深度模式)
+    abstain_note: str = ""                 # 具体事实查询的 abstention 硬指令(有据照实/无据认忘绝不编)
     recap: str = ""                        # 近期若干轮折叠文本(给折叠型适配器)
     recent_messages: list[dict] = field(default_factory=list)  # 近期原始多轮(给多轮型适配器)
     anchor: str = ""                       # 主线锚点
@@ -87,6 +88,8 @@ class DeepSeekAdapter:
             system += "\n\n# 早前剧情摘要(更久之前发生的事,已压缩)\n" + b.summary
         if b.recall_block:
             system += "\n\n# 检索到的相关旧资料(向量召回,供参考,不要照抄)\n" + b.recall_block
+        if b.abstain_note:
+            system += "\n\n" + b.abstain_note
         if b.recap:
             system += (
                 "\n\n# 最近剧情(最近若干轮的实际经过,供你延续上下文与口吻)\n" + b.recap +
@@ -136,6 +139,8 @@ class ClaudeAdapter:
             sys_parts.append("<early_summary>\n" + b.summary + "\n</early_summary>")
         if b.recall_block:
             sys_parts.append("<retrieved_context>\n" + b.recall_block + "\n</retrieved_context>")
+        if b.abstain_note:
+            sys_parts.append("<abstention>\n" + b.abstain_note + "\n</abstention>")
         if b.anchor:
             sys_parts.append("<main_anchor>\n" + b.anchor + "\n</main_anchor>")
         if b.esc_text:

@@ -56,6 +56,7 @@ async def main_async(fixture_key: str, turns: int, mode: str, label: str):
     eng_out = sum(r["engine_output"].get("usage", {}).get("completion_tokens", 0) for r in playthrough)
     eng_cost = (eng_in * DS_IN + eng_out * DS_OUT) / 1e6
     player_cost = (player_tokens * (DS_IN + DS_OUT) / 2) / 1e6
+    abst = big_test.check_abstention(playthrough, fx)
 
     run_dir = orchestrator.new_run_dir(label)
     orchestrator.save_playthrough(run_dir, playthrough)
@@ -66,7 +67,7 @@ async def main_async(fixture_key: str, turns: int, mode: str, label: str):
                            "min": min(x["score"] for x in v),
                            "issues": sum(len(x["issues"]) for x in v)} for k, v in structural["turn_scores"].items()},
         "structural_session": {k: {"score": v["score"], "issues": len(v["issues"])} for k, v in structural["session_scores"].items()},
-        "memory_probes": mem, "speaker_validity": spk,
+        "memory_probes": mem, "speaker_validity": spk, "abstention": abst,
         "cost": {"engine_tokens": eng_in + eng_out, "engine_usd": round(eng_cost, 4),
                  "player_tokens": player_tokens, "player_usd": round(player_cost, 4)},
         "scripted_probe_turns": sorted(int(k) for k in (fx.get("scripted_actions") or {})),
@@ -79,6 +80,9 @@ async def main_async(fixture_key: str, turns: int, mode: str, label: str):
     print(f"[{fixture_key}] speaker 非法 {spk['invalid']}/{spk['total_messages']}", flush=True)
     for i in spk["issues"]:
         print("   ", i, flush=True)
+    print(f"[{fixture_key}] abstention 认忘 {abst['passed']}/{abst['total']} 率{abst['abstain_rate']} · 伪证tell {abst['fab_tells']} · 落假事实 {abst['wrote_facts']}", flush=True)
+    for r in abst["results"]:
+        print(f"  [{'认忘' if r['abstained'] else '可能编'}] turn{r['turn']} {r['note']} fab_tell={r['fab_tell']} wrote_fact={r['wrote_fact']}", flush=True)
     print(f"[{fixture_key}] 结构均分", {k: summary["structural"][k]["mean"] for k in summary["structural"]}, flush=True)
     print(f"[{fixture_key}] 成本 引擎 {eng_in + eng_out:,} tok ${eng_cost:.4f} | 玩家 {player_tokens:,} tok ${player_cost:.4f}", flush=True)
     print(f"→ {run_dir}", flush=True)

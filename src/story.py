@@ -46,8 +46,10 @@ SUMMARY_MAX_CHARS = 900        # 滚动摘要注入上限
 SUMMARY_RECOMPUTE_EVERY = 4    # 更早消息每多这么多条,重算一次滚动摘要
 DEEP_WARMUP_AT = 0.65          # 深度模式:上下文用量超此比例,后台预热 embedding 模型
 DEEP_RECALL_AT = 0.80          # 深度模式:超此比例且模型就绪,启用向量召回
-RECALL_QUERY_ACTION_ONLY = False  # 实验门控:向量召回 query 仅用当前问句(不掺最近8条消息),
-                                  # 防具体事实查询被近期场景稀释(见 ais-stress STANDARD-VS-DEEP FINDINGS)
+RECALL_QUERY_ACTION_ONLY = False  # 实验门控:向量召回 query 强制仅用当前问句(默认 False:按 _is_fact_query 条件化)
+MISS_DIST = 0.45               # abstention:具体事实查询时 top1 余弦距离 > 此值 = 检索无相关记录(硬 NOT_FOUND 兜底)
+PHASE1_FIXES = True            # Phase 1 总开关(runner 置 False 跑 baseline 对照 / 也是 prod kill-switch):
+                              # off = 无①召回条件化 / ②abstention / ③不回写编造 / ④发言者已知实体门
 
 # 世界时钟(故事内分钟):模型每轮估 time_advance,代码 clamp。
 MIN_TIME_ADVANCE = 1           # 每轮至少推进的故事分钟,防时钟冻住
@@ -860,20 +862,71 @@ def _compact_retry_messages(
     ]
 
 
-def _normalize_messages(items: Any, characters: list[CharacterCard]) -> list[StoryMessage]:
+def _known_speaker_index(characters: list[CharacterCard], world: "WorldBook | None",
+                         story: "StoryBook | None") -> tuple[dict[str, tuple[str, str]], str]:
+    """发言者已知实体索引:roster(id/name → 规范 (id,name))+ 声明过的 canon 文本。
+    canon_text 用于放行"故事/世界书里出现过、但不在当前 roster"的涌现角色(如真凶罗伊洛特、白骨精别名村姑),
+    同时拦截"模型从自身 IP 记忆凭空补出、文本里根本没有"的幻觉角色(如本 fixture 未声明的沙僧)。"""
+    roster: dict[str, tuple[str, str]] = {}
+    roster_list: list[tuple[str, str]] = []
+    for i, c in enumerate(characters or []):
+        cid = _char_id(c, i)
+        nm = c.data.name or cid
+        roster[cid] = (cid, nm)
+        roster[nm] = (cid, nm)
+        roster_list.append((cid, nm))
+    parts: list[str] = []
+    if world:
+        for e in world.entries:
+            parts += [k for k in (e.keys or [])]
+            parts.append(e.content or "")
+    if story:
+        parts += [story.title or "", story.premise or ""]
+        for ev in story.events:
+            parts += [ev.title or "", ev.summary or ""]
+        for b in story.character_boundaries:
+            parts.append(b.character or "")
+    return roster, roster_list, "\n".join(parts)
+
+
+def _normalize_messages(items: Any, characters: list[CharacterCard],
+                        world: "WorldBook | None" = None, story: "StoryBook | None" = None) -> list[StoryMessage]:
     out = []
     fallback = characters[0] if characters else None
     fallback_name = fallback.data.name if fallback else "旁白"
     fallback_id = _char_id(fallback, 0) if fallback else "narrator"
+    if not PHASE1_FIXES:  # baseline:原行为——任何 character_id 照收,缺则归 fallback(不拦幻觉发言者)
+        for item in items or []:
+            if isinstance(item, dict):
+                text = str(item.get("text", "")).strip()
+                if text:
+                    out.append(StoryMessage(character_id=str(item.get("character_id") or fallback_id),
+                                            name=str(item.get("name") or fallback_name), text=text))
+            elif isinstance(item, str) and item.strip():
+                out.append(StoryMessage(character_id=fallback_id, name=fallback_name, text=item.strip()))
+        return out
+    roster, roster_list, canon_text = _known_speaker_index(characters, world, story)
     for item in items or []:
         if isinstance(item, dict):
             text = str(item.get("text", "")).strip()
-            if text:
-                out.append(StoryMessage(
-                    character_id=str(item.get("character_id") or fallback_id),
-                    name=str(item.get("name") or fallback_name),
-                    text=text,
-                ))
+            if not text:
+                continue
+            cid = str(item.get("character_id") or "").strip()
+            name = str(item.get("name") or "").strip()
+            hit = roster.get(cid) or roster.get(name)
+            if not hit and name and len(name) >= 2:  # 模糊:容忍部分名漂移(福尔摩斯↔夏洛克·福尔摩斯)
+                for rid, rnm in roster_list:
+                    if name in rnm or rnm in name:
+                        hit = (rid, rnm)
+                        break
+            if hit:  # roster 命中(按 id/name/部分名)→ 归一到规范 id/name
+                out.append(StoryMessage(character_id=hit[0], name=hit[1], text=text))
+            elif name and len(name) >= 2 and name in canon_text:
+                # ④ 涌现 canon 实体:故事/世界书声明过 → 放行,归一到稳定 id 便于 state 一致跟踪
+                out.append(StoryMessage(character_id=storage.slug(name, "canon"), name=name, text=text))
+            elif not name and not cid:  # 无署名 → 当旁白/主角(沿用旧行为)
+                out.append(StoryMessage(character_id=fallback_id, name=fallback_name, text=text))
+            # else: 未知实体(模型自身 IP 记忆现编,如沙僧)→ 丢弃,掐断幻觉发言者
         elif isinstance(item, str) and item.strip():
             out.append(StoryMessage(character_id=fallback_id, name=fallback_name, text=item.strip()))
     return out
@@ -1155,6 +1208,51 @@ async def story_turn(
         )
 
 
+# ── Phase 1:具体事实查询判定 + abstention 兜底 ──────────────────────
+_FACT_Q_INTERROG = ("?", "?", "什么", "多少", "几", "哪", "谁", "何时", "来着", "吗", "呢")
+_FACT_Q_CUES = (
+    "来着", "记得", "说过", "讲过", "提过", "当初", "当时", "之前", "先前", "最早", "上次",
+    "刚进", "刚来", "第一次", "保管", "交给", "托你", "开价", "刻的", "刻着", "刻了",
+    "叫什么", "名字", "几点", "哪天", "哪一天", "哪两", "几个", "多少", "什么时候",
+    "在哪", "是什么", "什么字", "什么物", "什么颜色", "多少钱", "什么价",
+)
+_ABSTAIN_MARKERS = (
+    "不记得", "记不起", "记不清", "想不起", "查无", "没有记录", "无记录", "不曾记",
+    "记不得", "无从记", "记不住", "已经忘", "不复记", "没印象", "无此记录", "无从查",
+)
+
+
+def _is_fact_query(action: str) -> bool:
+    """玩家是否在问一个具体既往事实(名物/数字/时间/名字)。只对这类触发 abstention,
+    避免误伤含糊/指代/确认轮('那它呢''你确定吗')。"""
+    a = action or ""
+    if not any(q in a for q in _FACT_Q_INTERROG):
+        return False
+    return any(c in a for c in _FACT_Q_CUES)
+
+
+def _abstain_note(kind: str) -> str:
+    """事实查询时注入的硬指令:有据照实答、无据 in-character 认忘,绝不编。
+    kind: found=检索到证据 / miss=检索无记录 / noretrieval=无向量检索(标准模式,凭上下文)。"""
+    head = "# 记忆检索(重要)\n玩家在问一个具体的既往事实。"
+    body = {
+        "found": ("**只有上面『检索到的相关旧资料』里明确写到的,才能照实说出来;"
+                  "若那些资料里并没有玩家问的那个具体数字/日期/名物/名字,就 in-character 坦白"
+                  "『我不记得了/查无此记录』,绝对不要编一个具体答案,也不要翻出没给你的账册/记录/笔记来作证。**"),
+        "miss": ("**检索没有找到任何相关记录。请 in-character 坦白你不记得/查无此事,"
+                 "绝对不要编造任何具体的数字/日期/名物/名字,也不要凭空翻出账册/记录/笔记作证。**"),
+        "noretrieval": ("**只有你在上面『最近剧情/摘要』里确实见到的,才能照实说;"
+                        "如果其中并没有玩家问的那个具体数字/日期/名物/名字,就 in-character 坦白你不记得,"
+                        "绝对不要编一个具体答案,也不要翻出没给你的账册/记录/笔记来作证。**"),
+    }
+    return head + body.get(kind, body["noretrieval"])
+
+
+def _has_abstain_markers(turn: "StoryTurn") -> bool:
+    blob = (turn.narration or "") + " " + " ".join(m.text or "" for m in turn.messages)
+    return any(mk in blob for mk in _ABSTAIN_MARKERS)
+
+
 async def _story_turn_impl(
     *,
     session_id: str,
@@ -1229,6 +1327,9 @@ async def _story_turn_impl(
 
     # L3 向量召回(仅深度模式):上下文逼近预算时后台预热,就绪且超召回阈值时补早期精确细节。
     recall_block = ""
+    abstain_note = ""
+    fact_query = _is_fact_query(action)
+    fact_miss = False  # 具体事实查询且检索硬 miss → 供 ③ 不回写编造
     if mode == "deep" and older:
         usage = (len(skeleton) + len(recap) + len(summary)) / CONTEXT_BUDGET_CHARS
         if usage >= DEEP_WARMUP_AT:
@@ -1239,13 +1340,24 @@ async def _story_turn_impl(
                 await asyncio.to_thread(_index_books, session_id, world, story)
                 await asyncio.to_thread(memory.index_history, session_id, messages)
                 data["vector_warmed"] = True
-            recall_query = action if RECALL_QUERY_ACTION_ONLY else scan_text
+            # ① 召回 query 条件化:具体事实查询用问句本身(防 scan_text 把真值挤出 top4);含糊/指代轮用 scan_text。
+            recall_query = action if ((PHASE1_FIXES and fact_query) or RECALL_QUERY_ACTION_ONLY) else scan_text
             kb_hits = await asyncio.to_thread(memory.search_knowledge, session_id, recall_query, 6)
-            old_chat = await asyncio.to_thread(memory.search, session_id, recall_query, 4, max(0, start_idx - 1))
+            scored = await asyncio.to_thread(memory.search_scored, session_id, recall_query, 4, max(0, start_idx - 1))
             lm_hits = await asyncio.to_thread(memory.search_long_memory, session_id, recall_query, 6)
+            old_chat = [t for t, _ in scored]
+            best = scored[0][1] if scored else 99.0
             recall_lines = kb_hits + [f"[旧对话] {x}" for x in old_chat] + [f"[长期记忆] {x}" for x in lm_hits]
             if recall_lines:
                 recall_block = "\n".join(recall_lines)
+            # ② abstention:具体事实查询时,注入硬指令(模型据证据判定有没有答案);top1 距离过大=硬 NOT_FOUND。
+            if PHASE1_FIXES and fact_query:
+                found = bool(recall_lines) and best <= MISS_DIST
+                abstain_note = _abstain_note("found" if found else "miss")
+                fact_miss = not found
+    # ② 标准模式 / 深度但召回未激活:无检索,仍对事实查询给认忘指令(防无据自信编)。
+    if PHASE1_FIXES and fact_query and not abstain_note:
+        abstain_note = _abstain_note("noretrieval")
 
     # 主线锚点 + 世界时钟 + 该主动恶化登场的事件(第5组 5b)。
     anchor = _main_anchor(story, player)
@@ -1269,6 +1381,7 @@ async def _story_turn_impl(
         action_prompt=action_prompt,
         summary=summary,
         recall_block=recall_block,
+        abstain_note=abstain_note,
         recap=recap,
         recent_messages=messages[start_idx:],
         anchor=anchor,
@@ -1338,7 +1451,7 @@ async def _story_turn_impl(
 
     turn = StoryTurn(
         narration=str(obj.get("narration", "")),
-        messages=_normalize_messages(obj.get("messages"), characters),
+        messages=_normalize_messages(obj.get("messages"), characters, world, story),
         choices=_normalize_choices(obj.get("choices")),
         state_update=obj.get("state_update") if isinstance(obj.get("state_update"), dict) else {},
         memory_write=_normalize_memory_write(obj.get("memory_write")),
@@ -1346,6 +1459,10 @@ async def _story_turn_impl(
         reasoning=_normalize_reasoning(obj.get("reasoning")),
     )
     turn = _ensure_story_body(turn, action, characters)
+    # ③ 不回写编造:具体事实查询且(检索硬 miss 或模型已 in-character 认忘)→ 丢弃本轮 fact/quest delta,
+    # 掐断"编造→落库→自我强化"。叙事/event/note 保留(它们记的是"发生了什么",不是断言某事实值)。
+    if PHASE1_FIXES and fact_query and (fact_miss or _has_abstain_markers(turn)):
+        turn.memory_write = [m for m in turn.memory_write if m.kind not in ("fact", "quest")]
     if not turn.choices:
         turn.choices = [
             StoryChoice(id="ask_detail", label="追问一个关键细节", intent="ask"),
