@@ -30,6 +30,10 @@ async def main_async(fixture_key: str, turns: int, mode: str, label: str):
         if action_only:
             _story.RECALL_QUERY_ACTION_ONLY = True       # 实验:召回 query 仅用当前问句
             sess = sess + "-aq"                          # 独立 session,不覆盖原 deep 向量
+        if _os.getenv("PHASE2") == "1":                  # Phase 2:开实体活档(含 Phase 1 全部修复)
+            _story.PHASE2_DOSSIER = True
+            sess = sess + "-p2"
+            print("  [phase2] 实体活档 ON", flush=True)
         _memory.ensure_loading()
         for _ in range(150):
             if _memory.is_ready():
