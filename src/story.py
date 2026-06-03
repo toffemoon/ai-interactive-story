@@ -46,6 +46,8 @@ SUMMARY_MAX_CHARS = 900        # 滚动摘要注入上限
 SUMMARY_RECOMPUTE_EVERY = 4    # 更早消息每多这么多条,重算一次滚动摘要
 DEEP_WARMUP_AT = 0.65          # 深度模式:上下文用量超此比例,后台预热 embedding 模型
 DEEP_RECALL_AT = 0.80          # 深度模式:超此比例且模型就绪,启用向量召回
+RECALL_QUERY_ACTION_ONLY = False  # 实验门控:向量召回 query 仅用当前问句(不掺最近8条消息),
+                                  # 防具体事实查询被近期场景稀释(见 ais-stress STANDARD-VS-DEEP FINDINGS)
 
 # 世界时钟(故事内分钟):模型每轮估 time_advance,代码 clamp。
 MIN_TIME_ADVANCE = 1           # 每轮至少推进的故事分钟,防时钟冻住
@@ -1237,9 +1239,10 @@ async def _story_turn_impl(
                 await asyncio.to_thread(_index_books, session_id, world, story)
                 await asyncio.to_thread(memory.index_history, session_id, messages)
                 data["vector_warmed"] = True
-            kb_hits = await asyncio.to_thread(memory.search_knowledge, session_id, scan_text, 6)
-            old_chat = await asyncio.to_thread(memory.search, session_id, scan_text, 4, max(0, start_idx - 1))
-            lm_hits = await asyncio.to_thread(memory.search_long_memory, session_id, scan_text, 6)
+            recall_query = action if RECALL_QUERY_ACTION_ONLY else scan_text
+            kb_hits = await asyncio.to_thread(memory.search_knowledge, session_id, recall_query, 6)
+            old_chat = await asyncio.to_thread(memory.search, session_id, recall_query, 4, max(0, start_idx - 1))
+            lm_hits = await asyncio.to_thread(memory.search_long_memory, session_id, recall_query, 6)
             recall_lines = kb_hits + [f"[旧对话] {x}" for x in old_chat] + [f"[长期记忆] {x}" for x in lm_hits]
             if recall_lines:
                 recall_block = "\n".join(recall_lines)

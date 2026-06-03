@@ -19,9 +19,32 @@ DS_IN, DS_OUT = 0.27, 1.10  # DeepSeek list price USD/M
 async def main_async(fixture_key: str, turns: int, mode: str, label: str):
     fx = FIXTURES[fixture_key]()
     dims = load_dimensions(only_lifecycles=SCORING_LIFECYCLES)
+    sess = f"stress-{fixture_key}-{mode}"
+    if mode == "deep":
+        # 给 deep 最好机会:召回门控从 0.80 降到 0.45(召回常开)+ 预加载 bge + 清该 session 旧向量。
+        import os as _os
+        from src import story as _story, memory as _memory
+        import time as _t
+        _story.DEEP_WARMUP_AT, _story.DEEP_RECALL_AT = 0.30, 0.45
+        action_only = _os.getenv("RECALL_ACTION_ONLY") == "1"
+        if action_only:
+            _story.RECALL_QUERY_ACTION_ONLY = True       # 实验:召回 query 仅用当前问句
+            sess = sess + "-aq"                          # 独立 session,不覆盖原 deep 向量
+        _memory.ensure_loading()
+        for _ in range(150):
+            if _memory.is_ready():
+                break
+            _t.sleep(2)
+        try:
+            from src.db import get_pool
+            with get_pool().connection() as c, c.cursor() as cur:
+                cur.execute("delete from memory_vec where session_id=%s", (sess,))
+        except Exception as e:
+            print("  [deep] 清旧向量失败(忽略):", e, flush=True)
+        print(f"  [deep] bge ready={_memory.is_ready()} · 召回门控 0.45 · action_only={action_only} · session={sess}", flush=True)
     print(f"== 压测真跑 {fixture_key} · 目标 {turns} 轮 · mode={mode} ==", flush=True)
     playthrough, player_tokens = await big_test.run_big(
-        fx, total_turns=turns, mode=mode, session_id=f"stress-{fixture_key}")
+        fx, total_turns=turns, mode=mode, session_id=sess)
     print(f"   生成完成 {len(playthrough)} 轮", flush=True)
 
     structural = orchestrator.run_structural_phase(playthrough, fx, dims)
