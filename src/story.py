@@ -1133,6 +1133,16 @@ def _dossier_block(data: dict[str, Any], present: list[tuple[str, str]], action:
     return "\n".join(lines)
 
 
+def _dossier_has_match(data: dict[str, Any], present: list[tuple[str, str]], query: str) -> bool:
+    """在场实体活档里有没有匹配 query 的 active delta —— 确定性 hit 信号(喂 abstention,比向量距离可靠)。"""
+    dossier = data.get("entity_dossier", {})
+    for cid, _ in present:
+        for d in dossier.get(cid, {}).get("deltas", []):
+            if d.get("status") == "active" and _delta_matches(query, d["text"]):
+                return True
+    return False
+
+
 def _store_memory_writes(session_id: str, data: dict[str, Any], turn: StoryTurn) -> None:
     for item in turn.memory_write:
         if isinstance(item, MemoryWrite):
@@ -1390,11 +1400,20 @@ async def _story_turn_impl(
     # L2 滚动摘要:recap 窗口之外的更早回合(两个模式共用,长局连续性的基座)。
     summary = await _rolling_summary(session_id, data, older) if older else ""
 
+    fact_query = _is_fact_query(action)
+    # Phase 2:在场实体活档(权威事实源)。dossier_hit = 确定性命中,喂下面的 abstention 判定(比向量距离可靠)。
+    dossier_block = ""
+    dossier_hit = False
+    if PHASE2_DOSSIER:
+        _present_pairs = [tuple(x) for x in data.get("_present", [])]
+        dossier_block = _dossier_block(data, _present_pairs, action, fact_query)
+        if fact_query:
+            dossier_hit = _dossier_has_match(data, _present_pairs, action)
+
     # L3 向量召回(仅深度模式):上下文逼近预算时后台预热,就绪且超召回阈值时补早期精确细节。
     recall_block = ""
     abstain_note = ""
-    fact_query = _is_fact_query(action)
-    fact_miss = False  # 具体事实查询且检索硬 miss → 供 ③ 不回写编造
+    fact_miss = False  # 具体事实查询且 dossier+向量都没命中 → 供 ③ 不回写编造
     if mode == "deep" and older:
         usage = (len(skeleton) + len(recap) + len(summary)) / CONTEXT_BUDGET_CHARS
         if usage >= DEEP_WARMUP_AT:
@@ -1415,19 +1434,14 @@ async def _story_turn_impl(
             recall_lines = kb_hits + [f"[旧对话] {x}" for x in old_chat] + [f"[长期记忆] {x}" for x in lm_hits]
             if recall_lines:
                 recall_block = "\n".join(recall_lines)
-            # ② abstention:具体事实查询时,注入硬指令(模型据证据判定有没有答案);top1 距离过大=硬 NOT_FOUND。
+            # ② abstention:dossier 命中 或 向量命中 = found;都没命中 = miss(认忘)。
             if PHASE1_FIXES and fact_query:
-                found = bool(recall_lines) and best <= MISS_DIST
+                found = dossier_hit or (bool(recall_lines) and best <= MISS_DIST)
                 abstain_note = _abstain_note("found" if found else "miss")
                 fact_miss = not found
-    # ② 标准模式 / 深度但召回未激活:无检索,仍对事实查询给认忘指令(防无据自信编)。
+    # ② 标准模式 / 深度但召回未激活:dossier 命中也算 found;否则给认忘指令(防无据自信编)。
     if PHASE1_FIXES and fact_query and not abstain_note:
-        abstain_note = _abstain_note("noretrieval")
-
-    # Phase 2:在场实体活档注入(按实体取,事实查询时关键词锚定 query)——权威事实源,向量退为兜底。
-    dossier_block = ""
-    if PHASE2_DOSSIER:
-        dossier_block = _dossier_block(data, [tuple(x) for x in data.get("_present", [])], action, fact_query)
+        abstain_note = _abstain_note("found" if dossier_hit else "noretrieval")
 
     # 主线锚点 + 世界时钟 + 该主动恶化登场的事件(第5组 5b)。
     anchor = _main_anchor(story, player)

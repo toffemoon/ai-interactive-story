@@ -36,7 +36,8 @@ def _done_cells(path: str) -> set:
 async def run_cell(fixture_key: str, condition: str, seed: int, turns: int, mode: str) -> dict:
     from src import story as _story, memory as _memory
     fx = FIXTURES[fixture_key]()
-    _story.PHASE1_FIXES = (condition == "phase1")
+    _story.PHASE1_FIXES = condition in ("phase1", "phase2")  # phase2 含 phase1 全部修复
+    _story.PHASE2_DOSSIER = (condition == "phase2")          # phase2 额外开实体活档
     sess = f"matrix-{fixture_key}-{condition}-{seed}"
     if mode == "deep":
         _story.DEEP_WARMUP_AT, _story.DEEP_RECALL_AT = 0.30, 0.45
