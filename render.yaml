@@ -1,0 +1,30 @@
+# Render Blueprint —— 后端(FastAPI 引擎,同时托管前端静态)。
+# 部署:Render 控制台 → New → Blueprint → 连 github.com/toffemoon/ai-interactive-story
+# 标了 sync:false 的两个密钥(LLM_API_KEY / DATABASE_URL)Render 会提示你填。
+# DATABASE_URL 用 Supabase 的 **Session pooler** 连接串(Settings→Database→Connection pooling,
+# 端口 5432),不要用直连 db.<ref>.supabase.co(只有 IPv6,Render 连不上)。
+services:
+  - type: web
+    name: ai-interactive-story
+    runtime: python
+    plan: starter            # 付费档,无休眠;按需在控制台调
+    buildCommand: pip install -r requirements-deploy.txt
+    startCommand: uvicorn src.api:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: LLM_PROVIDER
+        value: deepseek
+      - key: LLM_BASE_URL
+        value: https://api.deepseek.com
+      - key: LLM_MODEL
+        value: deepseek-chat
+      - key: LLM_TIMEOUT_SECONDS
+        value: "60"
+      - key: ENABLE_EMBEDDINGS
+        value: "0"
+      - key: LLM_API_KEY
+        sync: false            # 你的 DeepSeek key,Render 控制台填
+      - key: DATABASE_URL
+        sync: false            # Supabase session pooler 连接串,Render 控制台填
