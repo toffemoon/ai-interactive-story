@@ -1,0 +1,14 @@
+# 线上部署依赖(standard 模式)。
+# 故意不装 sentence-transformers/torch → 构建快、镜像小。
+# deep 被触发时 memory.ensure_loading() 的加载在后台线程 try/except 里优雅降级为
+# 纯文本(is_ready 恒 False,无向量召回),不会崩。
+# 想在线上开真 deep:把 render.yaml 的 buildCommand 换成 requirements.txt(含 torch)。
+# 本地跑 deep:pip install -r requirements.txt
+fastapi>=0.110
+uvicorn[standard]>=0.29
+openai>=1.30
+python-dotenv>=1.0
+psycopg[binary]>=3.2
+psycopg-pool>=3.2
+pgvector>=0.3
+python-docx>=1.1
