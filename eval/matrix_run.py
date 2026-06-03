@@ -100,7 +100,8 @@ async def main_async(a):
     fixtures = a.fixtures.split(",")
     conditions = a.conditions.split(",")
     done = _done_cells(OUT)
-    todo = [(f, c, s) for f in fixtures for c in conditions for s in range(a.seeds)
+    # 按 seed 外层:先跑完 seed0 的全部 cell(~一份完整单种子对照),再 seed1,便于早出增量结果。
+    todo = [(f, c, s) for s in range(a.seeds) for f in fixtures for c in conditions
             if (f, c, s) not in done]
     print(f"== 矩阵:{len(fixtures)}fix × {len(conditions)}cond × {a.seeds}seed = {len(fixtures)*len(conditions)*a.seeds} cell"
           f",已完成 {len(done)},待跑 {len(todo)} ==", flush=True)
