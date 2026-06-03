@@ -1101,6 +1101,8 @@ def _update_dossier(data: dict[str, Any], source_turn: int, turn: StoryTurn) -> 
     for mw in turn.memory_write:
         ent = _infer_entity(mw.text, entities, speakers)
         slot = dossier.setdefault(ent, {"deltas": []})
+        if any(d["text"] == mw.text and d.get("status") == "active" for d in slot["deltas"]):
+            continue  # 去重:同实体同文本的事实不重复存(控活档大小/注入成本)
         slot["deltas"].append({
             "kind": mw.kind, "text": mw.text, "source_turn": source_turn,
             "status": "active", "importance": mw.importance,
