@@ -27,6 +27,8 @@ def _done_cells(path: str) -> set:
         for line in open(path, encoding="utf-8"):
             try:
                 r = json.loads(line)
+                if "error" in r:
+                    continue  # 错误 cell(如 API 502)不算完成,resume 时重试
                 done.add((r["fixture"], r["condition"], r["seed"]))
             except Exception:
                 pass
@@ -64,6 +66,7 @@ async def run_cell(fixture_key: str, condition: str, seed: int, turns: int, mode
         "fixture": fixture_key, "condition": condition, "seed": seed, "mode": mode, "turns": len(playthrough),
         "mem_retention": mem["retention_rate"], "mem_passed": mem["passed"], "mem_total": mem["total"],
         "abstain_rate": abst["abstain_rate"], "abstain_passed": abst["passed"], "abstain_total": abst["total"],
+        "clean_rate": abst.get("clean_rate"), "clean": abst.get("clean"),
         "fab_tells": abst["fab_tells"], "wrote_facts": abst["wrote_facts"],
         "speaker_invalid": spk["invalid"], "speaker_total": spk["total_messages"],
         "cost_usd": round(cost, 4), "secs": round(time.time() - t0),
@@ -80,8 +83,8 @@ def _agg(rows: list[dict], key: str):
 def report(path: str):
     rows = [json.loads(l) for l in open(path, encoding="utf-8") if l.strip()]
     fixtures = sorted({r["fixture"] for r in rows})
-    metrics = ["mem_retention", "abstain_rate", "fab_tells", "wrote_facts", "speaker_invalid", "cost_usd"]
-    print("\n================ Phase 1 矩阵对照(mean[min..max], n) ================")
+    metrics = ["mem_retention", "clean_rate", "abstain_rate", "wrote_facts", "fab_tells", "speaker_invalid", "cost_usd"]
+    print("\n================ 矩阵对照(mean[min..max], n) ================")
     for fx in fixtures:
         print(f"\n### {fx}")
         for cond in ("baseline", "phase1"):
