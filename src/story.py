@@ -48,6 +48,7 @@ SUMMARY_MAX_CHARS = 900        # 滚动摘要注入上限
 SUMMARY_RECOMPUTE_EVERY = 4    # 更早消息每多这么多条,重算一次滚动摘要
 DEEP_WARMUP_AT = 0.65          # 深度模式:上下文用量超此比例,后台预热 embedding 模型
 DEEP_RECALL_AT = 0.80          # 深度模式:超此比例且模型就绪,启用向量召回
+DEEP_AUTO_CHAR_COUNT = 5       # 角色卡数 > 此值(即 ≥6,群像剧)自动进深度模式:上下文消耗大,需滚动摘要/consolidation/向量召回兜底
 
 # 世界时钟(故事内分钟):模型每轮估 time_advance,代码 clamp。
 MIN_TIME_ADVANCE = 1           # 每轮至少推进的故事分钟,防时钟冻住
@@ -1731,7 +1732,8 @@ async def _story_turn_impl(
     mode: str = "standard",
     on_delta=None,
 ) -> StoryTurn:
-    mode = "deep" if mode == "deep" else "standard"
+    # 角色卡 > DEEP_AUTO_CHAR_COUNT(群像剧)→ 自动深度模式;调用方已指定 deep 时保持不降级。
+    mode = "deep" if (mode == "deep" or len(characters) > DEEP_AUTO_CHAR_COUNT) else "standard"
     data = await asyncio.to_thread(storage.load_session, session_id)
     # 重 roll 快照:回合落盘前先存一份「上一轮之后」的完整会话镜像(排除 _reroll 本身防嵌套膨胀)。
     # 重 roll = 恢复这份镜像 + 用相同输入重跑;覆盖 messages/state/short_memory/long_memory/摘要/累计用量等。

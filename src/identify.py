@@ -41,18 +41,26 @@ _SYSTEM = """你是一个角色设定解析器。用户会给你一段关于某�
 
 
 def identify(text: str) -> CharacterCard:
-    """把一段设定文字识别成 Card V2。解析失败会抛异常(上层捕获回传)。"""
-    raw = chat_messages(
-        [
-            {"role": "system", "content": _SYSTEM},
-            {"role": "user", "content": text.strip()},
-        ],
-        json_mode=True,
-        max_tokens=2048,
-    )
-    obj = json.loads(raw)
-    data = CharacterData(**obj)
-    return CharacterCard(data=data)
+    """把一段设定文字识别成 Card V2。JSON 偶发不合法时容错解析,失败重试一次再抛。
+
+    对齐 identify_storybook / build_card 的健壮性:DeepSeek json_mode 偶尔吐出
+    带 fence / 中文引号 / 尾逗号的非法 JSON,裸 json.loads 会随机崩。
+    """
+    last_err: Exception | None = None
+    for _ in range(3):
+        raw = chat_messages(
+            [
+                {"role": "system", "content": _SYSTEM},
+                {"role": "user", "content": text.strip()},
+            ],
+            json_mode=True,
+            max_tokens=2048,
+        )
+        try:
+            return CharacterCard(data=CharacterData(**_loads_tolerant(raw)))
+        except Exception as e:  # JSON 不合法 / 字段缺失:重试一次
+            last_err = e
+    raise ValueError(f"角色卡识别失败(JSON 不合法,已重试):{last_err}")
 
 
 _WORLD_SYSTEM = """你是一个世界观解析器。用户会给你一段关于某个虚构世界的设定文字
@@ -206,15 +214,22 @@ _PLAYER_SYSTEM = """你是玩家设定卡解析器。用户会给一段玩家/�
 
 
 def identify_player(text: str) -> PlayerCard:
-    raw = chat_messages(
-        [
-            {"role": "system", "content": _PLAYER_SYSTEM},
-            {"role": "user", "content": text.strip()},
-        ],
-        json_mode=True,
-        max_tokens=1536,
-    )
-    return PlayerCard(**json.loads(raw))
+    """玩家设定文字 → PlayerCard。JSON 偶发不合法时容错解析 + 重试一次再抛(对齐 identify)。"""
+    last_err: Exception | None = None
+    for _ in range(3):
+        raw = chat_messages(
+            [
+                {"role": "system", "content": _PLAYER_SYSTEM},
+                {"role": "user", "content": text.strip()},
+            ],
+            json_mode=True,
+            max_tokens=1536,
+        )
+        try:
+            return PlayerCard(**_loads_tolerant(raw))
+        except Exception as e:  # JSON 不合法 / 字段缺失:重试
+            last_err = e
+    raise ValueError(f"玩家卡识别失败(JSON 不合法,已重试):{last_err}")
 
 
 _STORY_SYSTEM = """你是互动故事书解析器。用户给的可能是完整大纲,也可能只是几个离散点子/设定碎片。
@@ -275,6 +290,18 @@ def _coerce_int(v, default=None):
         m = re.search(r"-?\d+", v)
         return int(m.group()) if m else default
     return default
+
+
+def _as_str_list(v) -> list[str]:
+    """模型可能把列表字段(timeline/pacing 等)吐成字符串或单值;统一容错成 list[str]。"""
+    if v is None:
+        return []
+    if isinstance(v, str):
+        s = v.strip()
+        return [s] if s else []
+    if isinstance(v, list):
+        return [str(x) for x in v if str(x).strip()]
+    return [str(v)]
 
 
 def _story_event_from(e: dict) -> StoryEvent:
@@ -363,16 +390,16 @@ def identify_storybook(text: str) -> StoryBook:
     bounds = [m for b in obj.get("character_boundaries", []) if (m := _model_from(CharacterBoundary, b))]
     return StoryBook(
         title=obj.get("title") or "故事书",
-        premise=obj.get("premise") or "",
-        timeline=obj.get("timeline") or [],
-        main_plot=obj.get("main_plot") or [],
-        freedom_rules=obj.get("freedom_rules") or [],
+        premise=str(obj.get("premise") or ""),
+        timeline=_as_str_list(obj.get("timeline")),
+        main_plot=_as_str_list(obj.get("main_plot")),
+        freedom_rules=_as_str_list(obj.get("freedom_rules")),
         events=events,
         endings=endings,
         clock_start=_coerce_int(obj.get("clock_start"), 0) or 0,
-        pacing=obj.get("pacing") or [],
+        pacing=_as_str_list(obj.get("pacing")),
         character_boundaries=bounds,
-        needs_confirm=[str(x) for x in (obj.get("needs_confirm") or []) if str(x).strip()],
+        needs_confirm=_as_str_list(obj.get("needs_confirm")),
     )
 
 

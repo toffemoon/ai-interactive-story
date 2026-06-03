@@ -939,3 +939,24 @@ main.single-view { display: block; }
 .build-pick-grid b { font-size: 15px; }
 .build-pick-grid small { color: var(--muted); font-size: 12px; }
 @media (max-width: 680px) { .build-pick-grid { grid-template-columns: 1fr; } }
+
+/* ── 预设故事:选人页 ──────────────── */
+.char-select { max-width: 880px; margin: 0 auto; padding: 48px 24px; }
+.char-select h2 { font-size: 26px; margin: 0 0 6px; }
+.char-select .cs-sub { color: var(--muted); margin: 0 0 28px; font-size: 14px; }
+.select-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+.select-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px; text-align: left;
+  padding: 18px 16px; border: 1px solid var(--line); background: #fff; border-radius: 10px;
+  cursor: pointer; min-height: 88px; transition: border-color .15s, background .15s, transform .1s;
+}
+.select-card:hover { border-color: var(--green); background: var(--soft); transform: translateY(-2px); }
+.select-card b { font-size: 17px; color: var(--ink); }
+.select-card span { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.select-card.other { border-style: dashed; }
+.cs-textarea {
+  width: 100%; box-sizing: border-box; padding: 14px; border: 1px solid var(--line);
+  border-radius: 8px; font: inherit; resize: vertical; margin-bottom: 16px;
+}
+.cs-actions { display: flex; gap: 12px; align-items: center; }
+@media (max-width: 680px) { .select-grid { grid-template-columns: 1fr 1fr; } .char-select { padding: 28px 16px; } }
