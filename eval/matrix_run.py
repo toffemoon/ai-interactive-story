@@ -121,6 +121,13 @@ async def main_async(a):
         if "error" not in r:
             print(f"  ✓ mem={r['mem_retention']} abstain={r['abstain_rate']} "
                   f"speaker={r['speaker_invalid']}/{r['speaker_total']} ${r['cost_usd']} {r['secs']}s", flush=True)
+        import gc  # cell 间清理:防多 cell 累积内存/DB 连接把进程拖崩(xiyou 最大,曾在第5格静默猝死)
+        gc.collect()
+        try:
+            from src.db import close_pool
+            close_pool()
+        except Exception:
+            pass
     report(OUT)
     try:  # 优雅关池,矩阵进程干净退出 + 触发完成通知
         from src.db import close_pool
