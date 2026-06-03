@@ -113,16 +113,48 @@ def _present_entity_keys(state: RuntimeState, characters: list[CharacterCard],
     return keys
 
 
+def _mem_bigrams(s: str) -> set[str]:
+    t = "".join(str(s or "").split())
+    return {t[i:i + 2] for i in range(len(t) - 1)}
+
+
+SUPERSEDE_OVERLAP = 0.6  # #2 矛盾消解:同实体新旧事实 2-gram 重合 ≥ 此值且文本不同 → 旧标 superseded(保守,防误删)
+
+
+def _supersede_conflicts(long_memory: list[Any], new_text: str, new_entity: str) -> int:
+    """#2 轻量矛盾消解:新事实与同实体的既有 active 事实"近似但不完全相同"(像同一属性的新值)→
+    把旧的标 superseded(不删,留痕,不再注入)。保守:只对高重合且不同的才动,降误删风险。返回标记数。"""
+    if not new_entity or not new_text:
+        return 0
+    ng = _mem_bigrams(new_text)
+    if not ng:
+        return 0
+    marked = 0
+    for it in long_memory or []:
+        if not isinstance(it, dict) or it.get("superseded"):
+            continue
+        if str(it.get("entity", "") or "") != new_entity:
+            continue
+        ot = str(it.get("text", "") or "")
+        if not ot or ot == new_text:  # 完全相同=重复(交给去重),不算矛盾
+            continue
+        og = _mem_bigrams(ot)
+        if og and len(ng & og) / max(1, min(len(ng), len(og))) >= SUPERSEDE_OVERLAP:
+            it["superseded"] = True
+            marked += 1
+    return marked
+
+
 def _entity_memory_index(long_memory: list[Any], wanted: set[str],
                          per_entity: int = 6) -> dict[str, list[str]]:
     """从会话 long_memory 里取 entity ∈ wanted 的条目,按实体分组(每实体保留最近 per_entity 条)。
 
     这是 A 档的确定性召回:不靠相似度,只要实体在场就必然把挂在它身上的派生事实取出来。
-    两个记忆模式都走这里(数据落在会话 JSON,不依赖 embedding)。
+    两个记忆模式都走这里(数据落在会话 JSON,不依赖 embedding)。#2:superseded 的不再召回。
     """
     by_entity: dict[str, list[str]] = {}
     for item in long_memory or []:
-        if not isinstance(item, dict):
+        if not isinstance(item, dict) or item.get("superseded"):
             continue
         ent = str(item.get("entity", "") or "")
         if not ent or ent not in wanted:
@@ -1248,7 +1280,11 @@ def _store_memory_writes(session_id: str, data: dict[str, Any], turn: StoryTurn)
             # 会进会话 JSON long_memory —— 确定性的「按在场实体召回」从那里取(两模式都生效)。
             memory.add_memory(session_id, mid, item.text, kind=item.kind,
                               importance=item.importance, entity=item.entity)
-            data.setdefault("long_memory", []).append(item.model_dump())
+            _supersede_conflicts(data.setdefault("long_memory", []), item.text, item.entity)  # #2 旧矛盾标 superseded
+            d = item.model_dump()
+            d["derived"] = True       # #3:玩出来的派生事实(上传 canon 在骨架里、不进此处、不被覆盖)
+            d.setdefault("superseded", False)
+            data["long_memory"].append(d)
         elif isinstance(item, dict):
             text = str(item.get("text", "")).strip()
             if text:
