@@ -1,0 +1,3 @@
+# AI 互动故事引擎 MCP server 依赖(独立于引擎核心 requirements.txt)
+mcp>=1.0
+httpx>=0.27
