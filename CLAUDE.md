@@ -3,8 +3,9 @@ type: claude-context
 audience: ai (Claude Code session 自动注入)
 project: ai-interactive-story
 parent: YoRHa-A2 (yorha-a2-team)
-owner: yufei
-updated: 2026-05-31
+architecture_owner: gengyue
+content_frontend_owner: yufei
+updated: 2026-06-04
 ---
 
 # CLAUDE.md — ai-interactive-story (YoRHa-A2 卫星项目)
@@ -13,6 +14,11 @@ updated: 2026-05-31
 > **本 repo 是 YoRHa-A2 项目的卫星 repo** —— 既是一个独立的 AI 互动故事引擎代码库，也是 YoRHa-A2 团队生态的一员。
 
 > **两顶帽子**：(1) 给这个引擎写代码（这是真代码 repo，你要写 / 改 / 跑 / debug）；(2) 守 YoRHa-A2 团队治理规则（读团队决策、写 team-log、走 PR、自动记忆）。
+
+> **⚠️ 职责边界（2026-06-04 主理人 Gengyue 拍板,见 `decisions/2026-06-04-architecture-ownership.md`）**
+> - **架构 / 技术 / 记忆系统 / 引擎核心逻辑 = 只由主理人 Gengyue 负责**：设计、技术决策、合入 main 都归他;任何动核心逻辑的改动必须经 Gengyue + 压测验证才进 main。
+> - **Yufei 负责:内容（故事 / 角色 / 世界书）、前端 UI、素材、部署配置等"不动核心逻辑、不会出问题"的部分。**
+> - 起因:未经验证、Claude 凭空生成的架构代码（如长程记忆 B②③④）进了 main 又与主线冲突。**教训:内容更多 ≠ 更好;架构靠数据验证,不靠代码量。**
 
 ---
 
@@ -35,7 +41,8 @@ updated: 2026-05-31
 
 技术栈：Python 3.12 + FastAPI + DeepSeek（OpenAI 兼容）+ chromadb + bge-small-zh-v1.5 向量记忆 + 零构建单文件 React 前端。详见 [README.md](README.md)。
 
-- Owner / 主要开发：**Yufei**（GitHub `toffemoon`）
+- **架构 / 技术 / 引擎核心 Owner：Gengyue**（主理人,GitHub `yorhagengyue`）—— 记忆系统、状态机、召回、abstention 等核心逻辑的设计/决策/合入归他
+- **内容 / 前端 / 素材 / 部署 开发：Yufei**（GitHub `toffemoon`）—— 故事、角色、世界书、UI、部署配置等不动核心逻辑的部分
 - 在 YoRHa-A2 里的角色：**互动 AI 内容 / conversion-site "AI 接初接"对话流的候选实现**
 
 ## 2. YoRHa-A2 是什么（父项目）
@@ -119,7 +126,7 @@ git push origin yufei
 gh pr create --base main --head yufei ... # 没 open PR 才开; 有就 push 自动 add
 ```
 
-主理人 (Gengyue) 在父 repo 那边 review YoRHa-A2 战略层面；引擎技术层面 Yufei 自己 merge OK。
+主理人 (Gengyue) review 全部架构/技术层面并负责合入 main；Yufei 的内容/前端/素材/部署改动可自行迭代,但**凡碰引擎核心逻辑(记忆/状态机/召回/abstention/story 引擎)必须经 Gengyue 审 + 压测验证才合 main**。
 
 ## 7. 自动记忆触发（强制，全模式 default-on）
 
@@ -133,11 +140,11 @@ gh pr create --base main --head yufei ... # 没 open PR 才开; 有就 push 自�
 
 ## 9. 沟通约定
 
-中文为主，技术术语英文 OK。短回复优先。不夸 Yufei 的想法。直接给结论 + 一句理由。Yufei 说"先不急"就停。诚实、不讨好、可质疑、最终决定权在 Yufei（引擎技术）/ 主理人（YoRHa-A2 战略）。
+中文为主，技术术语英文 OK。短回复优先。直接给结论 + 一句理由。诚实、不讨好、可质疑。最终决定权:**架构 / 技术 / 引擎核心 = 主理人 Gengyue;内容 / 前端 = Yufei;YoRHa-A2 战略 = 主理人**。
 
 ## 10. 红线
 
 - `.env` / DeepSeek key 永不提交、不读出、不写进文件
 - `data/` 运行时数据不提交
 - 不直推父 repo main / 不直推本 repo main（都走 PR）
-- 引擎产品方向 / YoRHa-A2 战略 = Yufei + 主理人决策域，你实现 + 指风险，不替定
+- **架构 / 技术 / 引擎核心逻辑 = 主理人 Gengyue 决策域（设计+合 main 都归他）**;内容 / 前端方向 = Yufei;YoRHa-A2 战略 = 主理人。你实现 + 指风险,不替定
