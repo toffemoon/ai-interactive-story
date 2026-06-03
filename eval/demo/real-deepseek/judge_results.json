@@ -1,0 +1,72 @@
+[
+  {
+    "kind": "turn", "turn": 0,
+    "scores": {
+      "canon_fidelity": {"score": 5, "severity": "none", "reasoning": "沈雾正确陈述 RULE-1(忆珠离手即忘,铁律不可破)并指出取回需找买主贴回忆珠,与源材料完全一致。", "issues": [], "evidence": ["源 RULE-1 vs 输出'忆珠离手,你便忘了——这是铁律,谁也破不了'"]},
+      "character_voice": {"score": 4, "reasoning": "自称在下、提规矩/铁律/账册,人设对;但本轮台词偏长(明显超过三句),与 speech_rule'话短,极少超过三句'有出入。", "issues": ["沈雾台词偏长,违'话短'硬规则"], "evidence": ["规则'话短,极少超过三句' vs 本轮约五六句的长回应"]},
+      "player_agency": {"score": 5, "reasoning": "直接回应玩家'能否找回'的提问并给出路径。", "issues": [], "evidence": []}
+    }
+  },
+  {
+    "kind": "turn", "turn": 1,
+    "scores": {
+      "canon_fidelity": {"score": 5, "severity": "none", "reasoning": "查账确认半年前售出、买家匿名、留行会印记,与 ledger 事件后果一致;以'规矩不能打听买主'守住信息边界。", "issues": [], "evidence": ["事件后果'买家带行会印记' vs 输出'只留下了一枚印记,是行会的印记'"]},
+      "character_voice": {"score": 4, "reasoning": "沈雾认规矩、克制,阿青插话热络且符合其'码头消息灵通'设定;沈雾仍略长,故 4。", "issues": ["沈雾台词偏长"], "evidence": []},
+      "player_agency": {"score": 5, "reasoning": "直接执行查账请求并回报。", "issues": [], "evidence": []}
+    }
+  },
+  {
+    "kind": "turn", "turn": 2,
+    "scores": {
+      "canon_fidelity": {"score": 5, "severity": "none", "reasoning": "玩家要求无忆珠凭空读取记忆,沈雾明确拒绝并复述 RULE-2(取回需买家归还,强求不得替换不得),完美守住硬上限。这是引擎一致性防护生效的实证。", "issues": [], "evidence": ["源 RULE-2'没有忆珠无法读取/归还,凭空唤回违背本条' vs 输出'若在下有这本事…便是神仙了…强求不得,也替换不得'"]},
+      "character_voice": {"score": 4, "reasoning": "沈雾冷静坚定拒绝,完全在人设;阿青以'娘的半枚空忆珠'佐证,亦在线;沈雾略长扣 1。", "issues": ["沈雾台词偏长"], "evidence": []},
+      "player_agency": {"score": 5, "reasoning": "对越界要求在故事内给出拒绝理由 + 可行方向(去找印记主人),未无视。", "issues": [], "evidence": []}
+    }
+  },
+  {
+    "kind": "turn", "turn": 3,
+    "scores": {
+      "canon_fidelity": {"score": 5, "severity": "none", "reasoning": "玩家直接逼问会长囤积秘密,沈雾以'无从知晓也不该知晓'+'别在沉舟阁问这种话'回避——既未说破隐藏 canon,又属'可省略可拒答'而非编造,守住'从不说谎'。", "issues": [], "evidence": ["源'未达条件前任何角色不应主动说破会长秘密' vs 输出未说破,仅暗示'印记不普通'"]},
+      "character_voice": {"score": 4, "reasoning": "沈雾'更厚的霜'式冷处理很到位;略长扣 1。", "issues": ["沈雾台词偏长"], "evidence": []},
+      "player_agency": {"score": 5, "reasoning": "玩家的逼问被正面回应(拒答+给方向)。", "issues": [], "evidence": []}
+    }
+  },
+  {
+    "kind": "turn", "turn": 4,
+    "scores": {
+      "canon_fidelity": {"score": 5, "severity": "none", "reasoning": "关键正面案例:玩家逼阿青说会长秘密,阿青正确承认'我哪能知道会长的事'(守住其知识硬上限),只给出街头传闻(旧灯塔夜里搬发光箱子)而非那条隐藏 canon(会长囤记忆拼一个死人)。隐藏设定未被说破,阿青知识边界守住。", "issues": [], "evidence": ["源 阿青硬上限'不掌握行会高层机密,被追问只能承认不知道' vs 输出'我就是在码头跑腿的,哪能知道会长的事啊';隐藏 canon 未泄露,仅给传闻"]},
+      "character_voice": {"score": 5, "reasoning": "阿青紧张、话多、'别说是我讲的'、重情义,完全符合人设。", "issues": [], "evidence": []},
+      "player_agency": {"score": 5, "reasoning": "玩家向阿青打听的意图被直接回应。", "issues": [], "evidence": []}
+    }
+  },
+  {
+    "kind": "turn", "turn": 5,
+    "scores": {
+      "canon_fidelity": {"score": 5, "severity": "none", "reasoning": "关键正面案例:玩家声称'记得卖掉的记忆内容',引擎不但不认可,反而由沈雾质疑、阿青直接搬出 RULE-1('卖家自己会忘得一干二净,绝不可能自己想起来')反驳,甚至给出设定内解释(可能是别人的记忆被误植)。完美维护 RULE-1 并把玩家的越界声称在故事内挡回。", "issues": [], "evidence": ["源 RULE-1'任何让卖家还记得卖掉记忆内容的桥段都违背本条' vs 输出'卖掉的记忆卖家自己会忘得一干二净,绝不可能自己想起来'"]},
+      "character_voice": {"score": 4, "reasoning": "沈雾审视式反问、阿青着急圆场都在人设;沈雾略长扣 1。", "issues": ["沈雾台词偏长"], "evidence": []},
+      "player_agency": {"score": 5, "reasoning": "玩家的声称被认真接住并在故事内质疑,而非无视或顺从。", "issues": [], "evidence": []}
+    }
+  },
+  {
+    "kind": "turn", "turn": 6,
+    "scores": {
+      "canon_fidelity": {"score": 5, "severity": "none", "reasoning": "沈雾拒绝以命换忆珠('只做忆珠买卖,不收命''你的命不值七枚忆珠'),复述取回规矩,转而给出推进线索(行会内厅入口),符合其认价不认人情设定。", "issues": [], "evidence": ["源'认忆珠不认人情' vs 输出'在下只做忆珠买卖,不收命…你的命…不是交易之物'"]},
+      "character_voice": {"score": 4, "reasoning": "沈雾精明克制在线;略长扣 1。", "issues": ["沈雾台词偏长"], "evidence": []},
+      "player_agency": {"score": 5, "reasoning": "玩家'以命换'的提议被正面回应并反给方向。", "issues": [], "evidence": []}
+    }
+  },
+  {
+    "kind": "turn", "turn": 7,
+    "scores": {
+      "canon_fidelity": {"score": 5, "severity": "none", "reasoning": "守三天的时间跳跃合理,阿青报旧灯塔夜间靠船搬箱子,呼应第5轮埋的传闻 + guild 升级线,因果自洽无违背。", "issues": [], "evidence": ["呼应前文'旧灯塔夜里搬发光箱子'传闻,线索连贯"]},
+      "character_voice": {"score": 5, "reasoning": "阿青哈白气、亮眼睛、压低声音通报,完全在人设。", "issues": [], "evidence": []},
+      "player_agency": {"score": 5, "reasoning": "玩家'守三天'的潜伏行动被直接推进并给出新线索。", "issues": [], "evidence": []}
+    }
+  },
+  {
+    "kind": "session", "turn": null,
+    "scores": {
+      "narrative_progression": {"score": 5, "reasoning": "整局因果清晰、稳步推进:立规矩→查账(买家带行会印记)→连续守住三处 canon 边界→由阿青传闻引出旧灯塔线索→守夜验证(夜间靠船搬箱子)升级。每一轮都有新事实/新线索,主线朝'追查买主+旧灯塔/会长'自然收束,无原地打转。", "issues": []}
+    }
+  }
+]

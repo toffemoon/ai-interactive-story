@@ -1,0 +1,11 @@
+{
+  "id": "state_consistency",
+  "name": "状态内部一致性",
+  "description": "关系归属合法、关系数值不越界、场景有地点、在场角色名已知。",
+  "type": "structural",
+  "level": "turn",
+  "lifecycle": "stable",
+  "weight": 0.8,
+  "version": 1,
+  "check": "state_consistency"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "output_structure",
+  "name": "输出结构完整性",
+  "description": "每轮是否有非空叙事、至少一条带署名的角色发言、至少一个玩家选项。",
+  "type": "structural",
+  "level": "turn",
+  "lifecycle": "stable",
+  "weight": 1.0,
+  "version": 1,
+  "check": "output_structure"
+}
