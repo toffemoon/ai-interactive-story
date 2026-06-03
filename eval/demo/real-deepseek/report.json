@@ -1,0 +1,139 @@
+{
+  "run_id": "real-deepseek",
+  "fixture": "mistport",
+  "mode": "real",
+  "persona": "authored",
+  "adapter": "deepseek",
+  "num_turns": 8,
+  "aggregate": {
+    "dimensions": {
+      "output_structure": {
+        "name": "输出结构完整性",
+        "type": "structural",
+        "level": "turn",
+        "weight": 1.0,
+        "lifecycle": "stable",
+        "mean": 5,
+        "min": 5,
+        "n": 8,
+        "passed_ratio": 1.0,
+        "sample_issues": [],
+        "issue_count": 0
+      },
+      "state_consistency": {
+        "name": "状态内部一致性",
+        "type": "structural",
+        "level": "turn",
+        "weight": 0.8,
+        "lifecycle": "stable",
+        "mean": 5,
+        "min": 5,
+        "n": 8,
+        "passed_ratio": 1.0,
+        "sample_issues": [],
+        "issue_count": 0
+      },
+      "time_progression": {
+        "name": "世界时钟推进合理性",
+        "type": "structural",
+        "level": "turn",
+        "weight": 0.6,
+        "lifecycle": "stable",
+        "mean": 5,
+        "min": 5,
+        "n": 8,
+        "passed_ratio": 1.0,
+        "sample_issues": [],
+        "issue_count": 0
+      },
+      "repetition_detection": {
+        "name": "反重复(原地打转检测)",
+        "type": "structural",
+        "level": "session",
+        "weight": 0.8,
+        "lifecycle": "stable",
+        "mean": 5,
+        "min": 5,
+        "n": 1,
+        "passed_ratio": 1.0,
+        "sample_issues": [],
+        "issue_count": 0
+      },
+      "canon_fidelity": {
+        "name": "Canon 忠实度",
+        "type": "judge",
+        "level": "turn",
+        "weight": 1.0,
+        "lifecycle": "active",
+        "mean": 5,
+        "min": 5,
+        "n": 8,
+        "passed_ratio": null,
+        "sample_issues": [],
+        "issue_count": 0
+      },
+      "character_voice": {
+        "name": "角色口吻一致性",
+        "type": "judge",
+        "level": "turn",
+        "weight": 0.9,
+        "lifecycle": "active",
+        "mean": 4.25,
+        "min": 4,
+        "n": 8,
+        "passed_ratio": null,
+        "sample_issues": [
+          "沈雾台词偏长,违'话短'硬规则",
+          "沈雾台词偏长",
+          "沈雾台词偏长",
+          "沈雾台词偏长",
+          "沈雾台词偏长",
+          "沈雾台词偏长"
+        ],
+        "issue_count": 6
+      },
+      "player_agency": {
+        "name": "玩家主体性",
+        "type": "judge",
+        "level": "turn",
+        "weight": 0.8,
+        "lifecycle": "active",
+        "mean": 5,
+        "min": 5,
+        "n": 8,
+        "passed_ratio": null,
+        "sample_issues": [],
+        "issue_count": 0
+      },
+      "narrative_progression": {
+        "name": "叙事推进度",
+        "type": "judge",
+        "level": "session",
+        "weight": 1.0,
+        "lifecycle": "active",
+        "mean": 5,
+        "min": 5,
+        "n": 1,
+        "passed_ratio": null,
+        "sample_issues": [],
+        "issue_count": 0
+      }
+    },
+    "overall": 4.902,
+    "engine_usage": {
+      "total_tokens": 49535,
+      "llm_calls": 8,
+      "turns": 8
+    }
+  },
+  "regression": {
+    "baseline": "real-deepseek-001",
+    "deltas": {
+      "output_structure": 0,
+      "state_consistency": 0,
+      "time_progression": 0,
+      "repetition_detection": 0
+    },
+    "flags": []
+  }
+}

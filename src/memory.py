@@ -270,3 +270,39 @@ def search(session_id: str, query: str, k: int = 3, max_turn: int | None = None)
     except Exception as e:
         _mark_unavailable(e)
         return []
+
+
+def search_scored(session_id: str, query: str, k: int = 4,
+                  max_turn: int | None = None) -> list[tuple[str, float]]:
+    """同 search,但每条附带余弦距离(pgvector <=>,0=同向、越小越相似)。
+    供 abstention NOT_FOUND 判定:top1 距离 ≥ 阈值 = 召回 miss(查无此事)。"""
+    if not is_ready():
+        return []
+    try:
+        emb = Vector(_embed([query])[0])
+        pool = get_pool()
+        with pool.connection() as conn, conn.cursor() as cur:
+            if max_turn is not None:
+                cur.execute(
+                    """select content, meta, (embedding <=> %s) as dist from memory_vec
+                       where session_id = %s and scope = 'turn'
+                         and (meta->>'turn')::int <= %s
+                       order by embedding <=> %s limit %s""",
+                    (emb, session_id, max_turn, emb, k),
+                )
+            else:
+                cur.execute(
+                    """select content, meta, (embedding <=> %s) as dist from memory_vec
+                       where session_id = %s and scope = 'turn'
+                       order by embedding <=> %s limit %s""",
+                    (emb, session_id, emb, k),
+                )
+            out = []
+            for r in cur.fetchall():
+                meta = r["meta"] or {}
+                role = "玩家" if meta.get("role") == "user" else "角色"
+                out.append((f"{role}:{r['content']}", float(r["dist"])))
+            return out
+    except Exception as e:
+        _mark_unavailable(e)
+        return []

@@ -83,6 +83,19 @@ class ReRollReq(BaseModel):
     session_id: str
 
 
+@app.get("/api/health")
+def api_health():
+    """健康检查:确认后端在线 + DB 可达 + 是否带前端。AI / 调用方可先打这个再调其它接口。"""
+    db_ok = True
+    try:
+        with db.get_pool().connection() as conn, conn.cursor() as cur:
+            cur.execute("select 1")
+            cur.fetchone()
+    except Exception:
+        db_ok = False
+    return {"status": "ok", "db": db_ok, "frontend": FRONTEND.is_dir(), "mode": "frontend+api" if FRONTEND.is_dir() else "api-only"}
+
+
 @app.post("/api/identify")
 def api_identify(req: TextReq):
     """散文设定 → 角色 Card V2。"""
@@ -433,5 +446,9 @@ def api_delete_preset(name: str):
     return {"deleted": storage.delete_preset(name)}
 
 
-# 前端静态文件挂在根路径(html=True 让 / 返回 index.html)
-app.mount("/", StaticFiles(directory=str(FRONTEND), html=True), name="frontend")
+# 前端静态文件挂在根路径(html=True 让 / 返回 index.html)。
+# 前端目录存在 → 同时服务前端 + /api/* 接口(给人玩);目录不存在 → 退化为纯后端
+# (只剩 /api/* + /docs + /openapi.json,给 AI / 调用方按 schema 直接调),且不会启动崩溃。
+# 这样"既保留前端、又能纯后端被 AI 直接调用"在同一份代码里共存。
+if FRONTEND.is_dir():
+    app.mount("/", StaticFiles(directory=str(FRONTEND), html=True), name="frontend")

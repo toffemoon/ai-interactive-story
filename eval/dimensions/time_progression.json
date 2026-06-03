@@ -1,0 +1,11 @@
+{
+  "id": "time_progression",
+  "name": "世界时钟推进合理性",
+  "description": "故事内时钟单调不减、单轮增量非负且不荒诞、轮次递增。",
+  "type": "structural",
+  "level": "turn",
+  "lifecycle": "stable",
+  "weight": 0.6,
+  "version": 1,
+  "check": "time_progression"
+}
