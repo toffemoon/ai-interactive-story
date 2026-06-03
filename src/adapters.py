@@ -36,6 +36,7 @@ class ContextBundle:
     action_prompt: str                     # 本轮玩家行动 prompt
     summary: str = ""                      # 早前剧情滚动摘要(已压缩)
     recall_block: str = ""                 # 向量召回片段(深度模式)
+    dossier_block: str = ""                # Phase 2:在场实体既有事实档(按实体,权威事实源)
     abstain_note: str = ""                 # 具体事实查询的 abstention 硬指令(有据照实/无据认忘绝不编)
     recap: str = ""                        # 近期若干轮折叠文本(给折叠型适配器)
     recent_messages: list[dict] = field(default_factory=list)  # 近期原始多轮(给多轮型适配器)
@@ -86,6 +87,9 @@ class DeepSeekAdapter:
         system = b.skeleton
         if b.summary:
             system += "\n\n# 早前剧情摘要(更久之前发生的事,已压缩)\n" + b.summary
+        if b.dossier_block:
+            system += ("\n\n# 在场角色的既有事实档(按实体整理,权威事实源——回答既往具体事实优先据此;"
+                       "其中没有的别硬编)\n" + b.dossier_block)
         if b.recall_block:
             system += "\n\n# 检索到的相关旧资料(向量召回,供参考,不要照抄)\n" + b.recall_block
         if b.recap:
@@ -137,6 +141,8 @@ class ClaudeAdapter:
         sys_parts = [b.skeleton]
         if b.summary:
             sys_parts.append("<early_summary>\n" + b.summary + "\n</early_summary>")
+        if b.dossier_block:
+            sys_parts.append("<entity_dossier note='权威事实源,优先据此答既往事实'>\n" + b.dossier_block + "\n</entity_dossier>")
         if b.recall_block:
             sys_parts.append("<retrieved_context>\n" + b.recall_block + "\n</retrieved_context>")
         if b.anchor:

@@ -50,6 +50,7 @@ RECALL_QUERY_ACTION_ONLY = False  # 实验门控:向量召回 query 强制仅用
 MISS_DIST = 0.45               # abstention:具体事实查询时 top1 余弦距离 > 此值 = 检索无相关记录(硬 NOT_FOUND 兜底)
 PHASE1_FIXES = True            # Phase 1 总开关(runner 置 False 跑 baseline 对照 / 也是 prod kill-switch):
                               # off = 无①召回条件化 / ②abstention / ③不回写编造 / ④发言者已知实体门
+PHASE2_DOSSIER = False         # Phase 2 总开关(实体活档):on = 按实体存事实 + 注入在场实体档 + dossier 优先 abstention
 
 # 世界时钟(故事内分钟):模型每轮估 time_advance,代码 clamp。
 MIN_TIME_ADVANCE = 1           # 每轮至少推进的故事分钟,防时钟冻住
@@ -1077,6 +1078,61 @@ async def _rolling_summary(session_id: str, data: dict[str, Any], older_messages
     return summary
 
 
+# ── Phase 2:实体活档(entity living-dossier)写路径 ──────────────────
+def _infer_entity(text: str, entities: list[tuple[str, str]], speakers: list[tuple[str, str]]) -> str:
+    """把一条 memory_write 归到哪个实体:文本点名了在场某实体→他;否则→本轮主要发言者;
+    再否则→第一个在场实体;都没有→scene。(2.0-a 兜底启发式;后续可换显式 entity 标签/轻量抽取。)"""
+    for cid, name in entities:
+        if name and len(name) >= 2 and name in text:
+            return cid
+    if speakers:
+        return speakers[0][0]
+    return entities[0][0] if entities else "scene"
+
+
+def _update_dossier(data: dict[str, Any], source_turn: int, turn: StoryTurn) -> None:
+    """把本轮 memory_write 按实体 append 进活档,每条带 source_turn(reflection grounding)。"""
+    if not turn.memory_write:
+        return
+    dossier = data.setdefault("entity_dossier", {})
+    present = [tuple(x) for x in data.get("_present", [])]            # 本轮在场实体(_story_turn_impl 设)
+    speakers = [(m.character_id, m.name) for m in turn.messages if m.character_id]
+    entities = present + [s for s in speakers if s not in present]
+    for mw in turn.memory_write:
+        ent = _infer_entity(mw.text, entities, speakers)
+        slot = dossier.setdefault(ent, {"deltas": []})
+        slot["deltas"].append({
+            "kind": mw.kind, "text": mw.text, "source_turn": source_turn,
+            "status": "active", "importance": mw.importance,
+        })
+
+
+def _delta_matches(query: str, text: str) -> bool:
+    """便宜的中文相关性:query 的任一 2-gram 出现在 delta 文本里(实体锚定召回的命中判定)。"""
+    grams = {query[i:i + 2] for i in range(len(query) - 1)}
+    return any(len(g.strip()) == 2 and g in text for g in grams)
+
+
+def _dossier_block(data: dict[str, Any], present: list[tuple[str, str]], action: str, fact_query: bool) -> str:
+    """注入在场实体的既有事实档。事实查询时,关键词匹配 query 的 delta 优先(实体锚定召回),
+    其余补最近若干条;非事实查询给最近上下文。每实体限条数,控预算。"""
+    dossier = data.get("entity_dossier", {})
+    lines = []
+    for cid, name in present:
+        deltas = [d for d in dossier.get(cid, {}).get("deltas", []) if d.get("status") == "active"]
+        if not deltas:
+            continue
+        if fact_query:
+            matched = [d for d in deltas if _delta_matches(action, d["text"])]
+            rest = [d for d in deltas[-4:] if d not in matched]
+            picked = (matched + rest)[:6]
+        else:
+            picked = deltas[-4:]
+        if picked:
+            lines.append(f"【{name}】" + "; ".join(d["text"] for d in picked))
+    return "\n".join(lines)
+
+
 def _store_memory_writes(session_id: str, data: dict[str, Any], turn: StoryTurn) -> None:
     for item in turn.memory_write:
         if isinstance(item, MemoryWrite):
@@ -1145,6 +1201,8 @@ async def _save_turn(
     await asyncio.to_thread(memory.add_turn, session_id, len(messages) - 1, "assistant", assistant_text)
     short_memory.extend([user_msg, assistant_msg])
     await asyncio.to_thread(_store_memory_writes, session_id, data, turn)
+    if PHASE2_DOSSIER:  # Phase 2:按实体 append 活档(source_turn = 本轮 assistant 消息索引)
+        _update_dossier(data, len(messages) - 1, turn)
     short_memory = await _flush_short_memory(session_id, data, short_memory, mode)
     data["messages"] = messages
     data["short_memory"] = short_memory
@@ -1240,7 +1298,7 @@ def _abstain_note(kind: str) -> str:
         "# 记忆核查(回答前必做)\n"
         "玩家在问一个**具体的既往事实**(某个名字/数字/时间/颜色/位置/物件)。\n"
         "**第一步**——在 reasoning.recall_check 里先判定并写下 `hit` 或 `miss`:\n"
-        "  · `hit` = 上面给你的资料(检索旧资料 + 最近剧情 + 早前摘要)里**逐字写到了**玩家问的那个具体值;\n"
+        "  · `hit` = 上面给你的资料(**在场角色事实档** + 检索旧资料 + 最近剧情 + 早前摘要)里**逐字写到了**玩家问的那个具体值;\n"
         "  · `miss` = 资料里**根本没有**那个具体值(相邻话题、相关的事都不算)。\n"
         "**第二步**——据此写正文:\n"
         "  · hit → **自信、明确地把那个值说出来**,别含糊、别改口、别退回一个更笼统的说法。\n"
@@ -1314,6 +1372,7 @@ async def _story_turn_impl(
         "choice": raw_choice,
         "mode": mode,
     }
+    data["_present"] = [[_char_id(c, i), c.data.name] for i, c in enumerate(characters)]  # Phase 2:dossier 归档用
     scan_text = action + "\n" + "\n".join(_message_content(m) for m in messages[-8:])
     world_hits = _world_keyword_hits(world, scan_text)
     event_hits = _story_event_hits(story, scan_text, state)
@@ -1365,6 +1424,11 @@ async def _story_turn_impl(
     if PHASE1_FIXES and fact_query and not abstain_note:
         abstain_note = _abstain_note("noretrieval")
 
+    # Phase 2:在场实体活档注入(按实体取,事实查询时关键词锚定 query)——权威事实源,向量退为兜底。
+    dossier_block = ""
+    if PHASE2_DOSSIER:
+        dossier_block = _dossier_block(data, [tuple(x) for x in data.get("_present", [])], action, fact_query)
+
     # 主线锚点 + 世界时钟 + 该主动恶化登场的事件(第5组 5b)。
     anchor = _main_anchor(story, player)
     escalations = _due_escalations(story, state)
@@ -1387,6 +1451,7 @@ async def _story_turn_impl(
         action_prompt=action_prompt,
         summary=summary,
         recall_block=recall_block,
+        dossier_block=dossier_block,
         abstain_note=abstain_note,
         recap=recap,
         recent_messages=messages[start_idx:],
