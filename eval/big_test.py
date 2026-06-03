@@ -106,6 +106,14 @@ async def run_big(fixture: dict, *, total_turns: int, mode: str = "standard",
     scripted = {int(k): v for k, v in (fixture.get("scripted_actions") or {}).items()}
     # 无真值 abstention 探针:问从未建立过的具体事实,引擎应认忘不编(Phase 1 ② 的核心验证轮)。
     abst = {int(p["turn"]): p for p in (fixture.get("abstention_probes") or [])}
+    # #2 矛盾消解探针:establish/change/query 三轮注入,验证改后远距查到的是最新值。
+    contra = {int(p["turn"]): p for p in (fixture.get("contradiction_probes") or [])}
+    # Phase 3 知识边界探针:establish(某角色缺席时建立事实)/ absent-query(问缺席角色→应认忘)/
+    # witness-query(问在场见证角色→应召回)。三轮注入,验证"叙事真相≠人人都知道"。
+    kbp = fixture.get("knowledge_boundary_probes") or []
+    kb_est = {int(p["establish_turn"]): p for p in kbp}
+    kb_abs = {int(p["absent_turn"]): p for p in kbp}
+    kb_wit = {int(p["witness_turn"]): p for p in kbp}
 
     records: list[dict] = []
     player_tokens = 0
@@ -126,6 +134,14 @@ async def run_big(fixture: dict, *, total_turns: int, mode: str = "standard",
             action, action_kind = probes_query[t]["query_action"], "probe_query"
         elif t in abst:
             action, action_kind = abst[t]["action"], "abstention_probe"
+        elif t in contra:
+            action, action_kind = contra[t]["action"], "contradiction_" + contra[t]["kind"]
+        elif t in kb_est:
+            action, action_kind = kb_est[t]["establish_action"], "kb_establish"
+        elif t in kb_abs:
+            action, action_kind = kb_abs[t]["absent_action"], "kb_absent"
+        elif t in kb_wit:
+            action, action_kind = kb_wit[t]["witness_action"], "kb_witness"
         elif t in scripted:
             action, action_kind = scripted[t], "canon_probe"
         elif t in transitions and scene.get("location") != cur_loc:
@@ -246,3 +262,82 @@ def check_abstention(playthrough: list[dict], fixture: dict) -> dict:
             "clean": clean, "clean_rate": round(clean / n, 3) if n else None,
             "fab_tells": sum(1 for r in results if r["fab_tell"]),
             "wrote_facts": sum(1 for r in results if r["wrote_fact"])}
+
+
+def check_contradiction(playthrough: list[dict], fixture: dict) -> dict:
+    """#2 矛盾消解探针:先立 X=stale、后改 X=fresh,远距 query 应答 fresh、不答 stale。
+    ok = fresh 出现且 stale 没出现(superseded 生效:旧值不再被召回/引用)。"""
+    queries = [p for p in (fixture.get("contradiction_probes") or []) if p.get("kind") == "query"]
+    by_turn = {r["turn"]: r for r in playthrough}
+    results = []
+    for p in queries:
+        rec = by_turn.get(int(p["turn"]))
+        if not rec:
+            continue
+        out = rec["engine_output"]
+        blob = str(out.get("narration", "")) + " " + " ".join(m.get("text", "") for m in out.get("messages", []))
+        fresh_in, stale_in = p["fresh"] in blob, p["stale"] in blob
+        results.append({"turn": p["turn"], "fresh": p["fresh"], "stale": p["stale"],
+                        "fresh_recalled": fresh_in, "stale_leaked": stale_in,
+                        "ok": fresh_in and not stale_in, "note": p.get("note", "")})
+    n = len(results)
+    passed = sum(1 for r in results if r["ok"])
+    return {"results": results, "passed": passed, "total": n,
+            "rate": round(passed / n, 3) if n else None}
+
+
+def _char_own_text(rec: dict, who: str) -> tuple[str, bool]:
+    """取被问角色【自己】的发言(message.name 与 who 互为子串);取不到则退回全体 blob(保守)。
+    这样'别的在场见证者替答'不会污染对被问角色的判定——知识边界是 per-character 的。"""
+    out = rec["engine_output"]
+    msgs = out.get("messages", []) or []
+    mine = [str(m.get("text", "") or "") for m in msgs
+            if who and (who in str(m.get("name", "")) or str(m.get("name", "")) in who)]
+    if mine:
+        return " ".join(mine), True
+    whole = str(out.get("narration", "")) + " " + " ".join(str(m.get("text", "") or "") for m in msgs)
+    return whole, False
+
+
+def check_knowledge_boundary(playthrough: list[dict], fixture: dict) -> dict:
+    """Phase 3 知识边界:缺席角色被问具体往事→应 in-character 认忘(absent-abstain);
+    在场见证角色被问→应召回具体值(witness-recall);在场角色不该对自己知道的事误认忘(over-abstention 守卫)。
+    判定只看【被问角色本人】的发言(_char_own_text),避免别的在场见证者替答污染。"""
+    from src.story import _ABSTAIN_MARKERS
+    probes = fixture.get("knowledge_boundary_probes") or []
+    by_turn = {r["turn"]: r for r in playthrough}
+    results = []
+    for p in probes:
+        token = str(p["token"])
+        absent = witness = None
+        ar = by_turn.get(int(p["absent_turn"]))
+        if ar:
+            blob, own = _char_own_text(ar, p["absent_char"])
+            rc = str((ar["engine_output"].get("reasoning") or {}).get("recall_check", "")).strip().lower()
+            admitted = any(mk in blob for mk in _ABSTAIN_MARKERS) or rc.startswith("miss")
+            leaked = token in blob
+            absent = {"turn": p["absent_turn"], "char": p["absent_char"], "own_msg": own,
+                      "abstained": admitted, "token_leaked": leaked, "recall_check": rc[:40],
+                      "ok": admitted and not leaked}  # 认忘 且 没吐出具体值
+        wr = by_turn.get(int(p["witness_turn"]))
+        if wr:
+            blob, own = _char_own_text(wr, p["witness_char"])
+            rc = str((wr["engine_output"].get("reasoning") or {}).get("recall_check", "")).strip().lower()
+            recalled = token in blob
+            abst_w = any(mk in blob for mk in _ABSTAIN_MARKERS) or rc.startswith("miss")
+            witness = {"turn": p["witness_turn"], "char": p["witness_char"], "own_msg": own,
+                       "token_recalled": recalled, "over_abstained": abst_w and not recalled,
+                       "ok": recalled}  # 见证者应答出具体值
+        results.append({"id": p.get("id", ""), "token": token, "note": p.get("note", ""),
+                        "absent": absent, "witness": witness})
+    n_ab = sum(1 for r in results if r["absent"])
+    ab_ok = sum(1 for r in results if r["absent"] and r["absent"]["ok"])
+    n_wi = sum(1 for r in results if r["witness"])
+    wi_ok = sum(1 for r in results if r["witness"] and r["witness"]["ok"])
+    over = sum(1 for r in results if r["witness"] and r["witness"]["over_abstained"])
+    return {"results": results,
+            "absent_total": n_ab, "absent_ok": ab_ok,
+            "absent_abstain_rate": round(ab_ok / n_ab, 3) if n_ab else None,
+            "witness_total": n_wi, "witness_ok": wi_ok,
+            "witness_recall_rate": round(wi_ok / n_wi, 3) if n_wi else None,
+            "over_abstention": over}

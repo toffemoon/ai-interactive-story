@@ -51,6 +51,10 @@ RECALL_QUERY_ACTION_ONLY = False  # 实验门控:向量召回 query 强制仅用
 MISS_DIST = 0.45               # abstention:具体事实查询时 top1 余弦距离 > 此值 = 检索无相关记录(硬 NOT_FOUND 兜底)
 PHASE1_FIXES = True            # Phase 1 总开关(runner 置 False 跑 baseline 对照 / 也是 prod kill-switch):
                               # off = 无①召回条件化 / ②abstention / ③不回写编造 / ④发言者已知实体门
+PHASE3_KNOWERS = True          # Phase 3 知识边界开关(runner 置 False 跑 baseline 对照):
+                              # on = 派生事实记 knowers(建立轮在场实体+玩家)/ 召回按发言角色过滤(knower 轴)/
+                              #      认忘扩到"不是你的记录"(缺席角色被问具体往事→in-character 认忘,不借叙事真相)。
+                              # canon(角色卡/世界书/故事书)= 公共知识,人人可知,不受此过滤。
 
 # 世界时钟(故事内分钟):模型每轮估 time_advance,代码 clamp。
 MIN_TIME_ADVANCE = 1           # 每轮至少推进的故事分钟,防时钟冻住
@@ -146,25 +150,32 @@ def _supersede_conflicts(long_memory: list[Any], new_text: str, new_entity: str)
 
 
 def _entity_memory_index(long_memory: list[Any], wanted: set[str],
-                         per_entity: int = 6) -> dict[str, list[str]]:
-    """从会话 long_memory 里取 entity ∈ wanted 的条目,按实体分组(每实体保留最近 per_entity 条)。
+                         per_entity: int = 6, by_knower: bool = False) -> dict[str, list[str]]:
+    """从会话 long_memory 里取在场相关条目,按目标键分组(每键保留最近 per_entity 条)。
 
-    这是 A 档的确定性召回:不靠相似度,只要实体在场就必然把挂在它身上的派生事实取出来。
-    两个记忆模式都走这里(数据落在会话 JSON,不依赖 embedding)。#2:superseded 的不再召回。
+    A 档确定性召回:不靠相似度,数据落会话 JSON,两记忆模式都走这里。#2:superseded 的不再召回。
+
+    by_knower=False(A 原行为/subject 轴):按事实主体 entity 分组——entity ∈ wanted 才取(挂谁身上、谁在场就注入)。
+    by_knower=True(Phase 3/knower 轴):有 `knowers` 字段的派生事实按"谁知道"分组——只注入到 knowers ∩ wanted 的
+      在场角色块(该角色亲历/知情才看得到);**无 knowers 的旧事实回退 subject 轴**(向后兼容,不丢老数据)。
     """
-    by_entity: dict[str, list[str]] = {}
+    grouped: dict[str, list[str]] = {}
     for item in long_memory or []:
         if not isinstance(item, dict) or item.get("superseded"):
-            continue
-        ent = str(item.get("entity", "") or "")
-        if not ent or ent not in wanted:
             continue
         text = str(item.get("text", "") or "").strip()
         if not text:
             continue
-        kind = item.get("kind", "note")
-        by_entity.setdefault(ent, []).append(f"[{kind}] {text}")
-    return {ent: lines[-per_entity:] for ent, lines in by_entity.items()}
+        line = f"[{item.get('kind', 'note')}] {text}"
+        knowers = item.get("knowers") if by_knower else None
+        if knowers is not None:  # Phase 3:knower 轴(事实只进"知道它的在场角色"块)
+            targets = [k for k in knowers if k in wanted]
+        else:                    # subject 轴(A 原行为 / 未标 knowers 的旧事实)
+            ent = str(item.get("entity", "") or "")
+            targets = [ent] if (ent and ent in wanted) else []
+        for t in targets:
+            grouped.setdefault(t, []).append(line)
+    return {k: lines[-per_entity:] for k, lines in grouped.items()}
 
 
 def _json_obj(raw: str) -> dict[str, Any]:
@@ -812,13 +823,16 @@ def _prompt(
             "主动性要求:根据该角色的身份、性格、利益和当前情境主动反应。"
             "可以追问、打断、试探、拒绝、转移压力、提出条件或推进自己的小目标。"
         )
-        # 长程记忆 A 档:该角色在场 → 把挂在它身上的派生事实/记忆确定性注入它自己的块(不靠相似度)。
+        # 长程记忆 A 档:该角色在场 → 注入它自己的派生事实块(不靠相似度)。
+        # Phase 3 = 按"该角色知道的"注入(knower 轴);off = 按"关于该角色的"(subject 轴)。
         ent_lines = entity_memory.get(cid)
         if ent_lines:
-            block += (
+            head = (
+                f"\n{d.name} 知道/亲历的既有事实(该角色本人知情,须一致;此处没列出的具体往事=该角色当时不知道):\n"
+                if PHASE3_KNOWERS else
                 "\n关于该角色的既有事实/记忆(此前剧情里确立、必须保持一致,不要与之矛盾):\n"
-                + "\n".join(f"- {x}" for x in ent_lines)
             )
+            block += head + "\n".join(f"- {x}" for x in ent_lines)
         char_blocks.append(block)
     # 单角色"场景":判断依据是本轮实际在场的角色数(运行时),不是上传了几张卡。
     # 多角色卡组里和某个角色单独相处的段落也会触发——那种段落最容易退化成一问一答的聊天。
@@ -876,10 +890,20 @@ def _prompt(
             "\n关于玩家的既有事实/记忆(此前剧情里确立、必须保持一致):\n"
             + "\n".join(f"- {x}" for x in player_mem_lines)
         )
+    # Phase 3 知识边界:显式告诉模型"叙事真相≠人人都知道",被问的角色没亲历就 in-character 认忘(RoleRAG 式劝阻)。
+    kb_directive = (
+        "知识边界(每个角色只知道自己【亲历】或【被当面告知】的事):上面【活跃角色】每个角色块里列出的"
+        "『知道/亲历的既有事实』就是该角色的记忆边界。叙事真相 ≠ 人人都知道——某事在剧情里发生过,"
+        "不代表当时不在场的角色知道它。玩家问某个在场角色一件【具体往事】时:该事实若在【这个角色本人的】知情块里 → 据实答;"
+        "若它只出现在别的角色块、向量召回的旧对话、或剧情摘要里、而不在被问角色本人的知情块 → 该角色要 in-character 认忘"
+        "(我当时不在场 / 没听说 / 记不清),绝不替他把只有别人知道的细节说出来,也不许用『我推断 / 我观察到』把它演绎出来。"
+        "canon(角色卡 / 世界书 / 故事书的公开设定)是公共知识,人人可引用,不受此限。\n"
+    ) if PHASE3_KNOWERS else ""
     return (
         "你是互动故事引擎,不是普通聊天助手。你要生成一轮可玩的故事推进。\n"
         "严格事实边界:只能使用角色卡、世界书、故事书、玩家卡、运行状态和记忆中提供的事实。"
         "不存在/未披露/不确定的设定不得编造;可以让角色以自身口吻说不知道或需要调查。\n"
+        + kb_directive +
         "保持玩家自由度:不要替玩家做决定、不要描写玩家未选择的动作或心理。\n"
         "角色不是等待回复的机器人。每轮至少让一个在场角色做出符合性格的主动行为或主动判断,"
         "例如追问、质疑、观察、施压、试探、维护自身利益、提出交易条件、暴露情绪变化。"
@@ -1273,6 +1297,10 @@ async def _rolling_summary(session_id: str, data: dict[str, Any], older_messages
 
 
 def _store_memory_writes(session_id: str, data: dict[str, Any], turn: StoryTurn) -> None:
+    # Phase 3:本轮在场实体 + 玩家 = 这条事实的见证者(knowers)。建 prompt 时已算好暂存进 data["_present_keys"]
+    # (= turn 开始时的在场集,正是"谁见证了本轮")。离场角色自然不在里头 → 缺席=不知道。
+    pk = data.get("_present_keys")
+    knowers = sorted(pk) if (PHASE3_KNOWERS and pk) else None
     for item in turn.memory_write:
         if isinstance(item, MemoryWrite):
             mid = hashlib.sha1(f"{session_id}:{item.kind}:{item.text}".encode("utf-8")).hexdigest()
@@ -1284,6 +1312,8 @@ def _store_memory_writes(session_id: str, data: dict[str, Any], turn: StoryTurn)
             d = item.model_dump()
             d["derived"] = True       # #3:玩出来的派生事实(上传 canon 在骨架里、不进此处、不被覆盖)
             d.setdefault("superseded", False)
+            if knowers is not None:   # Phase 3:记下"建立这刻谁在场"=谁知道这条
+                d["knowers"] = knowers
             data["long_memory"].append(d)
         elif isinstance(item, dict):
             text = str(item.get("text", "")).strip()
@@ -1459,6 +1489,13 @@ def _abstain_note(kind: str) -> str:
         "**唯一禁止的**:recall_check 是 miss、却在正文里编一个具体值——不许凭空说、不许用『我推断/我观察到/依我看』"
         "把它推出来、不许翻出没在上面给过你的账册/记录/笔记来作证。**hit 就答、miss 就认忘,两种都对;只有'miss 却编'才是错。**"
     )
+    if PHASE3_KNOWERS:  # Phase 3:hit 还要求"是被问的这个角色本人知道的",否则对该角色仍是 miss(缺席≠知情)
+        base += (
+            "\n**知识边界附加**:`hit` 还要求那个具体值是【被问的这个在场角色本人亲历/知情】的"
+            "(出现在该角色自己的『知道/亲历的既有事实』块里)。若它只在叙事里发生过、或只有别的角色/玩家知道、"
+            "而被问的角色当时【不在场】 → 对这个角色仍记 `miss`,让他 in-character 认忘(我当时不在/没看见),"
+            "**绝不借叙事真相或别人的经历替他答**。"
+        )
     if kind == "miss":
         return base + "\n(系统提示:本轮向量检索**没有**找到相关记录,recall_check 极可能是 miss。)"
     return base
@@ -1536,7 +1573,10 @@ async def _story_turn_impl(
     wanted_keys = _present_entity_keys(state, characters, roster)
     if player and player.name:
         wanted_keys.add(_PLAYER_ENTITY)  # 玩家恒在场,挂玩家的记忆始终注入
-    entity_memory = _entity_memory_index(data.get("long_memory", []), wanted_keys)
+    entity_memory = _entity_memory_index(data.get("long_memory", []), wanted_keys, by_knower=PHASE3_KNOWERS)
+    # Phase 3:暂存本轮在场实体键(turn 开始时的在场集)→ _store_memory_writes 写 knowers 时取(= 谁见证了本轮)。
+    if PHASE3_KNOWERS:
+        data["_present_keys"] = sorted(wanted_keys)
 
     # 骨架:角色 + 命中世界书/事件 + 故事总览 + 状态摘要 + 指令。先建好用于度量预算,召回/历史另行追加。
     skeleton = _prompt(characters, player, story, world_hits, event_hits, [], [], state, entity_memory)

@@ -36,7 +36,9 @@ def _done_cells(path: str) -> set:
 async def run_cell(fixture_key: str, condition: str, seed: int, turns: int, mode: str) -> dict:
     from src import story as _story, memory as _memory
     fx = FIXTURES[fixture_key]()
-    _story.PHASE1_FIXES = (condition == "phase1")
+    # baseline = 全关;phase1 = Phase1 开、Phase3 关;phase3 = Phase1+Phase3 都开。
+    _story.PHASE1_FIXES = (condition in ("phase1", "phase3"))
+    _story.PHASE3_KNOWERS = (condition == "phase3")
     sess = f"matrix-{fixture_key}-{condition}-{seed}"
     if mode == "deep":
         _story.DEEP_WARMUP_AT, _story.DEEP_RECALL_AT = 0.30, 0.45
@@ -56,6 +58,8 @@ async def run_cell(fixture_key: str, condition: str, seed: int, turns: int, mode
     mem = big_test.check_memory_probes(playthrough, fx)
     spk = big_test.check_speaker_validity(playthrough, fx)
     abst = big_test.check_abstention(playthrough, fx)
+    contra = big_test.check_contradiction(playthrough, fx)        # #2 矛盾消解
+    kb = big_test.check_knowledge_boundary(playthrough, fx)       # Phase 3 知识边界
     eng_in = sum(r["engine_output"].get("usage", {}).get("prompt_tokens", 0) for r in playthrough)
     eng_out = sum(r["engine_output"].get("usage", {}).get("completion_tokens", 0) for r in playthrough)
     cost = (eng_in * DS_IN + eng_out * DS_OUT) / 1e6
@@ -65,6 +69,10 @@ async def run_cell(fixture_key: str, condition: str, seed: int, turns: int, mode
         "abstain_rate": abst["abstain_rate"], "abstain_passed": abst["passed"], "abstain_total": abst["total"],
         "fab_tells": abst["fab_tells"], "wrote_facts": abst["wrote_facts"],
         "speaker_invalid": spk["invalid"], "speaker_total": spk["total_messages"],
+        "contra_rate": contra["rate"], "contra_passed": contra["passed"], "contra_total": contra["total"],
+        "kb_absent_abstain": kb["absent_abstain_rate"], "kb_absent_ok": kb["absent_ok"], "kb_absent_total": kb["absent_total"],
+        "kb_witness_recall": kb["witness_recall_rate"], "kb_witness_ok": kb["witness_ok"], "kb_witness_total": kb["witness_total"],
+        "kb_over_abstention": kb["over_abstention"],
         "cost_usd": round(cost, 4), "secs": round(time.time() - t0),
     }
 
@@ -77,13 +85,14 @@ def _agg(rows: list[dict], key: str):
 
 
 def report(path: str):
-    rows = [json.loads(l) for l in open(path, encoding="utf-8") if l.strip()]
+    rows = [json.loads(l) for l in open(path, encoding="utf-8") if l.strip() and "error" not in json.loads(l)]
     fixtures = sorted({r["fixture"] for r in rows})
-    metrics = ["mem_retention", "abstain_rate", "fab_tells", "wrote_facts", "speaker_invalid", "cost_usd"]
-    print("\n================ Phase 1 矩阵对照(mean[min..max], n) ================")
+    metrics = ["kb_absent_abstain", "kb_witness_recall", "kb_over_abstention", "contra_rate",
+               "mem_retention", "abstain_rate", "fab_tells", "wrote_facts", "speaker_invalid", "cost_usd"]
+    print("\n========= 矩阵对照(★kb=知识边界 / contra=#2矛盾;mean[min..max]) =========")
     for fx in fixtures:
         print(f"\n### {fx}")
-        for cond in ("baseline", "phase1"):
+        for cond in ("baseline", "phase1", "phase3"):
             cr = [r for r in rows if r["fixture"] == fx and r["condition"] == cond]
             if not cr:
                 continue
@@ -99,6 +108,7 @@ def report(path: str):
 async def main_async(a):
     fixtures = a.fixtures.split(",")
     conditions = a.conditions.split(",")
+    OUT = a.out
     done = _done_cells(OUT)
     # 按 seed 外层:先跑完 seed0 的全部 cell(~一份完整单种子对照),再 seed1,便于早出增量结果。
     todo = [(f, c, s) for s in range(a.seeds) for f in fixtures for c in conditions
@@ -132,10 +142,11 @@ def main():
     ap.add_argument("--seeds", type=int, default=3)
     ap.add_argument("--turns", type=int, default=200)
     ap.add_argument("--mode", default="deep")
+    ap.add_argument("--out", default=OUT)
     ap.add_argument("--report-only", action="store_true")
     a = ap.parse_args()
     if a.report_only:
-        report(OUT)
+        report(a.out)
     else:
         asyncio.run(main_async(a))
 
