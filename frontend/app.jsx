@@ -1514,6 +1514,59 @@ function StoryTile({ d, fallbackName, sub, actions }) {
   );
 }
 
+// 预设故事进入后的选人页:列出可玩主角(选择题)+「其他」自定义。
+function CharacterSelect({ playables, storyName, onPick }) {
+  const [mode, setMode] = useState("list");   // list | custom
+  const [customText, setCustomText] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function startCustom() {
+    if (!customText.trim()) return;
+    setLoading(true);
+    try {
+      onPick(await postJSON("/api/identify_player", { text: customText }));
+    } catch (e) { alert("识别失败:" + e.message); }
+    setLoading(false);
+  }
+
+  if (mode === "custom") {
+    return (
+      <section className="char-select">
+        <h2>自定义你的主角</h2>
+        <p className="cs-sub">写下你要扮演的角色:身份、背景、目标、能力、限制、开局已知……AI 会把它识别成主角卡。</p>
+        <textarea className="cs-textarea" rows="8" value={customText}
+          onChange={(e) => setCustomText(e.target.value)}
+          placeholder="例:一个流落翁法罗斯的外乡铁匠,为寻失散的妹妹而来,擅长锻造与观察,却看不懂这世界的神话与战事……" />
+        <div className="cs-actions">
+          <button className="primary" disabled={loading || !customText.trim()} onClick={startCustom}>
+            {loading ? "识别中…" : "用这个角色开始"}
+          </button>
+          <button className="ghost" onClick={() => setMode("list")}>← 返回选择</button>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="char-select">
+      <h2>你想扮演谁?</h2>
+      {storyName && <p className="cs-sub">{storyName}</p>}
+      <div className="select-grid">
+        {(playables || []).map((p, i) => (
+          <button key={i} className="select-card" onClick={() => onPick(p)}>
+            <b>{p.name || "未命名"}</b>
+            <span>{p.role || ""}</span>
+          </button>
+        ))}
+        <button className="select-card other" onClick={() => setMode("custom")}>
+          <b>其他</b>
+          <span>自定义你自己的角色设定</span>
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function StoriesHome({ onNew, presets, saves, onLaunchPreset, onDeletePreset, onResume, onDeleteSave }) {
   return (
     <section className="stories-home">
@@ -1569,6 +1622,9 @@ function App() {
   const [restoredChoices, setRestoredChoices] = useState([]);
   const [view, setView] = useState("home"); // home / game / build / vault
   const [sidebarOpen, setSidebarOpen] = useState(true); // 游戏中侧边卡组栏开关
+  const [isPreset, setIsPreset] = useState(false);      // 当前局是否由预设开(预设:无侧边栏 + 先选人)
+  const [selecting, setSelecting] = useState(false);    // 预设进入后的选人页阶段
+  const [pendingPreset, setPendingPreset] = useState(null);
   const [buildSeed, setBuildSeed] = useState({ seed: "", draft: null });
   const [presets, setPresets] = useState([]);
   const [saves, setSaves] = useState(loadSaves);
@@ -1590,6 +1646,7 @@ function App() {
   function resetGameState() {
     setCharacters([]); setWorldBooks([]); setStory(null); setPlayer(null); setMode("standard");
     setRestoredTurns(null); setRestoredState(null); setRestoredChoices([]);
+    setIsPreset(false); setSelecting(false); setPendingPreset(null);
   }
 
   // 新建故事:开一个全新会话 + 清空卡组 → 进游戏页的组卡(assembling)。
@@ -1613,12 +1670,25 @@ function App() {
     setCharacters(d.characters || []);
     if (d.world) setWorldBooks([d.world]);
     if (d.story) setStory(d.story);
-    if (d.player) setPlayer(d.player);
     if (d.mode === "deep") setMode("deep");
     setSessionId(id);
+    setIsPreset(true);
+    setPendingPreset(d);
     setAssembling(false);
-    setStarted(true);
+    setSelecting(true);   // 预设故事:先进选人页(选主角 / 自定义),不直接开玩
+    setStarted(false);
     setView("game");
+  }
+
+  // 选人页定主角(预设候选 or 自定义识别结果):设为 player + 从 NPC 阵容拿掉同名角色,再开玩。
+  function startWithPlayer(playerCard) {
+    if (playerCard) {
+      setPlayer(playerCard);
+      const nm = playerCard.name || "";
+      if (nm) setCharacters((xs) => xs.filter((c) => ((c.data && c.data.name) || "") !== nm));
+    }
+    setSelecting(false);
+    setStarted(true);
   }
 
   async function deletePreset(p) {
@@ -1627,7 +1697,7 @@ function App() {
     refreshHome();
   }
 
-  function resumeSave(id) { setActiveId(id); setSessionId(id); setAssembling(false); setView("game"); }
+  function resumeSave(id) { setActiveId(id); setSessionId(id); setAssembling(false); setIsPreset(false); setSelecting(false); setView("game"); }
 
   async function deleteSaveHandler(id) {
     if (!confirm("删除这局存档?不可恢复。")) return;
@@ -1708,9 +1778,19 @@ function App() {
         </main>
       )}
 
+      {view === "game" && selecting && (
+        <main className="single-view">
+          <CharacterSelect
+            playables={(pendingPreset && pendingPreset.playables) || []}
+            storyName={(pendingPreset && pendingPreset.name) || ""}
+            onPick={startWithPlayer}
+          />
+        </main>
+      )}
+
       {view === "game" && started && characters.length > 0 && (
-        <main className={"play-layout " + (sidebarOpen ? "with-side" : "no-side")}>
-          {sidebarOpen && (
+        <main className={"play-layout " + ((sidebarOpen && !isPreset) ? "with-side" : "no-side")}>
+          {sidebarOpen && !isPreset && (
             <SetupPanel
               characters={characters} setCharacters={setCharacters}
               worldBooks={worldBooks} setWorldBooks={setWorldBooks}
@@ -1723,10 +1803,12 @@ function App() {
             />
           )}
           <div className="play-main">
-            <button className="side-toggle" onClick={() => setSidebarOpen((o) => !o)}
-              title="开/关侧边的角色卡、故事书等卡组栏">
-              {sidebarOpen ? "◀ 收起卡组栏" : "▶ 卡组栏"}
-            </button>
+            {!isPreset && (
+              <button className="side-toggle" onClick={() => setSidebarOpen((o) => !o)}
+                title="开/关侧边的角色卡、故事书等卡组栏">
+                {sidebarOpen ? "◀ 收起卡组栏" : "▶ 卡组栏"}
+              </button>
+            )}
             <StoryPanel key={sessionId} characters={characters} world={world} story={story} player={player} mode={mode} sessionId={sessionId} initialTurns={restoredTurns} initialState={restoredState} initialChoices={restoredChoices} goHome={() => { refreshHome(); setStarted(false); setAssembling(false); setView("home"); }} />
           </div>
         </main>
@@ -1756,7 +1838,7 @@ function App() {
         </main>
       )}
 
-      {view === "game" && !(started && characters.length > 0) && !assembling && (
+      {view === "game" && !(started && characters.length > 0) && !assembling && !selecting && (
         <main className="single-view">
           <section className="story-shell standby">
             <h2>还没有进行中的故事</h2>

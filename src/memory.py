@@ -24,7 +24,6 @@ bge-small-zh-v1.5(轻、快、中文好,512 维),只是存/检索落到 pgvector
 from __future__ import annotations
 
 import hashlib
-import os
 import threading
 
 from psycopg.types.json import Jsonb
@@ -37,11 +36,6 @@ _available = True
 _load_lock = threading.Lock()
 _loading = False
 _load_failed = False
-
-
-def embeddings_enabled() -> bool:
-    """旧 env 开关,保留兼容;v2 改由「深度模式」按上下文长度驱动加载,不再依赖它。"""
-    return os.getenv("ENABLE_EMBEDDINGS", "0").lower() in {"1", "true", "yes", "on"}
 
 
 def _load_model():

@@ -414,6 +414,7 @@ def api_delete_library(kind: str, name: str):
 class PresetReq(BaseModel):
     name: str
     characters: list[dict] = []
+    playables: list[dict] = []   # 可玩主角候选(预设故事的选人页用;空则前端回退到"自定义")
     world: dict | None = None
     story: dict | None = None
     player: dict | None = None

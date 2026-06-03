@@ -20,3 +20,17 @@ eval/fixtures/_*.json
 HANDOFF.md
 _smoke_group5a.py
 _smoke_group5c.py
+
+# 本机调试 / 试跑产物(scratch, 不进库)
+# 注: 不用宽 _* 规则 —— repo 里 _smoke_*/_validate_*/_migrate_*/_seed_preset 等是已跟踪脚手架
+*.log
+*.zip
+_pt_out/
+_pt_out_filebased_bak/
+_testdata/
+_r2*.txt
+_canary.txt
+_hsr_mid.txt
+_libnames.txt
+_setcheck.txt
+_seed_originals_report.json

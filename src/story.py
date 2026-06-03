@@ -49,6 +49,7 @@ SUMMARY_MAX_CHARS = 900        # 滚动摘要注入上限
 SUMMARY_RECOMPUTE_EVERY = 4    # 更早消息每多这么多条,重算一次滚动摘要
 DEEP_WARMUP_AT = 0.65          # 深度模式:上下文用量超此比例,后台预热 embedding 模型
 DEEP_RECALL_AT = 0.80          # 深度模式:超此比例且模型就绪,启用向量召回
+DEEP_AUTO_CHAR_COUNT = 5       # 角色卡数 > 此值(即 ≥6,群像剧)自动进深度模式:上下文消耗大,需滚动摘要/consolidation/向量召回兜底
 RECALL_QUERY_ACTION_ONLY = False  # 实验门控:向量召回 query 强制仅用当前问句(默认 False:按 _is_fact_query 条件化)
 MISS_DIST = 0.45               # abstention:具体事实查询时 top1 余弦距离 > 此值 = 检索无相关记录(硬 NOT_FOUND 兜底)
 PHASE1_FIXES = True            # Phase 1 总开关(runner 置 False 跑 baseline 对照 / 也是 prod kill-switch):
@@ -1841,7 +1842,8 @@ async def _story_turn_impl(
     mode: str = "standard",
     on_delta=None,
 ) -> StoryTurn:
-    mode = "deep" if mode == "deep" else "standard"
+    # 角色卡 > DEEP_AUTO_CHAR_COUNT(群像剧)→ 自动深度模式;调用方已指定 deep 时保持不降级。
+    mode = "deep" if (mode == "deep" or len(characters) > DEEP_AUTO_CHAR_COUNT) else "standard"
     data = await asyncio.to_thread(storage.load_session, session_id)
     # 重 roll 快照:回合落盘前先存一份「上一轮之后」的完整会话镜像(排除 _reroll 本身防嵌套膨胀)。
     # 重 roll = 恢复这份镜像 + 用相同输入重跑;覆盖 messages/state/short_memory/long_memory/摘要/累计用量等。
