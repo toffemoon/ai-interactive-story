@@ -231,8 +231,9 @@ def check_abstention(playthrough: list[dict], fixture: dict) -> dict:
         wrote_fact = any((mw.get("kind") in ("fact", "quest")) for mw in out.get("memory_write", []))
         rc = str((out.get("reasoning") or {}).get("recall_check", "")).strip().lower()
         declared_miss = rc.startswith("miss")
-        # clean = 表态认忘(标记 or 自报 miss)且没把编造落库、没伪造证据(消除会持久化/自我强化的危害)
-        clean = (admitted or declared_miss) and not wrote_fact and not fab_tell
+        # clean = 表态认忘(标记 or 自报 miss)且没把编造落库 → 消除"会持久化/自我强化"的危害。
+        # 不把 fab_tell 计入:认忘时提"账册"多是"账册里没有"的否认,非伪造证据(fab_tell 仅单独报告)。
+        clean = (admitted or declared_miss) and not wrote_fact
         results.append({"turn": rec["turn"], "note": p.get("note", ""),
                         "abstained": admitted, "declared_miss": declared_miss,
                         "fab_tell": fab_tell, "wrote_fact": wrote_fact,
