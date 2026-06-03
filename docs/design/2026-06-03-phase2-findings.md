@@ -1,6 +1,6 @@
 ---
 date: 2026-06-03
-status: 矩阵 9/9 完成
+status: 矩阵 9/9 完成 · Phase 2 核心判定达标(阶段收尾)
 type: findings
 作者: gengyue + Claude(Opus 4.8)
 relates: docs/design/2026-06-03-phase2-plan.md · decisions/2026-06-03-phase1-memory-fixes.md · eval/STANDARD-VS-DEEP-2026-06-03.md
@@ -52,7 +52,11 @@ relates: docs/design/2026-06-03-phase2-plan.md · decisions/2026-06-03-phase1-me
 **→ 判定:Phase 2 核心达标。** 一个修复(④发言者门)同时治了 baseline 最脏的 xiyou 45 个幻觉发言者;abstention 从"几乎全编 + 写回记忆"变成"clean 0.67~1.0 + 落假 0";记忆远距事实 0.667→1.0;成本不升反降。
 
 **遗留(归下一阶段,非阻断)**:
-1. **xiyou 记忆 0.333**(baseline=phase1=phase2 三档同低,**非 phase 效应**;单种子 + 该局玩家路径所致)→ 需 ≥3 种子复核(原 standard 曾 3/3)。
+1. **xiyou 记忆 0.333 根因已查清**(诊断重跑 xiyou-p1-probe-001):**不是 phase 召回 gap,是探针设计 + 群像角色知识边界**——
+   - turn70(念珠):八戒答出"念珠"(token 命中算"记得")但**语义否认**"师父没给你东西"(他在场本该记得=真矛盾,被 token 匹配蒙混);
+   - turn150(两个馒头):问悟空,但**悟空当时不在场没见篮子**(canon 被支开),他 in-character 正确地"她还没掀盖,老孙哪知道"=**探针问错角色**;
+   - turn110(莫回头):漏。
+   - mistport/sherlock 探针问的是**拥有该事实的角色**(沈雾/福尔摩斯)→召回 1.0;xiyou 探针问的角色**未必见证过**叙事建立的事实。**这是探针/fixture 设计问题 + "叙事建立的事实 vs 角色知识边界"的真课题**(群像通病),非 phase 退化。修法:探针只问见证者 / 把事实按角色归档;群像下"谁知道什么"应进 dossier。归下阶段。
 2. **多种子**:全表 n=1,speaker/state/记忆这类路径敏感项需 ≥3 种子定方差。
 3. **2.0-d 完整矛盾消解**(bi-temporal)+ 矛盾探针。
 4. sherlock phase2 落假=1(vs phase1=0,噪声级,留意)。
