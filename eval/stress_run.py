@@ -86,6 +86,11 @@ async def main_async(fixture_key: str, turns: int, mode: str, label: str):
     print(f"[{fixture_key}] 结构均分", {k: summary["structural"][k]["mean"] for k in summary["structural"]}, flush=True)
     print(f"[{fixture_key}] 成本 引擎 {eng_in + eng_out:,} tok ${eng_cost:.4f} | 玩家 {player_tokens:,} tok ${player_cost:.4f}", flush=True)
     print(f"→ {run_dir}", flush=True)
+    try:  # 优雅关 psycopg 池,否则后台 worker 线程会吊住进程退出(任务永远显示 running)
+        from src.db import close_pool
+        close_pool()
+    except Exception:
+        pass
 
 
 def main():

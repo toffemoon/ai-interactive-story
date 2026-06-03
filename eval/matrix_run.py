@@ -117,6 +117,11 @@ async def main_async(a):
             print(f"  ✓ mem={r['mem_retention']} abstain={r['abstain_rate']} "
                   f"speaker={r['speaker_invalid']}/{r['speaker_total']} ${r['cost_usd']} {r['secs']}s", flush=True)
     report(OUT)
+    try:  # 优雅关池,矩阵进程干净退出 + 触发完成通知
+        from src.db import close_pool
+        close_pool()
+    except Exception:
+        pass
 
 
 def main():

@@ -762,7 +762,7 @@ def _prompt(
         "- 玩家已达成的目标放进 state_update.player.completed_goals(会从当前目标里移除)。\n\n"
         "输出严格 JSON,只输出这一个对象,格式:\n"
         "{"
-        '"reasoning":{"hard_violation":false,"violation_detail":"","world_counter":"","ooc_risk":"","note":"一句话推演"},'
+        '"reasoning":{"hard_violation":false,"violation_detail":"","world_counter":"","ooc_risk":"","recall_check":"","note":"一句话推演"},'
         '"narration":"场景/动作/气氛,简洁",'
         '"messages":[{"character_id":"角色ID","name":"角色名","text":"带动作神情的台词"}],'
         '"choices":[{"id":"短ID","label":"玩家可点选行动","intent":"ask|act|move|observe|custom","description":"影响/风险"}],'
@@ -980,7 +980,7 @@ def _normalize_reasoning(value: Any) -> dict[str, Any]:
         out["hard_violation"] = hv
     elif isinstance(hv, str):
         out["hard_violation"] = hv.strip().lower() in {"true", "1", "yes", "是", "y"}
-    for key in ("violation_detail", "world_counter", "ooc_risk", "note"):
+    for key in ("violation_detail", "world_counter", "ooc_risk", "recall_check", "note"):
         v = value.get(key)
         if v:
             out[key] = str(v)[:400]
@@ -1232,20 +1232,25 @@ def _is_fact_query(action: str) -> bool:
 
 
 def _abstain_note(kind: str) -> str:
-    """事实查询时注入的硬指令:有据照实答、无据 in-character 认忘,绝不编。
-    kind: found=检索到证据 / miss=检索无记录 / noretrieval=无向量检索(标准模式,凭上下文)。"""
-    head = "# 记忆检索(重要)\n玩家在问一个具体的既往事实。"
-    body = {
-        "found": ("**只有上面『检索到的相关旧资料』里明确写到的,才能照实说出来;"
-                  "若那些资料里并没有玩家问的那个具体数字/日期/名物/名字,就 in-character 坦白"
-                  "『我不记得了/查无此记录』,绝对不要编一个具体答案,也不要翻出没给你的账册/记录/笔记来作证。**"),
-        "miss": ("**检索没有找到任何相关记录。请 in-character 坦白你不记得/查无此事,"
-                 "绝对不要编造任何具体的数字/日期/名物/名字,也不要凭空翻出账册/记录/笔记作证。**"),
-        "noretrieval": ("**只有你在上面『最近剧情/摘要』里确实见到的,才能照实说;"
-                        "如果其中并没有玩家问的那个具体数字/日期/名物/名字,就 in-character 坦白你不记得,"
-                        "绝对不要编一个具体答案,也不要翻出没给你的账册/记录/笔记来作证。**"),
-    }
-    return head + body.get(kind, body["noretrieval"])
+    """事实查询时注入的硬指令(最高优先级):有据照实答、无据 in-character 认忘,绝不编。
+    kind: found=检索到证据 / miss=检索无记录 / noretrieval=无向量检索(标准模式,凭上下文)。
+    强化版:用"角色诚信"框架 + 显式封死"我推断/我观察到"这个演绎借口(沈雾/福尔摩斯都靠它编)。"""
+    base = (
+        "# 记忆核查(回答前必做)\n"
+        "玩家在问一个**具体的既往事实**(某个名字/数字/时间/颜色/位置/物件)。\n"
+        "**第一步**——在 reasoning.recall_check 里先判定并写下 `hit` 或 `miss`:\n"
+        "  · `hit` = 上面给你的资料(检索旧资料 + 最近剧情 + 早前摘要)里**逐字写到了**玩家问的那个具体值;\n"
+        "  · `miss` = 资料里**根本没有**那个具体值(相邻话题、相关的事都不算)。\n"
+        "**第二步**——据此写正文:\n"
+        "  · hit → **自信、明确地把那个值说出来**,别含糊、别改口、别退回一个更笼统的说法。\n"
+        "  · miss → 让角色 in-character 直说『这个我记不清了 / 没记下』,然后把话交还玩家;"
+        "**且正文里不要补任何没被问到的具体细节**(连主动加一句『你右手当时攥着钥匙』这种没人问起的具体物件/数字也不许)。\n"
+        "**唯一禁止的**:recall_check 是 miss、却在正文里编一个具体值——不许凭空说、不许用『我推断/我观察到/依我看』"
+        "把它推出来、不许翻出没在上面给过你的账册/记录/笔记来作证。**hit 就答、miss 就认忘,两种都对;只有'miss 却编'才是错。**"
+    )
+    if kind == "miss":
+        return base + "\n(系统提示:本轮向量检索**没有**找到相关记录,recall_check 极可能是 miss。)"
+    return base
 
 
 def _has_abstain_markers(turn: "StoryTurn") -> bool:
@@ -1461,7 +1466,8 @@ async def _story_turn_impl(
     turn = _ensure_story_body(turn, action, characters)
     # ③ 不回写编造:具体事实查询且(检索硬 miss 或模型已 in-character 认忘)→ 丢弃本轮 fact/quest delta,
     # 掐断"编造→落库→自我强化"。叙事/event/note 保留(它们记的是"发生了什么",不是断言某事实值)。
-    if PHASE1_FIXES and fact_query and (fact_miss or _has_abstain_markers(turn)):
+    _recall_miss = isinstance(turn.reasoning, dict) and str(turn.reasoning.get("recall_check", "")).strip().lower().startswith("miss")
+    if PHASE1_FIXES and fact_query and (fact_miss or _recall_miss or _has_abstain_markers(turn)):
         turn.memory_write = [m for m in turn.memory_write if m.kind not in ("fact", "quest")]
     if not turn.choices:
         turn.choices = [

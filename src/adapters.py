@@ -88,8 +88,6 @@ class DeepSeekAdapter:
             system += "\n\n# 早前剧情摘要(更久之前发生的事,已压缩)\n" + b.summary
         if b.recall_block:
             system += "\n\n# 检索到的相关旧资料(向量召回,供参考,不要照抄)\n" + b.recall_block
-        if b.abstain_note:
-            system += "\n\n" + b.abstain_note
         if b.recap:
             system += (
                 "\n\n# 最近剧情(最近若干轮的实际经过,供你延续上下文与口吻)\n" + b.recap +
@@ -105,6 +103,8 @@ class DeepSeekAdapter:
             )
         if b.clock_line:
             system += "\n\n# 故事内时钟\n" + b.clock_line
+        if b.abstain_note:  # 放最后:具体事实查询的认忘指令,最高显著位(模型最后读到)
+            system += "\n\n" + b.abstain_note
         return [{"role": "system", "content": system}, {"role": "user", "content": b.action_prompt}]
 
     async def complete_main(self, bundle: ContextBundle, *, json_mode: bool,
@@ -139,14 +139,14 @@ class ClaudeAdapter:
             sys_parts.append("<early_summary>\n" + b.summary + "\n</early_summary>")
         if b.recall_block:
             sys_parts.append("<retrieved_context>\n" + b.recall_block + "\n</retrieved_context>")
-        if b.abstain_note:
-            sys_parts.append("<abstention>\n" + b.abstain_note + "\n</abstention>")
         if b.anchor:
             sys_parts.append("<main_anchor>\n" + b.anchor + "\n</main_anchor>")
         if b.esc_text:
             sys_parts.append("<due_escalations>\n" + b.esc_text + "\n</due_escalations>")
         if b.clock_line:
             sys_parts.append("<world_clock>\n" + b.clock_line + "\n</world_clock>")
+        if b.abstain_note:  # 放最后:最高显著位
+            sys_parts.append("<abstention priority='highest'>\n" + b.abstain_note + "\n</abstention>")
         system = "\n\n".join(sys_parts)
 
         messages: list[dict] = [{"role": "system", "content": system}]

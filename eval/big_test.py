@@ -229,11 +229,19 @@ def check_abstention(playthrough: list[dict], fixture: dict) -> dict:
         admitted = any(mk in blob for mk in _ABSTAIN_MARKERS)
         fab_tell = any(f in blob for f in fab_tells)
         wrote_fact = any((mw.get("kind") in ("fact", "quest")) for mw in out.get("memory_write", []))
+        rc = str((out.get("reasoning") or {}).get("recall_check", "")).strip().lower()
+        declared_miss = rc.startswith("miss")
+        # clean = 表态认忘(标记 or 自报 miss)且没把编造落库、没伪造证据(消除会持久化/自我强化的危害)
+        clean = (admitted or declared_miss) and not wrote_fact and not fab_tell
         results.append({"turn": rec["turn"], "note": p.get("note", ""),
-                        "abstained": admitted, "fab_tell": fab_tell, "wrote_fact": wrote_fact})
+                        "abstained": admitted, "declared_miss": declared_miss,
+                        "fab_tell": fab_tell, "wrote_fact": wrote_fact,
+                        "recall_check": rc[:50], "clean": clean})
     n = len(results)
     passed = sum(1 for r in results if r["abstained"])
+    clean = sum(1 for r in results if r["clean"])
     return {"results": results, "passed": passed, "total": n,
             "abstain_rate": round(passed / n, 3) if n else None,
+            "clean": clean, "clean_rate": round(clean / n, 3) if n else None,
             "fab_tells": sum(1 for r in results if r["fab_tell"]),
             "wrote_facts": sum(1 for r in results if r["wrote_fact"])}
