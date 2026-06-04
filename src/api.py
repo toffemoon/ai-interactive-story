@@ -85,7 +85,8 @@ class ReRollReq(BaseModel):
 
 @app.get("/api/health")
 def api_health():
-    """健康检查:确认后端在线 + DB 可达 + 是否带前端。AI / 调用方可先打这个再调其它接口。"""
+    """健康检查:确认后端在线 + DB 可达 + 是否带前端 + deep 向量召回依赖是否就绪。
+    AI / 调用方可先打这个再调其它接口。"""
     db_ok = True
     try:
         with db.get_pool().connection() as conn, conn.cursor() as cur:
@@ -93,7 +94,22 @@ def api_health():
             cur.fetchone()
     except Exception:
         db_ok = False
-    return {"status": "ok", "db": db_ok, "frontend": FRONTEND.is_dir(), "mode": "frontend+api" if FRONTEND.is_dir() else "api-only"}
+    # embeddings_installed:部署装没装 sentence-transformers/torch(= deep 向量召回 + Phase 3 在场过滤能不能用);
+    #   只查包是否可定位、不加载模型(不触发下载)。embeddings_loaded:bge 是否已加载(首次 deep 触发后才 True)。
+    try:
+        import importlib.util
+        emb_installed = importlib.util.find_spec("sentence_transformers") is not None
+    except Exception:
+        emb_installed = False
+    try:
+        from src import memory as _memory
+        emb_loaded = _memory.is_ready()
+    except Exception:
+        emb_loaded = False
+    return {"status": "ok", "db": db_ok, "frontend": FRONTEND.is_dir(),
+            "embeddings_installed": emb_installed, "embeddings_loaded": emb_loaded,
+            "deep_capable": emb_installed,  # True = 完整 Phase 3(向量在场过滤)可用
+            "mode": "frontend+api" if FRONTEND.is_dir() else "api-only"}
 
 
 @app.post("/api/identify")
