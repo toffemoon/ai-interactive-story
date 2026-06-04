@@ -1064,6 +1064,14 @@ main.single-view { display: block; }
 .bov-btns { margin-left: auto; display: inline-flex; gap: 6px; flex: 0 0 auto; }
 .bov-item button { border: 1px solid var(--line); background: #fff; color: var(--muted); font-size: 12px; padding: 4px 10px; border-radius: 3px; cursor: pointer; }
 .bov-item button:hover { border-color: var(--green); color: var(--green); }
+.bov-item button.primary { border-color: var(--green); background: var(--soft); color: var(--ink); font-weight: 600; }
+.bov-item button.saved { opacity: .65; }
+.bov-unsaved { font-size: 11px; color: #9a7b1a; border: 1px solid #e0c879; background: #fbf3da; border-radius: 999px; padding: 1px 8px; }
+.guide-readout { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); background: var(--soft); border: 1px solid var(--line); border-radius: 5px; padding: 6px 11px; margin: 0 0 10px; flex-wrap: wrap; }
+.guide-readout button { margin-left: auto; border: 1px solid var(--line); background: #fff; font-size: 12px; padding: 3px 10px; border-radius: 3px; cursor: pointer; color: var(--muted); }
+.guide-readout button:hover { border-color: var(--green); color: var(--green); }
+.draft-hint { font-size: 11px; color: var(--muted); margin: 2px 0 0; }
+.editor-panel select { width: 100%; padding: 7px 8px; border: 1px solid var(--line); border-radius: 4px; font-size: 13px; background: #fff; box-sizing: border-box; }
 
 /* ── 预设故事:选人页 ──────────────── */
 .char-select { max-width: 880px; margin: 0 auto; padding: 48px 24px; }

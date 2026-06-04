@@ -395,10 +395,12 @@ function WorldEditor({ world, index, onChange, onClose }) {
     );
     update("entries", entries);
   };
+  const addEntry = () => update("entries", [...(world.entries || []), { keys: [], content: "", comment: "新条目", source: "world", visibility: "public" }]);
+  const removeEntry = (i) => update("entries", (world.entries || []).filter((_, j) => j !== i));
   return (
     <section className="editor-panel wide-editor">
       <div className="editor-head">
-        <div><h3>编辑世界书 / 设定卡</h3><span>可以把名字改成“世界书”“IPC 设定卡”“黑塔空间站设定卡”等。</span></div>
+        <div><h3>编辑世界书 / 设定卡</h3><span>「可见性」选 hidden = 注入给 AI 但默认不说破(藏给玩家)。对话建卡可能没存上 hidden,在这里手动设。</span></div>
         <button onClick={onClose}>收起</button>
       </div>
       <label>名称<input value={world.name || ""} onChange={(e) => update("name", e.target.value)} /></label>
@@ -413,10 +415,20 @@ function WorldEditor({ world, index, onChange, onClose }) {
             <label>来源
               <input value={entry.source || "world"} onChange={(e) => updateEntry(i, "source", e.target.value)} />
             </label>
+            <label>可见性
+              <select value={entry.visibility || "public"} onChange={(e) => updateEntry(i, "visibility", e.target.value)}>
+                <option value="public">public(玩家可知)</option>
+                <option value="hidden">hidden(藏 · 默认不说破)</option>
+                <option value="character_only">character_only</option>
+              </select>
+            </label>
             <label>内容<textarea rows="5" value={entry.content || ""} onChange={(e) => updateEntry(i, "content", e.target.value)} /></label>
+            <button type="button" className="row-del" onClick={() => removeEntry(i)}>删除此条目</button>
           </details>
         ))}
+        {!(world.entries || []).length && <p className="hint-line">还没条目。点下面「+ 加条目」。</p>}
       </div>
+      <button type="button" onClick={addEntry}>+ 加条目</button>
     </section>
   );
 }
@@ -587,6 +599,7 @@ function DraftPreview({ kind, draft }) {
         <Row k="标题" v={d.title} /><Row k="前提" v={d.premise} />
         <ListBlock k="主线" items={d.main_plot} />
         <ListBlock k="事件" items={d.events} render={(e) => e.title || e.event_id} />
+        {!(d.events || []).length && <p className="draft-hint">(对话不建事件,事件在「事件卡」步单独加)</p>}
         <ListBlock k="结局" items={d.endings} render={(e) => (e.title || "") + (e.tone ? ` · ${e.tone}` : "")} />
         {(d.needs_confirm || []).length > 0 && <div className="needs-confirm"><b>待确认</b><ul>{d.needs_confirm.map((x, i) => <li key={i}>{x}</li>)}</ul></div>}
       </>}
@@ -649,7 +662,7 @@ function CardBuilder({ kind = "characters", seed, initialDraft, onComplete, onCl
   return (
     <section className="editor-panel card-builder">
       <div className="editor-head">
-        <div><h3>对话建卡 · {(KIND_META[kind] || {}).label || ""}</h3><span>不会写设定?聊着聊着卡就建好了。完成后自动存进故事库。</span></div>
+        <div><h3>对话建卡 · {(KIND_META[kind] || {}).label || ""}</h3><span>不会写设定?聊着聊着卡就建好了。</span></div>
         <button onClick={onClose}>关闭</button>
       </div>
       <div className="builder-body">
@@ -1276,7 +1289,8 @@ function SavesMenu({ sessionId }) {
 }
 
 async function saveToVault(kind, data) {
-  try { await postJSON("/api/library/save", { kind, data }); } catch (e) { /* 入库失败不打断 */ }
+  try { await postJSON("/api/library/save", { kind, data }); return true; }
+  catch (e) { return false; }
 }
 
 function TopNav({ view, setView, sessionId }) {
@@ -1406,8 +1420,10 @@ function BuiltOverview({ characters = [], worldBooks = [], story = null, player 
             {it.desc && <span className="bov-desc">{it.desc}</span>}
             {it.kind !== "events" && (
               <span className="bov-btns">
+                {!saved.has(it.kind + ":" + it.index) && <span className="bov-unsaved">未入库</span>}
                 <button onClick={() => onView && onView(it.kind, it.index)}>查看/修改</button>
-                <button onClick={() => onSave && onSave(it.kind, it.index, it.data)}>
+                <button className={saved.has(it.kind + ":" + it.index) ? "saved" : "primary"}
+                  onClick={() => onSave && onSave(it.kind, it.index, it.data)}>
                   {saved.has(it.kind + ":" + it.index) ? "已存✓" : "保存到故事库"}
                 </button>
               </span>
@@ -1888,7 +1904,7 @@ function EventStep({ story, setStory }) {
 
   function add() {
     if (!d.title.trim()) return;
-    const base = story || { title: "故事书", premise: "", timeline: [], main_plot: [], events: [], endings: [], freedom_rules: [], pacing: [], character_boundaries: [], needs_confirm: [] };
+    const base = story || { title: "(未命名故事书)", premise: "", timeline: [], main_plot: [], events: [], endings: [], freedom_rules: [], pacing: [], character_boundaries: [], needs_confirm: [] };
     setStory({ ...base, events: [...(base.events || []), { ...d }] });
     setD(blank);
   }
@@ -1934,6 +1950,7 @@ function StepBuilder({ characters, worldBooks, story, player, addCharacter, addW
   const [started, setStarted] = useState(false); // 引导步:是否已点「开始」进对话
   const [editing, setEditing] = useState(null);   // 正在查看/修改的卡 {kind, index}
   const [savedKeys, setSavedKeys] = useState(() => new Set()); // 已存入故事库的项 key (kind:index)
+  const [saveErr, setSaveErr] = useState("");      // 入库失败提示
   const cur = BUILD_STEPS[step];
   const isLast = step === BUILD_STEPS.length - 1;
   const canLeaveCharStep = characters.length > 0;
@@ -1960,8 +1977,10 @@ function StepBuilder({ characters, worldBooks, story, player, addCharacter, addW
   }
 
   async function saveOne(kind, index, data) {
-    await saveToVault(kind, data);
-    setSavedKeys((s) => new Set(s).add(kind + ":" + index));
+    setSaveErr("");
+    const ok = await saveToVault(kind, data);
+    if (ok) setSavedKeys((s) => new Set(s).add(kind + ":" + index));
+    else setSaveErr("「" + ((data && data.data && data.data.name) || (data && data.name) || (data && data.title) || "这张卡") + "」存入故事库失败,请重试。");
   }
   function viewEdit(kind, index) {
     setEditing({ kind, index });
@@ -1996,7 +2015,15 @@ function StepBuilder({ characters, worldBooks, story, player, addCharacter, addW
           ) : guide && !started ? (
             <BuildOptions guide={guide} opts={opts} setOpts={setOpts} onStart={() => setStarted(true)} />
           ) : (
-            <CardBuilder key={cur.key + nonce} kind={cur.key} seed={seed} onComplete={onCardComplete} onClose={() => {}} />
+            <>
+              {guide && (
+                <div className="guide-readout">
+                  建卡设定:{(BUILD_GUIDES[guide] || []).map((g) => opts[g.key] || g.opts[0]).join(" · ")}
+                  <button onClick={() => setStarted(false)}>重选</button>
+                </div>
+              )}
+              <CardBuilder key={cur.key + nonce} kind={cur.key} seed={seed} onComplete={onCardComplete} onClose={() => {}} />
+            </>
           )}
           <div className="step-nav">
             <button onClick={() => jump(step - 1)} disabled={step === 0}>← 上一步</button>
@@ -2042,6 +2069,7 @@ function StepBuilder({ characters, worldBooks, story, player, addCharacter, addW
         <StoryEditor story={story} onChange={setStory} onClose={() => setEditing(null)} />
       )}
 
+      {saveErr && <p className="error">{saveErr}</p>}
       <BuiltOverview characters={characters} worldBooks={worldBooks} story={story} player={player}
         onView={viewEdit} onSave={saveOne} savedKeys={savedKeys} />
     </section>

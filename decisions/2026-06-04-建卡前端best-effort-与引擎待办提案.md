@@ -34,4 +34,15 @@ audience: gengyue (架构 / 引擎 owner)
 
 以上 §2 全属架构 / 引擎核心 = 你的决策域(2026-06-04 架构主权决策)。yufei 不自合 main、不替你定;本提案只是把前端这侧撞到的引擎缺口列清楚,等你判断优先级。要哪条我配合出最小闭环草案走 PR 给你审。
 
+## 4. 测试实证(2026-06-04 真实用户 subagent 全程实测 build_card)
+
+一个扮真实用户的 subagent 真调 DeepSeek 建了角色 / 设定卡 / 故事书,确认上面不是猜测:
+
+- **§2.2 设定卡 hidden 被剥(高 · 剧透)**:建「设定卡·组织」时明确告诉 AI"这条是隐藏内幕,默认不说破",AI 照做、最后一轮 `filled` 写着"修正可见性为hidden",但最终 draft 那条 `visibility` 仍是 `public`。根因:`_validate_build_draft` worlds 分支(~549-559)重建 `WorldEntry` 只传 keys/content/comment,丢掉 visibility/source/truth_status/priority,回退 public/world/canon/100。对照:直接 POST `/api/library/save` 带 `visibility:"hidden"` 读回完好 —— **只有 build_card 对话路径剥**,越靠 AI 引导的新手越中招。(前端已补救:`WorldEditor` 加了 visibility 编辑 + 加/删条目入口,可手动设 hidden 经 library/save 存住;但根治要 validator 保留字段。)
+- **§2.2 versions / events**:满配角色 seed 要 `versions`,AI 中途主动提"加揭穿后状态轴"却在收尾时留空;故事书对话建卡 `events` 永远空数组(主线 / 结局有,事件无)。根因:`_BUILD_SYSTEM` 角色 prompt **根本没列** anchor/tension/look/keys/known_hidden/versions(只列 name/description/personality 等基础项),全靠前端 seed 临时补、模型看心情跳过;`_BUILD_STORY` 不产 events。
+- **§2 identify_auto 可见性**:贴含"镇阁之宝是照见心魔的古镜"这种该当悬念的设定,识别出的世界书条目 `visibility` 全 public(`_WORLD_SYSTEM` 没让模型判可见性)。
+
+> 优先级建议:最该先治的是 §4 第 1 条(设定卡 hidden 被剥)—— 它直接让"设定卡藏真相"这个卖点对目标用户(靠 AI 引导的人)失效 + 剧透。最小修:`_validate_build_draft` 的 worlds 分支保留 `visibility/source`(+ stories 分支 events 保留隐藏档字段)。
+
 记录:2026-06-04 18:29 by Claude(yufei 侧)
+记录:2026-06-04 19:29 by Claude(补真实用户测试实证 §4 + 前端补救 WorldEditor visibility 入口)
