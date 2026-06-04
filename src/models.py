@@ -204,6 +204,9 @@ class MemoryWrite(BaseModel):
     kind: Literal["event", "choice", "relationship", "fact", "quest", "note"] = "note"
     text: str
     importance: int = 3
+    # 长程记忆 A 档(实体轴):这条记忆挂在哪个实体上(角色 ID / 名,从【活跃角色】受限词表里选)。
+    # 空 = 未挂载到具体实体(走旧的整体/相似度召回)。挂上的会在该实体在场时被确定性召回注入。
+    entity: str = Field("", description="挂载的实体(角色ID),供按在场实体确定性召回;空=未挂载")
 
 
 class StoryTurn(BaseModel):
