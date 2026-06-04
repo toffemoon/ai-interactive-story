@@ -22,7 +22,7 @@ from src.llm import achat_messages, collect_usage
 from src.models import CharacterCard, PlayerCard, StoryBook, WorldBook
 from src.story import story_turn
 
-from .harness import in_memory_storage
+from .harness import in_memory_storage, in_memory_vectors
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -119,7 +119,19 @@ async def run_big(fixture: dict, *, total_turns: int, mode: str = "standard",
     player_tokens = 0
     cur_loc = None
     # 内存存储隔离 Supabase(免费项目常被 pause → TCP 卡住);标准模式下向量记忆本就 no-op。
-    with in_memory_storage():
+    # deep 模式额外挂内存向量库(本地 bge + numpy 余弦)→ 离线召回,不依赖 pgvector。
+    import contextlib as _ctx
+    with _ctx.ExitStack() as _stack:
+      _stack.enter_context(in_memory_storage())
+      if mode == "deep":
+        import time as _time
+        from src import memory as _M
+        _stack.enter_context(in_memory_vectors())
+        _M.ensure_loading()
+        for _ in range(180):  # 等本地 bge 加载就绪(首次 ~10-30s)
+            if _M.is_ready():
+                break
+            _time.sleep(1)
       for t in range(total_turns):
         scene = scene_for_turn(t, scenes)
         present = roster_subset(scene.get("character_ids", []), roster)
@@ -299,11 +311,23 @@ def _char_own_text(rec: dict, who: str) -> tuple[str, bool]:
     return whole, False
 
 
+# 缺席/没见证类声明(知识边界专用):角色声明"当时不在/没亲历"——这是认忘成功的关键信号。
+# 即便后半句把 token 当【转述】提一嘴(如"我没下去,只是刚听你们通讯说K-23"),也算认忘成功,
+# 因为他已明确声明非一手知情。现有 _ABSTAIN_MARKERS 全是"记不得"类记忆词,缺这类缺席词。
+_ABSENCE_MARKERS = ("不在场", "没在场", "没在跟前", "没在旁", "不在跟前", "没亲眼", "没亲历", "没见过",
+                    "没看见", "没瞧见", "没下去", "没随", "没跟去", "没跟着", "没去成", "当时不在",
+                    "那会儿不在", "我不在", "没参与", "没经手", "没下到", "未亲眼", "未亲历", "不曾见",
+                    "不曾亲", "留在列车", "留守", "没能去", "没一起")
+
+
 def check_knowledge_boundary(playthrough: list[dict], fixture: dict) -> dict:
     """Phase 3 知识边界:缺席角色被问具体往事→应 in-character 认忘(absent-abstain);
     在场见证角色被问→应召回具体值(witness-recall);在场角色不该对自己知道的事误认忘(over-abstention 守卫)。
-    判定只看【被问角色本人】的发言(_char_own_text),避免别的在场见证者替答污染。"""
+    判定只看【被问角色本人】的发言(_char_own_text),避免别的在场见证者替答污染。
+    absent_ok = 被问的缺席角色【声明了非一手知情】(认忘标记/缺席声明/recall_check=miss)——
+    转述提 token 不再否决(关键是他声明没亲历);token_leaked 仍单独报告(供看"无声明却吐 token"的真编造)。"""
     from src.story import _ABSTAIN_MARKERS
+    markers = tuple(_ABSTAIN_MARKERS) + _ABSENCE_MARKERS
     probes = fixture.get("knowledge_boundary_probes") or []
     by_turn = {r["turn"]: r for r in playthrough}
     results = []
@@ -314,11 +338,13 @@ def check_knowledge_boundary(playthrough: list[dict], fixture: dict) -> dict:
         if ar:
             blob, own = _char_own_text(ar, p["absent_char"])
             rc = str((ar["engine_output"].get("reasoning") or {}).get("recall_check", "")).strip().lower()
-            admitted = any(mk in blob for mk in _ABSTAIN_MARKERS) or rc.startswith("miss")
+            admitted = any(mk in blob for mk in markers) or rc.startswith("miss")
             leaked = token in blob
+            # 真编造 = 没声明非一手知情、却把 token 当一手知识说出来
+            fabricated = leaked and not admitted
             absent = {"turn": p["absent_turn"], "char": p["absent_char"], "own_msg": own,
-                      "abstained": admitted, "token_leaked": leaked, "recall_check": rc[:40],
-                      "ok": admitted and not leaked}  # 认忘 且 没吐出具体值
+                      "abstained": admitted, "token_leaked": leaked, "fabricated": fabricated,
+                      "recall_check": rc[:40], "ok": admitted and not fabricated}
         wr = by_turn.get(int(p["witness_turn"]))
         if wr:
             blob, own = _char_own_text(wr, p["witness_char"])
