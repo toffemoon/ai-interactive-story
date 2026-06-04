@@ -892,11 +892,13 @@ def _prompt(
         )
     # Phase 3 知识边界:显式告诉模型"叙事真相≠人人都知道",被问的角色没亲历就 in-character 认忘(RoleRAG 式劝阻)。
     kb_directive = (
-        "知识边界(每个角色只知道自己【亲历】或【被当面告知】的事):上面【活跃角色】每个角色块里列出的"
-        "『知道/亲历的既有事实』就是该角色的记忆边界。叙事真相 ≠ 人人都知道——某事在剧情里发生过,"
-        "不代表当时不在场的角色知道它。玩家问某个在场角色一件【具体往事】时:该事实若在【这个角色本人的】知情块里 → 据实答;"
-        "若它只出现在别的角色块、向量召回的旧对话、或剧情摘要里、而不在被问角色本人的知情块 → 该角色要 in-character 认忘"
-        "(我当时不在场 / 没听说 / 记不清),绝不替他把只有别人知道的细节说出来,也不许用『我推断 / 我观察到』把它演绎出来。"
+        "知识边界(角色只知道自己【当时在场】经历或被当面告知的事):召回的【旧对话】可能带标记"
+        "『[当时在场:某、某]』,表示那件事发生时谁在场。玩家问某个在场角色一件【具体往事】时,据此判断:\n"
+        "  · 被问角色【在】那条往事的『当时在场』名单里(或那是 canon 公开设定、或列在他自己的知情块里)"
+        "→ 他亲历/知情,**该自信、明确地把那个值答出来,别推脱别装糊涂**;\n"
+        "  · 被问角色【不在】名单里(那段他被支开 / 在别处 / 尚未登场)→ 他当时不在场,要 in-character 认忘"
+        "(我那会儿不在 / 没瞧见 / 没听说),**绝不照叙事真相或别人的见闻编**——连那物件的形状 / 颜色 / 数量也不许猜。\n"
+        "叙事真相 ≠ 人人都知道:一件事被你召回到,不代表当前被问的角色当时在场。"
         "canon(角色卡 / 世界书 / 故事书的公开设定)是公共知识,人人可引用,不受此限。\n"
     ) if PHASE3_KNOWERS else ""
     return (
@@ -1381,8 +1383,15 @@ async def _save_turn(
     user_msg = {"role": "user", "content": action}
     assistant_msg = {"role": "assistant", "content": assistant_text}
     messages.extend([user_msg, assistant_msg])
-    await asyncio.to_thread(memory.add_turn, session_id, len(messages) - 2, "user", action)
-    await asyncio.to_thread(memory.add_turn, session_id, len(messages) - 1, "assistant", assistant_text)
+    # Phase 3:把"本轮在场"随对话轮存进向量 meta(供召回时标注 [当时在场:…],让缺席角色认忘)。
+    pres = (data.get("_present_names") or []) if PHASE3_KNOWERS else None
+    idx_u, idx_a = len(messages) - 2, len(messages) - 1
+    if pres:
+        tp = data.setdefault("_turn_present", {})
+        tp[str(idx_u)] = pres
+        tp[str(idx_a)] = pres
+    await asyncio.to_thread(memory.add_turn, session_id, idx_u, "user", action, pres)
+    await asyncio.to_thread(memory.add_turn, session_id, idx_a, "assistant", assistant_text, pres)
     short_memory.extend([user_msg, assistant_msg])
     await asyncio.to_thread(_store_memory_writes, session_id, data, turn)
     short_memory = await _flush_short_memory(session_id, data, short_memory, mode, roster, entity_labels)
@@ -1489,12 +1498,12 @@ def _abstain_note(kind: str) -> str:
         "**唯一禁止的**:recall_check 是 miss、却在正文里编一个具体值——不许凭空说、不许用『我推断/我观察到/依我看』"
         "把它推出来、不许翻出没在上面给过你的账册/记录/笔记来作证。**hit 就答、miss 就认忘,两种都对;只有'miss 却编'才是错。**"
     )
-    if PHASE3_KNOWERS:  # Phase 3:hit 还要求"是被问的这个角色本人知道的",否则对该角色仍是 miss(缺席≠知情)
+    if PHASE3_KNOWERS:  # Phase 3:hit/miss 还要看"被问角色当时在不在场"(缺席≠知情;在场则照常 hit→答)
         base += (
-            "\n**知识边界附加**:`hit` 还要求那个具体值是【被问的这个在场角色本人亲历/知情】的"
-            "(出现在该角色自己的『知道/亲历的既有事实』块里)。若它只在叙事里发生过、或只有别的角色/玩家知道、"
-            "而被问的角色当时【不在场】 → 对这个角色仍记 `miss`,让他 in-character 认忘(我当时不在/没看见),"
-            "**绝不借叙事真相或别人的经历替他答**。"
+            "\n**知识边界附加**:判断 hit/miss 还要看【被问的这个在场角色当时在不在场】。召回到的旧对话可能标了"
+            "『[当时在场:…]』。若**被问角色在该名单里**(或那是 canon、或列在他自己的知情块里)→ 他亲历过,"
+            "照常 `hit`、自信答出,别因为'记录在别处'就推脱;若**被问角色不在名单里**(被支开/在别处/没登场)"
+            "→ 对这个角色记 `miss`、in-character 认忘,**绝不借叙事真相或别人的见闻替他编**(连形状/颜色/数量也不猜)。"
         )
     if kind == "miss":
         return base + "\n(系统提示:本轮向量检索**没有**找到相关记录,recall_check 极可能是 miss。)"
@@ -1574,9 +1583,11 @@ async def _story_turn_impl(
     if player and player.name:
         wanted_keys.add(_PLAYER_ENTITY)  # 玩家恒在场,挂玩家的记忆始终注入
     entity_memory = _entity_memory_index(data.get("long_memory", []), wanted_keys, by_knower=PHASE3_KNOWERS)
-    # Phase 3:暂存本轮在场实体键(turn 开始时的在场集)→ _store_memory_writes 写 knowers 时取(= 谁见证了本轮)。
+    # Phase 3:暂存本轮在场(turn 开始时的在场集)→ knowers(实体键)+ 向量轮在场标注(角色名)。
     if PHASE3_KNOWERS:
         data["_present_keys"] = sorted(wanted_keys)
+        data["_present_names"] = [p for p in (state.scene.present_characters
+                                              or [c.data.name for c in characters]) if p]
 
     # 骨架:角色 + 命中世界书/事件 + 故事总览 + 状态摘要 + 指令。先建好用于度量预算,召回/历史另行追加。
     skeleton = _prompt(characters, player, story, world_hits, event_hits, [], [], state, entity_memory)
@@ -1604,7 +1615,7 @@ async def _story_turn_impl(
             # 向量召回涉及 embedding(CPU 密集),全部丢线程池跑,避免堵住事件循环、拖慢其他在玩的人。
             if not data.get("vector_warmed"):  # 模型刚就绪:补建此前漏掉的历史/书目索引
                 await asyncio.to_thread(_index_books, session_id, world, story)
-                await asyncio.to_thread(memory.index_history, session_id, messages)
+                await asyncio.to_thread(memory.index_history, session_id, messages, data.get("_turn_present"))
                 data["vector_warmed"] = True
             # ① 召回 query 条件化:具体事实查询用问句本身(防 scan_text 把真值挤出 top4);含糊/指代轮用 scan_text。
             recall_query = action if ((PHASE1_FIXES and fact_query) or RECALL_QUERY_ACTION_ONLY) else scan_text

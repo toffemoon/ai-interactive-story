@@ -107,8 +107,10 @@ def _upsert_many(rows: list[tuple]) -> None:
             )
 
 
-def index_history(session_id: str, messages: list) -> None:
-    """把已有整段对话历史一次性补建进向量库(深度模式刚就绪时调一次,upsert 幂等)。"""
+def index_history(session_id: str, messages: list, turn_present: dict | None = None) -> None:
+    """把已有整段对话历史一次性补建进向量库(深度模式刚就绪时调一次,upsert 幂等)。
+    turn_present: {turn_idx: [在场角色名]} —— Phase 3 知识边界:把"这条往事发生时谁在场"写进 meta,
+    召回时据此让缺席角色认忘。键可能是 int 或 str(会话 JSON 反序列化后变 str),两种都查。"""
     if not is_ready():
         return
     docs, rows_meta = [], []
@@ -119,8 +121,12 @@ def index_history(session_id: str, messages: list) -> None:
         role = m.get("role")
         if not content or role not in {"user", "assistant"}:
             continue
+        meta = {"turn": i, "role": role}
+        pres = (turn_present or {}).get(i) or (turn_present or {}).get(str(i))
+        if pres:
+            meta["present"] = list(pres)
         docs.append(content)
-        rows_meta.append((f"{i}-{role}", content, {"turn": i, "role": role}))
+        rows_meta.append((f"{i}-{role}", content, meta))
     if not docs:
         return
     try:
@@ -133,13 +139,16 @@ def index_history(session_id: str, messages: list) -> None:
         _mark_unavailable(e)
 
 
-def add_turn(session_id: str, turn: int, role: str, content: str) -> None:
-    """把一轮对话存进向量库。"""
+def add_turn(session_id: str, turn: int, role: str, content: str, present: list | None = None) -> None:
+    """把一轮对话存进向量库。present=该轮在场角色名(Phase 3 知识边界:召回时据此让缺席角色认忘)。"""
     if not content.strip() or not is_ready():
         return
     try:
         emb = _embed([content])[0]
-        _upsert_many([(session_id, "turn", f"{turn}-{role}", content, emb, {"turn": turn, "role": role})])
+        meta = {"turn": turn, "role": role}
+        if present:
+            meta["present"] = list(present)
+        _upsert_many([(session_id, "turn", f"{turn}-{role}", content, emb, meta)])
     except Exception as e:
         _mark_unavailable(e)
 
@@ -265,11 +274,17 @@ def search(session_id: str, query: str, k: int = 3, max_turn: int | None = None)
             for r in cur.fetchall():
                 meta = r["meta"] or {}
                 role = "玩家" if meta.get("role") == "user" else "角色"
-                out.append(f"{role}:{r['content']}")
+                out.append(f"{_present_tag(meta)}{role}:{r['content']}")
             return out
     except Exception as e:
         _mark_unavailable(e)
         return []
+
+
+def _present_tag(meta: dict) -> str:
+    """Phase 3:把'这条往事发生时谁在场'渲染成召回前缀,供模型据此让缺席角色认忘。"""
+    pres = (meta or {}).get("present")
+    return f"[当时在场:{'、'.join(pres)}] " if pres else ""
 
 
 def search_scored(session_id: str, query: str, k: int = 4,
@@ -301,7 +316,7 @@ def search_scored(session_id: str, query: str, k: int = 4,
             for r in cur.fetchall():
                 meta = r["meta"] or {}
                 role = "玩家" if meta.get("role") == "user" else "角色"
-                out.append((f"{role}:{r['content']}", float(r["dist"])))
+                out.append((f"{_present_tag(meta)}{role}:{r['content']}", float(r["dist"])))
             return out
     except Exception as e:
         _mark_unavailable(e)

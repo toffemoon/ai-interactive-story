@@ -41,20 +41,17 @@ async def run_cell(fixture_key: str, condition: str, seed: int, turns: int, mode
     _story.PHASE3_KNOWERS = (condition == "phase3")
     sess = f"matrix-{fixture_key}-{condition}-{seed}"
     if mode == "deep":
+        # deep 走 run_big 内置的离线内存向量库(本地 bge + numpy 余弦),不碰 Supabase pgvector;
+        # 每个 cell 的向量库在 run_big 内独立新建,无跨 cell 残留,无需清理。
         _story.DEEP_WARMUP_AT, _story.DEEP_RECALL_AT = 0.30, 0.45
-        _memory.ensure_loading()
-        for _ in range(150):
-            if _memory.is_ready():
-                break
-            time.sleep(2)
-        try:
-            from src.db import get_pool
-            with get_pool().connection() as c, c.cursor() as cur:
-                cur.execute("delete from memory_vec where session_id=%s", (sess,))
-        except Exception as e:
-            print("  [deep] 清旧向量失败(忽略):", e, flush=True)
     t0 = time.time()
     playthrough, ptok = await big_test.run_big(fx, total_turns=turns, mode=mode, session_id=sess)
+    try:  # 落盘 playthrough,便于失败时诊断(看角色到底说了啥 / 在场标注对不对)
+        os.makedirs("eval/runs/p3-cells", exist_ok=True)
+        with open(f"eval/runs/p3-cells/{fixture_key}-{condition}-{seed}.json", "w", encoding="utf-8") as fh:
+            json.dump(playthrough, fh, ensure_ascii=False)
+    except Exception as e:
+        print("  [save playthrough 失败,忽略]", e, flush=True)
     mem = big_test.check_memory_probes(playthrough, fx)
     spk = big_test.check_speaker_validity(playthrough, fx)
     abst = big_test.check_abstention(playthrough, fx)
@@ -128,11 +125,6 @@ async def main_async(a):
             print(f"  ✓ mem={r['mem_retention']} abstain={r['abstain_rate']} "
                   f"speaker={r['speaker_invalid']}/{r['speaker_total']} ${r['cost_usd']} {r['secs']}s", flush=True)
     report(OUT)
-    try:  # 优雅关池,矩阵进程干净退出 + 触发完成通知
-        from src.db import close_pool
-        close_pool()
-    except Exception:
-        pass
 
 
 def main():
