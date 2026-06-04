@@ -1027,6 +1027,30 @@ main.single-view { display: block; }
 .build-import-or { font-size: 13px; color: var(--muted); }
 .build-import .upbtn { flex: 0 0 auto; display: inline-block; padding: 8px 14px; }
 
+/* ── 建卡引导选项 ──────────────── */
+.build-options { padding: 8px 0 4px; }
+.bo-group { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; }
+.bo-label { font-size: 13px; color: var(--muted); width: 48px; flex: 0 0 auto; }
+.bo-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.bo-chip { border: 1px solid var(--line); background: #fff; color: var(--muted); font-size: 13px; padding: 6px 14px; border-radius: 999px; cursor: pointer; }
+.bo-chip:hover { border-color: var(--green); }
+.bo-chip.on { border-color: var(--green); background: var(--soft); color: var(--ink); font-weight: 600; }
+.bo-actions { display: flex; gap: 10px; margin-top: 16px; }
+
+/* ── 已建卡一览 ──────────────── */
+.built-overview { margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--line); }
+.bov-head { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+.bov-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.bov-tabs button { border: 1px solid var(--line); background: #fff; color: var(--muted); font-size: 12px; padding: 5px 10px; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.bov-tabs button.active { border-color: var(--green); color: var(--green); }
+.bov-count { background: var(--soft); color: var(--ink); border-radius: 999px; font-size: 11px; padding: 0 6px; min-width: 16px; text-align: center; }
+.bov-list { display: flex; flex-direction: column; gap: 6px; }
+.bov-item { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 4px; padding: 7px 10px; background: var(--panel); }
+.bov-item b { font-size: 13px; }
+.bov-desc { font-size: 12px; color: var(--muted); }
+.bov-item button { margin-left: auto; border: 1px solid var(--line); background: #fff; color: var(--muted); font-size: 12px; padding: 4px 10px; border-radius: 3px; cursor: pointer; }
+.bov-item button:hover { border-color: var(--green); color: var(--green); }
+
 /* ── 预设故事:选人页 ──────────────── */
 .char-select { max-width: 880px; margin: 0 auto; padding: 48px 24px; }
 .char-select h2 { font-size: 26px; margin: 0 0 6px; }

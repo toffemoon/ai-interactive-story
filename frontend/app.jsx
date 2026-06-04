@@ -566,14 +566,18 @@ function DraftPreview({ kind, draft }) {
     <div className="builder-draft">
       <h4>{(KIND_META[kind] || {}).title || "草稿"}</h4>
       {kind === "characters" && <>
-        <Row k="名字" v={d.name} /><Row k="主设定" v={d.description} /><Row k="性格" v={d.personality} />
+        <Row k="名字" v={d.name} /><Row k="锚点" v={d.anchor} /><Row k="核心矛盾" v={d.tension} />
+        <Row k="主设定" v={d.description} /><Row k="性格" v={d.personality} /><Row k="外貌" v={d.look} />
         <Row k="情境" v={d.scenario} /><Row k="开场白" v={d.first_mes} /><Row k="说话范例" v={d.mes_example} />
-        <ListBlock k="说话规则" items={d.speech_rules} />
+        <ListBlock k="说话规则" items={d.speech_rules} /><ListBlock k="召回关键词" items={d.keys} />
+        <ListBlock k="知识·公开" items={d.known_public} /><ListBlock k="知识·隐藏" items={d.known_hidden} />
+        <ListBlock k="版本人格" items={d.versions} />
       </>}
       {kind === "players" && <>
         <Row k="名字" v={d.name} /><Row k="身份" v={d.role} /><Row k="背景" v={d.background} />
         <ListBlock k="目标" items={d.goals} /><ListBlock k="能力/资源" items={d.abilities} />
         <ListBlock k="限制" items={d.constraints} /><ListBlock k="开局已知" items={d.known_facts} />
+        <ListBlock k="开局不知道" items={d.unknown} /><Row k="开局场景" v={d.opening} />
       </>}
       {kind === "worlds" && <>
         <Row k="名称" v={d.name} />
@@ -1292,16 +1296,155 @@ function TopNav({ view, setView, sessionId }) {
   );
 }
 
+// 建卡引导:按 template 子分档给 chips。选项折进 seed(best-effort 让 AI 按 template 走;不改后端 build_card)。
+const BUILD_GUIDES = {
+  character: [
+    { key: "类别", opts: ["主要NPC", "次要NPC"] },
+    { key: "档位", opts: ["轻量", "满配"] },
+    { key: "隐藏", opts: ["无隐藏", "含隐藏真相"] },
+  ],
+  setting: [
+    { key: "子类", opts: ["组织", "地点"] },
+    { key: "档位", opts: ["轻量", "满配"] },
+  ],
+};
+
+function BuildOptions({ guide, opts, setOpts, onStart, onCancel }) {
+  const groups = BUILD_GUIDES[guide] || [];
+  return (
+    <div className="build-options">
+      <p className="build-pick-q">先定个调,AI 据此引导(都可改)</p>
+      {groups.map((g) => (
+        <div className="bo-group" key={g.key}>
+          <span className="bo-label">{g.key}</span>
+          <div className="bo-chips">
+            {g.opts.map((o) => (
+              <button key={o} className={"bo-chip " + ((opts[g.key] || g.opts[0]) === o ? "on" : "")}
+                onClick={() => setOpts({ ...opts, [g.key]: o })}>{o}</button>
+            ))}
+          </div>
+        </div>
+      ))}
+      <div className="bo-actions">
+        <button className="primary" onClick={onStart}>开始对话建卡</button>
+        <button onClick={onCancel}>返回</button>
+      </div>
+    </div>
+  );
+}
+
+// 卡种 + 引导选项 → 给 build_card 的 seed(它会拼进系统提示;best-effort 让 AI 按 template 字段引导)。
+function buildGuideSeed(pickId, opts) {
+  const o = opts || {};
+  if (pickId === "characters") {
+    const tier = o["档位"] || "轻量", cat = o["类别"] || "主要NPC", hid = o["隐藏"] || "无隐藏";
+    return `【建卡要求 · 角色卡(${cat} · ${tier} · ${hid})】
+按角色卡模板逐项引导我填,草稿请尽量产出这些字段:anchor 一句话锚点、tension 核心矛盾、look 外貌锚点、keys 召回关键词、speech_rules(自称/称呼玩家/句长节奏/高频句式/口头禅/禁用)、description 身份、personality 性格、first_mes 开场白、known_public 公开可知、known_hidden 隐藏真相(默认不说破)${tier === "满配" ? "、versions 版本人格/状态轴(含揭穿后覆盖)" : ""}。
+${cat === "次要NPC" ? "次要NPC 从简:锚点 + speech_rules + 一句外形 + 知识边界即可,核心矛盾可省。" : ""}${hid === "含隐藏真相" ? "这个角色有隐藏真相:把真相写进 known_hidden,披露节奏挂故事书,不写进公开设定。" : ""}`;
+  }
+  if (pickId === "settings") {
+    const sub = o["子类"] || "组织", tier = o["档位"] || "轻量";
+    return `【建卡要求 · 设定卡(${sub} · ${tier})→ 存为世界书条目】
+这是一张设定卡(${sub}的中层完整设定)。按设定卡模板引导:一句话锚点、知识分层 public/hidden、口吻/禁区、召回关键词、概览、${sub === "地点" ? "场景气质/出入口/在场势力与现状" : "宗旨与信仰/结构与权力/关键人物/与其它势力关系"}、剧情钩子。产出为世界书条目:每条 keys + 内容(standalone),切成总览条 + 各分项条;hidden 的标可见性 hidden。`;
+  }
+  if (pickId === "players") {
+    return `【建卡要求 · 玩家卡】
+按玩家卡模板引导,草稿请尽量产出:role 身份、background 背景、goals 目标、abilities 能力/资源、constraints 限制/禁忌、known_facts 开局已知、unknown 开局不知道(与 known_facts 配对,防上帝视角)、opening 开局场景/时间锚点。`;
+  }
+  return "";
+}
+
+// 已建卡一览:从卡库读各大类;事件卡从故事书聚合(只读)。建完刷新,看得到自己建了哪些。
+const BUILT_CATS = [
+  { id: "characters", label: "角色卡" },
+  { id: "players", label: "玩家卡" },
+  { id: "worlds", label: "世界书 / 设定卡" },
+  { id: "stories", label: "故事书" },
+  { id: "events", label: "事件卡(在故事书里)" },
+];
+
+function BuiltOverview({ refreshKey, onUse }) {
+  const [data, setData] = useState({});
+  const [open, setOpen] = useState("characters");
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const got = {};
+      await Promise.all(["characters", "players", "worlds", "stories"].map(async (k) => {
+        try { const r = await fetch(`/api/library/${k}`); got[k] = r.ok ? await r.json() : []; }
+        catch (e) { got[k] = []; }
+      }));
+      if (!alive) return;
+      const nm = (k, it) => k === "characters" ? (it.data.data || {}).name || it.name
+        : k === "stories" ? it.data.title || it.name : it.data.name || it.name;
+      setData({
+        characters: (got.characters || []).map((it) => ({ name: nm("characters", it), kind: "characters", raw: it.data })),
+        players: (got.players || []).map((it) => ({ name: nm("players", it), kind: "players", raw: it.data })),
+        worlds: (got.worlds || []).map((it) => ({ name: nm("worlds", it), kind: "worlds", raw: it.data, desc: `${(it.data.entries || []).length} 条` })),
+        stories: (got.stories || []).map((it) => ({ name: nm("stories", it), kind: "stories", raw: it.data, desc: `${(it.data.events || []).length} 事件` })),
+        events: (got.stories || []).flatMap((it) =>
+          (it.data.events || []).map((e) => ({ name: e.title || e.event_id || "事件", desc: `属:${it.data.title || it.name}`, kind: "events", raw: null }))),
+      });
+    })();
+    return () => { alive = false; };
+  }, [refreshKey]);
+
+  const list = data[open] || [];
+  return (
+    <div className="built-overview">
+      <div className="bov-head">你已建的卡 · 建多个时在这里看你都建了谁</div>
+      <div className="bov-tabs">
+        {BUILT_CATS.map((c) => (
+          <button key={c.id} className={open === c.id ? "active" : ""} onClick={() => setOpen(c.id)}>
+            {c.label}<span className="bov-count">{(data[c.id] || []).length}</span>
+          </button>
+        ))}
+      </div>
+      <div className="bov-list">
+        {!list.length && <p className="empty">这一类你还没建过。</p>}
+        {list.map((it, i) => (
+          <div className="bov-item" key={i}>
+            <b>{it.name || "未命名"}</b>
+            {it.desc && <span className="bov-desc">{it.desc}</span>}
+            {it.kind !== "events" && onUse && <button onClick={() => onUse(it.kind, it.raw)}>用到游戏</button>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function BuildView({ buildSeed, clearSeed, addCharacter, addWorld, setStory, setPlayer, goGame }) {
   const seeded = !!buildSeed.draft; // 从卡库「对话完善」进来:固定角色卡
-  const [kind, setKind] = useState(seeded ? "characters" : null);
+  const PICKS = [
+    { id: "characters", label: "角色卡", desc: "NPC:可选 主要/次要、轻量/满配、含不含隐藏真相", buildKind: "characters", guide: "character" },
+    { id: "players", label: "玩家卡", desc: "你扮演谁:身份/目标/能力/限制/开局已知与不知", buildKind: "players" },
+    { id: "worlds", label: "世界书", desc: "关键词触发的世界设定碎片条目", buildKind: "worlds" },
+    { id: "settings", label: "设定卡", desc: "组织 / 地点的中层完整设定(走世界书引擎)", buildKind: "worlds", guide: "setting" },
+    { id: "stories", label: "故事卡", desc: "前提/主线/事件/结局 → 故事书(事件卡建在这里)", buildKind: "stories" },
+  ];
+  const [pick, setPick] = useState(seeded ? PICKS[0] : null);
+  const [opts, setOpts] = useState({});
+  const [building, setBuilding] = useState(seeded);
   const [saved, setSaved] = useState(null); // {kind, data, name}
   const [nonce, setNonce] = useState(0);
   const [importing, setImporting] = useState(false); // 本地文件导入识别中
   const [importErr, setImportErr] = useState("");
+  const [overviewKey, setOverviewKey] = useState(0); // 建完 +1 刷新「已建卡一览」
+
+  const kind = pick ? pick.buildKind : (seeded ? "characters" : null);
+  const seed = seeded ? (buildSeed.seed || "") : (pick ? buildGuideSeed(pick.id, opts) : "");
 
   const nameOf = (k, data) =>
     k === "characters" ? (data.data || {}).name : k === "stories" ? data.title : data.name;
+
+  function placeInGame(k, data) {
+    if (k === "characters") addCharacter(data);
+    else if (k === "worlds") addWorld(data);
+    else if (k === "stories") setStory(data);
+    else if (k === "players") setPlayer(data);
+  }
 
   // 本地文件 → 统一识别归类(/api/identify_auto 已自动入库)→ 进「已建好」态,可一键用到游戏。
   async function importLocal(file) {
@@ -1313,6 +1456,7 @@ function BuildView({ buildSeed, clearSeed, addCharacter, addWorld, setStory, set
       const SING2PLU = { character: "characters", world: "worlds", story: "stories", player: "players" };
       const k = SING2PLU[out.kind] || "characters";
       setSaved({ kind: k, data: out.data, name: nameOf(k, out.data) || "未命名" });
+      setOverviewKey((n) => n + 1);
     } catch (e) { setImportErr(e.message || "导入失败"); }
     finally { setImporting(false); }
   }
@@ -1321,36 +1465,25 @@ function BuildView({ buildSeed, clearSeed, addCharacter, addWorld, setStory, set
     const data = kind === "characters" ? wrapCard(draft) : draft; // 角色卡包成 Card V2 信封,其余 data 即卡
     await saveToVault(kind, data);
     setSaved({ kind, data, name: nameOf(kind, data) || "未命名" });
+    setOverviewKey((n) => n + 1);
   }
-  function useInGame() {
-    const { kind: k, data } = saved;
-    if (k === "characters") addCharacter(data);
-    else if (k === "worlds") addWorld(data);
-    else if (k === "stories") setStory(data);
-    else setPlayer(data);
-    goGame();
-  }
-  function again() { setSaved(null); clearSeed(); setKind(seeded ? "characters" : null); setNonce((n) => n + 1); }
-
-  const PICKS = [
-    ["characters", "角色卡", "故事里的 NPC 角色:性格、说话腔调"],
-    ["players", "主角卡", "你扮演谁:身份、目标、能力、限制"],
-    ["worlds", "设定卡", "世界观 / 组织 / 地点 / 规则 → 世界书"],
-    ["stories", "故事卡", "前提 / 主线 / 事件 / 结局 → 故事书"],
-  ];
+  function useInGame() { placeInGame(saved.kind, saved.data); goGame(); }
+  function again() { setSaved(null); clearSeed(); setPick(seeded ? PICKS[0] : null); setOpts({}); setBuilding(seeded); setNonce((n) => n + 1); }
+  function choosePick(p) { setPick(p); setOpts({}); if (!p.guide) setBuilding(true); } // 无引导:直接进对话
 
   return (
     <section className="view-shell build-view">
       <div className="view-head">
         <h2>对话建卡</h2>
-        <p>不会写设定?选一种卡,和 AI 聊着把它建出来。{seeded ? "(正在完善已有角色卡)" : ""}完成后自动存进卡库。</p>
+        <p>选一种卡(对齐卡片模板大类),和 AI 聊着把它建出来。{seeded ? "(正在完善已有角色卡)" : ""}完成后自动存进卡库,在下方「已建的卡」看得到。</p>
       </div>
-      {!kind && !saved && (
+
+      {!pick && !saved && (
         <div className="build-pick">
           <p className="build-pick-q">想建哪种卡?</p>
           <div className="build-pick-grid">
-            {PICKS.map(([k, label, desc]) => (
-              <button key={k} onClick={() => setKind(k)}><b>{label}</b><small>{desc}</small></button>
+            {PICKS.map((p) => (
+              <button key={p.id} onClick={() => choosePick(p)}><b>{p.label}</b><small>{p.desc}</small></button>
             ))}
           </div>
           <div className="build-import">
@@ -1364,11 +1497,18 @@ function BuildView({ buildSeed, clearSeed, addCharacter, addWorld, setStory, set
           </div>
         </div>
       )}
-      {kind && !saved && (
-        <CardBuilder key={kind + nonce + (seeded ? "-edit" : "-new")} kind={kind}
-          seed={buildSeed.seed} initialDraft={buildSeed.draft} onComplete={onComplete}
-          onClose={() => { if (seeded) goGame(); else setKind(null); }} />
+
+      {pick && !building && !saved && pick.guide && (
+        <BuildOptions guide={pick.guide} opts={opts} setOpts={setOpts}
+          onStart={() => setBuilding(true)} onCancel={() => setPick(null)} />
       )}
+
+      {pick && building && !saved && (
+        <CardBuilder key={pick.id + nonce + (seeded ? "-edit" : "-new")} kind={kind}
+          seed={seed} initialDraft={buildSeed.draft} onComplete={onComplete}
+          onClose={() => { if (seeded) goGame(); else { setBuilding(false); setPick(null); } }} />
+      )}
+
       {saved && (
         <div className="build-done">
           <p>已建好并存入卡库:<b>{saved.name}</b>(<span>{(KIND_META[saved.kind] || {}).label}</span>)</p>
@@ -1379,6 +1519,8 @@ function BuildView({ buildSeed, clearSeed, addCharacter, addWorld, setStory, set
           </div>
         </div>
       )}
+
+      {(!building || saved) && <BuiltOverview refreshKey={overviewKey} onUse={placeInGame} />}
     </section>
   );
 }
