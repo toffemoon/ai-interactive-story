@@ -1023,6 +1023,9 @@ main.single-view { display: block; }
 .build-pick-grid b { font-size: 15px; }
 .build-pick-grid small { color: var(--muted); font-size: 12px; }
 @media (max-width: 680px) { .build-pick-grid { grid-template-columns: 1fr; } }
+.build-import { margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--line); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.build-import-or { font-size: 13px; color: var(--muted); }
+.build-import .upbtn { flex: 0 0 auto; display: inline-block; padding: 8px 14px; }
 
 /* ── 预设故事:选人页 ──────────────── */
 .char-select { max-width: 880px; margin: 0 auto; padding: 48px 24px; }

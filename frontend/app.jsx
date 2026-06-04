@@ -683,7 +683,6 @@ function SetupPanel({ characters, setCharacters, worldBooks, setWorldBooks, stor
   const [error, setError] = useState("");
 
   const LIB_KIND = { character: "characters", world: "worlds", story: "stories", player: "players" };
-  const IDENTIFY = { character: "/api/identify", world: "/api/identify_world", story: "/api/identify_story", player: "/api/identify_player" };
 
   function place(kind, data) {
     if (kind === "character") setCharacters((xs) => [...xs, data]);
@@ -706,20 +705,6 @@ function SetupPanel({ characters, setCharacters, worldBooks, setWorldBooks, stor
   function importItem(kind, it) {
     place(kind, it.data);
     setPicker(null);
-  }
-
-  // 「上传」= 本地文件 → identify → 加入卡组并打开内联编辑。
-  async function uploadInto(kind, file) {
-    if (!file) return;
-    setLoading(kind); setError("");
-    try {
-      const text = await uploadFile(file);
-      const data = await postJSON(IDENTIFY[kind], { text });
-      place(kind, data);
-      const idx = (kind === "character") ? characters.length : (kind === "world") ? worldBooks.length : 0;
-      setEditing({ kind, index: idx });
-    } catch (e) { setError(e.message); }
-    finally { setLoading(""); }
   }
 
   function removeCharacter(index) {
@@ -752,16 +737,11 @@ function SetupPanel({ characters, setCharacters, worldBooks, setWorldBooks, stor
     return it.data.name || it.name;
   }
 
-  // [+ 添加(卡库)] [↑ 上传(本地)] 一排 + 内联卡库选择
+  // 卡组栏只从卡库导入([+ 添加])。本地文件上传已移到「建卡」页(自动识别归类),卡组栏不再上传。
   const renderActions = (kind, disabled) => (
     <>
       <div className="card-actions">
-        <button onClick={() => openPicker(kind)} disabled={disabled}>{picker === kind ? "收起卡库" : "+ 添加"}</button>
-        <label className={"upbtn " + (disabled || loading === kind ? "disabled" : "")}>
-          {loading === kind ? "识别中…" : "↑ 上传"}
-          <input type="file" accept=".txt,.md,.docx" style={{ display: "none" }} disabled={disabled || loading === kind}
-            onChange={async (e) => { const f = e.target.files[0]; e.target.value = ""; await uploadInto(kind, f); }} />
-        </label>
+        <button onClick={() => openPicker(kind)} disabled={disabled}>{picker === kind ? "收起卡库" : "+ 添加(卡库)"}</button>
       </div>
       {picker === kind && (
         <div className="lib-picker">
@@ -813,7 +793,7 @@ function SetupPanel({ characters, setCharacters, worldBooks, setWorldBooks, stor
               {isEditing("character", i) && <CharacterEditor card={c} index={i} onChange={updateCharacter} onClose={closeEdit} />}
             </React.Fragment>
           ))}
-          {!characters.length && <p className="mini-empty">还没有角色。「+ 添加」从卡库导入,或「↑ 上传」本地文件。</p>}
+          {!characters.length && <p className="mini-empty">还没有角色。「+ 添加」从卡库导入;要上传本地文件去「建卡」页。</p>}
         </div>
       </div>
 
@@ -1317,9 +1297,25 @@ function BuildView({ buildSeed, clearSeed, addCharacter, addWorld, setStory, set
   const [kind, setKind] = useState(seeded ? "characters" : null);
   const [saved, setSaved] = useState(null); // {kind, data, name}
   const [nonce, setNonce] = useState(0);
+  const [importing, setImporting] = useState(false); // 本地文件导入识别中
+  const [importErr, setImportErr] = useState("");
 
   const nameOf = (k, data) =>
     k === "characters" ? (data.data || {}).name : k === "stories" ? data.title : data.name;
+
+  // 本地文件 → 统一识别归类(/api/identify_auto 已自动入库)→ 进「已建好」态,可一键用到游戏。
+  async function importLocal(file) {
+    if (!file) return;
+    setImporting(true); setImportErr("");
+    try {
+      const text = await uploadFile(file);
+      const out = await postJSON("/api/identify_auto", { text });
+      const SING2PLU = { character: "characters", world: "worlds", story: "stories", player: "players" };
+      const k = SING2PLU[out.kind] || "characters";
+      setSaved({ kind: k, data: out.data, name: nameOf(k, out.data) || "未命名" });
+    } catch (e) { setImportErr(e.message || "导入失败"); }
+    finally { setImporting(false); }
+  }
 
   async function onComplete(draft) {
     const data = kind === "characters" ? wrapCard(draft) : draft; // 角色卡包成 Card V2 信封,其余 data 即卡
@@ -1356,6 +1352,15 @@ function BuildView({ buildSeed, clearSeed, addCharacter, addWorld, setStory, set
             {PICKS.map(([k, label, desc]) => (
               <button key={k} onClick={() => setKind(k)}><b>{label}</b><small>{desc}</small></button>
             ))}
+          </div>
+          <div className="build-import">
+            <span className="build-import-or">或 · 已有写好的设定?</span>
+            <label className={"upbtn " + (importing ? "disabled" : "")}>
+              {importing ? "识别中…" : "↑ 上传本地文件(自动识别归类)"}
+              <input type="file" accept=".txt,.md,.docx" style={{ display: "none" }} disabled={importing}
+                onChange={async (e) => { const f = e.target.files[0]; e.target.value = ""; await importLocal(f); }} />
+            </label>
+            {importErr && <div className="error">{importErr}</div>}
           </div>
         </div>
       )}
