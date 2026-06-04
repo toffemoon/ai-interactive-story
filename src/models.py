@@ -24,6 +24,15 @@ class CharacterData(BaseModel):
     # voice 锁定:从设定里抽出的硬规则(说话方式、口头禅、绝不做的事)
     speech_rules: list[str] = Field(default_factory=list, description="说话/行为硬规则,锁 voice 不漂")
     tags: list[str] = Field(default_factory=list)
+    # —— 卡片模板「引擎摘要」扩展字段(2026-06-04,只落字段;接引擎注入由 Gengyue 决策)——
+    anchor: str = Field("", description="一句话锚点:角色是谁、对玩家是什么、底色")
+    tension: str = Field("", description="核心矛盾:不该被抹平的内在张力")
+    look: str = Field("", description="外貌锚点:一句话视觉印象,供描写 + 图像生成")
+    keys: list[str] = Field(default_factory=list, description="召回关键词:世界书触发 + 向量召回(比 tags 更细)")
+    versions: list[str] = Field(default_factory=list, description="版本人格 / 状态轴原文(离散切版或连续轴;含揭穿后覆盖。只落字段,不接运行时切换)")
+    # 知识边界(防剧透防全知);hidden 注入给 AI 但默认不说破(输出控制,非不注入)
+    known_public: list[str] = Field(default_factory=list, description="角色公开可知、可主动说的")
+    known_hidden: list[str] = Field(default_factory=list, description="隐藏真相 / 反转,注入给 AI 但披露前不说破")
 
 
 class CharacterCard(BaseModel):
@@ -52,6 +61,29 @@ class WorldBook(BaseModel):
     entries: list[WorldEntry] = Field(default_factory=list)
 
 
+class SettingCard(BaseModel):
+    """设定卡:单个组织 / 地点 / … 的中层完整设定。引擎独立分析类型(对接「设定卡引擎」)。
+
+    现状只落 model + 确定性解析;整张解析接进引擎是 Gengyue 决策域(待补)。
+    子类不限组织 / 地点,可扩(阵营 / 物品体系 / 历法…)。
+    """
+
+    name: str
+    category: str = Field("", description="子类:组织 / 地点 / …")
+    scene_type: str = Field("", description="地点专用:城邦 / 村庄 / 区域 / 设施 / 秘境")
+    ip: str = Field("", description="所属 IP / 世界")
+    parent_world: str = Field("", description="母本:依附的顶层世界设定集")
+    tier: str = Field("轻量", description="档位:轻量 / 满配")
+    anchor: str = Field("", description="一句话锚点")
+    keys: list[str] = Field(default_factory=list, description="召回关键词:专名 / 地名 / 组织名")
+    public: list[str] = Field(default_factory=list, description="知识分层 public:角色普遍可知")
+    hidden: list[str] = Field(default_factory=list, description="知识分层 hidden:元真相 / 内幕,默认不说破")
+    tone: str = Field("", description="口吻 / 禁区")
+    overview: str = Field("", description="概览正文")
+    sections: dict[str, str] = Field(default_factory=dict, description="其余标号段原文(宗旨 / 结构 / 关键人物 / 关系…),保留中层全貌不强约束 schema")
+    hooks: list[str] = Field(default_factory=list, description="剧情钩子")
+
+
 class PlayerCard(BaseModel):
     """玩家设定卡:玩家扮演谁、以什么身份进入故事。"""
 
@@ -62,6 +94,9 @@ class PlayerCard(BaseModel):
     abilities: list[str] = Field(default_factory=list)
     constraints: list[str] = Field(default_factory=list)
     known_facts: list[str] = Field(default_factory=list)
+    # —— 卡片模板扩展(2026-06-04,只落字段)——
+    unknown: list[str] = Field(default_factory=list, description="开局不知道的:主线反转 / 别处的事 / 元真相;与 known_facts 配对防上帝视角")
+    opening: str = Field("", description="开局场景 / 时间锚点:玩家默认从哪、什么时间点入局")
 
 
 class StoryEvent(BaseModel):
@@ -82,6 +117,13 @@ class StoryEvent(BaseModel):
     due_clock: int | None = Field(None, description="故事内时钟(分钟)到此值,事件主动登场/恶化(纯时间触发)")
     escalate_after_idle: int | None = Field(None, description="主线静默这么多故事分钟后升级催促(时间+停滞,认真查就重置)")
     severity: int = Field(2, description="恶化烈度 + 注入优先级,1-5")
+    # —— 隐藏事件卡扩展(2026-06-04,只落字段;门控注入 + flag 自动求值是 Gengyue 决策域)——
+    hidden: bool = Field(False, description="隐藏事件:注入给 AI 但默认不触发 + 玩家界面不可见,触发条件满足才发生(输出控制,非不注入)")
+    unlock_conditions: list[str] = Field(default_factory=list, description="触发 / 解锁条件的自然语言描述(flag / 前置事件 / 玩家行为 / 时钟);现状不自动求值,只落字段")
+    set_flags: list[str] = Field(default_factory=list, description="触发后置位的 flag / fact,是「事件 → 结局谓词」的联动接口")
+    once: bool = Field(True, description="触发性:True=一次性(触发后不再重复);False=可重复(配合 cooldown_minutes)")
+    cooldown_minutes: int | None = Field(None, description="可重复事件的冷却(故事内分钟);once=True 时忽略")
+    affects_ending: bool = Field(False, description="本事件是否影响结局(对应分支需在故事书结局段补谓词)")
 
 
 class Ending(BaseModel):
