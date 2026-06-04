@@ -551,7 +551,7 @@ function wrapCard(data) {
 const KIND_META = {
   characters: { label: "角色卡", title: "角色卡草稿", ph: "说说这个角色……", canFinish: (d) => !!d.name },
   players: { label: "主角卡", title: "主角卡草稿", ph: "说说你要扮演的主角……", canFinish: (d) => !!d.name },
-  worlds: { label: "设定卡", title: "设定卡草稿", ph: "说说这个世界 / 组织 / 设定……", canFinish: (d) => !!d.name && (d.entries || []).length > 0 },
+  worlds: { label: "设定卡", title: "设定卡草稿", ph: "说说这个世界 / 组织 / 设定……", canFinish: (d) => !!d.name },
   stories: { label: "故事卡", title: "故事书草稿", ph: "说说这个故事的前提、主线、结局……", canFinish: (d) => !!d.title },
 };
 
@@ -649,7 +649,7 @@ function CardBuilder({ kind = "characters", seed, initialDraft, onComplete, onCl
   return (
     <section className="editor-panel card-builder">
       <div className="editor-head">
-        <div><h3>对话建卡 · {(KIND_META[kind] || {}).label || ""}</h3><span>不会写设定?聊着聊着卡就建好了。完成后自动存进卡库。</span></div>
+        <div><h3>对话建卡 · {(KIND_META[kind] || {}).label || ""}</h3><span>不会写设定?聊着聊着卡就建好了。完成后自动存进故事库。</span></div>
         <button onClick={onClose}>关闭</button>
       </div>
       <div className="builder-body">
@@ -680,7 +680,7 @@ function CardBuilder({ kind = "characters", seed, initialDraft, onComplete, onCl
 
 function SetupPanel({ characters, setCharacters, worldBooks, setWorldBooks, story, setStory, player, setPlayer, mode, setMode, onStart, onSavePreset, onBack, playing }) {
   const [editing, setEditing] = useState(null);   // { kind, index } | null
-  const [picker, setPicker] = useState(null);     // kind | null(正在从卡库导入)
+  const [picker, setPicker] = useState(null);     // kind | null(正在从故事库导入)
   const [libItems, setLibItems] = useState([]);
   const [libLoading, setLibLoading] = useState(false);
   const [loading, setLoading] = useState("");      // 正在上传识别的 kind
@@ -695,7 +695,7 @@ function SetupPanel({ characters, setCharacters, worldBooks, setWorldBooks, stor
     else if (kind === "player") setPlayer(data);
   }
 
-  // 「添加」= 从卡库导入:展开该类卡库列表,选中即加入卡组。
+  // 「添加」= 从故事库导入:展开该类故事库列表,选中即加入卡组。
   async function openPicker(kind) {
     setError("");
     if (picker === kind) { setPicker(null); return; }
@@ -741,16 +741,16 @@ function SetupPanel({ characters, setCharacters, worldBooks, setWorldBooks, stor
     return it.data.name || it.name;
   }
 
-  // 卡组栏只从卡库导入([+ 添加])。本地文件上传已移到「建卡」页(自动识别归类),卡组栏不再上传。
+  // 卡组栏只从故事库导入([+ 添加])。本地文件上传已移到「建卡」页(自动识别归类),卡组栏不再上传。
   const renderActions = (kind, disabled) => (
     <>
       <div className="card-actions">
-        <button onClick={() => openPicker(kind)} disabled={disabled}>{picker === kind ? "收起卡库" : "+ 添加(卡库)"}</button>
+        <button onClick={() => openPicker(kind)} disabled={disabled}>{picker === kind ? "收起故事库" : "+ 添加(故事库)"}</button>
       </div>
       {picker === kind && (
         <div className="lib-picker">
-          {libLoading ? <p className="empty">读取卡库…</p>
-            : !libItems.length ? <p className="empty">卡库这一类还是空的</p>
+          {libLoading ? <p className="empty">读取故事库…</p>
+            : !libItems.length ? <p className="empty">故事库这一类还是空的</p>
             : libItems.map((it, i) => (
               <button key={i} className="lib-pick-item" onClick={() => importItem(kind, it)}><b>{libLabel(kind, it)}</b></button>
             ))}
@@ -797,7 +797,7 @@ function SetupPanel({ characters, setCharacters, worldBooks, setWorldBooks, stor
               {isEditing("character", i) && <CharacterEditor card={c} index={i} onChange={updateCharacter} onClose={closeEdit} />}
             </React.Fragment>
           ))}
-          {!characters.length && <p className="mini-empty">还没有角色。「+ 添加」从卡库导入;要上传本地文件去「建卡」页。</p>}
+          {!characters.length && <p className="mini-empty">还没有角色。「+ 添加」从故事库导入;要上传本地文件去「建卡」页。</p>}
         </div>
       </div>
 
@@ -1280,7 +1280,7 @@ async function saveToVault(kind, data) {
 }
 
 function TopNav({ view, setView, sessionId }) {
-  const tabs = [["home", "探索"], ["game", "故事"], ["chat", "聊天"], ["record", "记录"], ["build", "建卡"], ["vault", "卡库"]];
+  const tabs = [["home", "探索"], ["game", "故事"], ["chat", "聊天"], ["record", "记录"], ["build", "建卡"], ["vault", "故事库"]];
   return (
     <header className="topnav">
       <div className="brand"><h1>AI 互动故事</h1></div>
@@ -1307,6 +1307,10 @@ const BUILD_GUIDES = {
     { key: "子类", opts: ["组织", "地点"] },
     { key: "档位", opts: ["轻量", "满配"] },
   ],
+  worldsetting: [
+    { key: "类型", opts: ["世界书", "设定卡·组织", "设定卡·地点"] },
+    { key: "档位", opts: ["轻量", "满配"] },
+  ],
 };
 
 function BuildOptions({ guide, opts, setOpts, onStart, onCancel }) {
@@ -1327,7 +1331,7 @@ function BuildOptions({ guide, opts, setOpts, onStart, onCancel }) {
       ))}
       <div className="bo-actions">
         <button className="primary" onClick={onStart}>开始对话建卡</button>
-        <button onClick={onCancel}>返回</button>
+        {onCancel && <button onClick={onCancel}>返回</button>}
       </div>
     </div>
   );
@@ -1351,49 +1355,42 @@ ${cat === "次要NPC" ? "次要NPC 从简:锚点 + speech_rules + 一句外形 +
     return `【建卡要求 · 玩家卡】
 按玩家卡模板引导,草稿请尽量产出:role 身份、background 背景、goals 目标、abilities 能力/资源、constraints 限制/禁忌、known_facts 开局已知、unknown 开局不知道(与 known_facts 配对,防上帝视角)、opening 开局场景/时间锚点。`;
   }
+  if (pickId === "worldsetting") {
+    const type = o["类型"] || "世界书", tier = o["档位"] || "轻量";
+    if (type.indexOf("设定卡") === 0) {
+      return buildGuideSeed("settings", { 子类: type.indexOf("地点") >= 0 ? "地点" : "组织", 档位: tier });
+    }
+    return `【建卡要求 · 世界书(${tier})】
+按世界书模板引导我把世界拆成关键词触发的条目。每条产出:keys 触发关键词(玩家真会说的词 + 标志专名)、content 内容(standalone 自足、一条一事)、可见性 public/hidden(hidden 注入但默认不说破)、来源 world/rule/location/figure/org。世界铁则设常驻、标硬canon。`;
+  }
   return "";
 }
 
-// 已建卡一览:从卡库读各大类;事件卡从故事书聚合(只读)。建完刷新,看得到自己建了哪些。
+// 已建卡一览:从故事库读各大类;事件卡从故事书聚合(只读)。建完刷新,看得到自己建了哪些。
 const BUILT_CATS = [
   { id: "characters", label: "角色卡" },
   { id: "players", label: "玩家卡" },
   { id: "worlds", label: "世界书 / 设定卡" },
   { id: "stories", label: "故事书" },
-  { id: "events", label: "事件卡(在故事书里)" },
+  { id: "events", label: "事件卡" },
 ];
 
-function BuiltOverview({ refreshKey, onUse }) {
-  const [data, setData] = useState({});
+// 只显示「本次建卡轮次」里建的卡(从当前卡组 assembly 读,不是故事库全量)。事件卡 = 本轮故事书里的事件。
+// 每张卡可「查看/修改」(开编辑器)或「保存到故事库」(单独入库)。事件卡随故事书,不单列按钮。
+function BuiltOverview({ characters = [], worldBooks = [], story = null, player = null, onView, onSave, savedKeys }) {
   const [open, setOpen] = useState("characters");
-
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      const got = {};
-      await Promise.all(["characters", "players", "worlds", "stories"].map(async (k) => {
-        try { const r = await fetch(`/api/library/${k}`); got[k] = r.ok ? await r.json() : []; }
-        catch (e) { got[k] = []; }
-      }));
-      if (!alive) return;
-      const nm = (k, it) => k === "characters" ? (it.data.data || {}).name || it.name
-        : k === "stories" ? it.data.title || it.name : it.data.name || it.name;
-      setData({
-        characters: (got.characters || []).map((it) => ({ name: nm("characters", it), kind: "characters", raw: it.data })),
-        players: (got.players || []).map((it) => ({ name: nm("players", it), kind: "players", raw: it.data })),
-        worlds: (got.worlds || []).map((it) => ({ name: nm("worlds", it), kind: "worlds", raw: it.data, desc: `${(it.data.entries || []).length} 条` })),
-        stories: (got.stories || []).map((it) => ({ name: nm("stories", it), kind: "stories", raw: it.data, desc: `${(it.data.events || []).length} 事件` })),
-        events: (got.stories || []).flatMap((it) =>
-          (it.data.events || []).map((e) => ({ name: e.title || e.event_id || "事件", desc: `属:${it.data.title || it.name}`, kind: "events", raw: null }))),
-      });
-    })();
-    return () => { alive = false; };
-  }, [refreshKey]);
-
+  const data = {
+    characters: characters.map((c, i) => ({ name: (c.data || {}).name || "未命名", kind: "characters", index: i, data: c })),
+    players: player ? [{ name: player.name || "主角", kind: "players", index: 0, data: player }] : [],
+    worlds: worldBooks.map((w, i) => ({ name: w.name || "设定", desc: `${(w.entries || []).length} 条`, kind: "worlds", index: i, data: w })),
+    stories: story ? [{ name: story.title || "故事书", desc: (story.premise || "").slice(0, 30), kind: "stories", index: 0, data: story }] : [],
+    events: story ? (story.events || []).map((e) => ({ name: e.title || e.event_id || "事件", desc: e.hidden ? "隐藏" : "", kind: "events" })) : [],
+  };
   const list = data[open] || [];
+  const saved = savedKeys || new Set();
   return (
     <div className="built-overview">
-      <div className="bov-head">你已建的卡 · 建多个时在这里看你都建了谁</div>
+      <div className="bov-head">本次新建里你已建的卡 · 查看/修改 或单独保存到故事库</div>
       <div className="bov-tabs">
         {BUILT_CATS.map((c) => (
           <button key={c.id} className={open === c.id ? "active" : ""} onClick={() => setOpen(c.id)}>
@@ -1402,12 +1399,19 @@ function BuiltOverview({ refreshKey, onUse }) {
         ))}
       </div>
       <div className="bov-list">
-        {!list.length && <p className="empty">这一类你还没建过。</p>}
+        {!list.length && <p className="empty">这一类这轮还没建。</p>}
         {list.map((it, i) => (
           <div className="bov-item" key={i}>
             <b>{it.name || "未命名"}</b>
             {it.desc && <span className="bov-desc">{it.desc}</span>}
-            {it.kind !== "events" && onUse && <button onClick={() => onUse(it.kind, it.raw)}>用到游戏</button>}
+            {it.kind !== "events" && (
+              <span className="bov-btns">
+                <button onClick={() => onView && onView(it.kind, it.index)}>查看/修改</button>
+                <button onClick={() => onSave && onSave(it.kind, it.index, it.data)}>
+                  {saved.has(it.kind + ":" + it.index) ? "已存✓" : "保存到故事库"}
+                </button>
+              </span>
+            )}
           </div>
         ))}
       </div>
@@ -1416,7 +1420,7 @@ function BuiltOverview({ refreshKey, onUse }) {
 }
 
 function BuildView({ buildSeed, clearSeed, addCharacter, addWorld, setStory, setPlayer, goGame }) {
-  const seeded = !!buildSeed.draft; // 从卡库「对话完善」进来:固定角色卡
+  const seeded = !!buildSeed.draft; // 从故事库「对话完善」进来:固定角色卡
   const PICKS = [
     { id: "characters", label: "角色卡", desc: "NPC:可选 主要/次要、轻量/满配、含不含隐藏真相", buildKind: "characters", guide: "character" },
     { id: "players", label: "玩家卡", desc: "你扮演谁:身份/目标/能力/限制/开局已知与不知", buildKind: "players" },
@@ -1475,7 +1479,7 @@ function BuildView({ buildSeed, clearSeed, addCharacter, addWorld, setStory, set
     <section className="view-shell build-view">
       <div className="view-head">
         <h2>对话建卡</h2>
-        <p>选一种卡(对齐卡片模板大类),和 AI 聊着把它建出来。{seeded ? "(正在完善已有角色卡)" : ""}完成后自动存进卡库,在下方「已建的卡」看得到。</p>
+        <p>选一种卡(对齐卡片模板大类),和 AI 聊着把它建出来。{seeded ? "(正在完善已有角色卡)" : ""}完成后自动存进故事库,在下方「已建的卡」看得到。</p>
       </div>
 
       {!pick && !saved && (
@@ -1511,7 +1515,7 @@ function BuildView({ buildSeed, clearSeed, addCharacter, addWorld, setStory, set
 
       {saved && (
         <div className="build-done">
-          <p>已建好并存入卡库:<b>{saved.name}</b>(<span>{(KIND_META[saved.kind] || {}).label}</span>)</p>
+          <p>已建好并存入故事库:<b>{saved.name}</b>(<span>{(KIND_META[saved.kind] || {}).label}</span>)</p>
           <div className="build-done-actions">
             <button className="primary" onClick={useInGame}>用到当前游戏</button>
             <button onClick={again}>再建一个</button>
@@ -1525,32 +1529,47 @@ function BuildView({ buildSeed, clearSeed, addCharacter, addWorld, setStory, set
   );
 }
 
-function VaultView({ addCharacter, addWorld, setStory, setPlayer, completeCard, goGame }) {
-  const KINDS = [["characters", "角色"], ["worlds", "世界书"], ["stories", "故事书"], ["players", "玩家"]];
+function VaultView({ addCharacter, addWorld, setStory, setPlayer, completeCard, goGame, presets, onLaunchPreset, onDeletePreset }) {
+  const KINDS = [["characters", "角色卡"], ["players", "玩家卡"], ["worlds", "世界书 / 设定卡"], ["stories", "故事书"], ["events", "事件卡"], ["mystories", "我的故事"]];
   const [kind, setKind] = useState("characters");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(null); // {origName, data} | null
+  const [page, setPage] = useState(1);          // 当前页(每页 12 张)
 
   async function load(k) {
+    if (k === "mystories") { setItems((presets || []).map((p) => ({ name: p.name, data: p.data || {}, _preset: true }))); return; }
     setLoading(true);
     try {
-      const r = await fetch(`/api/library/${k}`);
-      setItems(r.ok ? await r.json() : []);
+      if (k === "events") {
+        // 事件卡随故事书:从故事库的故事里聚合出来(只读)。
+        const r = await fetch(`/api/library/stories`);
+        const stories = r.ok ? await r.json() : [];
+        const evs = [];
+        stories.forEach((s) => (s.data.events || []).forEach((e) =>
+          evs.push({ name: e.title || e.event_id || "事件", data: e, _event: true, _story: s.data.title || s.name })));
+        setItems(evs);
+      } else {
+        const r = await fetch(`/api/library/${k}`);
+        setItems(r.ok ? await r.json() : []);
+      }
     } catch (e) { setItems([]); }
     finally { setLoading(false); }
   }
-  useEffect(() => { load(kind); }, [kind]);
+  useEffect(() => { load(kind); }, [kind, presets]);
 
   function cardName(item) {
     if (kind === "characters") return (item.data.data || {}).name;
     if (kind === "stories") return item.data.title;
+    if (kind === "events" || kind === "mystories") return item.name;
     return item.data.name;
   }
   function cardDesc(item) {
     if (kind === "characters") return (item.data.data || {}).description;
     if (kind === "worlds") return `${(item.data.entries || []).length} 条条目`;
     if (kind === "stories") return item.data.premise || `${(item.data.events || []).length} 个事件`;
+    if (kind === "events") return (item._story ? `属:${item._story}` : "") + (item.data.hidden ? " · 隐藏" : "");
+    if (kind === "mystories") return item.data.synopsis || bundleSummary(item.data);
     return item.data.role || (item.data.goals || []).join(" / ");
   }
   function useInGame(item) {
@@ -1562,7 +1581,7 @@ function VaultView({ addCharacter, addWorld, setStory, setPlayer, completeCard, 
     goGame();
   }
   async function del(item) {
-    if (!confirm("从卡库删除这张卡?不可恢复。")) return;
+    if (!confirm("从故事库删除这张卡?不可恢复。")) return;
     try { await fetch(`/api/library/${kind}/${encodeURIComponent(item.name)}`, { method: "DELETE" }); } catch (e) {}
     load(kind);
   }
@@ -1574,7 +1593,7 @@ function VaultView({ addCharacter, addWorld, setStory, setPlayer, completeCard, 
     if (!editing) return;
     try {
       const res = await postJSON("/api/library/save", { kind, data: editing.data });
-      // 改了名字 → 新文件名变了,删掉旧文件免得卡库里留俩
+      // 改了名字 → 新文件名变了,删掉旧文件免得故事库里留俩
       if (res && res.name && res.name !== editing.origName) {
         try { await fetch(`/api/library/${kind}/${encodeURIComponent(editing.origName)}`, { method: "DELETE" }); } catch (e) {}
       }
@@ -1582,39 +1601,18 @@ function VaultView({ addCharacter, addWorld, setStory, setPlayer, completeCard, 
     setEditing(null);
     load(kind);
   }
-  function switchKind(k) { setEditing(null); setKind(k); }
+  function switchKind(k) { setEditing(null); setKind(k); setPage(1); }
 
-  return (
-    <section className="view-shell vault-view">
-      <div className="view-head">
-        <h2>卡库</h2>
-        <p>建好和上传过的卡都存在这里,挑出来用到游戏里,或点「详情/修改」看全字段并编辑(改完关闭自动存回)。</p>
-      </div>
-      <div className="vault-tabs">
-        {KINDS.map(([k, label]) => (
-          <button key={k} className={kind === k ? "active" : ""} onClick={() => switchKind(k)}>{label}</button>
-        ))}
-      </div>
-      <div className="vault-list">
-        {loading && <p className="empty">读取中…</p>}
-        {!loading && !items.length && <p className="empty">这一类卡库还是空的。去「建卡」或在「游戏」页上传。</p>}
-        {!loading && items.map((item, i) => (
-          <div className="vault-card" key={i}>
-            <div className="vc-main">
-              <b>{cardName(item) || item.name}</b>
-              <span>{(cardDesc(item) || "").slice(0, 70)}</span>
-            </div>
-            <div className="vc-actions">
-              <button className="primary" onClick={() => useInGame(item)}>用到游戏</button>
-              <button onClick={() => openEdit(item)}>详情/修改</button>
-              {kind === "characters" && <button onClick={() => completeCard(item.data)}>对话完善</button>}
-              <button className="del" onClick={() => del(item)}>删除</button>
-            </div>
-          </div>
-        ))}
-      </div>
-      {editing && (
-        <div className="vault-editor">
+  // 修改 = 单开一个编辑页(整页切过去),不在列表底部内联。改完「保存返回」存回故事库。
+  if (editing) {
+    const label = (KINDS.find(([k]) => k === kind) || [null, "卡"])[1];
+    return (
+      <section className="view-shell vault-view">
+        <div className="view-head vh-row">
+          <div><h2>修改 · {label}</h2><p>改完点「保存返回」(编辑器里的「收起」同样存回)。</p></div>
+          <button className="back-link" onClick={saveEdit}>← 保存返回</button>
+        </div>
+        <div className="vault-editor single-edit">
           {kind === "characters" && (
             <CharacterEditor card={editing.data} index={0}
               onChange={(_, next) => setEditing((e) => ({ ...e, data: next }))} onClose={saveEdit} />
@@ -1631,6 +1629,69 @@ function VaultView({ addCharacter, addWorld, setStory, setPlayer, completeCard, 
             <PlayerEditor player={editing.data}
               onChange={(next) => setEditing((e) => ({ ...e, data: next }))} onClose={saveEdit} />
           )}
+        </div>
+      </section>
+    );
+  }
+
+  const PER = 12;
+  const totalPages = Math.max(1, Math.ceil(items.length / PER));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = items.slice((safePage - 1) * PER, safePage * PER);
+
+  return (
+    <section className="view-shell vault-view">
+      <div className="view-head">
+        <h2>故事库</h2>
+        <p>你建过 / 导入的卡和故事都在这里,按卡片分类管理。「我的故事」是你自己创作的完整故事(预设),可一键开始。</p>
+      </div>
+      <div className="vault-tabs">
+        {KINDS.map(([k, label]) => (
+          <button key={k} className={kind === k ? "active" : ""} onClick={() => switchKind(k)}>{label}</button>
+        ))}
+      </div>
+      <div className="vault-list">
+        {loading && <p className="empty">读取中…</p>}
+        {!loading && !items.length && (
+          <p className="empty">{
+            kind === "mystories" ? "还没有你的故事。在「新建故事」最后『存成预设故事书』,或导入《如我所书》这类原创故事。"
+            : kind === "events" ? "还没有事件卡。在「新建故事 → 事件卡」给故事书加隐藏事件。"
+            : "这一类还是空的。去「建卡」建一张。"
+          }</p>
+        )}
+        {!loading && pageItems.map((item, i) => (
+          <div className="vault-card" key={i}>
+            <div className="vc-main">
+              <b>{cardName(item) || item.name}</b>
+              <span>{(cardDesc(item) || "").slice(0, 70)}</span>
+            </div>
+            <div className="vc-actions">
+              {kind === "events" ? (
+                <span className="vc-note">事件随故事书,去「故事书」编辑</span>
+              ) : kind === "mystories" ? (
+                <>
+                  <button className="primary" onClick={() => onLaunchPreset && onLaunchPreset({ name: item.name, data: item.data })}>开始</button>
+                  <button className="del" onClick={() => onDeletePreset && onDeletePreset({ name: item.name })}>删除</button>
+                </>
+              ) : (
+                <>
+                  <button className="primary" onClick={() => useInGame(item)}>用到游戏</button>
+                  <button onClick={() => openEdit(item)}>详情/修改</button>
+                  {kind === "characters" && <button onClick={() => completeCard(item.data)}>对话完善</button>}
+                  <button className="del" onClick={() => del(item)}>删除</button>
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      {!loading && totalPages > 1 && (
+        <div className="vault-pager">
+          <button disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>‹</button>
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
+            <button key={n} className={n === safePage ? "active" : ""} onClick={() => setPage(n)}>{n}</button>
+          ))}
+          <button disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)}>›</button>
         </div>
       )}
     </section>
@@ -1767,7 +1828,7 @@ function ChatView() {
       <div className="view-head"><h2>聊天</h2><p>和单个角色一对一聊天,像微信对话框。轻量引擎(不带状态机/事件/世界时钟),后续批次接入。</p></div>
       <div className="placeholder-pane">
         <p className="placeholder-big">聊天功能正在搭建中</p>
-        <p className="hint-line">规划:从卡库选一个角色 → 微信式对话框 → 轻量 <code>/api/chat</code> 引擎,纯角色对话,可后期融入剧情。</p>
+        <p className="hint-line">规划:从故事库选一个角色 → 微信式对话框 → 轻量 <code>/api/chat</code> 引擎,纯角色对话,可后期融入剧情。</p>
       </div>
     </section>
   );
@@ -1810,29 +1871,101 @@ function RecordView({ saves, onResume, onDeleteSave, onGoExplore }) {
 }
 
 const BUILD_STEPS = [
-  { key: "worlds", label: "世界 / 设定", optional: true, desc: "世界观、规则、地点、组织 → 世界书" },
-  { key: "characters", label: "角色", desc: "故事里的 NPC:性格、说话腔调(至少 1 张)" },
-  { key: "players", label: "主角", optional: true, desc: "你扮演谁:身份 / 目标 / 能力 / 限制(可跳过用模板)" },
-  { key: "stories", label: "故事框架", optional: true, desc: "前提 / 主线 / 事件 / 结局 → 故事书" },
+  { key: "worlds", label: "世界 / 设定", optional: true, desc: "世界书 或 设定卡(组织 / 地点)的中层设定 — 先选类型" },
+  { key: "characters", label: "角色", desc: "NPC:先选 主要/次要、轻量/满配、含不含隐藏真相(至少 1 张)" },
+  { key: "players", label: "主角", optional: true, desc: "你扮演谁:身份 / 目标 / 能力 / 限制 / 开局已知与不知(可跳过用模板)" },
+  { key: "stories", label: "故事框架", optional: true, desc: "前提 / 主线 / 结局 → 故事书" },
+  { key: "events", label: "事件卡", optional: true, desc: "隐藏事件卡 → 挂到当前故事书(手动加;引擎暂无 AI 建事件)" },
   { key: "summary", label: "汇总", desc: "打包成预设 + 开始故事" },
 ];
 
+// 事件卡步:表单手动加事件,挂到当前故事书的 events(没故事书则自动建一个空的)。不走 AI 对话(引擎无事件卡建卡类型)。
+function EventStep({ story, setStory }) {
+  const blank = { event_id: "", title: "", summary: "", trigger_keywords: [], unlock_conditions: [], hidden: true, severity: 2 };
+  const [d, setD] = useState(blank);
+  const events = (story && story.events) || [];
+  const up = (f, v) => setD({ ...d, [f]: v });
+
+  function add() {
+    if (!d.title.trim()) return;
+    const base = story || { title: "故事书", premise: "", timeline: [], main_plot: [], events: [], endings: [], freedom_rules: [], pacing: [], character_boundaries: [], needs_confirm: [] };
+    setStory({ ...base, events: [...(base.events || []), { ...d }] });
+    setD(blank);
+  }
+  function remove(i) { if (story) setStory({ ...story, events: story.events.filter((_, j) => j !== i) }); }
+
+  return (
+    <section className="editor-panel">
+      <div className="editor-head">
+        <div><h3>事件卡(隐藏事件)</h3><span>挂到当前故事书。引擎暂无 AI 建事件,这里手动加。{!story ? "(还没故事书,加第一个会自动建一个空的)" : ""}</span></div>
+      </div>
+      <label>事件名<input value={d.title} onChange={(e) => up("title", e.target.value)} placeholder="如 炉底显魂" /></label>
+      <label>摘要<textarea rows="3" value={d.summary} onChange={(e) => up("summary", e.target.value)} placeholder="触发后发生什么" /></label>
+      <label>触发关键词,逗号分隔<input value={(d.trigger_keywords || []).join(", ")} onChange={(e) => up("trigger_keywords", e.target.value.split(/[,，]/).map((x) => x.trim()).filter(Boolean))} /></label>
+      <label>触发条件,一行一条<textarea rows="2" value={listToLines(d.unlock_conditions)} onChange={(e) => up("unlock_conditions", linesToList(e.target.value))} placeholder="如 玩家三次提到炉底怪声" /></label>
+      <div className="ev-row">
+        <label className="inline-check"><input type="checkbox" checked={!!d.hidden} onChange={(e) => up("hidden", e.target.checked)} /> 隐藏事件(默认不触发,条件到了才发生)</label>
+        <label className="ev-sev">烈度<input type="number" min="1" max="5" value={d.severity} onChange={(e) => up("severity", Math.max(1, Math.min(5, parseInt(e.target.value, 10) || 2)))} /></label>
+      </div>
+      <button className="primary add-event" onClick={add} disabled={!d.title.trim()}>
+        {d.title.trim() ? "+ 添加事件到故事书" : "+ 添加事件(先填事件名)"}
+      </button>
+
+      <div className="editor-subhead"><h4>已加事件({events.length})</h4></div>
+      <div className="entry-editor-list">
+        {!events.length && <p className="hint-line">还没加事件。</p>}
+        {events.map((ev, i) => (
+          <div className="bov-item" key={i}>
+            <b>{ev.title || ev.event_id || `事件 ${i + 1}`}</b>
+            {ev.hidden && <span className="bov-desc">隐藏</span>}
+            <span className="bov-btns"><button onClick={() => remove(i)}>删除</button></span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // 步骤式建卡(自建故事流程):依次 世界→角色→主角→故事→汇总,复用 CardBuilder + 现有端点,不动后端引擎。
-function StepBuilder({ characters, worldBooks, story, player, addCharacter, addWorld, setStory, setPlayer, onStartStory, onSavePreset, onExit }) {
+function StepBuilder({ characters, worldBooks, story, player, addCharacter, addWorld, setCharacters, setWorldBooks, setStory, setPlayer, onStartStory, onSavePreset, onExit }) {
   const [step, setStep] = useState(0);
   const [nonce, setNonce] = useState(0);   // 重置 CardBuilder(换步 / 角色再加一张)
+  const [opts, setOpts] = useState({});     // 当前步的引导选项
+  const [started, setStarted] = useState(false); // 引导步:是否已点「开始」进对话
+  const [editing, setEditing] = useState(null);   // 正在查看/修改的卡 {kind, index}
+  const [savedKeys, setSavedKeys] = useState(() => new Set()); // 已存入故事库的项 key (kind:index)
   const cur = BUILD_STEPS[step];
   const isLast = step === BUILD_STEPS.length - 1;
   const canLeaveCharStep = characters.length > 0;
 
-  function jump(i) { setStep(Math.max(0, Math.min(BUILD_STEPS.length - 1, i))); setNonce((n) => n + 1); }
+  const STEP_GUIDE = { characters: "character", worlds: "worldsetting" }; // 这些步先选引导 chips 再聊
+  const guide = STEP_GUIDE[cur.key];
+  const seed = buildGuideSeed(cur.key === "worlds" ? "worldsetting" : cur.key, opts);
 
-  async function onCardComplete(draft) {
+  function jump(i) { setStep(Math.max(0, Math.min(BUILD_STEPS.length - 1, i))); setNonce((n) => n + 1); setOpts({}); setStarted(false); setEditing(null); }
+
+  // CardBuilder 完成 → 把卡加进本轮卡组(立刻显示在下方列表),清空 builder 准备下一张。
+  // 先不存故事库——保存由下方列表里每张卡的「保存到故事库」单独点。
+  function onCardComplete(draft) {
     const k = cur.key;
-    if (k === "characters") { const c = wrapCard(draft); await saveToVault("characters", c); addCharacter(c); setNonce((n) => n + 1); }
-    else if (k === "worlds") { await saveToVault("worlds", draft); addWorld(draft); jump(step + 1); }
-    else if (k === "players") { await saveToVault("players", draft); setPlayer(draft); jump(step + 1); }
-    else if (k === "stories") { await saveToVault("stories", draft); setStory(draft); jump(step + 1); }
+    if (k === "characters") addCharacter(wrapCard(draft));
+    else if (k === "worlds") addWorld(draft);
+    else if (k === "players") setPlayer(draft);
+    else if (k === "stories") {
+      // 保住手动加的事件卡:新故事框架没带 events 时,沿用已挂在旧故事上的 events。
+      const keepEvents = story && (story.events || []).length && !(draft.events || []).length;
+      setStory(keepEvents ? { ...draft, events: story.events } : draft);
+    }
+    setNonce((n) => n + 1);
+  }
+
+  async function saveOne(kind, index, data) {
+    await saveToVault(kind, data);
+    setSavedKeys((s) => new Set(s).add(kind + ":" + index));
+  }
+  function viewEdit(kind, index) {
+    setEditing({ kind, index });
+    setSavedKeys((s) => { const n = new Set(s); n.delete(kind + ":" + index); return n; }); // 改过要重存
   }
 
   return (
@@ -1858,7 +1991,13 @@ function StepBuilder({ characters, worldBooks, story, player, addCharacter, addW
             <h3>第 {step + 1} 步:{cur.label}</h3>
             <p>{cur.desc}{cur.key === "characters" && characters.length ? ` · 已建 ${characters.length} 张` : ""}</p>
           </div>
-          <CardBuilder key={cur.key + nonce} kind={cur.key} onComplete={onCardComplete} onClose={() => {}} />
+          {cur.key === "events" ? (
+            <EventStep story={story} setStory={setStory} />
+          ) : guide && !started ? (
+            <BuildOptions guide={guide} opts={opts} setOpts={setOpts} onStart={() => setStarted(true)} />
+          ) : (
+            <CardBuilder key={cur.key + nonce} kind={cur.key} seed={seed} onComplete={onCardComplete} onClose={() => {}} />
+          )}
           <div className="step-nav">
             <button onClick={() => jump(step - 1)} disabled={step === 0}>← 上一步</button>
             {cur.key === "characters" && !canLeaveCharStep
@@ -1885,6 +2024,26 @@ function StepBuilder({ characters, worldBooks, story, player, addCharacter, addW
           </div>
         </div>
       )}
+
+      {editing && editing.kind === "characters" && characters[editing.index] && (
+        <CharacterEditor card={characters[editing.index]} index={editing.index}
+          onChange={(i, next) => setCharacters((xs) => xs.map((c, j) => (j === i ? next : c)))}
+          onClose={() => setEditing(null)} />
+      )}
+      {editing && editing.kind === "worlds" && worldBooks[editing.index] && (
+        <WorldEditor world={worldBooks[editing.index]} index={editing.index}
+          onChange={(i, next) => setWorldBooks((xs) => xs.map((w, j) => (j === i ? next : w)))}
+          onClose={() => setEditing(null)} />
+      )}
+      {editing && editing.kind === "players" && player && (
+        <PlayerEditor player={player} onChange={setPlayer} onClose={() => setEditing(null)} />
+      )}
+      {editing && editing.kind === "stories" && story && (
+        <StoryEditor story={story} onChange={setStory} onClose={() => setEditing(null)} />
+      )}
+
+      <BuiltOverview characters={characters} worldBooks={worldBooks} story={story} player={player}
+        onView={viewEdit} onSave={saveOne} savedKeys={savedKeys} />
     </section>
   );
 }
@@ -1908,7 +2067,7 @@ function App() {
   const [selecting, setSelecting] = useState(false);    // 预设进入后的选人页阶段
   const [pendingPreset, setPendingPreset] = useState(null);
   const [buildSeed, setBuildSeed] = useState({ seed: "", draft: null });
-  const [buildFlow, setBuildFlow] = useState(false); // true=新建故事步骤式引导 / false=卡库单卡完善
+  const [buildFlow, setBuildFlow] = useState(false); // true=新建故事步骤式引导 / false=故事库单卡完善
   const [turnSeq, setTurnSeq] = useState(0); // 每回合 bump,驱动右侧状态栏刷新
   const [railOpen, setRailOpen] = useState(false); // 右侧状态栏开合(不常驻)
   const [presets, setPresets] = useState([]);
@@ -1919,7 +2078,7 @@ function App() {
   const addWorld = (wb) => setWorldBooks((xs) => [...xs, wb]);
   const completeCardFromVault = (cardData) => {
     setBuildSeed({ seed: JSON.stringify(cardData), draft: cardData.data || cardData });
-    setBuildFlow(false);   // 卡库来的「对话完善」走单卡 BuildView,不进步骤式
+    setBuildFlow(false);   // 故事库来的「对话完善」走单卡 BuildView,不进步骤式
     setView("build");
   };
 
@@ -2159,7 +2318,7 @@ function App() {
           {buildFlow ? (
             <StepBuilder
               characters={characters} worldBooks={worldBooks} story={story} player={player}
-              addCharacter={addCharacter} addWorld={addWorld} setStory={setStory} setPlayer={setPlayer}
+              addCharacter={addCharacter} addWorld={addWorld} setCharacters={setCharacters} setWorldBooks={setWorldBooks} setStory={setStory} setPlayer={setPlayer}
               onStartStory={() => { setBuildFlow(false); setAssembling(false); setStarted(true); setView("game"); }}
               onSavePreset={saveAsPreset}
               onExit={() => { setBuildFlow(false); refreshHome(); setView("home"); }}
@@ -2187,6 +2346,9 @@ function App() {
             setPlayer={setPlayer}
             completeCard={completeCardFromVault}
             goGame={() => setView("game")}
+            presets={presets}
+            onLaunchPreset={launchPreset}
+            onDeletePreset={deletePreset}
           />
         </main>
       )}
