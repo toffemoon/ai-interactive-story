@@ -3,12 +3,19 @@
 # 标了 sync:false 的两个密钥(LLM_API_KEY / DATABASE_URL)Render 会提示你填。
 # DATABASE_URL 用 Supabase 的 **Session pooler** 连接串(Settings→Database→Connection pooling,
 # 端口 5432),不要用直连 db.<ref>.supabase.co(只有 IPv6,Render 连不上)。
+#
+# ⚠️ 本配置开【完整 deep 模式】(向量召回 + Phase 3 在场过滤,含悟空案修复):
+#   - buildCommand 用 requirements.txt(含 torch/sentence-transformers,镜像较大、构建较慢)。
+#   - plan 至少 standard:starter(512MB)装不下 torch+bge(峰值 ~1GB)会 OOM。
+#   - 首次触发 deep 时后台下载 bge-small-zh(~130MB)到容器,加载完召回生效(首轮稍慢)。
+#   - 只想要轻量 standard 模式(无向量召回):buildCommand 换回 requirements-deploy.txt、plan 可用 starter。
 services:
   - type: web
     name: ai-interactive-story
     runtime: python
-    plan: starter            # 付费档,无休眠;按需在控制台调
-    buildCommand: pip install -r requirements-deploy.txt
+    plan: standard           # torch+bge 需内存(峰值 ~1GB);starter 会 OOM。付费档,无休眠。
+    # 先装 CPU 版 torch(~200MB),避免 sentence-transformers 默认拉 CUDA 版(~2GB+)撑爆构建。
+    buildCommand: pip install torch --index-url https://download.pytorch.org/whl/cpu && pip install -r requirements.txt
     startCommand: uvicorn src.api:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /
     envVars:
@@ -22,8 +29,6 @@ services:
         value: deepseek-chat
       - key: LLM_TIMEOUT_SECONDS
         value: "60"
-      - key: ENABLE_EMBEDDINGS
-        value: "0"
       - key: LLM_API_KEY
         sync: false            # 你的 DeepSeek key,Render 控制台填
       - key: DATABASE_URL
