@@ -61,6 +61,69 @@ function extractNarration(raw) {
   return out;
 }
 
+// 从(可能半截的)JSON 文本里抽某个字符串字段的当前值,处理转义与半截(逻辑同 extractNarration,泛化字段名)。
+function extractField(raw, field) {
+  const key = '"' + field + '"';
+  let i = raw.indexOf(key);
+  if (i < 0) return "";
+  i += key.length;
+  while (i < raw.length && raw[i] !== '"') i++; // 跳过 : 与空白,定位到值起始引号
+  if (raw[i] !== '"') return "";
+  i++;
+  let out = "";
+  while (i < raw.length) {
+    const ch = raw[i];
+    if (ch === "\\") {
+      const next = raw[i + 1];
+      if (next === undefined) break;
+      if (next === "n") out += "\n";
+      else if (next === "t") out += "\t";
+      else if (next === "r") out += "\r";
+      else if (next === '"') out += '"';
+      else if (next === "\\") out += "\\";
+      else if (next === "/") out += "/";
+      else if (next === "u") {
+        const hex = raw.slice(i + 2, i + 6);
+        if (hex.length < 4) break;
+        out += String.fromCharCode(parseInt(hex, 16));
+        i += 6;
+        continue;
+      } else out += next;
+      i += 2;
+      continue;
+    }
+    if (ch === '"') break;
+    out += ch;
+    i++;
+  }
+  return out;
+}
+
+// 从流式累积的半截 JSON 里抽出当前的叙事 + 已成形的角色台词(每条 {name, text},text 可半截)。
+function extractStream(raw) {
+  const narration = extractField(raw, "narration");
+  const messages = [];
+  const m = raw.indexOf('"messages"');
+  if (m >= 0) {
+    let i = raw.indexOf("[", m);
+    if (i >= 0) {
+      i++;
+      while (i < raw.length) {
+        while (i < raw.length && raw[i] !== "{" && raw[i] !== "]") i++;
+        if (i >= raw.length || raw[i] === "]") break;
+        const j = raw.indexOf("}", i);            // 台词对象不嵌套,取到 } 即一条
+        const obj = raw.slice(i, j < 0 ? raw.length : j + 1);
+        const name = extractField(obj, "name");
+        const text = extractField(obj, "text");
+        if (name || text) messages.push({ name, text });
+        if (j < 0) break;                          // 最后一条还没收尾,partial 已 push,停
+        i = j + 1;
+      }
+    }
+  }
+  return { narration, messages };
+}
+
 // 调用流式回合端点,逐块回调 onDelta(原始 JSON 文本块),返回服务端解析好的完整 turn(done/error 事件)。
 async function streamTurn(body, { onDelta }) {
   const r = await fetch("/api/story_turn_stream", {
@@ -612,103 +675,105 @@ function CardBuilder({ kind = "characters", seed, initialDraft, onComplete, onCl
 }
 
 function SetupPanel({ characters, setCharacters, worldBooks, setWorldBooks, story, setStory, player, setPlayer, mode, setMode, onStart, onSavePreset, onBack, playing }) {
-  const [charText, setCharText] = useState("");
-  const [worldText, setWorldText] = useState("");
-  const [storyText, setStoryText] = useState("");
-  const [playerText, setPlayerText] = useState("");
-  const [autoText, setAutoText] = useState("");
-  const [autoResult, setAutoResult] = useState(null);
-  const [loading, setLoading] = useState("");
+  const [editing, setEditing] = useState(null);   // { kind, index } | null
+  const [picker, setPicker] = useState(null);     // kind | null(正在从卡库导入)
+  const [libItems, setLibItems] = useState([]);
+  const [libLoading, setLibLoading] = useState(false);
+  const [loading, setLoading] = useState("");      // 正在上传识别的 kind
   const [error, setError] = useState("");
-  const [editingCharacter, setEditingCharacter] = useState(null);
-  const [editingWorld, setEditingWorld] = useState(null);
-  const [showPlayerEditor, setShowPlayerEditor] = useState(false);
-  const [showStoryEditor, setShowStoryEditor] = useState(false);
 
-  const KIND_LABEL = { character: "角色卡", world: "世界书 / 设定卡", story: "故事书", player: "玩家卡" };
+  const LIB_KIND = { character: "characters", world: "worlds", story: "stories", player: "players" };
+  const IDENTIFY = { character: "/api/identify", world: "/api/identify_world", story: "/api/identify_story", player: "/api/identify_player" };
 
-  function placeAuto(out) {
-    const { kind, data } = out;
-    if (kind === "character") { setCharacters((xs) => [...xs, data].slice(0, 3)); setEditingCharacter(Math.min(characters.length, 2)); }
-    else if (kind === "world") { setWorldBooks((xs) => [...xs, data]); setEditingWorld(worldBooks.length); }
-    else if (kind === "story") { setStory(data); setShowStoryEditor(true); }
-    else if (kind === "player") { setPlayer(data); setShowPlayerEditor(true); }
+  function place(kind, data) {
+    if (kind === "character") setCharacters((xs) => [...xs, data]);
+    else if (kind === "world") setWorldBooks((xs) => [...xs, data]);
+    else if (kind === "story") setStory(data);
+    else if (kind === "player") setPlayer(data);
   }
 
-  // 一键上传:AI 判类型后路由到对应卡槽。forceKind 用于判错时改判重识别。
-  async function runAuto(forceKind) {
-    if (!autoText.trim() || loading) return;
-    setLoading("auto");
+  // 「添加」= 从卡库导入:展开该类卡库列表,选中即加入卡组。
+  async function openPicker(kind) {
     setError("");
+    if (picker === kind) { setPicker(null); return; }
+    setPicker(kind); setLibLoading(true); setLibItems([]);
     try {
-      const out = await postJSON("/api/identify_auto", { text: autoText, kind: forceKind || null });
-      placeAuto(out);
-      const nm = out.kind === "character" ? (out.data.data || {}).name
-        : out.kind === "story" ? out.data.title : out.data.name;
-      setAutoResult({ kind: out.kind, name: nm || "", reason: out.reason || "", confidence: out.confidence || 0 });
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading("");
-    }
+      const r = await fetch(`/api/library/${LIB_KIND[kind]}`);
+      setLibItems(r.ok ? await r.json() : []);
+    } catch (e) { setLibItems([]); }
+    finally { setLibLoading(false); }
+  }
+  function importItem(kind, it) {
+    place(kind, it.data);
+    setPicker(null);
   }
 
-  async function run(kind) {
-    setLoading(kind);
-    setError("");
+  // 「上传」= 本地文件 → identify → 加入卡组并打开内联编辑。
+  async function uploadInto(kind, file) {
+    if (!file) return;
+    setLoading(kind); setError("");
     try {
-      if (kind === "char") {
-        const card = await postJSON("/api/identify", { text: charText });
-        setCharacters((xs) => [...xs, card].slice(0, 3));
-        setEditingCharacter(Math.min(characters.length, 2));
-        setCharText("");
-      }
-      if (kind === "world") {
-        const wb = await postJSON("/api/identify_world", { text: worldText });
-        setWorldBooks((xs) => [...xs, wb]);
-        setEditingWorld(worldBooks.length);
-        setWorldText("");
-      }
-      if (kind === "story") {
-        setStory(await postJSON("/api/identify_story", { text: storyText }));
-        setShowStoryEditor(true);
-      }
-      if (kind === "player") {
-        setPlayer(await postJSON("/api/identify_player", { text: playerText }));
-        setShowPlayerEditor(true);
-      }
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading("");
-    }
+      const text = await uploadFile(file);
+      const data = await postJSON(IDENTIFY[kind], { text });
+      place(kind, data);
+      const idx = (kind === "character") ? characters.length : (kind === "world") ? worldBooks.length : 0;
+      setEditing({ kind, index: idx });
+    } catch (e) { setError(e.message); }
+    finally { setLoading(""); }
   }
 
   function removeCharacter(index) {
     setCharacters((xs) => xs.filter((_, i) => i !== index));
-    setEditingCharacter((current) => {
-      if (current === index) return null;
-      if (current > index) return current - 1;
-      return current;
-    });
+    setEditing((cur) => (cur && cur.kind === "character" && cur.index === index ? null : cur));
   }
-
-  function updateCharacter(index, nextCard) {
-    setCharacters((xs) => xs.map((card, i) => (i === index ? nextCard : card)));
-  }
-
+  function updateCharacter(index, nextCard) { setCharacters((xs) => xs.map((c, i) => (i === index ? nextCard : c))); }
   function removeWorld(index) {
     setWorldBooks((xs) => xs.filter((_, i) => i !== index));
-    setEditingWorld((current) => {
-      if (current === index) return null;
-      if (current > index) return current - 1;
-      return current;
-    });
+    setEditing((cur) => (cur && cur.kind === "world" && cur.index === index ? null : cur));
+  }
+  function updateWorld(index, nextWorld) { setWorldBooks((xs) => xs.map((w, i) => (i === index ? nextWorld : w))); }
+
+  const isEditing = (kind, index) => editing && editing.kind === kind && editing.index === index;
+  function toggleEdit(kind, index) { isEditing(kind, index) ? closeEdit() : setEditing({ kind, index }); }
+  function closeEdit() {
+    if (editing) {
+      const { kind, index } = editing;
+      if (kind === "character") { const c = characters[index]; if (c) saveToVault("characters", c); }
+      else if (kind === "world") { const w = worldBooks[index]; if (w) saveToVault("worlds", w); }
+      else if (kind === "story") { if (story) saveToVault("stories", story); }
+      else if (kind === "player") { if (player) saveToVault("players", player); }
+    }
+    setEditing(null);
   }
 
-  function updateWorld(index, nextWorld) {
-    setWorldBooks((xs) => xs.map((world, i) => (i === index ? nextWorld : world)));
+  function libLabel(kind, it) {
+    if (kind === "character") return (it.data.data || {}).name || it.name;
+    if (kind === "story") return it.data.title || it.name;
+    return it.data.name || it.name;
   }
+
+  // [+ 添加(卡库)] [↑ 上传(本地)] 一排 + 内联卡库选择
+  const renderActions = (kind, disabled) => (
+    <>
+      <div className="card-actions">
+        <button onClick={() => openPicker(kind)} disabled={disabled}>{picker === kind ? "收起卡库" : "+ 添加"}</button>
+        <label className={"upbtn " + (disabled || loading === kind ? "disabled" : "")}>
+          {loading === kind ? "识别中…" : "↑ 上传"}
+          <input type="file" accept=".txt,.md,.docx" style={{ display: "none" }} disabled={disabled || loading === kind}
+            onChange={async (e) => { const f = e.target.files[0]; e.target.value = ""; await uploadInto(kind, f); }} />
+        </label>
+      </div>
+      {picker === kind && (
+        <div className="lib-picker">
+          {libLoading ? <p className="empty">读取卡库…</p>
+            : !libItems.length ? <p className="empty">卡库这一类还是空的</p>
+            : libItems.map((it, i) => (
+              <button key={i} className="lib-pick-item" onClick={() => importItem(kind, it)}><b>{libLabel(kind, it)}</b></button>
+            ))}
+        </div>
+      )}
+    </>
+  );
 
   const worldEntryCount = worldBooks.reduce((n, w) => n + (w.entries || []).length, 0);
 
@@ -720,178 +785,134 @@ function SetupPanel({ characters, setCharacters, worldBooks, setWorldBooks, stor
           <span>新建故事</span>
         </div>
       )}
-      <div className="section-title">
-        <span>00</span>
-        <h2>一键上传</h2>
-      </div>
-      <div className="upload-group auto-upload">
-        <div className="row-head"><h3>AI 自动分类</h3><span>不用手动选类型</span></div>
-        <SourceInput value={autoText} onChange={setAutoText}
-          placeholder="把任意设定文字 / 文档扔进来:角色、世界书、故事书、玩家卡都行,AI 自动判断类型并归到对应卡槽。" />
-        <button onClick={() => runAuto(null)} disabled={loading || !autoText.trim()}>
-          {loading === "auto" ? "识别中..." : "识别并归类"}
-        </button>
-        {autoResult && (
-          <div className="auto-result">
-            识别为 <b>{KIND_LABEL[autoResult.kind]}</b>:{autoResult.name || "(未命名)"}
-            {autoResult.reason ? <small> · {autoResult.reason}</small> : null}
-            <div className="auto-override">
-              判错了?改判为
-              {["character", "world", "story", "player"].filter((k) => k !== autoResult.kind).map((k) => (
-                <button key={k} onClick={() => runAuto(k)} disabled={loading}>{KIND_LABEL[k]}</button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="section-title">
-        <span>01</span>
-        <h2>上传卡组</h2>
-      </div>
 
       <div className="upload-group">
         <div className="row-head"><h3>记忆模式</h3><span>{mode === "deep" ? "深度" : "标准"}</span></div>
         <div className="mode-pick">
-          <button
-            type="button"
-            className={"mode-btn " + (mode === "standard" ? "selected" : "")}
-            onClick={() => setMode("standard")}
-          >
-            标准
-            <small>原文 + 滚动摘要,不加载向量模型,装好即玩</small>
+          <button type="button" className={"mode-btn " + (mode === "standard" ? "selected" : "")} onClick={() => setMode("standard")}>
+            标准<small>原文 + 滚动摘要,不加载向量模型,装好即玩</small>
           </button>
-          <button
-            type="button"
-            className={"mode-btn " + (mode === "deep" ? "selected" : "")}
-            onClick={() => setMode("deep")}
-          >
-            深度
-            <small>长对话变长后自动加载向量模型,语义召回更早剧情</small>
+          <button type="button" className={"mode-btn " + (mode === "deep" ? "selected" : "")} onClick={() => setMode("deep")}>
+            深度<small>长对话变长后自动加载向量模型,语义召回更早剧情</small>
           </button>
         </div>
       </div>
 
       <div className="upload-group">
-        <div className="row-head">
-          <h3>角色卡</h3>
-          <span>{characters.length}/3</span>
-        </div>
-        <SourceInput value={charText} onChange={setCharText}
-          placeholder="上传角色设定。当前 v2 支持三个活跃角色。" />
-        <button onClick={() => run("char")} disabled={loading || !charText.trim() || characters.length >= 3}>
-          {loading === "char" ? "识别中..." : "添加角色"}
-        </button>
+        <div className="row-head"><h3>角色卡</h3><span>{characters.length ? `${characters.length} 张` : "至少 1 张"}</span></div>
+        {renderActions("character", false)}
         <div className="mini-list">
           {characters.map((c, i) => (
-            <div className={"mini-item " + (editingCharacter === i ? "selected" : "")} key={i}>
-              <b>{c.data.name}</b>
-              <span>{(c.data.tags || []).slice(0, 3).join(" / ")}</span>
-              <button onClick={() => setEditingCharacter(editingCharacter === i ? null : i)}>
-                {editingCharacter === i ? "收起" : "编辑"}
-              </button>
-              <button onClick={() => removeCharacter(i)}>移除</button>
-            </div>
+            <React.Fragment key={i}>
+              <div className={"mini-item " + (isEditing("character", i) ? "selected" : "")}>
+                <b>{c.data.name}</b>
+                <span>{(c.data.tags || []).slice(0, 3).join(" / ")}</span>
+                <button onClick={() => toggleEdit("character", i)}>{isEditing("character", i) ? "收起" : "编辑"}</button>
+                <button onClick={() => removeCharacter(i)}>移除</button>
+              </div>
+              {isEditing("character", i) && <CharacterEditor card={c} index={i} onChange={updateCharacter} onClose={closeEdit} />}
+            </React.Fragment>
           ))}
+          {!characters.length && <p className="mini-empty">还没有角色。「+ 添加」从卡库导入,或「↑ 上传」本地文件。</p>}
         </div>
-        <CharacterEditor
-          card={editingCharacter === null ? null : characters[editingCharacter]}
-          index={editingCharacter}
-          onChange={updateCharacter}
-          onClose={() => { const c = characters[editingCharacter]; if (c) saveToVault("characters", c); setEditingCharacter(null); }}
-        />
       </div>
 
       <div className="upload-group">
         <div className="row-head"><h3>玩家设定卡</h3><span>{player ? "已生成" : "可选"}</span></div>
-        <SourceInput value={playerText} onChange={setPlayerText}
-          placeholder="玩家是谁、身份、目标、能力、限制、开局知道什么。" />
-        <button onClick={() => run("player")} disabled={loading || !playerText.trim()}>
-          {loading === "player" ? "识别中..." : "识别玩家"}
-        </button>
+        {renderActions("player", false)}
         {player && (
           <div className="mini-list">
-            <div className={"mini-item " + (showPlayerEditor ? "selected" : "")}>
+            <div className={"mini-item " + (isEditing("player", 0) ? "selected" : "")}>
               <b>{player.name || "玩家"}</b>
               <span>{player.role || "玩家设定卡"}</span>
-              <button onClick={() => setShowPlayerEditor(!showPlayerEditor)}>{showPlayerEditor ? "收起" : "编辑"}</button>
+              <button onClick={() => toggleEdit("player", 0)}>{isEditing("player", 0) ? "收起" : "编辑"}</button>
+              <button onClick={() => { setPlayer(null); setEditing((cur) => (cur && cur.kind === "player" ? null : cur)); }}>移除</button>
             </div>
+            {isEditing("player", 0) && <PlayerEditor player={player} onChange={setPlayer} onClose={closeEdit} />}
           </div>
         )}
-        <PlayerEditor player={showPlayerEditor ? player : null} onChange={setPlayer} onClose={() => { if (player) saveToVault("players", player); setShowPlayerEditor(false); }} />
       </div>
 
       <div className="upload-group">
         <div className="row-head"><h3>世界书 / 设定卡</h3><span>{worldBooks.length ? `${worldBooks.length} 份 / ${worldEntryCount} 条` : "可选"}</span></div>
-        <SourceInput value={worldText} onChange={setWorldText}
-          placeholder="世界观、派系卡、组织卡、地点卡、规则卡。可重复添加,会合并成世界书合集并进入关键词+向量召回。" />
-        <button onClick={() => run("world")} disabled={loading || !worldText.trim()}>
-          {loading === "world" ? "识别中..." : "添加设定卡"}
-        </button>
+        {renderActions("world", false)}
         <div className="mini-list">
           {worldBooks.map((w, i) => (
-            <div className={"mini-item " + (editingWorld === i ? "selected" : "")} key={i}>
-              <b>{w.name || "设定卡"}</b>
-              <span>{(w.entries || []).length} 条条目</span>
-              <button onClick={() => setEditingWorld(editingWorld === i ? null : i)}>
-                {editingWorld === i ? "收起" : "编辑"}
-              </button>
-              <button onClick={() => removeWorld(i)}>移除</button>
-            </div>
+            <React.Fragment key={i}>
+              <div className={"mini-item " + (isEditing("world", i) ? "selected" : "")}>
+                <b>{w.name || "设定卡"}</b>
+                <span>{(w.entries || []).length} 条条目</span>
+                <button onClick={() => toggleEdit("world", i)}>{isEditing("world", i) ? "收起" : "编辑"}</button>
+                <button onClick={() => removeWorld(i)}>移除</button>
+              </div>
+              {isEditing("world", i) && <WorldEditor world={w} index={i} onChange={updateWorld} onClose={closeEdit} />}
+            </React.Fragment>
           ))}
         </div>
-        <WorldEditor
-          world={editingWorld === null ? null : worldBooks[editingWorld]}
-          index={editingWorld}
-          onChange={updateWorld}
-          onClose={() => { const w = worldBooks[editingWorld]; if (w) saveToVault("worlds", w); setEditingWorld(null); }}
-        />
       </div>
 
       <div className="upload-group">
-        <div className="row-head"><h3>故事书</h3><span>{story ? story.events.length + " 事件" : "建议上传"}</span></div>
-        <SourceInput value={storyText} onChange={setStoryText}
-          placeholder="时间线、主线剧情、事件节点、触发条件、分支后果。事件会渐进式披露。" />
-        <button onClick={() => run("story")} disabled={loading || !storyText.trim()}>
-          {loading === "story" ? "识别中..." : "识别故事书"}
-        </button>
+        <div className="row-head"><h3>故事书</h3><span>{story ? (story.events || []).length + " 事件" : "建议加"}</span></div>
+        {renderActions("story", false)}
         {story && (
           <div className="mini-list">
-            <div className={"mini-item " + (showStoryEditor ? "selected" : "")}>
+            <div className={"mini-item " + (isEditing("story", 0) ? "selected" : "")}>
               <b>{story.title || "故事书"}</b>
               <span>{(story.events || []).length} 个事件节点</span>
-              <button onClick={() => setShowStoryEditor(!showStoryEditor)}>{showStoryEditor ? "收起" : "编辑"}</button>
+              <button onClick={() => toggleEdit("story", 0)}>{isEditing("story", 0) ? "收起" : "编辑"}</button>
+              <button onClick={() => { setStory(null); setEditing((cur) => (cur && cur.kind === "story" ? null : cur)); }}>移除</button>
             </div>
+            {isEditing("story", 0) && <StoryEditor story={story} onChange={setStory} onClose={closeEdit} />}
           </div>
         )}
-        <StoryEditor story={showStoryEditor ? story : null} onChange={setStory} onClose={() => { if (story) saveToVault("stories", story); setShowStoryEditor(false); }} />
       </div>
 
       {error && <div className="error">{error}</div>}
 
       {!playing && (
-        <button className="primary start" onClick={onStart} disabled={!characters.length || loading}>
-          启动 v2 故事
-        </button>
+        <button className="primary start" onClick={onStart} disabled={!characters.length || loading}>启动 v2 故事</button>
       )}
       {onSavePreset && (
-        <button className="ghost start" onClick={onSavePreset} disabled={!characters.length}>
-          保存为故事预设
-        </button>
+        <button className="ghost start" onClick={onSavePreset} disabled={!characters.length}>保存为故事预设</button>
       )}
     </aside>
   );
 }
 
-function StoryPanel({ characters, world, story, player, mode, sessionId, initialTurns, initialState, initialChoices, goHome }) {
+// 把一条台词按中文双引号 “…” 拆段:引号内的对白各自单独成行,引号外的动作描写也成行。
+function splitSpeech(text) {
+  const t = text || "";
+  const parts = [];
+  const re = /[“”][^“”]*[“”]/g;  // 一对 “…”
+  let last = 0, m;
+  while ((m = re.exec(t)) !== null) {
+    const between = t.slice(last, m.index).trim();
+    if (between) parts.push({ q: false, s: between });
+    parts.push({ q: true, s: m[0].trim() });
+    last = re.lastIndex;
+  }
+  const tail = t.slice(last).trim();
+  if (tail) parts.push({ q: false, s: tail });
+  return parts.length ? parts : [{ q: false, s: t }];
+}
+
+function SpeechText({ text }) {
+  const segs = splitSpeech(text);
+  return (
+    <div className="speech">
+      {segs.map((seg, k) => <p key={k} className={"seg" + (seg.q ? " quote" : "")}>{seg.s}</p>)}
+    </div>
+  );
+}
+
+function StoryPanel({ characters, world, story, player, mode, sessionId, initialTurns, initialState, initialChoices, goHome, onTurn }) {
   const [turns, setTurns] = useState(initialTurns || []);
   const [input, setInput] = useState("");
   const [choices, setChoices] = useState(initialChoices || []);
   const [state, setState] = useState(initialState || null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [seq, setSeq] = useState(0); // 每次回合/重生成自增,驱动状态面板重新拉取会话
-  const [streamingText, setStreamingText] = useState(""); // 流式中实时显示的叙事
+  const [streaming, setStreaming] = useState(null); // 流式中实时显示的叙事 + 角色台词 {narration, messages}
   const inputRef = useRef(null);
 
   const hasStoryTurn = turns.some((t) => t.kind === "story");
@@ -918,7 +939,7 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
       setTurns((xs) => [...xs, { kind: "player", text: action || choice }]);
     }
     setInput("");
-    setStreamingText("");
+    setStreaming(null);
     const body = { characters, world, story, player, mode, session_id: sessionId, user: action, selected_choice: choice };
     try {
       let raw = "";
@@ -926,20 +947,20 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
       try {
         // 优先流式:叙事逐字蹦出来,治"干等十几秒"的感知延迟。
         finalTurn = await streamTurn(body, {
-          onDelta: (t) => { raw += t; setStreamingText(extractNarration(raw)); },
+          onDelta: (t) => { raw += t; setStreaming(extractStream(raw)); },
         });
       } catch (streamErr) {
         // 流式不可用(老浏览器/代理缓冲等)→ 降级非流式端点,逻辑一致只是没有逐字。
         finalTurn = await postJSON("/api/story_turn", body);
       }
       if (!finalTurn) throw new Error("没有拿到回合结果");
-      setStreamingText("");
+      setStreaming(null);
       setTurns((xs) => [...xs, { kind: "story", data: finalTurn }]);
       setChoices(finalTurn.choices || []);
       setState(finalTurn.state || null);
-      setSeq((s) => s + 1);
+      if (onTurn) onTurn();
     } catch (e) {
-      setStreamingText("");
+      setStreaming(null);
       const fallback = {
         narration: "这一轮没有从后端拿到完整回应。当前输入已经留在故事记录里,你可以换一种说法继续,或先整理现场。",
         messages: [{
@@ -983,7 +1004,7 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
       setTurns((xs) => xs.map((t, i) => (i === idx ? { kind: "story", data: out } : t)));
       setChoices(out.choices || []);
       setState(out.state || null);
-      setSeq((s) => s + 1);
+      if (onTurn) onTurn();
     } catch (e) {
       setError("重新生成失败: " + e.message);
     } finally {
@@ -1022,7 +1043,7 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
               {(data.messages || []).map((m, j) => (
                 <div className="line" key={j}>
                   <b>{m.name || m.character_id}</b>
-                  <span>{m.text}</span>
+                  <SpeechText text={m.text} />
                 </div>
               ))}
               {(data.triggered_events || []).length > 0 && (
@@ -1037,12 +1058,16 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
             </article>
           );
         })}
-        {streamingText && (
+        {streaming && (streaming.narration || streaming.messages.length > 0) && (
           <article className="story-turn streaming">
-            <p className="narration">{streamingText}<span className="caret">▋</span></p>
+            {streaming.narration && <p className="narration">{streaming.narration}</p>}
+            {streaming.messages.map((m, j) => (
+              <div className="line" key={j}><b>{m.name || "…"}</b><SpeechText text={m.text} /></div>
+            ))}
+            <span className="caret">▋</span>
           </article>
         )}
-        {loading && !streamingText && <div className="empty">故事引擎正在推演...</div>}
+        {loading && !(streaming && (streaming.narration || streaming.messages.length > 0)) && <div className="empty">故事引擎正在推演...</div>}
       </div>
 
       <div className="choice-bar">
@@ -1071,147 +1096,143 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
         <button onClick={() => runTurn({ text: input })} disabled={loading}>提交</button>
       </div>
       {error && <div className="error">{error}</div>}
-
-      <StateInspector state={state} sessionId={sessionId} refreshKey={seq} />
     </section>
   );
 }
 
-function StateInspector({ state, sessionId, refreshKey }) {
+// 右状态栏的单个栏目:默认收起,点标题展开。
+function StatSection({ title, sub, children }) {
   const [open, setOpen] = useState(false);
+  return (
+    <div className={"stat-section " + (open ? "open" : "")}>
+      <button className="stat-head" onClick={() => setOpen(!open)}>
+        <span className="stat-caret">{open ? "−" : "+"}</span>
+        <span className="stat-title">{title}</span>
+        {sub ? <span className="stat-sub">{sub}</span> : null}
+      </button>
+      {open && <div className="stat-body">{children}</div>}
+    </div>
+  );
+}
+
+// 右侧状态栏:分栏目、默认收起、点击展开。数据自后端 session 拉(state + 记忆 + 用量 + 判定),
+// 每回合由 refreshKey 触发刷新。历史书 / 时间线 / 地图 先占位排上(设计文档列、暂无数据源)。
+function StateInspector({ sessionId, refreshKey }) {
   const [session, setSession] = useState(null);
 
   useEffect(() => {
     let alive = true;
     if (!sessionId) return undefined;
     fetch(`/api/session/${sessionId}`)
-      .then((r) => r.ok ? r.json() : null)
+      .then((r) => (r.ok ? r.json() : null))
       .then((data) => { if (alive) setSession(data); })
       .catch(() => { if (alive) setSession(null); });
     return () => { alive = false; };
   }, [sessionId, refreshKey]);
 
-  const shortMemory = session?.short_memory || [];
-  const longMemory = session?.long_memory || [];
-  const usageTotal = session?.usage_total || 0;
-  const usageLog = session?.usage_log || [];
-  const reasoningLog = session?.reasoning_log || [];
+  const state = (session && session.state) || null;
+  const shortMemory = (session && session.short_memory) || [];
+  const longMemory = (session && session.long_memory) || [];
+  const usageTotal = (session && session.usage_total) || 0;
+  const usageLog = (session && session.usage_log) || [];
+  const reasoningLog = (session && session.reasoning_log) || [];
   const lastReasoning = reasoningLog.length ? reasoningLog[reasoningLog.length - 1] : null;
 
-  if (!state) {
-    return (
-      <section className="state-shell collapsed">
-        <div className="state-head">
-          <div>
-            <h3>状态面板</h3>
-            <span>故事开始后显示场景、关系、事件和记忆。</span>
-          </div>
-          <button onClick={() => setOpen(!open)}>{open ? "收起" : "展开"}</button>
-        </div>
-        {open && <div className="state-grid clean-state"><div className="state-card"><h3>等待回合</h3><p>生成开场后会记录运行状态。</p></div></div>}
-      </section>
-    );
-  }
-  const scene = state.scene || {};
-  const player = state.player || {};
-  const facts = state.facts || {};
+  const scene = (state && state.scene) || {};
+  const player = (state && state.player) || {};
+  const facts = (state && state.facts) || {};
+  const rels = (state && state.relationships) || [];
+  const logs = (state && state.character_logs) || [];
+  const timeline = (state && state.timeline) || [];
+
   return (
-    <section className={"state-shell " + (open ? "expanded" : "collapsed")}>
-      <div className="state-head">
-        <div>
-          <h3>状态面板</h3>
-          <span>{scene.location || "未定地点"} · 短期记忆 {shortMemory.length} · 长期记忆 {longMemory.length}{usageTotal ? ` · 累计 token ${usageTotal}` : ""}</span>
-        </div>
-        <button onClick={() => setOpen(!open)}>{open ? "收起" : "展开"}</button>
+    <aside className="state-rail">
+      <div className="rail-head">
+        <h3>状态栏</h3>
+        <span>{state ? (scene.location || "进行中") : "故事开始后更新"}</span>
       </div>
-      {open && (
-        <div className="state-grid clean-state">
-          <div className="state-card">
-            <h3>场景</h3>
-            <p><b>地点</b>{scene.location || "未定"}</p>
-            <p><b>故事内时钟</b>{formatClock(state.clock_minutes)}{state.main_resolved ? " · 主线已结案" : ""}</p>
-            <p><b>时间</b>{scene.time || "未定"}</p>
-            <p><b>氛围</b>{scene.atmosphere || "暂无"}</p>
-            <List label="在场角色" items={scene.present_characters} />
-            <List label="可交互对象" items={scene.objects} />
+
+      <StatSection title="场景" sub={scene.location || ""}>
+        <p><b>地点</b>{scene.location || "未定"}</p>
+        <p><b>故事内时钟</b>{formatClock(state && state.clock_minutes)}{state && state.main_resolved ? " · 主线已结案" : ""}</p>
+        <p><b>时间</b>{scene.time || "未定"}</p>
+        <p><b>氛围</b>{scene.atmosphere || "暂无"}</p>
+        <List label="在场角色" items={scene.present_characters} />
+        <List label="可交互对象" items={scene.objects} />
+      </StatSection>
+
+      <StatSection title="玩家">
+        <p><b>位置</b>{player.location || scene.location || "未定"}</p>
+        <p><b>状态</b>{player.status || "正常"}</p>
+        <List label="当前目标" items={player.active_goals} />
+        <List label="物品/资源" items={player.inventory} />
+        <List label="已知事实" items={player.known_facts} />
+      </StatSection>
+
+      <StatSection title="关系" sub={rels.length ? String(rels.length) : ""}>
+        {rels.length ? rels.map((r, i) => (
+          <div className="relation-line" key={i}>
+            <b>{r.character_id}</b>
+            <span>信任 {r.trust} / 紧张 {r.tension} / 好感 {r.affection}</span>
+            <List items={r.notes} />
           </div>
-          <div className="state-card">
-            <h3>玩家</h3>
-            <p><b>位置</b>{player.location || scene.location || "未定"}</p>
-            <p><b>状态</b>{player.status || "正常"}</p>
-            <List label="当前目标" items={player.active_goals} />
-            <List label="物品/资源" items={player.inventory} />
-            <List label="已知事实" items={player.known_facts} />
+        )) : <p>暂无关系变化</p>}
+      </StatSection>
+
+      <StatSection title="人物日志">
+        {logs.length ? logs.map((log, i) => (
+          <div className="relation-line" key={i}>
+            <b>{log.character_id}</b>
+            <List label="已知" items={log.knows} />
+            <List label="印象" items={log.impressions} />
           </div>
-          <div className="state-card">
-            <h3>关系</h3>
-            {(state.relationships || []).length ? (state.relationships || []).map((r, i) => (
-              <div className="relation-line" key={i}>
-                <b>{r.character_id}</b>
-                <span>信任 {r.trust} / 紧张 {r.tension} / 好感 {r.affection}</span>
-                <List items={r.notes} />
-              </div>
-            )) : <p>暂无关系变化</p>}
+        )) : <p>暂无人物日志</p>}
+      </StatSection>
+
+      <StatSection title="事件" sub={timeline.length ? String(timeline.length) : ""}>
+        {timeline.length ? timeline.slice(0, 12).map((event, i) => (
+          <p key={i}><b>{event.status}</b>{event.title || event.event_id}</p>
+        )) : <p>暂无事件</p>}
+        {(state && (state.reached_endings || []).length > 0) && (
+          <p className="ending-reached"><b>已达成结局</b>{state.reached_endings.join(", ")}</p>
+        )}
+      </StatSection>
+
+      <StatSection title="事实边界">
+        <List label="已确认" items={facts.canon} />
+        <List label="已披露" items={facts.revealed} />
+        <List label="不确定" items={facts.uncertain} />
+        <List label="禁止编造" items={facts.forbidden} />
+      </StatSection>
+
+      <StatSection title="记忆卡" sub={`长 ${longMemory.length} / 短 ${shortMemory.length}`}>
+        <List label="长期记忆" items={longMemory.slice(-8).map(memoryText)} />
+        <List label="短期记忆" items={shortMemory.slice(-8).map(memoryText)} />
+      </StatSection>
+
+      <StatSection title="token 用量" sub={usageTotal ? String(usageTotal) : ""}>
+        <p><b>本局累计</b>{usageTotal || 0}</p>
+        <List label="最近每轮合计" items={usageLog.slice(-8).map((u) =>
+          `第 ${u.turn} 轮:合计 ${u.total_tokens || 0}(输入 ${u.prompt_tokens || 0} / 输出 ${u.completion_tokens || 0}${u.calls > 1 ? ` · ${u.calls} 次调用` : ""})`
+        )} />
+      </StatSection>
+
+      <StatSection title="历史书"><p className="rail-soon">开发中 —— 已发生事件的完整记录(当前先看上面「事件」栏)。</p></StatSection>
+      <StatSection title="时间线"><p className="rail-soon">开发中 —— 故事时间线的可视化呈现。</p></StatSection>
+      <StatSection title="地图"><p className="rail-soon">开发中 —— 世界 / 场景地图(引擎暂无地图数据源)。</p></StatSection>
+
+      <StatSection title="本轮判定" sub="调试">
+        {lastReasoning ? (
+          <div>
+            <p><b>硬设定违背</b><span className={lastReasoning.hard_violation ? "flag-on" : ""}>{lastReasoning.hard_violation ? "是 · 已用世界内逻辑反制" : "否"}</span></p>
+            {lastReasoning.world_counter && <p><b>世界反制</b>{lastReasoning.world_counter}</p>}
+            {lastReasoning.ooc_risk && <p><b>OOC 风险</b>{lastReasoning.ooc_risk}</p>}
+            {lastReasoning.note && <p><b>推演</b>{lastReasoning.note}</p>}
           </div>
-          <div className="state-card">
-            <h3>人物日志</h3>
-            {(state.character_logs || []).length ? (state.character_logs || []).map((log, i) => (
-              <div className="relation-line" key={i}>
-                <b>{log.character_id}</b>
-                <List label="已知" items={log.knows} />
-                <List label="印象" items={log.impressions} />
-              </div>
-            )) : <p>暂无人物日志</p>}
-          </div>
-          <div className="state-card">
-            <h3>事件</h3>
-            {(state.timeline || []).length ? (state.timeline || []).slice(0, 8).map((event, i) => (
-              <p key={i}><b>{event.status}</b>{event.title || event.event_id}</p>
-            )) : <p>暂无事件</p>}
-            {(state.reached_endings || []).length > 0 && (
-              <p className="ending-reached"><b>已达成结局</b>{(state.reached_endings || []).join(", ")}</p>
-            )}
-          </div>
-          <div className="state-card">
-            <h3>事实边界</h3>
-            <List label="已确认" items={facts.canon} />
-            <List label="已披露" items={facts.revealed} />
-            <List label="不确定" items={facts.uncertain} />
-            <List label="禁止编造" items={facts.forbidden} />
-          </div>
-          <div className="state-card memory-card">
-            <h3>记忆卡</h3>
-            <List label="长期记忆" items={longMemory.slice(-8).map(memoryText)} />
-            <List label="短期记忆" items={shortMemory.slice(-8).map(memoryText)} />
-          </div>
-          <div className="state-card">
-            <h3>token 用量</h3>
-            <p><b>本局累计</b>{usageTotal || 0}</p>
-            <List
-              label="最近每轮合计"
-              items={usageLog.slice(-8).map((u) =>
-                `第 ${u.turn} 轮:合计 ${u.total_tokens || 0}(输入 ${u.prompt_tokens || 0} / 输出 ${u.completion_tokens || 0}${u.calls > 1 ? ` · ${u.calls} 次调用` : ""})`
-              )}
-            />
-          </div>
-          <div className="state-card">
-            <h3>本轮判定<small className="hint"> 一致性自检 · 调试</small></h3>
-            {lastReasoning ? (
-              <div>
-                <p><b>硬设定违背</b><span className={lastReasoning.hard_violation ? "flag-on" : ""}>{lastReasoning.hard_violation ? "是 · 已用世界内逻辑反制" : "否"}</span></p>
-                {lastReasoning.world_counter && <p><b>世界反制</b>{lastReasoning.world_counter}</p>}
-                {lastReasoning.ooc_risk && <p><b>OOC 风险</b>{lastReasoning.ooc_risk}</p>}
-                {lastReasoning.note && <p><b>推演</b>{lastReasoning.note}</p>}
-              </div>
-            ) : <p>暂无判定记录</p>}
-            <List
-              label="触发过反制的轮"
-              items={reasoningLog.filter((r) => r.hard_violation).slice(-5).map((r) => `第 ${r.turn} 轮:${r.world_counter || r.violation_detail || "硬设定违背"}`)}
-            />
-          </div>
-        </div>
-      )}
-    </section>
+        ) : <p>暂无判定记录</p>}
+        <List label="触发过反制的轮" items={reasoningLog.filter((r) => r.hard_violation).slice(-5).map((r) => `第 ${r.turn} 轮:${r.world_counter || r.violation_detail || "硬设定违背"}`)} />
+      </StatSection>
+    </aside>
   );
 }
 
@@ -1275,7 +1296,7 @@ async function saveToVault(kind, data) {
 }
 
 function TopNav({ view, setView, sessionId }) {
-  const tabs = [["home", "首页"], ["game", "游戏"], ["build", "建卡"], ["vault", "卡库"]];
+  const tabs = [["home", "探索"], ["game", "故事"], ["chat", "聊天"], ["record", "记录"], ["build", "建卡"], ["vault", "卡库"]];
   return (
     <header className="topnav">
       <div className="brand"><h1>AI 互动故事</h1></div>
@@ -1567,18 +1588,18 @@ function CharacterSelect({ playables, storyName, onPick }) {
   );
 }
 
-function StoriesHome({ onNew, presets, saves, onLaunchPreset, onDeletePreset, onResume, onDeleteSave }) {
+function StoriesHome({ onNew, presets, onLaunchPreset, onDeletePreset }) {
   return (
     <section className="stories-home">
       <div className="home-hero">
-        <div><h2>开始你的故事</h2><p>新建一个故事(挑卡组 / 上传组装),或接着玩已有的。</p></div>
+        <div><h2>开始你的故事</h2><p>从一个预设故事书开局,或新建一个属于你的故事。</p></div>
         <button className="primary big" onClick={onNew}>+ 新建故事</button>
       </div>
 
       <div className="home-section">
-        <h3>故事预设<small> 配好的卡组,点一下开新局</small></h3>
+        <h3>预设故事书<small> 配好的世界 + 角色 + 故事,点一下开新局</small></h3>
         <div className="story-gallery">
-          {!presets.length && <p className="empty">还没有预设。新建故事时可「保存为故事预设」复用。</p>}
+          {!presets.length && <p className="empty">还没有预设故事书。</p>}
           {presets.map((p, i) => (
             <StoryTile key={i} d={p.data || {}} fallbackName={p.name}
               actions={<>
@@ -1588,21 +1609,135 @@ function StoriesHome({ onNew, presets, saves, onLaunchPreset, onDeletePreset, on
           ))}
         </div>
       </div>
+    </section>
+  );
+}
 
-      <div className="home-section">
-        <h3>存档<small> 玩到一半的,接着玩</small></h3>
-        <div className="story-gallery">
-          {!saves.length && <p className="empty">还没有存档。新建故事玩起来后会自动存。</p>}
-          {saves.map((s) => (
-            <StoryTile key={s.id} d={{ name: s.name || s.summary || "未命名故事" }}
-              sub={`${s.turns || 0} 轮${s.updated ? " · " + s.updated : ""}`}
-              actions={<>
-                <button className="primary" onClick={() => onResume(s.id)}>续玩</button>
-                <button className="del" onClick={() => onDeleteSave(s.id)}>删除</button>
-              </>} />
-          ))}
-        </div>
+// 聊天页(占位)——后续批次接轻量 /api/chat 引擎。
+function ChatView() {
+  return (
+    <section className="view-shell chat-view">
+      <div className="view-head"><h2>聊天</h2><p>和单个角色一对一聊天,像微信对话框。轻量引擎(不带状态机/事件/世界时钟),后续批次接入。</p></div>
+      <div className="placeholder-pane">
+        <p className="placeholder-big">聊天功能正在搭建中</p>
+        <p className="hint-line">规划:从卡库选一个角色 → 微信式对话框 → 轻量 <code>/api/chat</code> 引擎,纯角色对话,可后期融入剧情。</p>
       </div>
+    </section>
+  );
+}
+
+// 记录页——存档独立成页,区分故事存档 / 聊天存档(聊天上线后填充)。
+function RecordView({ saves, onResume, onDeleteSave, onGoExplore }) {
+  // 只展示真正玩过/有内容的存档;App 启动会自动登记一个空 session 存档(0 轮、无名),
+  // 那是续局用的占位,不该当成存档显示 → 过滤掉,初始就显示空引导。
+  const realSaves = (saves || []).filter((s) => s.turns > 0 || (s.name && s.name.trim()) || (s.summary && s.summary.trim()));
+  return (
+    <section className="view-shell record-view">
+      <div className="view-head"><h2>记录</h2><p>你的存档。故事存档可续玩;聊天记录单独管理。</p></div>
+      <div className="home-section">
+        <h3>故事存档<small> 玩到一半的,接着玩</small></h3>
+        {!realSaves.length ? (
+          <div className="empty-guide">
+            <p>还没有故事存档。先去探索挑一个故事开始吧,玩起来会自动存档。</p>
+            <button className="primary" onClick={onGoExplore}>去探索 →</button>
+          </div>
+        ) : (
+          <div className="story-gallery">
+            {realSaves.map((s) => (
+              <StoryTile key={s.id} d={{ name: s.name || s.summary || "未命名故事" }}
+                sub={`${s.turns || 0} 轮${s.updated ? " · " + s.updated : ""}`}
+                actions={<>
+                  <button className="primary" onClick={() => onResume(s.id)}>续玩</button>
+                  <button className="del" onClick={() => onDeleteSave(s.id)}>删除</button>
+                </>} />
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="home-section">
+        <h3>聊天存档<small> 和角色的对话记录</small></h3>
+        <div className="story-gallery"><p className="empty">聊天功能上线后,这里区分显示聊天记录。</p></div>
+      </div>
+    </section>
+  );
+}
+
+const BUILD_STEPS = [
+  { key: "worlds", label: "世界 / 设定", optional: true, desc: "世界观、规则、地点、组织 → 世界书" },
+  { key: "characters", label: "角色", desc: "故事里的 NPC:性格、说话腔调(至少 1 张)" },
+  { key: "players", label: "主角", optional: true, desc: "你扮演谁:身份 / 目标 / 能力 / 限制(可跳过用模板)" },
+  { key: "stories", label: "故事框架", optional: true, desc: "前提 / 主线 / 事件 / 结局 → 故事书" },
+  { key: "summary", label: "汇总", desc: "打包成预设 + 开始故事" },
+];
+
+// 步骤式建卡(自建故事流程):依次 世界→角色→主角→故事→汇总,复用 CardBuilder + 现有端点,不动后端引擎。
+function StepBuilder({ characters, worldBooks, story, player, addCharacter, addWorld, setStory, setPlayer, onStartStory, onSavePreset, onExit }) {
+  const [step, setStep] = useState(0);
+  const [nonce, setNonce] = useState(0);   // 重置 CardBuilder(换步 / 角色再加一张)
+  const cur = BUILD_STEPS[step];
+  const isLast = step === BUILD_STEPS.length - 1;
+  const canLeaveCharStep = characters.length > 0;
+
+  function jump(i) { setStep(Math.max(0, Math.min(BUILD_STEPS.length - 1, i))); setNonce((n) => n + 1); }
+
+  async function onCardComplete(draft) {
+    const k = cur.key;
+    if (k === "characters") { const c = wrapCard(draft); await saveToVault("characters", c); addCharacter(c); setNonce((n) => n + 1); }
+    else if (k === "worlds") { await saveToVault("worlds", draft); addWorld(draft); jump(step + 1); }
+    else if (k === "players") { await saveToVault("players", draft); setPlayer(draft); jump(step + 1); }
+    else if (k === "stories") { await saveToVault("stories", draft); setStory(draft); jump(step + 1); }
+  }
+
+  return (
+    <section className="view-shell step-builder">
+      <div className="view-head vh-row">
+        <div><h2>新建故事 · 引导建卡</h2><p>一步步把世界、角色、故事建出来,最后打包成预设并开始。</p></div>
+        <button className="back-link" onClick={onExit}>← 探索</button>
+      </div>
+
+      <div className="step-progress">
+        {BUILD_STEPS.map((s, i) => (
+          <button key={s.key} className={"step-dot " + (i === step ? "active " : "") + (i < step ? "done" : "")}
+            onClick={() => jump(i)}>
+            <span className="step-num">{i + 1}</span>
+            <span className="step-label">{s.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {!isLast && (
+        <div className="step-body">
+          <div className="step-cur-head">
+            <h3>第 {step + 1} 步:{cur.label}</h3>
+            <p>{cur.desc}{cur.key === "characters" && characters.length ? ` · 已建 ${characters.length} 张` : ""}</p>
+          </div>
+          <CardBuilder key={cur.key + nonce} kind={cur.key} onComplete={onCardComplete} onClose={() => {}} />
+          <div className="step-nav">
+            <button onClick={() => jump(step - 1)} disabled={step === 0}>← 上一步</button>
+            {cur.key === "characters" && !canLeaveCharStep
+              ? <span className="step-hint">至少建 1 张角色才能继续</span>
+              : <button className="primary" onClick={() => jump(step + 1)}>{cur.optional ? "跳过 / 下一步" : "下一步"} →</button>}
+          </div>
+        </div>
+      )}
+
+      {isLast && (
+        <div className="step-summary">
+          <h3>汇总</h3>
+          <ul className="summary-list">
+            <li>世界 / 设定:{worldBooks.length ? `${worldBooks.length} 份` : "未建(可选)"}</li>
+            <li>角色:{characters.length ? `${characters.length} 张` : "未建"}</li>
+            <li>主角:{player ? (player.name || "已建") : "未建(开局可选 / 用模板)"}</li>
+            <li>故事框架:{story ? (story.title || "已建") : "未建(可选)"}</li>
+          </ul>
+          {!characters.length && <p className="error">还没有任何角色,至少建 1 张角色才能开始故事。回上面补一张。</p>}
+          <div className="step-summary-actions">
+            <button onClick={() => jump(0)}>← 回去补卡</button>
+            <button onClick={onSavePreset} disabled={!characters.length}>存成预设故事书</button>
+            <button className="primary" onClick={onStartStory} disabled={!characters.length}>开始故事 →</button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -1626,14 +1761,18 @@ function App() {
   const [selecting, setSelecting] = useState(false);    // 预设进入后的选人页阶段
   const [pendingPreset, setPendingPreset] = useState(null);
   const [buildSeed, setBuildSeed] = useState({ seed: "", draft: null });
+  const [buildFlow, setBuildFlow] = useState(false); // true=新建故事步骤式引导 / false=卡库单卡完善
+  const [turnSeq, setTurnSeq] = useState(0); // 每回合 bump,驱动右侧状态栏刷新
+  const [railOpen, setRailOpen] = useState(false); // 右侧状态栏开合(不常驻)
   const [presets, setPresets] = useState([]);
   const [saves, setSaves] = useState(loadSaves);
   const world = useMemo(() => mergeWorldBooks(worldBooks), [worldBooks]);
 
-  const addCharacter = (card) => setCharacters((xs) => [...xs, card].slice(0, 3));
+  const addCharacter = (card) => setCharacters((xs) => [...xs, card]);
   const addWorld = (wb) => setWorldBooks((xs) => [...xs, wb]);
   const completeCardFromVault = (cardData) => {
     setBuildSeed({ seed: JSON.stringify(cardData), draft: cardData.data || cardData });
+    setBuildFlow(false);   // 卡库来的「对话完善」走单卡 BuildView,不进步骤式
     setView("build");
   };
 
@@ -1643,13 +1782,19 @@ function App() {
   }
   useEffect(() => { refreshHome(); }, []);
 
+  // 顶部导航:点「建卡」tab 直接进步骤式引导(建卡界面=步骤式);其余 tab 正常切。
+  function navTo(k) {
+    if (k === "build") setBuildFlow(true);
+    setView(k);
+  }
+
   function resetGameState() {
     setCharacters([]); setWorldBooks([]); setStory(null); setPlayer(null); setMode("standard");
     setRestoredTurns(null); setRestoredState(null); setRestoredChoices([]);
     setIsPreset(false); setSelecting(false); setPendingPreset(null);
   }
 
-  // 新建故事:开一个全新会话 + 清空卡组 → 进游戏页的组卡(assembling)。
+  // 新建故事:开新会话 + 清空卡组 → 进建卡页的步骤式引导(世界→角色→主角→故事→汇总),最后打包预设并开始。
   function onNew() {
     const id = newSessionId();
     setActiveId(id);
@@ -1657,7 +1802,8 @@ function App() {
     setSessionId(id);
     setStarted(false);
     setAssembling(true);
-    setView("game");
+    setBuildFlow(true);
+    setView("build");
   }
 
   // 用故事预设开新局:新会话 + 载入预设卡组 + 直接开玩。
@@ -1762,19 +1908,28 @@ function App() {
 
   return (
     <div className="app">
-      <TopNav view={view} setView={setView} sessionId={sessionId} />
+      <TopNav view={view} setView={navTo} sessionId={sessionId} />
 
       {view === "home" && (
         <main className="single-view">
           <StoriesHome
             onNew={onNew}
             presets={presets}
-            saves={saves}
             onLaunchPreset={launchPreset}
             onDeletePreset={deletePreset}
-            onResume={resumeSave}
-            onDeleteSave={deleteSaveHandler}
           />
+        </main>
+      )}
+
+      {view === "chat" && (
+        <main className="single-view">
+          <ChatView />
+        </main>
+      )}
+
+      {view === "record" && (
+        <main className="single-view">
+          <RecordView saves={saves} onResume={resumeSave} onDeleteSave={deleteSaveHandler} onGoExplore={() => setView("home")} />
         </main>
       )}
 
@@ -1789,7 +1944,7 @@ function App() {
       )}
 
       {view === "game" && started && characters.length > 0 && (
-        <main className={"play-layout " + ((sidebarOpen && !isPreset) ? "with-side" : "no-side")}>
+        <main className={"play-layout " + ((sidebarOpen && !isPreset) ? "has-left " : "") + (railOpen ? "has-right" : "")}>
           {sidebarOpen && !isPreset && (
             <SetupPanel
               characters={characters} setCharacters={setCharacters}
@@ -1803,14 +1958,19 @@ function App() {
             />
           )}
           <div className="play-main">
-            {!isPreset && (
-              <button className="side-toggle" onClick={() => setSidebarOpen((o) => !o)}
-                title="开/关侧边的角色卡、故事书等卡组栏">
-                {sidebarOpen ? "◀ 收起卡组栏" : "▶ 卡组栏"}
+            <div className="play-toolbar">
+              {!isPreset && (
+                <button className="side-toggle" onClick={() => setSidebarOpen((o) => !o)} title="开/关左侧卡组栏">
+                  {sidebarOpen ? "◀ 收起卡组栏" : "▶ 卡组栏"}
+                </button>
+              )}
+              <button className="side-toggle rail-toggle" onClick={() => setRailOpen((o) => !o)} title="开/关右侧状态栏">
+                {railOpen ? "状态栏 ▶" : "◀ 状态栏"}
               </button>
-            )}
-            <StoryPanel key={sessionId} characters={characters} world={world} story={story} player={player} mode={mode} sessionId={sessionId} initialTurns={restoredTurns} initialState={restoredState} initialChoices={restoredChoices} goHome={() => { refreshHome(); setStarted(false); setAssembling(false); setView("home"); }} />
+            </div>
+            <StoryPanel key={sessionId} characters={characters} world={world} story={story} player={player} mode={mode} sessionId={sessionId} initialTurns={restoredTurns} initialState={restoredState} initialChoices={restoredChoices} goHome={() => { refreshHome(); setStarted(false); setAssembling(false); setView("home"); }} onTurn={() => setTurnSeq((s) => s + 1)} />
           </div>
+          {railOpen && <StateInspector sessionId={sessionId} refreshKey={turnSeq} />}
         </main>
       )}
 
@@ -1849,15 +2009,25 @@ function App() {
 
       {view === "build" && (
         <main className="single-view">
-          <BuildView
-            buildSeed={buildSeed}
-            clearSeed={() => setBuildSeed({ seed: "", draft: null })}
-            addCharacter={addCharacter}
-            addWorld={addWorld}
-            setStory={setStory}
-            setPlayer={setPlayer}
-            goGame={() => { setBuildSeed({ seed: "", draft: null }); setView(started ? "game" : "home"); }}
-          />
+          {buildFlow ? (
+            <StepBuilder
+              characters={characters} worldBooks={worldBooks} story={story} player={player}
+              addCharacter={addCharacter} addWorld={addWorld} setStory={setStory} setPlayer={setPlayer}
+              onStartStory={() => { setBuildFlow(false); setAssembling(false); setStarted(true); setView("game"); }}
+              onSavePreset={saveAsPreset}
+              onExit={() => { setBuildFlow(false); refreshHome(); setView("home"); }}
+            />
+          ) : (
+            <BuildView
+              buildSeed={buildSeed}
+              clearSeed={() => setBuildSeed({ seed: "", draft: null })}
+              addCharacter={addCharacter}
+              addWorld={addWorld}
+              setStory={setStory}
+              setPlayer={setPlayer}
+              goGame={() => { setBuildSeed({ seed: "", draft: null }); setView(started ? "game" : "home"); }}
+            />
+          )}
         </main>
       )}
 
