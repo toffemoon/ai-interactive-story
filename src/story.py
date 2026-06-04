@@ -117,6 +117,39 @@ def _present_entity_keys(state: RuntimeState, characters: list[CharacterCard],
     return keys
 
 
+# 玩家点名某角色的常见别称 → 角色全名(用于"点名问谁"识别)。认不出就不过滤(安全偏向)。
+_ADDR_ALIASES = {"师父": "唐僧", "师傅": "唐僧", "大师兄": "悟空", "猴哥": "悟空", "大圣": "悟空",
+                 "二师兄": "八戒", "呆子": "八戒", "老猪": "八戒"}
+
+
+def _addressed_character(action: str, characters: list[CharacterCard]) -> str | None:
+    """从玩家行动开头解析"点名在问谁"(如『悟空,…』『师父,…』)→ 角色全名;认不出返回 None。
+    认不出=不过滤(安全:见证者事实照常保留;只在明确点名【缺席者】时才删材料,误判倾向不删)。"""
+    head = str(action or "").strip()
+    if not head:
+        return None
+    for c in characters:
+        nm = c.data.name
+        forms = {nm, nm[-2:], nm[-3:]}  # 全名 + 末2/3字(孙悟空→悟空)
+        forms |= {a for a, full in _ADDR_ALIASES.items() if full in nm or nm in full}
+        if any(f and head.startswith(f) for f in forms):
+            return nm
+    return None
+
+
+def _parse_present_tag(text: str) -> set[str] | None:
+    """从召回行解析 `[当时在场:A、B]` → {A,B};无该标记返回 None(无法判定在场→不删,安全偏向)。"""
+    m = re.search(r"\[当时在场:([^\]]*)\]", str(text or ""))
+    if not m:
+        return None
+    return {x.strip() for x in re.split(r"[、,，]", m.group(1)) if x.strip()}
+
+
+def _name_in_present(name: str, present: set[str]) -> bool:
+    """名字模糊归属:在场名单里有任一项与 name 互相包含即算在场(悟空↔孙悟空)。"""
+    return any(p and (p == name or p in name or name in p) for p in present)
+
+
 def _mem_bigrams(s: str) -> set[str]:
     t = "".join(str(s or "").split())
     return {t[i:i + 2] for i in range(len(t) - 1)}
@@ -1622,6 +1655,21 @@ async def _story_turn_impl(
             kb_hits = await asyncio.to_thread(memory.search_knowledge, session_id, recall_query, 6)
             scored = await asyncio.to_thread(memory.search_scored, session_id, recall_query, 4, max(0, start_idx - 1))
             lm_hits = await asyncio.to_thread(memory.search_long_memory, session_id, recall_query, 6)
+            # Phase 3 确定性删除(治本,不靠指令松紧、与作品无关):玩家点名问某角色一件具体往事,
+            # 而召回到的那条往事【当时在场】里没有他 → 把这条从本轮材料里删掉(他看不到=编不出,
+            # 火眼金睛也照不出不在上下文里的东西),并点名硬认忘。比"软劝模型自律"稳得多。
+            masked_for = None
+            if PHASE3_KNOWERS and fact_query:
+                addressed = _addressed_character(action, characters)
+                if addressed:
+                    kept = []
+                    for txt, dist in scored:
+                        pres = _parse_present_tag(txt)
+                        if pres is not None and not _name_in_present(addressed, pres):
+                            masked_for = addressed  # 这条他没见证 → 从他的视野删除
+                            continue
+                        kept.append((txt, dist))
+                    scored = kept
             old_chat = [t for t, _ in scored]
             best = scored[0][1] if scored else 99.0
             recall_lines = kb_hits + [f"[旧对话] {x}" for x in old_chat] + [f"[长期记忆] {x}" for x in lm_hits]
@@ -1632,6 +1680,13 @@ async def _story_turn_impl(
                 found = bool(recall_lines) and best <= MISS_DIST
                 abstain_note = _abstain_note("found" if found else "miss")
                 fact_miss = not found
+            if masked_for:  # 点名硬认忘:代码已确定他没见证,比泛知识边界指令更强(材料也已删)
+                abstain_note += (
+                    f"\n**【知识边界·硬·最高优先级】** 系统已确定:本轮玩家点名问的 {masked_for} 当时【不在场】、"
+                    f"对这件具体往事【没有任何记忆】(相关材料已从其视野移除)。{masked_for} 必须 in-character 明确认忘"
+                    f"(我那会儿不在场 / 没看见 / 不知道),**绝不描述任何细节**(形状/颜色/数量/气味一律不许),"
+                    f"也**不许用『我远远看到 / 听到 / 凭本事推断』之类给自己补一个在场理由**——即便该角色设定上有特殊能力。"
+                )
     # ② 标准模式 / 深度但召回未激活:无检索,仍对事实查询给认忘指令(防无据自信编)。
     if PHASE1_FIXES and fact_query and not abstain_note:
         abstain_note = _abstain_note("noretrieval")
