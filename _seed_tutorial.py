@@ -201,7 +201,7 @@ PRESET = {
     "story": STORY,
     "player": None,
     "mode": "standard",
-    "cover": "",
+    "cover": "/assets/tutorial-dukou.jpg",  # 黄昏渡口封面(静态资源 frontend/assets/)
     "synopsis": "5 分钟教学局:在一个黄昏渡口,边玩边学——自由行动、选项推进,你的选择和态度会真的改变结局。",
     "author": "教学",
     "tags": ["教学", "新手", "渡口", "短局"],
