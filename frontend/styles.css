@@ -1113,7 +1113,7 @@ main.single-view { display: block; }
 .coach-pop .coach-count { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; color: var(--muted); }
 .coach-pop h4 { margin: 4px 0 6px; font-size: 16px; }
 .coach-pop p { margin: 0 0 12px; font-size: 13.5px; line-height: 1.55; color: var(--ink); white-space: pre-line; }
-.coach-pop .coach-actions { display: flex; gap: 8px; align-items: center; }
+.coach-pop .coach-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; row-gap: 8px; }
 .coach-pop .coach-actions .spacer { flex: 1; }
 .coach-skip {
   background: none; border: none; min-height: auto; padding: 4px 2px;

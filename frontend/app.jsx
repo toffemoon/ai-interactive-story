@@ -1731,11 +1731,17 @@ function coverStyle(cover) {
   return { background: "var(--ink)" };
 }
 
-function StoryTile({ d, fallbackName, sub, actions }) {
+// 判断某个 preset 是不是新手教学局(给探索页那张卡打引导锚点 / startTutorial 找它都用)。
+function isTutorialPreset(p) {
+  const d = (p && p.data) || {};
+  return ((d.tags || []).includes("教学")) || (((p && p.name) || "").includes("渡口")) || ((d.name || "").includes("渡口"));
+}
+
+function StoryTile({ d, fallbackName, sub, actions, coach }) {
   const name = (d && d.name) || fallbackName || "故事";
   const cover = d && d.cover;
   return (
-    <div className="story-tile">
+    <div className="story-tile" data-coach={coach || undefined}>
       <div className="tile-cover" style={coverStyle(cover)}>
         {!cover && <span className="cover-title">{name.slice(0, 10)}</span>}
       </div>
@@ -1822,6 +1828,7 @@ function StoriesHome({ onNew, presets, onLaunchPreset, onDeletePreset }) {
           {!presets.length && <p className="empty">还没有预设故事书。</p>}
           {presets.map((p, i) => (
             <StoryTile key={i} d={p.data || {}} fallbackName={p.name}
+              coach={isTutorialPreset(p) ? "tutorial-tile" : undefined}
               actions={<>
                 <button className="primary" onClick={() => onLaunchPreset(p)}>开始</button>
                 <button className="del" onClick={() => onDeletePreset(p)}>删除</button>
@@ -2089,7 +2096,8 @@ function markCoachSeen(screen) {
 const COACH = {
   home: [
     { sel: '[data-coach="gallery"]', title: "挑一个故事", body: "这里是故事库。选一个预设故事,点卡片上的「开始」就能进入开玩。" },
-    { sel: '[data-coach="new-story"]', title: "或者自己造一个", body: "想做属于自己的故事?点「新建故事」,一步步把世界、角色、剧情建出来。\n\n选好故事后,我会在下一屏接着指给你看。" },
+    { sel: '[data-coach="new-story"]', title: "或者自己造一个", body: "想做属于自己的故事?点「新建故事」,一步步把世界、角色、剧情建出来。" },
+    { sel: '[data-coach="tutorial-tile"]', title: "第一次来?从这局学起", body: "这就是新手教学《渡口》。点它的「开始」(或下面的按钮)进去走一遍,5 分钟摸清怎么玩——进去后我会在每一屏接着指给你看。", actionId: "tutorial", actionLabel: "开始新手教学" },
   ],
   select: [
     { sel: '[data-coach="select-grid"]', title: "选你扮演谁", body: "挑一个角色来扮演。同一个故事换不同角色,看到的剧情和结局都会不一样。" },
@@ -2097,11 +2105,12 @@ const COACH = {
   ],
   story: [
     { sel: '[data-coach="gen-opening"]', title: "先生成开场", body: "点「生成开场」,故事会从一个具体场景开始,而不是空白对话。" },
-    { sel: '[data-coach="composer"]', title: "你来推进剧情", body: "在这里自由输入你想做的事;顶部也会冒出几个选项,点一下会填进输入框,你可以改了再发。\n\n还不熟?教学局即将上线(开发中)。" },
+    { sel: '[data-coach="composer"]', title: "你来推进剧情", body: "在这里自由输入你想做的事;顶部也会冒出几个选项,点一下会填进输入框,你可以改了再发。" },
+    { sel: '[data-coach="rail-toggle"]', title: "随时看故事状态", body: "想知道现在什么情况?点这里展开右侧状态栏:当前场景、在场角色、你和他们的关系、物品、故事时间轴,都在这。" },
   ],
 };
 
-function CoachMarks({ steps, manual, onDone, onSkip }) {
+function CoachMarks({ steps, manual, onDone, onSkip, onAction }) {
   const list = steps || [];
   const [idx, setIdx] = useState(0);
   const [rect, setRect] = useState(null);
@@ -2159,9 +2168,10 @@ function CoachMarks({ steps, manual, onDone, onSkip }) {
         <div className="coach-actions">
           <button className="coach-skip" onClick={manual ? onDone : onSkip}>{manual ? "关闭" : "跳过 · 不再显示"}</button>
           <span className="spacer" />
-          {idx > 0 && <button onClick={() => setIdx(idx - 1)}>上一步</button>}
-          {!last && <button className="primary" onClick={() => setIdx(idx + 1)}>下一步</button>}
-          {last && <button className="primary" onClick={onDone}>{manual ? "关闭" : "知道了"}</button>}
+          {idx > 0 && !last && <button onClick={() => setIdx(idx - 1)}>上一步</button>}
+          {step.actionId && <button className="primary" onClick={() => onAction && onAction(step.actionId)}>{step.actionLabel || "去看看"}</button>}
+          {!last && <button className={step.actionId ? "" : "primary"} onClick={() => setIdx(idx + 1)}>下一步</button>}
+          {last && !manual && <button className={step.actionId ? "" : "primary"} onClick={onDone}>知道了</button>}
         </div>
       </div>
     </div>
@@ -2264,6 +2274,14 @@ function App() {
     setSelecting(true);   // 预设故事:先进选人页(选主角 / 自定义),不直接开玩
     setStarted(false);
     setView("game");
+  }
+
+  // coach marks「开始新手教学」CTA:找教学 preset(《渡口》)直接开局,顺势进选人页(select 引导会接着自动带)。
+  function startTutorial() {
+    const t = presets.find(isTutorialPreset);
+    setCoachRun(null);
+    if (t) launchPreset(t);
+    else { setView("home"); alert("没找到教学故事《渡口》。请先在后端 seed:python _seed_tutorial.py"); }
   }
 
   // 选人页定主角(预设候选 or 自定义识别结果):设为 player + 从 NPC 阵容拿掉同名角色,再开玩。
@@ -2419,7 +2437,7 @@ function App() {
                   {sidebarOpen ? "◀ 收起卡组栏" : "▶ 卡组栏"}
                 </button>
               )}
-              <button className="side-toggle rail-toggle" onClick={() => setRailOpen((o) => !o)} title="开/关右侧状态栏">
+              <button className="side-toggle rail-toggle" data-coach="rail-toggle" onClick={() => setRailOpen((o) => !o)} title="开/关右侧状态栏">
                 {railOpen ? "状态栏 ▶" : "◀ 状态栏"}
               </button>
             </div>
@@ -2510,6 +2528,7 @@ function App() {
           manual={coachRun.manual}
           onDone={() => setCoachRun(null)}
           onSkip={() => { setCoachDone(); setCoachRun(null); }}
+          onAction={(id) => { if (id === "tutorial") startTutorial(); }}
         />
       )}
     </div>
