@@ -60,6 +60,9 @@ def split_frontmatter(text: str) -> tuple[dict[str, str], str]:
     只处理本项目模板用到的形态:`key: 标量` / `key: [a, b]` / `key: "..."`,行尾 ` # 注释` 截掉。
     标量返回原始字符串(未 _clean,保留 `[a,b]` 原样供调用方按需 _split_list)。
     """
+    # 剥 UTF-8 BOM(U+FEFF):Windows 编辑器 / Obsidian 存的卡常带 BOM,而 _FM_RE 的 `\s` 不吃它,
+    # 不剥会导致 frontmatter 检测不到 → detect_kind 空 → parse_card 误判卡种。放函数最前,覆盖所有解析入口。
+    text = text.lstrip("\ufeff")
     m = _FM_RE.match(text)
     if not m:
         return {}, text

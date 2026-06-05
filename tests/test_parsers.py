@@ -435,6 +435,19 @@ def test_backward_compat_empty():
     assert d.anchor == "" and d.keys == [] and d.known_hidden == []
 
 
+def test_bom_prefixed_card():
+    # 回归:UTF-8-with-BOM(Windows 编辑器 / Obsidian 常带)存的卡,frontmatter 前有 BOM。
+    # 修前 _FM_RE 的 `\s` 不吃 BOM → split_frontmatter 检测不到 → detect_kind '' → parse_card 抛 ValueError。
+    bom = "\ufeff"
+    assert P.detect_kind(bom + CHARACTER) == "角色卡", repr(P.detect_kind(bom + CHARACTER))
+    card = P.parse_card(bom + CHARACTER)  # 不应抛 ValueError
+    assert isinstance(card, type(P.parse_character(CHARACTER)))
+    assert card.data.name == "阿岩", card.data.name
+    assert card.data.anchor.startswith("把毕生执念"), card.data.anchor
+    # 另一卡种走一遍,确认是 split_frontmatter 层的通用修复而非个例
+    assert P.parse_card(bom + WORLDBOOK).name == "测试世界 世界书"
+
+
 TESTS = [
     test_character,
     test_player,
@@ -444,6 +457,7 @@ TESTS = [
     test_storybook,
     test_parse_card_routing,
     test_backward_compat_empty,
+    test_bom_prefixed_card,
 ]
 
 
