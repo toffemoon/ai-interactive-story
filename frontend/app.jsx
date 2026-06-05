@@ -1296,13 +1296,13 @@ async function saveToVault(kind, data) {
 }
 
 function TopNav({ view, setView, sessionId }) {
-  const tabs = [["home", "探索"], ["game", "故事"], ["chat", "聊天"], ["record", "记录"], ["build", "建卡"], ["vault", "故事库"]];
+  const tabs = [["home", "探索"], ["game", "当前故事"], ["build", "建卡"], ["chat", "聊天"], ["mine", "我的"]];
   return (
     <header className="topnav">
       <div className="brand"><h1>AI 互动故事</h1></div>
       <nav className="nav-tabs">
         {tabs.map(([k, label]) => (
-          <button key={k} className={view === k ? "active" : ""} onClick={() => setView(k)}>{label}</button>
+          <button key={k} data-coach={k === "home" ? "nav-explore" : undefined} className={view === k ? "active" : ""} onClick={() => setView(k)}>{label}</button>
         ))}
       </nav>
       <div className="header-right">
@@ -1405,7 +1405,7 @@ function BuiltOverview({ characters = [], worldBooks = [], story = null, player 
   const list = data[open] || [];
   const saved = savedKeys || new Set();
   return (
-    <div className="built-overview">
+    <div className="built-overview" data-coach="build-overview">
       <div className="bov-head">本次新建里你已建的卡 · 查看/修改 或单独保存到故事库</div>
       <div className="bov-tabs">
         {BUILT_CATS.map((c) => (
@@ -1547,8 +1547,9 @@ function BuildView({ buildSeed, clearSeed, addCharacter, addWorld, setStory, set
   );
 }
 
-function VaultView({ addCharacter, addWorld, setStory, setPlayer, completeCard, goGame, presets, onLaunchPreset, onDeletePreset }) {
-  const KINDS = [["characters", "角色卡"], ["players", "玩家卡"], ["worlds", "世界书 / 设定卡"], ["stories", "故事书"], ["events", "事件卡"], ["mystories", "我的故事"]];
+function VaultView({ addCharacter, addWorld, setStory, setPlayer, completeCard, goGame, presets, onLaunchPreset, onDeletePreset, hideMyStories, embedded }) {
+  // hideMyStories:嵌进「我的」页时,「我的故事(预设)」由外层单独成区,这里不重复;embedded:省掉自己的大标题。
+  const KINDS = [["characters", "角色卡"], ["players", "玩家卡"], ["worlds", "世界书 / 设定卡"], ["stories", "故事书"], ["events", "事件卡"]].concat(hideMyStories ? [] : [["mystories", "我的故事"]]);
   const [kind, setKind] = useState("characters");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1625,7 +1626,7 @@ function VaultView({ addCharacter, addWorld, setStory, setPlayer, completeCard, 
   if (editing) {
     const label = (KINDS.find(([k]) => k === kind) || [null, "卡"])[1];
     return (
-      <section className="view-shell vault-view">
+      <section className={"vault-view" + (embedded ? "" : " view-shell")}>
         <div className="view-head vh-row">
           <div><h2>修改 · {label}</h2><p>改完点「保存返回」(编辑器里的「收起」同样存回)。</p></div>
           <button className="back-link" onClick={saveEdit}>← 保存返回</button>
@@ -1658,11 +1659,13 @@ function VaultView({ addCharacter, addWorld, setStory, setPlayer, completeCard, 
   const pageItems = items.slice((safePage - 1) * PER, safePage * PER);
 
   return (
-    <section className="view-shell vault-view">
-      <div className="view-head">
-        <h2>故事库</h2>
-        <p>你建过 / 导入的卡和故事都在这里,按卡片分类管理。「我的故事」是你自己创作的完整故事(预设),可一键开始。</p>
-      </div>
+    <section className={"vault-view" + (embedded ? "" : " view-shell")}>
+      {!embedded && (
+        <div className="view-head">
+          <h2>故事库</h2>
+          <p>你建过 / 导入的卡和故事都在这里,按卡片分类管理。「我的故事」是你自己创作的完整故事(预设),可一键开始。</p>
+        </div>
+      )}
       <div className="vault-tabs">
         {KINDS.map(([k, label]) => (
           <button key={k} className={kind === k ? "active" : ""} onClick={() => switchKind(k)}>{label}</button>
@@ -1737,11 +1740,11 @@ function isTutorialPreset(p) {
   return ((d.tags || []).includes("教学")) || (((p && p.name) || "").includes("渡口")) || ((d.name || "").includes("渡口"));
 }
 
-function StoryTile({ d, fallbackName, sub, actions, coach }) {
+function StoryTile({ d, fallbackName, sub, actions, coach, onOpen }) {
   const name = (d && d.name) || fallbackName || "故事";
   const cover = d && d.cover;
   return (
-    <div className="story-tile" data-coach={coach || undefined}>
+    <div className={"story-tile" + (onOpen ? " clickable" : "")} data-coach={coach || undefined} onClick={onOpen}>
       <div className="tile-cover" style={coverStyle(cover)}>
         {!cover && <span className="cover-title">{name.slice(0, 10)}</span>}
       </div>
@@ -1755,62 +1758,169 @@ function StoryTile({ d, fallbackName, sub, actions, coach }) {
           {((d && d.tags) || []).slice(0, 4).map((t, j) => <span className="tag" key={j}>{t}</span>)}
           {d && bundleSummary(d) !== "空卡组" ? <span className="tag muted">{bundleSummary(d)}</span> : null}
         </div>
-        <div className="tile-actions">{actions}</div>
+        <div className="tile-actions" onClick={(e) => e.stopPropagation()}>{actions}</div>
       </div>
     </div>
   );
 }
 
-// 预设故事进入后的选人页:列出可玩主角(选择题)+「其他」自定义。
-function CharacterSelect({ playables, storyName, onPick }) {
-  const [mode, setMode] = useState("list");   // list | custom
+// 单卡轮播:一次一张 + 左右箭头 + 圆点(角色 / 出演用)。只有一张时不显箭头/点。
+function Carousel({ items, render }) {
+  const [i, setI] = useState(0);
+  const n = (items || []).length;
+  if (!n) return <p className="empty">(无)</p>;
+  const idx = Math.min(i, n - 1);
+  return (
+    <div className="carousel">
+      <div className="carousel-row">
+        {n > 1 && <button className="carousel-arrow" onClick={() => setI((x) => (x - 1 + n) % n)} aria-label="上一张">‹</button>}
+        <div className="carousel-stage">{render(items[idx], idx)}</div>
+        {n > 1 && <button className="carousel-arrow" onClick={() => setI((x) => (x + 1) % n)} aria-label="下一张">›</button>}
+      </div>
+      {n > 1 && (
+        <div className="carousel-dots">
+          {items.map((_, k) => <button key={k} className={"dot" + (k === idx ? " on" : "")} onClick={() => setI(k)} aria-label={`第 ${k + 1} 张`} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 故事详情 modal(§1):点故事卡弹出,4 tab(简介 / 故事背景 / 角色 / 出演)。
+// 【剧透边界·硬约束】简介 / 故事 / 角色只渲染公开层(白名单字段);known_hidden、versions、隐藏事件、
+// 主线 / 事件 / 结局 / 角色边界 等一律不进 modal。出演 tab = 选身份(取代旧整页选人页),自带 coach 锚点。
+function StoryModal({ entry, setTab, onClose, onStart }) {
+  const preset = entry.preset;
+  const tab = entry.tab;
+  const d = (preset && preset.data) || {};
+  const name = d.name || (preset && preset.name) || "故事";
+  const synopsis = d.synopsis || (d.story && d.story.premise) || "";     // §2 降级:无 synopsis 取 premise
+  const author = d.author || "";
+  const tags = d.tags || [];
+  const premise = (d.story && d.story.premise) || "";
+  const worldEntries = (((d.world && d.world.entries) || [])).filter((e) => (e.visibility || "public") === "public"); // 只公开条目
+  const chars = d.characters || [];
+  // 可扮演:有 playables 用之;否则 §2 兜底=全体角色(从 NPC 卡降级出名/一句设定)
+  const playables = (d.playables && d.playables.length)
+    ? d.playables
+    : chars.map((c) => ({ name: (c.data || {}).name || "角色", role: ((c.data || {}).description || "").slice(0, 40) }));
+
+  const TABS = [["intro", "简介"], ["bg", "故事背景"], ["chars", "角色"], ["cast", "出演"]];
+  const [castMode, setCastMode] = useState("list"); // list | custom
   const [customText, setCustomText] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function startCustom() {
     if (!customText.trim()) return;
     setLoading(true);
-    try {
-      onPick(await postJSON("/api/identify_player", { text: customText }));
-    } catch (e) { alert("识别失败:" + e.message); }
+    try { onStart(await postJSON("/api/identify_player", { text: customText })); }
+    catch (e) { alert("识别失败:" + e.message); }
     setLoading(false);
   }
 
-  if (mode === "custom") {
+  // 角色公开层白名单:名 / 外貌 / 主设定 / 性格 / 公开可知 / 标签。绝不渲染 known_hidden、versions、tension、scenario、first_mes 等。
+  function PublicChar({ c }) {
+    const cd = (c && c.data) || c || {};
+    const pub = cd.known_public || [];
     return (
-      <section className="char-select">
-        <h2>自定义你的主角</h2>
-        <p className="cs-sub">写下你要扮演的角色:身份、背景、目标、能力、限制、开局已知……AI 会把它识别成主角卡。</p>
-        <textarea className="cs-textarea" rows="8" value={customText}
-          onChange={(e) => setCustomText(e.target.value)}
-          placeholder="例:一个流落异乡的年轻铁匠,为寻失散的妹妹而来,擅长锻造与观察,却看不懂这片土地的神话与战事……" />
-        <div className="cs-actions">
-          <button className="primary" disabled={loading || !customText.trim()} onClick={startCustom}>
-            {loading ? "识别中…" : "用这个角色开始"}
-          </button>
-          <button className="ghost" onClick={() => setMode("list")}>← 返回选择</button>
-        </div>
-      </section>
+      <div className="modal-char">
+        <b>{cd.name || "角色"}</b>
+        {cd.look ? <p className="mc-look">{cd.look}</p> : null}
+        {cd.description ? <p>{cd.description}</p> : null}
+        {cd.personality ? <p className="mc-dim">{cd.personality}</p> : null}
+        {pub.length ? <ul className="mc-pub">{pub.map((x, i) => <li key={i}>{x}</li>)}</ul> : null}
+        {(cd.tags || []).length ? <div className="modal-char-tags">{(cd.tags || []).slice(0, 5).map((t, i) => <span className="tag" key={i}>{t}</span>)}</div> : null}
+      </div>
     );
   }
 
   return (
-    <section className="char-select">
-      <h2>你想扮演谁?</h2>
-      {storyName && <p className="cs-sub">{storyName}</p>}
-      <div className="select-grid" data-coach="select-grid">
-        {(playables || []).map((p, i) => (
-          <button key={i} className="select-card" onClick={() => onPick(p)}>
-            <b>{p.name || "未命名"}</b>
-            <span>{p.role || ""}</span>
-          </button>
-        ))}
-        <button className="select-card other" data-coach="select-custom" onClick={() => setMode("custom")}>
-          <b>其他</b>
-          <span>自定义你自己的角色设定</span>
-        </button>
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="story-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-cover" style={coverStyle(d.cover)}>
+          {!d.cover && <span className="modal-cover-title">{name}</span>}
+          <button className="modal-close" onClick={onClose} aria-label="关闭">×</button>
+        </div>
+        <div className="modal-tabs" data-coach="modal-tabs">
+          {TABS.map(([k, label]) => (
+            <button key={k} data-coach={"modal-tab-" + k} className={tab === k ? "active" : ""} onClick={() => setTab(k)}>{label}</button>
+          ))}
+        </div>
+        <div className="modal-body">
+          {tab === "intro" && (
+            <div className="modal-pane">
+              <div className="pane-scroll modal-intro" data-coach="modal-intro">
+                <h3>{name}</h3>
+                <div className="modal-meta">{author ? <span>作者 {author}</span> : null}<span>{bundleSummary(d)}</span></div>
+                <p className="modal-syn">{synopsis || "(暂无简介)"}</p>
+                <div className="modal-tags">{tags.map((t, i) => <span className="tag" key={i}>{t}</span>)}</div>
+              </div>
+              <div className="pane-footer"><button className="primary modal-cta" onClick={() => setTab("cast")}>选身份 · 开始 →</button></div>
+            </div>
+          )}
+          {tab === "bg" && (
+            <div className="modal-pane">
+              <div className="pane-scroll modal-bg" data-coach="modal-bg">
+                <h4>前情</h4>
+                <p>{premise || "(这个故事还没写前情简介)"}</p>
+                {worldEntries.length > 0 && (
+                  <>
+                    <h4>世界设定</h4>
+                    {/* 只露最核心的几条公开条目(滚动看),不把世界书全抖出来。 */}
+                    {worldEntries.slice(0, 3).map((e, i) => (
+                      <div className="modal-world-entry" key={i}>
+                        <b>{e.comment || (e.keys || []).join(" / ") || "设定"}</b>
+                        <p>{e.content || ""}</p>
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+          {tab === "chars" && (
+            <div className="modal-pane" data-coach="modal-chars">
+              {chars.length
+                ? <Carousel items={chars} render={(c) => <PublicChar c={c} />} />
+                : <div className="pane-scroll"><p className="empty">(没有登场人物信息)</p></div>}
+            </div>
+          )}
+          {tab === "cast" && (castMode === "custom" ? (
+            <div className="modal-pane">
+              <div className="pane-scroll modal-cast-custom">
+                <p className="cs-sub">写下你要扮演的角色:身份、背景、目标、能力、限制、开局已知……AI 会把它识别成主角卡。</p>
+                <textarea className="cs-textarea" rows="6" value={customText} onChange={(e) => setCustomText(e.target.value)}
+                  placeholder="例:一个流落异乡的年轻铁匠,为寻失散的妹妹而来,擅长锻造与观察……" />
+                <label className="filebtn">上传 .txt / .md / .docx
+                  <input type="file" accept=".txt,.md,.docx" style={{ display: "none" }}
+                    onChange={async (e) => { const f = e.target.files[0]; if (f) setCustomText(await uploadFile(f)); }} />
+                </label>
+                <div className="cs-actions">
+                  <button className="primary" disabled={loading || !customText.trim()} onClick={startCustom}>{loading ? "识别中…" : "用这个角色开始"}</button>
+                  <button className="ghost" onClick={() => setCastMode("list")}>← 返回</button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="modal-pane">
+              <div className="cast-carousel" data-coach="select-grid">
+                <Carousel items={playables} render={(p) => (
+                  <div className="cast-card">
+                    <b>{p.name || "未命名"}</b>
+                    <span className="cast-role">{p.role || ""}</span>
+                    <button className="primary" onClick={() => onStart(p)}>以 TA 开始</button>
+                  </div>
+                )} />
+              </div>
+              <div className="pane-footer cast-extra">
+                <button className="ghost" data-coach="select-custom" onClick={() => setCastMode("custom")}>自定义角色</button>
+                <button className="ghost" onClick={() => onStart(null)}>直接开始(不指定主角)</button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -1823,16 +1933,14 @@ function StoriesHome({ onNew, presets, onLaunchPreset, onDeletePreset }) {
       </div>
 
       <div className="home-section">
-        <h3>预设故事书<small> 配好的世界 + 角色 + 故事,点一下开新局</small></h3>
+        <h3>故事书<small> 配好的世界 + 角色 + 故事,点一下开新局</small></h3>
         <div className="story-gallery" data-coach="gallery">
           {!presets.length && <p className="empty">还没有预设故事书。</p>}
           {presets.map((p, i) => (
             <StoryTile key={i} d={p.data || {}} fallbackName={p.name}
               coach={isTutorialPreset(p) ? "tutorial-tile" : undefined}
-              actions={<>
-                <button className="primary" onClick={() => onLaunchPreset(p)}>开始</button>
-                <button className="del" onClick={() => onDeletePreset(p)}>删除</button>
-              </>} />
+              onOpen={() => onLaunchPreset(p)}
+              actions={<button className="primary" onClick={() => onLaunchPreset(p)}>开始</button>} />
           ))}
         </div>
       </div>
@@ -1845,7 +1953,7 @@ function ChatView() {
   return (
     <section className="view-shell chat-view">
       <div className="view-head"><h2>聊天</h2><p>和单个角色一对一聊天,像微信对话框。轻量引擎(不带状态机/事件/世界时钟),后续批次接入。</p></div>
-      <div className="placeholder-pane">
+      <div className="placeholder-pane" data-coach="chat-ph">
         <p className="placeholder-big">聊天功能正在搭建中</p>
         <p className="hint-line">规划:从故事库选一个角色 → 微信式对话框 → 轻量 <code>/api/chat</code> 引擎,纯角色对话,可后期融入剧情。</p>
       </div>
@@ -1853,38 +1961,107 @@ function ChatView() {
   );
 }
 
-// 记录页——存档独立成页,区分故事存档 / 聊天存档(聊天上线后填充)。
-function RecordView({ saves, onResume, onDeleteSave, onGoExplore }) {
-  // 只展示真正玩过/有内容的存档;App 启动会自动登记一个空 session 存档(0 轮、无名),
-  // 那是续局用的占位,不该当成存档显示 → 过滤掉,初始就显示空引导。
+// 「我的」中心(§5/§6):把作者/个人资产从主导航收进来——存档进度 + 我建的预设 + 我的卡库。
+// 第一阶段=localStorage / 本地 API 聚合壳,无账号系统(P0 属后端域,本批次不引入登录)。
+// dashboard 三面板布局(yufei 模板):上排 存档表格 + 预设横排;下排整宽卡库。
+function MineView({ saves, presets, activeId, onResume, onDeleteSave, onGoExplore, onOpenStory, onDeletePreset,
+                    addCharacter, addWorld, setStory, setPlayer, completeCard, goGame }) {
+  const [cardCount, setCardCount] = useState(null);
+  // 只展示真正玩过/有内容的存档(过滤掉启动时登记的空占位 session)。
   const realSaves = (saves || []).filter((s) => s.turns > 0 || (s.name && s.name.trim()) || (s.summary && s.summary.trim()));
+
+  // 头部统计 chip 的卡库总数(角色 + 玩家 + 世界 + 故事;事件随故事书不单算)。
+  useEffect(() => {
+    let alive = true;
+    Promise.all(["characters", "players", "worlds", "stories"].map((k) =>
+      fetch(`/api/library/${k}`).then((r) => (r.ok ? r.json() : [])).catch(() => [])
+    )).then((lists) => { if (alive) setCardCount(lists.reduce((n, l) => n + (l ? l.length : 0), 0)); });
+    return () => { alive = false; };
+  }, []);
+
   return (
-    <section className="view-shell record-view">
-      <div className="view-head"><h2>记录</h2><p>你的存档。故事存档可续玩;聊天记录单独管理。</p></div>
-      <div className="home-section">
-        <h3>故事存档<small> 玩到一半的,接着玩</small></h3>
-        {!realSaves.length ? (
-          <div className="empty-guide">
-            <p>还没有故事存档。先去探索挑一个故事开始吧,玩起来会自动存档。</p>
-            <button className="primary" onClick={onGoExplore}>去探索 →</button>
-          </div>
-        ) : (
-          <div className="story-gallery">
-            {realSaves.map((s) => (
-              <StoryTile key={s.id} d={{ name: s.name || s.summary || "未命名故事" }}
-                sub={`${s.turns || 0} 轮${s.updated ? " · " + s.updated : ""}`}
-                actions={<>
-                  <button className="primary" onClick={() => onResume(s.id)}>续玩</button>
-                  <button className="del" onClick={() => onDeleteSave(s.id)}>删除</button>
-                </>} />
-            ))}
-          </div>
-        )}
+    <section className="mine-view">
+      <div className="mine-head">
+        <div><h2>我的</h2><p>本地保存,账号系统后续接入。</p></div>
+        <div className="mine-stats">
+          <span className="mine-stat"><b>{realSaves.length}</b>个存档</span>
+          <span className="mine-stat"><b>{(presets || []).length}</b>个我建的故事</span>
+          <span className="mine-stat"><b>{cardCount == null ? "…" : cardCount}</b>张卡</span>
+        </div>
       </div>
-      <div className="home-section">
-        <h3>聊天存档<small> 和角色的对话记录</small></h3>
-        <div className="story-gallery"><p className="empty">聊天功能上线后,这里区分显示聊天记录。</p></div>
+
+      <div className="mine-grid">
+        {/* 存档进度 */}
+        <section className="mine-panel" data-coach="mine-saves">
+          <div className="panel-head"><h3>存档进度</h3></div>
+          {realSaves.length ? (
+            <table className="saves-table">
+              <thead><tr><th>故事名</th><th>轮数</th><th>最近游玩</th><th>当前局</th><th>操作</th></tr></thead>
+              <tbody>
+                {realSaves.map((s) => (
+                  <tr key={s.id} className={s.id === activeId ? "current" : ""}>
+                    <td>{s.name || s.summary || "未命名故事"}</td>
+                    <td>{s.turns || 0} 轮</td>
+                    <td className="save-time">{s.updated || "—"}</td>
+                    <td>{s.id === activeId ? <span className="save-now-tag">当前局</span> : "—"}</td>
+                    <td><div className="row-actions">
+                      <button className="primary" onClick={() => onResume(s.id)}>续玩</button>
+                      <button className="del" onClick={() => onDeleteSave(s.id)}>删除</button>
+                    </div></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="empty-guide">
+              <p>还没有故事存档。去探索挑一个故事开始,玩起来会自动存档。</p>
+              <button className="primary" onClick={onGoExplore}>去探索 →</button>
+            </div>
+          )}
+          <div className="chat-saves-ph">聊天存档 —— 聊天功能上线后在这显示</div>
+        </section>
+
+        {/* 我建的预设 */}
+        <section className="mine-panel" data-coach="mine-presets">
+          <div className="panel-head"><h3>我建的预设</h3></div>
+          {(presets || []).length ? (
+            <div className="preset-list">
+              {presets.map((p, i) => {
+                const d = p.data || {};
+                const name = d.name || p.name || "未命名故事";
+                return (
+                  <div className="preset-row" key={i}>
+                    <div className="preset-thumb" style={coverStyle(d.cover)}>{!d.cover && <span>{name.slice(0, 6)}</span>}</div>
+                    <div className="preset-info">
+                      <div className="preset-titlerow"><b>{name}</b>{d.author ? <span className="preset-author">by {d.author}</span> : null}</div>
+                      <p className="preset-syn">{d.synopsis || (d.story && d.story.premise) || "(无简介)"}</p>
+                      <div className="preset-tags">
+                        {(d.tags || []).slice(0, 4).map((t, j) => <span className="tag" key={j}>{t}</span>)}
+                        {bundleSummary(d) !== "空卡组" ? <span className="tag muted">{bundleSummary(d)}</span> : null}
+                      </div>
+                    </div>
+                    <div className="preset-actions">
+                      <button className="primary" onClick={() => onOpenStory(p)}>开始</button>
+                      <button className="del" onClick={() => onDeletePreset(p)}>删除</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="empty-guide"><p>还没有你建的故事。去「建卡 / 新建故事」做一个,存成预设后会出现在这。</p></div>
+          )}
+        </section>
       </div>
+
+      {/* 我的卡库(整宽) */}
+      <section className="mine-panel library-panel" data-coach="mine-library">
+        <div className="panel-head"><h3>我的卡库</h3></div>
+        <VaultView embedded hideMyStories
+          addCharacter={addCharacter} addWorld={addWorld} setStory={setStory} setPlayer={setPlayer}
+          completeCard={completeCard} goGame={goGame}
+          presets={presets} onLaunchPreset={onOpenStory} onDeletePreset={onDeletePreset} />
+      </section>
     </section>
   );
 }
@@ -1997,7 +2174,7 @@ function StepBuilder({ characters, worldBooks, story, player, addCharacter, addW
         <button className="back-link" onClick={onExit}>← 探索</button>
       </div>
 
-      <div className="step-progress">
+      <div className="step-progress" data-coach="build-steps">
         {BUILD_STEPS.map((s, i) => (
           <button key={s.key} className={"step-dot " + (i === step ? "active " : "") + (i < step ? "done" : "")}
             onClick={() => jump(i)}>
@@ -2008,7 +2185,7 @@ function StepBuilder({ characters, worldBooks, story, player, addCharacter, addW
       </div>
 
       {!isLast && (
-        <div className="step-body">
+        <div className="step-body" data-coach="build-body">
           <div className="step-cur-head">
             <h3>第 {step + 1} 步:{cur.label}</h3>
             <p>{cur.desc}{cur.key === "characters" && characters.length ? ` · 已建 ${characters.length} 张` : ""}</p>
@@ -2097,25 +2274,47 @@ const COACH = {
   home: [
     { sel: '[data-coach="gallery"]', title: "挑一个故事", body: "这里是故事库。选一个预设故事,点卡片上的「开始」就能进入开玩。" },
     { sel: '[data-coach="new-story"]', title: "或者自己造一个", body: "想做属于自己的故事?点「新建故事」,一步步把世界、角色、剧情建出来。" },
+    { sel: '[data-coach="help-btn"]', title: "随时能重看", body: "不知道怎么操作?任何时候点右下角这个「?」,就能重看当前页面的引导。" },
     { sel: '[data-coach="tutorial-tile"]', title: "第一次来?从这局学起", body: "这就是新手教学《渡口》。点它的「开始」(或下面的按钮)进去走一遍,5 分钟摸清怎么玩——进去后我会在每一屏接着指给你看。", actionId: "tutorial", actionLabel: "开始新手教学" },
   ],
-  select: [
-    { sel: '[data-coach="select-grid"]', title: "选你扮演谁", body: "挑一个角色来扮演。同一个故事换不同角色,看到的剧情和结局都会不一样。" },
-    { sel: '[data-coach="select-custom"]', title: "也能自定义", body: "点「其他」可以用自己写的设定当主角,AI 会把它识别成一张主角卡。" },
+  modal: [
+    { tab: "intro", sel: '[data-coach="modal-tab-intro"]', title: "① 简介", body: "封面、一句钩子、作者、标签——先大概了解这个故事是什么。" },
+    { tab: "bg", sel: '[data-coach="modal-tab-bg"]', title: "② 故事背景", body: "前情 + 最核心的世界设定。只给公开信息,不剧透。" },
+    { tab: "chars", sel: '[data-coach="modal-tab-chars"]', title: "③ 角色", body: "登场人物,在内容区用箭头左右翻看(只露公开层,藏的真相不剧透)。" },
+    { tab: "cast", sel: '[data-coach="modal-tab-cast"]', title: "④ 出演", body: "选你扮演谁:翻看可扮演角色「以 TA 开始」,或点「自定义角色」用自己的设定。同一个故事换人重玩,体验不同。" },
   ],
   story: [
     { sel: '[data-coach="gen-opening"]', title: "先生成开场", body: "点「生成开场」,故事会从一个具体场景开始,而不是空白对话。" },
     { sel: '[data-coach="composer"]', title: "你来推进剧情", body: "在这里自由输入你想做的事;顶部也会冒出几个选项,点一下会填进输入框,你可以改了再发。" },
     { sel: '[data-coach="rail-toggle"]', title: "随时看故事状态", body: "想知道现在什么情况?点这里展开右侧状态栏:当前场景、在场角色、你和他们的关系、物品、故事时间轴,都在这。" },
   ],
+  mine: [
+    { sel: '[data-coach="mine-saves"]', title: "存档在这", body: "玩过的故事都自动存档,在这里接着玩。" },
+    { sel: '[data-coach="mine-presets"]', title: "你建的故事", body: "你做的预设故事在这,点「开始」就能开局。" },
+    { sel: '[data-coach="mine-library"]', title: "你的卡库", body: "建过 / 导入的角色、世界、故事卡,按类型在这管理、复用。" },
+  ],
+  build: [
+    { sel: '[data-coach="build-steps"]', title: "一步步建故事", body: "建卡分几步:世界 → 角色 → 主角 → 故事 → 汇总。点上面的步骤可以来回跳。" },
+    { sel: '[data-coach="build-body"]', title: "聊着就建好", body: "每一步和 AI 对话,聊着聊着卡就出来了。" },
+    { sel: '[data-coach="build-overview"]', title: "建好的卡在这", body: "这轮建好的卡都列在这,可查看 / 修改,或单独存到故事库。点下面按钮开始建第一张。", actionId: "dismiss", actionLabel: "开始对话建卡" },
+  ],
+  chat: [
+    { sel: '[data-coach="chat-ph"]', title: "聊天即将上线", body: "之后这里能和单个角色一对一聊天(微信式)。本批次先占位。" },
+  ],
+  gameEmpty: [
+    { sel: '[data-coach="nav-explore"]', title: "先挑个故事", body: "还没有进行中的故事。去「探索」挑一个开始(或新建一个),玩起来这里就是当前故事。", actionId: "explore", actionLabel: "去探索" },
+  ],
 };
 
-function CoachMarks({ steps, manual, onDone, onSkip, onAction }) {
+function CoachMarks({ steps, manual, onDone, onSkip, onAction, onStep }) {
   const list = steps || [];
   const [idx, setIdx] = useState(0);
   const [rect, setRect] = useState(null);
   const [pop, setPop] = useState(null);
   const step = list[idx] || null;
+
+  // 通知外层当前步(modal 逐 tab 走查用它切到对应 tab,随后 60ms 重量锚点)。
+  useEffect(() => { if (onStep && step) onStep(step); }, [idx]);
 
   // 量出当前步目标元素的位置(必要时先滚进视口);找不到 → rect=null,降级居中卡。
   useEffect(() => {
@@ -2171,7 +2370,7 @@ function CoachMarks({ steps, manual, onDone, onSkip, onAction }) {
           {idx > 0 && !last && <button onClick={() => setIdx(idx - 1)}>上一步</button>}
           {step.actionId && <button className="primary" onClick={() => onAction && onAction(step.actionId)}>{step.actionLabel || "去看看"}</button>}
           {!last && <button className={step.actionId ? "" : "primary"} onClick={() => setIdx(idx + 1)}>下一步</button>}
-          {last && !manual && <button className={step.actionId ? "" : "primary"} onClick={onDone}>知道了</button>}
+          {last && !manual && !step.actionId && <button className="primary" onClick={onDone}>知道了</button>}
         </div>
       </div>
     </div>
@@ -2179,7 +2378,7 @@ function CoachMarks({ steps, manual, onDone, onSkip, onAction }) {
 }
 
 function CoachHelpButton({ onClick }) {
-  return <button className="coach-help-btn" onClick={onClick} title="重看新手引导" aria-label="重看新手引导">?</button>;
+  return <button className="coach-help-btn" data-coach="help-btn" onClick={onClick} title="重看新手引导" aria-label="重看新手引导">?</button>;
 }
 
 function App() {
@@ -2208,13 +2407,23 @@ function App() {
   const [saves, setSaves] = useState(loadSaves);
   const [coachRun, setCoachRun] = useState(null); // 新手引导当前运行 { screen, manual } | null
   const coachRunRef = useRef(null);
+  const [storyModal, setStoryModal] = useState(null); // 故事详情 modal { preset, tab } | null
+  // 建卡(新建故事)独立工作区:跟进行中的游戏卡组分开,互不影响。
+  const [bChars, setBChars] = useState([]);
+  const [bWorlds, setBWorlds] = useState([]);
+  const [bStory, setBStory] = useState(null);
+  const [bPlayer, setBPlayer] = useState(null);
   const world = useMemo(() => mergeWorldBooks(worldBooks), [worldBooks]);
 
-  // 当前所在「引导屏」:探索 / 选人 / 故事;其它页(建卡/故事库/聊天/记录/待机)无对应引导。
+  // 当前所在「引导屏」——每个界面都有 onboarding。modal 开 = 一条龙走查(简介→背景→角色→出演);
+  // 否则按 view 分(探索/我的/建卡/聊天/故事)。
   const coachScreen =
-    view === "home" ? "home"
-    : (view === "game" && selecting) ? "select"
-    : (view === "game" && started && characters.length > 0) ? "story"
+    storyModal ? "modal"
+    : view === "home" ? "home"
+    : view === "mine" ? "mine"
+    : view === "build" ? "build"
+    : view === "chat" ? "chat"
+    : view === "game" ? (started && characters.length > 0 ? "story" : "gameEmpty")
     : null;
   useEffect(() => { coachRunRef.current = coachRun; }, [coachRun]);
 
@@ -2244,21 +2453,48 @@ function App() {
     setIsPreset(false); setSelecting(false); setPendingPreset(null);
   }
 
-  // 新建故事:开新会话 + 清空卡组 → 进建卡页的步骤式引导(世界→角色→主角→故事→汇总),最后打包预设并开始。
+  // 新建故事 = 全新的建卡工作区(独立于进行中的游戏,不动游戏卡组 / 会话)。
   function onNew() {
-    const id = newSessionId();
-    setActiveId(id);
-    resetGameState();
-    setSessionId(id);
-    setStarted(false);
-    setAssembling(true);
+    setBChars([]); setBWorlds([]); setBStory(null); setBPlayer(null);
     setBuildFlow(true);
     setView("build");
   }
 
-  // 用故事预设开新局:新会话 + 载入预设卡组 + 直接开玩。
-  function launchPreset(p) {
-    const d = p.data || {};
+  // 建卡完成「开始故事」:把建卡工作区的卡组载进一局新游戏(此时才建会话)。
+  function startBuiltStory() {
+    if (!bChars.length) return;
+    const id = newSessionId();
+    persistSaves([{ id, name: (bStory && bStory.title) || (bChars[0] && bChars[0].data && bChars[0].data.name) || "新故事", updated: "", turns: 0, summary: (bStory && bStory.title) || "" }, ...loadSaves()]);
+    setActiveId(id);
+    resetGameState();
+    setCharacters(bChars); setWorldBooks(bWorlds); setStory(bStory); setPlayer(bPlayer);
+    setSessionId(id);
+    setBuildFlow(false);
+    setStarted(true);
+    setView("game");
+  }
+
+  // 把建卡工作区存成预设(用 build deck,不是游戏 deck)。
+  async function saveBuildAsPreset() {
+    const name = prompt("故事名(存成预设可复用)", (bStory && bStory.title) || (bChars[0] && bChars[0].data.name) || "我的故事");
+    if (name == null || !name.trim()) return;
+    const synopsis = prompt("简介(可空)", (bStory && bStory.premise) || "") || "";
+    const author = prompt("作者(可空)", "") || "";
+    const cover = prompt("封面图片 URL(可空,留空用纯色封面)", "") || "";
+    const tagSet = new Set([...((bStory && bStory.tags) || []), ...bChars.flatMap((c) => (c.data.tags || []))]);
+    const tags = [...tagSet].filter(Boolean).slice(0, 5);
+    try {
+      await postJSON("/api/presets", { name: name.trim(), characters: bChars, world: mergeWorldBooks(bWorlds), story: bStory, player: bPlayer, mode, synopsis, author, cover, tags });
+      refreshHome();
+      alert("已保存为故事预设。");
+    } catch (e) { alert("保存失败:" + e.message); }
+  }
+
+  // 点故事卡 → 弹详情 modal(只浏览,不建存档)。预设 + 自装配都走这同一个 modal(§2)。
+  function openStoryModal(p, tab) { setStoryModal({ preset: p, tab: tab || "intro" }); }
+
+  // 真正开始(modal 出演 tab 定身份)时才建会话 + 载入预设卡组。
+  function loadPresetDeck(d) {
     const id = newSessionId();
     persistSaves([{ id, name: d.name || "未命名故事", updated: "", turns: 0, summary: d.name || "" }, ...loadSaves()]);
     setActiveId(id);
@@ -2271,16 +2507,22 @@ function App() {
     setIsPreset(true);
     setPendingPreset(d);
     setAssembling(false);
-    setSelecting(true);   // 预设故事:先进选人页(选主角 / 自定义),不直接开玩
-    setStarted(false);
+  }
+
+  // modal 出演 tab 定身份(playable / 自定义识别结果 / null=作者直接开始)→ 载卡组 + 开玩。
+  function startFromModal(playerCard) {
+    if (!storyModal) return;
+    loadPresetDeck(storyModal.preset.data || {});
+    setStoryModal(null);
+    startWithPlayer(playerCard);   // setPlayer(if any) + 移除同名 NPC + selecting=false + started=true
     setView("game");
   }
 
-  // coach marks「开始新手教学」CTA:找教学 preset(《渡口》)直接开局,顺势进选人页(select 引导会接着自动带)。
+  // coach marks「开始新手教学」CTA:开《渡口》modal 直接落出演 tab → select 引导接力(闭环)。
   function startTutorial() {
     const t = presets.find(isTutorialPreset);
     setCoachRun(null);
-    if (t) launchPreset(t);
+    if (t) openStoryModal(t, "intro");   // 从简介开始,逐 section 走查,不直接进出演
     else { setView("home"); alert("没找到教学故事《渡口》。请先在后端 seed:python _seed_tutorial.py"); }
   }
 
@@ -2388,7 +2630,7 @@ function App() {
           <StoriesHome
             onNew={onNew}
             presets={presets}
-            onLaunchPreset={launchPreset}
+            onLaunchPreset={openStoryModal}
             onDeletePreset={deletePreset}
           />
         </main>
@@ -2400,18 +2642,14 @@ function App() {
         </main>
       )}
 
-      {view === "record" && (
+      {view === "mine" && (
         <main className="single-view">
-          <RecordView saves={saves} onResume={resumeSave} onDeleteSave={deleteSaveHandler} onGoExplore={() => setView("home")} />
-        </main>
-      )}
-
-      {view === "game" && selecting && (
-        <main className="single-view">
-          <CharacterSelect
-            playables={(pendingPreset && pendingPreset.playables) || []}
-            storyName={(pendingPreset && pendingPreset.name) || ""}
-            onPick={startWithPlayer}
+          <MineView
+            saves={saves} presets={presets} activeId={sessionId}
+            onResume={resumeSave} onDeleteSave={deleteSaveHandler} onGoExplore={() => setView("home")}
+            onOpenStory={openStoryModal} onDeletePreset={deletePreset}
+            addCharacter={addCharacter} addWorld={addWorld} setStory={setStory} setPlayer={setPlayer}
+            completeCard={completeCardFromVault} goGame={() => setView("game")}
           />
         </main>
       )}
@@ -2484,10 +2722,11 @@ function App() {
         <main className="single-view">
           {buildFlow ? (
             <StepBuilder
-              characters={characters} worldBooks={worldBooks} story={story} player={player}
-              addCharacter={addCharacter} addWorld={addWorld} setCharacters={setCharacters} setWorldBooks={setWorldBooks} setStory={setStory} setPlayer={setPlayer}
-              onStartStory={() => { setBuildFlow(false); setAssembling(false); setStarted(true); setView("game"); }}
-              onSavePreset={saveAsPreset}
+              characters={bChars} worldBooks={bWorlds} story={bStory} player={bPlayer}
+              addCharacter={(c) => setBChars((xs) => [...xs, c])} addWorld={(w) => setBWorlds((xs) => [...xs, w])}
+              setCharacters={setBChars} setWorldBooks={setBWorlds} setStory={setBStory} setPlayer={setBPlayer}
+              onStartStory={startBuiltStory}
+              onSavePreset={saveBuildAsPreset}
               onExit={() => { setBuildFlow(false); refreshHome(); setView("home"); }}
             />
           ) : (
@@ -2504,20 +2743,13 @@ function App() {
         </main>
       )}
 
-      {view === "vault" && (
-        <main className="single-view">
-          <VaultView
-            addCharacter={addCharacter}
-            addWorld={addWorld}
-            setStory={setStory}
-            setPlayer={setPlayer}
-            completeCard={completeCardFromVault}
-            goGame={() => setView("game")}
-            presets={presets}
-            onLaunchPreset={launchPreset}
-            onDeletePreset={deletePreset}
-          />
-        </main>
+      {storyModal && (
+        <StoryModal
+          entry={storyModal}
+          setTab={(k) => setStoryModal((m) => (m ? { ...m, tab: k } : m))}
+          onClose={() => setStoryModal(null)}
+          onStart={startFromModal}
+        />
       )}
 
       <CoachHelpButton onClick={replayCoach} />
@@ -2528,7 +2760,8 @@ function App() {
           manual={coachRun.manual}
           onDone={() => setCoachRun(null)}
           onSkip={() => { setCoachDone(); setCoachRun(null); }}
-          onAction={(id) => { if (id === "tutorial") startTutorial(); }}
+          onAction={(id) => { if (id === "tutorial") startTutorial(); else if (id === "dismiss") setCoachRun(null); else if (id === "explore") { setView("home"); setCoachRun(null); } }}
+          onStep={(s) => { if (s && s.tab) setStoryModal((m) => (m ? { ...m, tab: s.tab } : m)); }}
         />
       )}
     </div>
