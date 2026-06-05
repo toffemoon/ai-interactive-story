@@ -2081,7 +2081,7 @@ function App() {
   const [worldBooks, setWorldBooks] = useState([]);
   const [story, setStory] = useState(null);
   const [player, setPlayer] = useState(null);
-  const [mode, setMode] = useState("standard");
+  const [mode, setMode] = useState("deep");  // 默认深度:长对话自动上向量召回 + Phase 3 在场过滤(部署需含 embedding 依赖)
   const [started, setStarted] = useState(false);
   const [assembling, setAssembling] = useState(false);
   const [sessionId, setSessionId] = useState(loadOrCreateSessionId);
