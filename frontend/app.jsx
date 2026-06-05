@@ -1542,7 +1542,9 @@ function BuildView({ buildSeed, clearSeed, addCharacter, addWorld, setStory, set
         </div>
       )}
 
-      {(!building || saved) && <BuiltOverview refreshKey={overviewKey} onUse={placeInGame} />}
+      {/* BuiltOverview 属【多步建卡组流程 StepBuilder】的"本轮已建卡组一览"(它收 characters/worldBooks/
+          story/player/onView/onSave)。单卡 BuildView 没有"本轮卡组"可展示,原调用传的 refreshKey/onUse
+          组件根本不接 → 恒渲染空 + 按钮回调 undefined。移除以免误导;单卡产物已在故事库(VaultView)可见。 */}
     </section>
   );
 }
@@ -1728,10 +1730,11 @@ function bundleSummary(d) {
   return parts.join(" · ") || "空卡组";
 }
 
-// 封面:有 cover(图片 URL 或 data-URI)就铺它,否则用统一深色纯底(故事名压在上面)。
+// 封面:有 cover(图片 URL 或 data-URI)就铺它,否则用渐变星空底(故事名压在上面)。
+// 配色对齐 _seed_preset.py 的 starfield_cover(深蓝→紫→近黑),比纯黑封面墙耐看。
 function coverStyle(cover) {
   if (cover) return { backgroundImage: `url("${cover}")`, backgroundSize: "cover", backgroundPosition: "center" };
-  return { background: "var(--ink)" };
+  return { backgroundImage: "radial-gradient(120% 90% at 72% 28%, rgba(106,123,255,0.35), rgba(106,123,255,0) 60%), linear-gradient(135deg, #0b1437 0%, #27194e 55%, #070a1b 100%)" };
 }
 
 // 判断某个 preset 是不是新手教学局(给探索页那张卡打引导锚点 / startTutorial 找它都用)。
@@ -2563,7 +2566,10 @@ function App() {
     const tagSet = new Set([...((story && story.tags) || []), ...characters.flatMap((c) => (c.data.tags || []))]);
     const tags = [...tagSet].filter(Boolean).slice(0, 5);
     try {
-      await postJSON("/api/presets", { name: name.trim(), characters, world, story, player, mode, synopsis, author, cover, tags });
+      // playables = 选人页(CharacterSelect)的数据源;不传则自建预设进去选人页全空、"换主角"失效。
+      // 至少把当前玩家卡塞进去(有 player 才有得选);无 player 留空,前端回退"自定义"。
+      await postJSON("/api/presets", { name: name.trim(), characters, world, story, player,
+        playables: player ? [player] : [], mode, synopsis, author, cover, tags });
       refreshHome();
       alert("已保存为故事预设。");
     } catch (e) { alert("保存失败:" + e.message); }
