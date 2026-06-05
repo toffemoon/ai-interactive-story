@@ -1093,3 +1093,39 @@ main.single-view { display: block; }
 }
 .cs-actions { display: flex; gap: 12px; align-items: center; }
 @media (max-width: 680px) { .select-grid { grid-template-columns: 1fr 1fr; } .char-select { padding: 28px 16px; } }
+
+/* ── 新手引导 coach marks + 浮动「?」钮 ───────────────────────────── */
+.coach-overlay { position: fixed; inset: 0; z-index: 9000; }
+.coach-overlay .coach-backdrop { position: absolute; inset: 0; background: rgba(20,20,18,.55); }
+.coach-spot {
+  position: fixed; z-index: 9001; border-radius: 8px;
+  box-shadow: 0 0 0 9999px rgba(20,20,18,.55);
+  outline: 2px solid var(--gold); outline-offset: 2px;
+  pointer-events: none; transition: top .18s ease, left .18s ease, width .18s ease, height .18s ease;
+}
+.coach-pop {
+  position: fixed; z-index: 9002;
+  width: min(320px, calc(100vw - 24px));
+  background: var(--panel); border: 1px solid var(--dark); border-radius: 7px;
+  box-shadow: 6px 6px 0 rgba(36,35,31,.18); padding: 14px 16px;
+}
+.coach-pop.center { left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.coach-pop .coach-count { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; color: var(--muted); }
+.coach-pop h4 { margin: 4px 0 6px; font-size: 16px; }
+.coach-pop p { margin: 0 0 12px; font-size: 13.5px; line-height: 1.55; color: var(--ink); white-space: pre-line; }
+.coach-pop .coach-actions { display: flex; gap: 8px; align-items: center; }
+.coach-pop .coach-actions .spacer { flex: 1; }
+.coach-skip {
+  background: none; border: none; min-height: auto; padding: 4px 2px;
+  color: var(--muted); font-size: 12px; text-decoration: underline;
+}
+.coach-skip:hover { background: none; color: var(--ink); }
+.coach-help-btn {
+  position: fixed; right: 20px; bottom: 20px; z-index: 800;
+  width: 42px; height: 42px; min-height: 42px; padding: 0; border-radius: 50%;
+  border: 1px solid var(--dark); background: var(--panel); color: var(--ink);
+  font-size: 19px; box-shadow: 4px 4px 0 rgba(36,35,31,.16);
+  display: flex; align-items: center; justify-content: center;
+}
+.coach-help-btn:hover { background: var(--dark); color: #fff; }
+@media (max-width: 680px) { .coach-help-btn { right: 12px; bottom: 12px; } }

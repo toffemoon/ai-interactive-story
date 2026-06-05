@@ -1025,7 +1025,7 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
               {loading ? "重新生成中..." : "↻ 重生成上一轮"}
             </button>
           )}
-          <button onClick={() => runTurn()} disabled={loading || turns.length > 0}>
+          <button data-coach="gen-opening" onClick={() => runTurn()} disabled={loading || turns.length > 0}>
             {loading && !turns.length ? "开场中..." : "生成开场"}
           </button>
         </div>
@@ -1079,7 +1079,7 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
         ))}
       </div>
 
-      <div className="composer">
+      <div className="composer" data-coach="composer">
         <textarea
           ref={inputRef}
           rows="2"
@@ -1792,14 +1792,14 @@ function CharacterSelect({ playables, storyName, onPick }) {
     <section className="char-select">
       <h2>你想扮演谁?</h2>
       {storyName && <p className="cs-sub">{storyName}</p>}
-      <div className="select-grid">
+      <div className="select-grid" data-coach="select-grid">
         {(playables || []).map((p, i) => (
           <button key={i} className="select-card" onClick={() => onPick(p)}>
             <b>{p.name || "未命名"}</b>
             <span>{p.role || ""}</span>
           </button>
         ))}
-        <button className="select-card other" onClick={() => setMode("custom")}>
+        <button className="select-card other" data-coach="select-custom" onClick={() => setMode("custom")}>
           <b>其他</b>
           <span>自定义你自己的角色设定</span>
         </button>
@@ -1813,12 +1813,12 @@ function StoriesHome({ onNew, presets, onLaunchPreset, onDeletePreset }) {
     <section className="stories-home">
       <div className="home-hero">
         <div><h2>开始你的故事</h2><p>从一个预设故事书开局,或新建一个属于你的故事。</p></div>
-        <button className="primary big" onClick={onNew}>+ 新建故事</button>
+        <button className="primary big" data-coach="new-story" onClick={onNew}>+ 新建故事</button>
       </div>
 
       <div className="home-section">
         <h3>预设故事书<small> 配好的世界 + 角色 + 故事,点一下开新局</small></h3>
-        <div className="story-gallery">
+        <div className="story-gallery" data-coach="gallery">
           {!presets.length && <p className="empty">还没有预设故事书。</p>}
           {presets.map((p, i) => (
             <StoryTile key={i} d={p.data || {}} fallbackName={p.name}
@@ -2072,6 +2072,106 @@ function StepBuilder({ characters, worldBooks, story, player, addCharacter, addW
   );
 }
 
+// ── 新手引导(coach marks)─────────────────────────────────────────────
+// 只对「第一次用网站」的用户自动触发;随屏即时:每屏一组,锚到该屏真实元素;之后靠右下角「?」手动重放。
+const COACH_DONE_KEY = "ais_onboarding_done"; // 跳过/不再显示后置 1,自动引导永不再触发
+const COACH_SEEN_KEY = "ais_coach_seen";      // 首用期间各屏是否已自动展示过 {home,select,story}
+
+function coachDone() { try { return localStorage.getItem(COACH_DONE_KEY) === "1"; } catch (e) { return true; } }
+function setCoachDone() { try { localStorage.setItem(COACH_DONE_KEY, "1"); } catch (e) {} }
+function coachSeen() { try { return JSON.parse(localStorage.getItem(COACH_SEEN_KEY)) || {}; } catch (e) { return {}; } }
+function markCoachSeen(screen) {
+  try { const s = coachSeen(); s[screen] = true; localStorage.setItem(COACH_SEEN_KEY, JSON.stringify(s)); } catch (e) {}
+}
+
+// 每屏的步骤(锚到上面打的 data-coach 元素)。文案为通用占位,后续 yufei 再润。
+// sel 找不到对应元素时该步降级为居中说明卡(不高亮),保证健壮。
+const COACH = {
+  home: [
+    { sel: '[data-coach="gallery"]', title: "挑一个故事", body: "这里是故事库。选一个预设故事,点卡片上的「开始」就能进入开玩。" },
+    { sel: '[data-coach="new-story"]', title: "或者自己造一个", body: "想做属于自己的故事?点「新建故事」,一步步把世界、角色、剧情建出来。\n\n选好故事后,我会在下一屏接着指给你看。" },
+  ],
+  select: [
+    { sel: '[data-coach="select-grid"]', title: "选你扮演谁", body: "挑一个角色来扮演。同一个故事换不同角色,看到的剧情和结局都会不一样。" },
+    { sel: '[data-coach="select-custom"]', title: "也能自定义", body: "点「其他」可以用自己写的设定当主角,AI 会把它识别成一张主角卡。" },
+  ],
+  story: [
+    { sel: '[data-coach="gen-opening"]', title: "先生成开场", body: "点「生成开场」,故事会从一个具体场景开始,而不是空白对话。" },
+    { sel: '[data-coach="composer"]', title: "你来推进剧情", body: "在这里自由输入你想做的事;顶部也会冒出几个选项,点一下会填进输入框,你可以改了再发。\n\n还不熟?教学局即将上线(开发中)。" },
+  ],
+};
+
+function CoachMarks({ steps, manual, onDone, onSkip }) {
+  const list = steps || [];
+  const [idx, setIdx] = useState(0);
+  const [rect, setRect] = useState(null);
+  const [pop, setPop] = useState(null);
+  const step = list[idx] || null;
+
+  // 量出当前步目标元素的位置(必要时先滚进视口);找不到 → rect=null,降级居中卡。
+  useEffect(() => {
+    if (!step) return undefined;
+    function measure() {
+      const el = step.sel ? document.querySelector(step.sel) : null;
+      if (!el) { setRect(null); return; }
+      let r = el.getBoundingClientRect();
+      if (r.top < 8 || r.bottom > window.innerHeight - 8) {
+        el.scrollIntoView({ block: "center", behavior: "auto" });
+        r = el.getBoundingClientRect();
+      }
+      setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+    }
+    measure();                          // 立刻量一次
+    const t = setTimeout(measure, 60);  // 布局 / 滚动后再校正一次(setTimeout 在后台标签也会触发,不用 rAF)
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+    };
+  }, [idx, step && step.sel]);
+
+  // 据目标位置摆 popover:优先放下方,放不下放上方,再不行贴边。
+  useEffect(() => {
+    if (!rect) { setPop(null); return; }
+    const ph = 190, pw = Math.min(320, window.innerWidth - 24);
+    const vw = window.innerWidth, vh = window.innerHeight, gap = 14, m = 12;
+    let top;
+    if (rect.top + rect.height + gap + ph <= vh) top = rect.top + rect.height + gap;
+    else if (rect.top - gap - ph >= 0) top = rect.top - gap - ph;
+    else top = Math.max(m, Math.min(vh - ph - m, rect.top));
+    const left = Math.max(m, Math.min(vw - pw - m, rect.left + rect.width / 2 - pw / 2));
+    setPop({ top, left });
+  }, [rect]);
+
+  if (!step) return null;
+  const last = idx === list.length - 1;
+  return (
+    <div className="coach-overlay">
+      {rect
+        ? <div className="coach-spot" style={{ top: rect.top - 6, left: rect.left - 6, width: rect.width + 12, height: rect.height + 12 }} />
+        : <div className="coach-backdrop" />}
+      <div className={"coach-pop" + (rect ? "" : " center")} style={rect && pop ? { top: pop.top, left: pop.left } : undefined}>
+        <div className="coach-count">{idx + 1} / {list.length}</div>
+        <h4>{step.title}</h4>
+        <p>{step.body}</p>
+        <div className="coach-actions">
+          <button className="coach-skip" onClick={manual ? onDone : onSkip}>{manual ? "关闭" : "跳过 · 不再显示"}</button>
+          <span className="spacer" />
+          {idx > 0 && <button onClick={() => setIdx(idx - 1)}>上一步</button>}
+          {!last && <button className="primary" onClick={() => setIdx(idx + 1)}>下一步</button>}
+          {last && <button className="primary" onClick={onDone}>{manual ? "关闭" : "知道了"}</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CoachHelpButton({ onClick }) {
+  return <button className="coach-help-btn" onClick={onClick} title="重看新手引导" aria-label="重看新手引导">?</button>;
+}
+
 function App() {
   const [characters, setCharacters] = useState([]);
   const [worldBooks, setWorldBooks] = useState([]);
@@ -2096,7 +2196,17 @@ function App() {
   const [railOpen, setRailOpen] = useState(false); // 右侧状态栏开合(不常驻)
   const [presets, setPresets] = useState([]);
   const [saves, setSaves] = useState(loadSaves);
+  const [coachRun, setCoachRun] = useState(null); // 新手引导当前运行 { screen, manual } | null
+  const coachRunRef = useRef(null);
   const world = useMemo(() => mergeWorldBooks(worldBooks), [worldBooks]);
+
+  // 当前所在「引导屏」:探索 / 选人 / 故事;其它页(建卡/故事库/聊天/记录/待机)无对应引导。
+  const coachScreen =
+    view === "home" ? "home"
+    : (view === "game" && selecting) ? "select"
+    : (view === "game" && started && characters.length > 0) ? "story"
+    : null;
+  useEffect(() => { coachRunRef.current = coachRun; }, [coachRun]);
 
   const addCharacter = (card) => setCharacters((xs) => [...xs, card]);
   const addWorld = (wb) => setWorldBooks((xs) => [...xs, wb]);
@@ -2227,6 +2337,21 @@ function App() {
       .catch(() => { if (alive) setRestoring(false); });
     return () => { alive = false; };
   }, [sessionId]);
+
+  // 随屏即时:进入某引导屏 + 是首用 + 该屏没自动show过 → 自动放一次(略延时,等元素挂载 / 首屏 loading 撤掉)。
+  useEffect(() => {
+    if (restoring || !coachScreen || coachDone()) return undefined;
+    if (coachSeen()[coachScreen]) return undefined;
+    const t = setTimeout(() => {
+      if (coachRunRef.current) return;            // 已有引导在跑,不抢
+      markCoachSeen(coachScreen);
+      setCoachRun({ screen: coachScreen, manual: false });
+    }, 520);
+    return () => clearTimeout(t);
+  }, [coachScreen, restoring]);
+
+  // 右下角「?」:重放当前屏引导(无对应屏则回退到 home 概览,目标缺失会降级为居中说明卡)。
+  function replayCoach() { setCoachRun({ screen: coachScreen || "home", manual: true }); }
 
   if (restoring) {
     return (
@@ -2376,8 +2501,30 @@ function App() {
           />
         </main>
       )}
+
+      <CoachHelpButton onClick={replayCoach} />
+      {coachRun && (
+        <CoachMarks
+          key={coachRun.screen + (coachRun.manual ? "-m" : "")}
+          steps={COACH[coachRun.screen] || COACH.home}
+          manual={coachRun.manual}
+          onDone={() => setCoachRun(null)}
+          onSkip={() => { setCoachDone(); setCoachRun(null); }}
+        />
+      )}
     </div>
   );
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+
+// React 已挂载(createRoot().render 同步提交),撤掉 index.html 里的首屏 loading。
+// 用 setTimeout 不用 rAF:后台标签里 rAF 会被挂起,首屏 loading 就撤不掉了。
+(function dropBoot() {
+  const boot = document.getElementById("boot");
+  if (!boot) return;
+  setTimeout(() => {
+    boot.classList.add("boot-hide");
+    setTimeout(() => boot.remove(), 460);
+  }, 60);
+})();
