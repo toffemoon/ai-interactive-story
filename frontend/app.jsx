@@ -937,6 +937,7 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
     }
     setInput("");
     setStreaming(null);
+    setChoices([]);  // 生成中清掉上一轮的旧选项,避免"还挂着像能点"
     const body = { characters, world, story, player, mode, session_id: sessionId, user: action, selected_choice: choice };
     try {
       let raw = "";
@@ -996,6 +997,7 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
     if (idx === -1) return;
     setLoading(true);
     setError("");
+    setChoices([]);  // 重生成期间清掉旧选项
     try {
       const out = await postJSON("/api/reroll", { session_id: sessionId });
       setTurns((xs) => xs.map((t, i) => (i === idx ? { kind: "story", data: out } : t)));
@@ -1030,7 +1032,7 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
       </div>
 
       <div className="story-feed">
-        {!turns.length && <div className="empty">点击“生成开场”，从场景而不是纯聊天开始。</div>}
+        {!turns.length && !loading && <div className="empty">点击“生成开场”，从场景而不是纯聊天开始。</div>}
         {turns.map((turn, i) => {
           if (turn.kind === "player") return <div className="player-action" key={i}>{turn.text}</div>;
           const data = turn.data;
@@ -1670,7 +1672,7 @@ function VaultView({ addCharacter, addWorld, setStory, setPlayer, completeCard, 
         {loading && <p className="empty">读取中…</p>}
         {!loading && !items.length && (
           <p className="empty">{
-            kind === "mystories" ? "还没有你的故事。在「新建故事」最后『存成预设故事书』,或导入《如我所书》这类原创故事。"
+            kind === "mystories" ? "还没有你的故事。在「新建故事」最后『存成预设故事书』,或导入你自己的原创故事。"
             : kind === "events" ? "还没有事件卡。在「新建故事 → 事件卡」给故事书加隐藏事件。"
             : "这一类还是空的。去「建卡」建一张。"
           }</p>
@@ -1723,16 +1725,10 @@ function bundleSummary(d) {
   return parts.join(" · ") || "空卡组";
 }
 
-function hashHue(s) {
-  let h = 0;
-  for (let i = 0; i < (s || "").length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
-  return h;
-}
-// 封面:有 cover(图片 URL 或 data-URI)就铺它,否则按故事名生成一张渐变星空封面。
-function coverStyle(cover, name) {
+// 封面:有 cover(图片 URL 或 data-URI)就铺它,否则用统一深色纯底(故事名压在上面)。
+function coverStyle(cover) {
   if (cover) return { backgroundImage: `url("${cover}")`, backgroundSize: "cover", backgroundPosition: "center" };
-  const h = hashHue(name);
-  return { background: `radial-gradient(120% 90% at 75% 25%, hsl(${(h + 40) % 360},55%,32%), hsl(${h},48%,12%))` };
+  return { background: "var(--ink)" };
 }
 
 function StoryTile({ d, fallbackName, sub, actions }) {
@@ -1740,7 +1736,7 @@ function StoryTile({ d, fallbackName, sub, actions }) {
   const cover = d && d.cover;
   return (
     <div className="story-tile">
-      <div className="tile-cover" style={coverStyle(cover, name)}>
+      <div className="tile-cover" style={coverStyle(cover)}>
         {!cover && <span className="cover-title">{name.slice(0, 10)}</span>}
       </div>
       <div className="tile-body">
@@ -1781,7 +1777,7 @@ function CharacterSelect({ playables, storyName, onPick }) {
         <p className="cs-sub">写下你要扮演的角色:身份、背景、目标、能力、限制、开局已知……AI 会把它识别成主角卡。</p>
         <textarea className="cs-textarea" rows="8" value={customText}
           onChange={(e) => setCustomText(e.target.value)}
-          placeholder="例:一个流落翁法罗斯的外乡铁匠,为寻失散的妹妹而来,擅长锻造与观察,却看不懂这世界的神话与战事……" />
+          placeholder="例:一个流落异乡的年轻铁匠,为寻失散的妹妹而来,擅长锻造与观察,却看不懂这片土地的神话与战事……" />
         <div className="cs-actions">
           <button className="primary" disabled={loading || !customText.trim()} onClick={startCustom}>
             {loading ? "识别中…" : "用这个角色开始"}
@@ -2193,7 +2189,7 @@ function App() {
     if (name == null || !name.trim()) return;
     const synopsis = prompt("简介(可空)", (story && story.premise) || "") || "";
     const author = prompt("作者(可空)", "") || "";
-    const cover = prompt("封面图片 URL(可空,留空自动生成星空封面)", "") || "";
+    const cover = prompt("封面图片 URL(可空,留空用纯色封面)", "") || "";
     const tagSet = new Set([...((story && story.tags) || []), ...characters.flatMap((c) => (c.data.tags || []))]);
     const tags = [...tagSet].filter(Boolean).slice(0, 5);
     try {
