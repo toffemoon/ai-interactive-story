@@ -957,6 +957,27 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
     });
   }, [turns, sessionId]);
 
+  // 切走会卸载本组件、丢失内部 turns;App 的 restore effect 只在 sessionId 变时跑,
+  // 「切 tab 回当前故事」和「续玩当前这一局」都不触发 → 会显示空。挂载时兜底:
+  // 本地没有 turns 就按 sessionId 拉后端补水(全新局后端也空,保持空;App 已还原过则跳过不重复拉)。
+  useEffect(() => {
+    if (initialTurns && initialTurns.length) return undefined;
+    let alive = true;
+    fetch(`/api/session/${sessionId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!alive || !data) return;
+        const structured = data.turns || [];
+        const msgs = data.messages || [];
+        if (!structured.length && !msgs.length) return;   // 后端也空(全新局没玩过)→ 保持空
+        setTurns(structured.length ? restoreTurns(structured) : messagesToTurns(msgs));
+        setChoices(structured.length ? (structured[structured.length - 1].choices || []) : []);
+        setState(data.state || null);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [sessionId]);
+
   async function runTurn({ text = "", choice = "" } = {}) {
     if (loading) return;
     const action = text.trim();
@@ -2487,6 +2508,7 @@ function App() {
   // 顶部导航:点「创作」tab 直接进步骤式引导(创作界面=步骤式);其余 tab 正常切。
   function navTo(k) {
     if (k === "build") setBuildFlow(true);
+    setSaves(loadSaves());   // 切 tab 刷新存档列表:进行中那局每轮已写 localStorage,这样「我的」立刻看得到,不必刷新页面
     setView(k);
   }
 
@@ -2586,7 +2608,11 @@ function App() {
     refreshHome();
   }
 
-  function resumeSave(id) { setActiveId(id); setSessionId(id); setAssembling(false); setIsPreset(false); setSelecting(false); setView("game"); }
+  // 从存档进入 = 玩家模式,不显示左侧卡组栏(作者/开发者模式未完成,暂不暴露;isPreset 当前仅控制「无卡组栏」)。
+  function resumeSave(id) {
+    if (id !== sessionId) setRestoring(true);   // 切到不同存档:先显示「读取存档中」,等 restore effect 拉到新局再渲染,避免慢加载时还显示上一个档
+    setActiveId(id); setSessionId(id); setAssembling(false); setIsPreset(true); setSelecting(false); setView("game");
+  }
 
   async function deleteSaveHandler(id) {
     if (!confirm("删除这局存档?不可恢复。")) return;
@@ -2627,6 +2653,8 @@ function App() {
         const art = data.artifacts || {};
         const hasGame = (structured.length || msgs.length) && art.characters && art.characters.length;
         if (hasGame) {
+          // 续玩进来 = 玩家模式,不显示左侧卡组栏(同 resumeSave;作者/开发者模式未完成,暂不暴露)。
+          setIsPreset(true);
           setCharacters(art.characters);
           if (art.world) setWorldBooks([art.world]);
           if (art.story) setStory(art.story);
@@ -2700,8 +2728,9 @@ function App() {
         </main>
       )}
 
-      {view === "game" && started && characters.length > 0 && (
-        <main className={"play-layout " + ((sidebarOpen && !isPreset) ? "has-left " : "") + (railOpen ? "has-right" : "")}>
+      {/* 在玩就一直挂着,只用 CSS 藏(不卸载)→ 切 tab 回来 turns/选项/状态都在内存里,瞬时显示、零 fetch(治"切回来慢")。 */}
+      {started && characters.length > 0 && (
+        <main className={"play-layout " + ((sidebarOpen && !isPreset) ? "has-left " : "") + (railOpen ? "has-right" : "")} style={view === "game" ? undefined : { display: "none" }}>
           {sidebarOpen && !isPreset && (
             <SetupPanel
               characters={characters} setCharacters={setCharacters}
@@ -2725,7 +2754,7 @@ function App() {
                 {railOpen ? "状态栏 ▶" : "◀ 状态栏"}
               </button>
             </div>
-            <StoryPanel key={sessionId} characters={characters} world={world} story={story} player={player} mode={mode} sessionId={sessionId} initialTurns={restoredTurns} initialState={restoredState} initialChoices={restoredChoices} goHome={() => { refreshHome(); setStarted(false); setAssembling(false); setView("home"); }} onTurn={() => setTurnSeq((s) => s + 1)} />
+            <StoryPanel key={sessionId} characters={characters} world={world} story={story} player={player} mode={mode} sessionId={sessionId} initialTurns={restoredTurns} initialState={restoredState} initialChoices={restoredChoices} goHome={() => { refreshHome(); setStarted(false); setAssembling(false); setView("home"); }} onTurn={() => { setTurnSeq((s) => s + 1); setSaves(loadSaves()); }} />
           </div>
           {railOpen && <StateInspector sessionId={sessionId} refreshKey={turnSeq} />}
         </main>
