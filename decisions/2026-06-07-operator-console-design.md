@@ -1,7 +1,8 @@
 ---
 date: 2026-06-07
+updated: 2026-06-07
 type: design
-status: 实施中
+status: 已实施(PR #33 合入 main)
 owner: Gengyue
 ---
 
@@ -54,3 +55,14 @@ owner: Gengyue
 
 ## 七、安全
 全部 `/api/operator/*` 过 `OPERATOR_TOKEN` 闸(没设=503/404);`direct`/`narration` 是引擎直插、不调 LLM(零 token、即时);玩家端 tail 无 token(同 /api/session,只读自己这局)。
+
+## 八、实施结果(2026-06-07,PR #33)
+
+三模式 + 时机 + 留痕全部落地并合入 main。
+
+- **后端**(`src/api.py`):`OperatorInjectReq` 加 `mode`/`target`;`POST /api/operator/inject` 按 mode 分支 —— `director`→ 进队列(`sticky` 决定是否持续)+ `now` 立即跑一回合;`direct`/`narration`→ 引擎直接 append 一条回合(逐字、即时、零 LLM),`direct` 缺 target 自动退化 narration。
+- **留痕**(`src/story.py`):消费 director 队列时把采纳项写进落地回合的 `operator_applied`;`direct`/`narration` 在端点直接写。
+- **控制台**(`_OPERATOR_HTML`):模式下拉 + 角色名输入(direct 时显示)+ 时机按钮(director 时)+ 内容框;对话区用 🎬/🎤/🌧 标签标出注入。
+- **验证**:`_validate_operator_modes.py` —— TestClient 跑临时 session(跑完即删),**24 项全过**(token 闸 / 三模式落地 / 逐字保真 / 退化 / 队列结构 / 留痕 / 控制台页面元素)。
+
+> 演进链:#28 token 闸 → #30 两栏控制台 → #31 人话标签+立即生效 → #32 玩家端实时弹出(tail)→ #33 三模式+留痕。详见 `docs/MILESTONES.md` M9。
