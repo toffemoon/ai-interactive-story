@@ -383,6 +383,19 @@ def api_delete_session(session_id: str):
     return {"deleted": storage.delete_session(session_id)}
 
 
+@app.get("/api/session/{session_id}/tail")
+def api_session_tail(session_id: str, after: int = 0):
+    """玩家端实时轮询:返回该局第 after 条之后的新回合 + 当前状态(轻量,只回新回合)。
+    用途:运营者「立即生效」或任何 server 端出的新回合,玩家界面自己冒出来(不必刷新)。
+    无 token —— 同 /api/session(玩家本来就能读自己这局;session_id 随机难猜)。"""
+    d = storage.load_session(session_id)
+    turns = d.get("turns") or []
+    n = len(turns)
+    after = max(0, after)
+    new_turns = turns[after:] if after < n else []
+    return {"turn_count": n, "new_turns": new_turns, "state": d.get("state")}
+
+
 _LIB_KINDS = {"characters", "worlds", "stories", "players"}
 
 
