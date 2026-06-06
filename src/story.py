@@ -1170,18 +1170,30 @@ def _known_speaker_index(characters: list[CharacterCard], world: "WorldBook | No
 
 
 def _normalize_messages(items: Any, characters: list[CharacterCard],
-                        world: "WorldBook | None" = None, story: "StoryBook | None" = None) -> list[StoryMessage]:
+                        world: "WorldBook | None" = None, story: "StoryBook | None" = None,
+                        player: "PlayerCard | None" = None) -> list[StoryMessage]:
     out = []
     fallback = characters[0] if characters else None
     fallback_name = fallback.data.name if fallback else "旁白"
     fallback_id = _char_id(fallback, 0) if fallback else "narrator"
+    # 硬兜底(bug#6):玩家扮演的角色,引擎绝不替其发言。PR#27 已在 present/prompt 软排除 + 软指令,
+    # 但模型若不听话仍可能给玩家角色生成台词,且玩家角色是【合法 roster 发言者】、下面的发言者门不会拦它
+    # → 在此按名/cid 直接丢弃(复用 _is_player_char,与 present/prompt 同一套判定)。
+    player_name = (player.name or "").strip() if player else ""
+    player_cids = {_char_id(c, i) for i, c in enumerate(characters)
+                   if _is_player_char(c.data.name, player_name)} if player_name else set()
+
+    def _is_player_msg(cid: str, name: str) -> bool:
+        return bool(player_name) and (_is_player_char(name, player_name) or (cid and cid in player_cids))
+
     if not PHASE1_FIXES:  # baseline:原行为——任何 character_id 照收,缺则归 fallback(不拦幻觉发言者)
         for item in items or []:
             if isinstance(item, dict):
                 text = str(item.get("text", "")).strip()
-                if text:
-                    out.append(StoryMessage(character_id=str(item.get("character_id") or fallback_id),
-                                            name=str(item.get("name") or fallback_name), text=text))
+                _cid, _nm = str(item.get("character_id") or "").strip(), str(item.get("name") or "").strip()
+                if text and not _is_player_msg(_cid, _nm):
+                    out.append(StoryMessage(character_id=_cid or fallback_id,
+                                            name=_nm or fallback_name, text=text))
             elif isinstance(item, str) and item.strip():
                 out.append(StoryMessage(character_id=fallback_id, name=fallback_name, text=item.strip()))
         return out
@@ -1193,6 +1205,8 @@ def _normalize_messages(items: Any, characters: list[CharacterCard],
                 continue
             cid = str(item.get("character_id") or "").strip()
             name = str(item.get("name") or "").strip()
+            if _is_player_msg(cid, name):  # 硬兜底:玩家扮演的角色,丢弃引擎替它生成的台词
+                continue
             hit = roster.get(cid) or roster.get(name)
             if not hit and name and len(name) >= 2:  # 模糊:容忍部分名漂移(福尔摩斯↔夏洛克·福尔摩斯)
                 for rid, rnm in roster_list:
@@ -1824,7 +1838,7 @@ async def _story_turn_impl(
 
     turn = StoryTurn(
         narration=str(obj.get("narration", "")),
-        messages=_normalize_messages(obj.get("messages"), characters, world, story),
+        messages=_normalize_messages(obj.get("messages"), characters, world, story, player),
         choices=_normalize_choices(obj.get("choices")),
         state_update=obj.get("state_update") if isinstance(obj.get("state_update"), dict) else {},
         memory_write=_normalize_memory_write(obj.get("memory_write"), roster),
