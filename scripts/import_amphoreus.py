@@ -432,10 +432,14 @@ def parse_amphoreus_storybook(text: str) -> StoryBook:
 
 
 def do_story():
+    # 2026-06-06 切换到通用确定性解析器 src.parsers.parse_storybook:
+    # 故事书已补 §6.4 结局条目(3 结局 + required_facts 谓词) + 角色信息边界段(5 角色),
+    # 通用 parser 即可解析出 14 事件 / 3 结局 / 5 边界,弃本地硬编码 parse_amphoreus_storybook(见文末,留作参考)。
+    from src.parsers import parse_storybook
     f = next(VAULT.glob("故事书*.md"))
-    sb = parse_amphoreus_storybook(f.read_text(encoding="utf-8"))
+    sb = parse_storybook(f.read_text(encoding="utf-8"))
     key = storage.save_library("stories", sb.title, sb.model_dump())
-    print(f"[故事书·确定性解析] {sb.title!r}  events={len(sb.events)} endings={len(sb.endings)} "
+    print(f"[故事书·通用确定性解析] {sb.title!r}  events={len(sb.events)} endings={len(sb.endings)} "
           f"boundaries={len(sb.character_boundaries)} timeline={len(sb.timeline)} "
           f"main_plot={len(sb.main_plot)} freedom={len(sb.freedom_rules)}  lib={key}")
     print("  事件:", " ".join(f"{e.event_id}({e.severity})" for e in sb.events))
@@ -535,19 +539,59 @@ _OLD_PRESETS = [
 ]
 
 
+def do_settings():
+    """7 城邦设定卡走 src.parsers.parse_settingcard 确定性解析,存库 kind=settings。
+    设定集(顶层世界母本)不导——不合设定卡模板(无引擎摘要/知识分层),其内容已在世界书 + 各城邦卡。"""
+    from src.parsers import parse_settingcard
+    cdir = VAULT / "城邦"
+    cards = []
+    for f in sorted(cdir.glob("*.md")):
+        sc = parse_settingcard(f.read_text(encoding="utf-8"))
+        key = storage.save_library("settings", sc.name, sc.model_dump())
+        cards.append(sc.model_dump())
+        print(f"  [设定卡] {sc.name[:18]:18} 类别={sc.category} 场景={sc.scene_type} "
+              f"public={len(sc.public)} hidden={len(sc.hidden)} sections={len(sc.sections)} hooks={len(sc.hooks)}  lib={key}")
+    print(f"  共 {len(cards)} 张城邦设定卡入库(设定集不导)")
+    return cards
+
+
+def _settings_to_world_entries(setting_cards: list[dict]) -> list[dict]:
+    """把设定卡 public/hidden 摊平成世界书条目(复用引擎现成的关键词注入 + hidden 门控,引擎不必改)。
+    每卡:1 条 public(概览+public 分层,按地点/关键词召回)+ 1 条 hidden(元真相,门控不说破)。"""
+    out = []
+    for sc in setting_cards:
+        keys = sc.get("keys") or [sc.get("name", "")[:12]]
+        pub = "；".join(sc.get("public") or [])
+        content_pub = ((sc.get("overview") or "").strip() + (("　知识分层(public)：" + pub) if pub else "")).strip()
+        if content_pub:
+            out.append(WorldEntry(keys=keys, content=content_pub, comment=f"{sc['name']}·设定(public)",
+                                  source="location", visibility="public", priority=50).model_dump())
+        hid = "；".join(sc.get("hidden") or [])
+        if hid:
+            out.append(WorldEntry(keys=keys, content=hid, comment=f"{sc['name']}·设定(hidden·元真相)",
+                                  source="location", visibility="hidden", priority=50).model_dump())
+    return out
+
+
 def do_preset():
-    """建两个首页预设:除玩家卡来源外完全相同——一个整套「原卡(未过LLM)」、一个整套「模拟丢卡(过LLM)」。
-    各内嵌 完整世界书 + 14 张公开卡 + 故事书 + 封面 + 11 张对应来源的玩家卡。"""
+    """建单个首页预设「如我所书」:完整世界书(并入 7 城邦设定卡摊平条目)+ 14 张公开角色卡 + 故事书 + 封面 + 11 张演出卡(原卡)。"""
     chars = {c["name"]: c["data"] for c in storage.list_library("characters")}
     worlds = {w["name"]: w["data"] for w in storage.list_library("worlds")}
     stories = {s["name"]: s["data"] for s in storage.list_library("stories")}
     players = {p["name"]: p["data"] for p in storage.list_library("players")}
+    setting_cards = [s["data"] for s in storage.list_library("settings")]
     cast = [chars[n] for n in PUBLIC_14 if n in chars]
     missing = [n for n in PUBLIC_14 if n not in chars]
     if missing:
         print("  ⚠ 缺角色:", missing)
     world = worlds.get("翁法罗斯世界书")
     story = stories.get("某一个轮回里确实发生过")
+    # 设定卡摊平成世界书条目并入 world(只进预设副本、不回写 world 库,re-run 幂等);引擎据此按地点召回 + hidden 门控注入,无需改引擎核心
+    world_for_preset = world
+    if world and setting_cards:
+        extra = _settings_to_world_entries(setting_cards)
+        world_for_preset = {**world, "entries": list(world.get("entries", [])) + extra}
+        print(f"  设定卡摊平:+{len(extra)} 条并入预设 world(原 {len(world.get('entries', []))} 条 → {len(world_for_preset['entries'])} 条)")
     roster = PLAYABLE_9 + PLAYER_TEMPLATES  # 11 名,两套对齐
 
     def pick(suffix):
@@ -564,7 +608,8 @@ def do_preset():
             "name": name,
             "characters": cast,
             "playables": pick(suffix),
-            "world": world,
+            "world": world_for_preset,
+            "settings": setting_cards,
             "story": story,
             "player": None,
             "mode": "deep",
@@ -607,6 +652,8 @@ if __name__ == "__main__":
         do_story_llm()
     elif mode == "players":
         do_players()
+    elif mode == "settings":
+        do_settings()
     elif mode == "preset":
         do_preset()
     elif mode == "players+preset":
@@ -625,13 +672,14 @@ if __name__ == "__main__":
         do_world()
         do_chars()
         do_story()
-    elif mode == "full":   # 一把梭:世界书 + 角色卡 + 故事书 + 玩家卡(A/B) + 预设
+    elif mode == "full":   # 一把梭:世界书 + 角色卡 + 故事书 + 演出卡 + 城邦设定卡 + 预设
         do_world()
         do_chars()
         do_story()
         do_players()
+        do_settings()
         do_preset()
 
     print("\n=== 库内现状 ===")
-    for kind in ("worlds", "characters", "stories", "players"):
+    for kind in ("worlds", "characters", "stories", "players", "settings"):
         print(f"  {kind}: {[it['name'] for it in storage.list_library(kind)]}")
