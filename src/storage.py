@@ -130,6 +130,22 @@ def delete_session(session_id: str) -> bool:
         return cur.rowcount > 0
 
 
+def list_sessions(limit: int = 300) -> list[dict[str, Any]]:
+    """列出会话 (后台控制台用): id + 更新时间 + 回合数。按最近更新排序。"""
+    pool = get_pool()
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """select id, updated_at,
+                      coalesce(jsonb_array_length(
+                        case when jsonb_typeof(data->'turns')='array' then data->'turns' else '[]'::jsonb end), 0) as turns
+               from sessions order by updated_at desc nulls last limit %s""",
+            (limit,),
+        )
+        return [{"id": r["id"],
+                 "updated_at": str(r["updated_at"]) if r["updated_at"] else None,
+                 "turns": r["turns"]} for r in cur.fetchall()]
+
+
 # ---------------- 卡库 (cards) ----------------
 
 def save_library(kind: str, name: str, payload: dict[str, Any]) -> str:

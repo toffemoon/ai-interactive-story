@@ -512,31 +512,86 @@ def api_operator_inject_clear(session_id: str, x_operator_token: str | None = He
     return {"ok": True}
 
 
+@app.get("/api/operator/sessions")
+def api_operator_sessions(x_operator_token: str | None = Header(None)):
+    """列出所有 session(控制台左栏点选用)。需 X-Operator-Token。"""
+    _require_operator(x_operator_token)
+    return {"sessions": storage.list_sessions()}
+
+
+@app.get("/api/operator/session/{session_id}")
+def api_operator_session(session_id: str, x_operator_token: str | None = Header(None)):
+    """看某局完整上下文:回合记录(玩家输入 + 叙事 + 角色发言)+ 当前状态 + 注入队列。需 X-Operator-Token。"""
+    _require_operator(x_operator_token)
+    d = storage.load_session(session_id)
+    return {
+        "session_id": session_id,
+        "turns": d.get("turns") or [],
+        "state": d.get("state"),
+        "operator_inject": d.get("operator_inject") or [],
+        "artifacts_mode": (d.get("artifacts") or {}).get("mode"),
+    }
+
+
 # 私人后台控制台:不从玩家前端链接过去;真正的闸是 token(页面只是表单,无 token 调不动接口)。
 # OPERATOR_TOKEN 没设则 404(功能关闭)。token 存浏览器 localStorage,同源 fetch 免 CORS。
 _OPERATOR_HTML = """<!doctype html><html lang="zh"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>后台注入</title>
-<style>body{font:15px/1.6 -apple-system,sans-serif;max-width:640px;margin:24px auto;padding:0 16px;color:#222}
-h2{margin:0 0 12px}label{display:block;margin:10px 0 4px;font-weight:600;font-size:13px;color:#555}
-input,textarea{width:100%;box-sizing:border-box;padding:8px;border:1px solid #ccc;border-radius:6px;font:inherit}
-textarea{min-height:80px}.row{display:flex;gap:8px;align-items:center;margin:10px 0}
-.row label{margin:0;font-weight:400}button{padding:9px 16px;border:0;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer;font:inherit;margin:4px 6px 4px 0}
-button.sec{background:#6b7280}#out{white-space:pre-wrap;background:#f6f7f9;border-radius:6px;padding:10px;margin-top:12px;font-size:13px;min-height:20px}</style>
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>后台控制台</title>
+<style>*{box-sizing:border-box}body{font:14px/1.55 -apple-system,system-ui,sans-serif;margin:0;color:#1f2328;background:#fff}
+header{display:flex;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid #e5e7eb;flex-wrap:wrap}
+header h1{font-size:15px;margin:0 10px 0 0}
+header input{padding:6px 8px;border:1px solid #ccc;border-radius:6px;font:inherit}
+button{padding:6px 12px;border:0;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer;font:inherit}
+button.sec{background:#6b7280}#st{font-size:12px;color:#888;margin-left:auto}
+#wrap{display:flex;height:calc(100vh - 53px)}
+#list{width:240px;border-right:1px solid #e5e7eb;overflow:auto}
+.sess{padding:9px 12px;border-bottom:1px solid #f0f0f0;cursor:pointer}
+.sess:hover{background:#f6f7f9}.sess.on{background:#e8f0fe}
+.sess .id{font-weight:600;word-break:break-all}.sess .meta{color:#999;font-size:12px}
+#detail{flex:1;display:flex;flex-direction:column;min-width:0}
+#shdr{padding:8px 14px;border-bottom:1px solid #eee;color:#555;font-size:13px}
+#conv{flex:1;overflow:auto;padding:14px;background:#fafafa}
+.b{max-width:80%;margin:6px 0;padding:8px 11px;border-radius:10px;white-space:pre-wrap;word-break:break-word}
+.b.player{background:#2563eb;color:#fff;margin-left:auto}.b.char{background:#fff;border:1px solid #e5e7eb}
+.narr{color:#666;font-style:italic;margin:8px 4px;font-size:13px}
+#box{border-top:1px solid #e5e7eb;padding:10px 14px}
+#box textarea{width:100%;min-height:52px;padding:8px;border:1px solid #ccc;border-radius:6px;font:inherit}
+#queue{font-size:12px;color:#a15;margin-bottom:4px}</style>
 </head><body>
-<h2>后台注入控制台</h2>
-<label>OPERATOR_TOKEN(只你知道,存本机浏览器)</label><input id="tok" type="password" placeholder="X-Operator-Token">
-<label>局 ID(session_id)</label><input id="sid" placeholder="哪一局">
-<label>内容(要让 AI 看到的话)</label><textarea id="msg" placeholder="例:让沈雾突然警觉起来"></textarea>
-<div class="row"><input id="sticky" type="checkbox"><label for="sticky">持续生效(sticky:每回合都注入,直到手动清空;不勾=一次性,下回合送达即清)</label></div>
-<button onclick="send()">发送</button><button class="sec" onclick="view()">查看队列</button><button class="sec" onclick="clr()">清空</button>
-<div id="out"></div>
+<header><h1>后台控制台</h1>
+<input id="tok" type="password" placeholder="OPERATOR_TOKEN" size="22">
+<button class="sec" onclick="loadSessions()">刷新列表</button><span id="st"></span></header>
+<div id="wrap">
+ <div id="list"></div>
+ <div id="detail">
+  <div id="shdr">← 左边点一个 session 看上下文</div>
+  <div id="conv"></div>
+  <div id="box">
+   <div id="queue"></div>
+   <textarea id="msg" placeholder="发给 AI 的内容(它下一回合就看到),例:让沈雾突然警觉起来"></textarea>
+   <div style="margin-top:6px;display:flex;align-items:center;gap:10px">
+    <label style="font-size:13px"><input id="sticky" type="checkbox"> 持续生效(不勾=一次性,下回合送达即清)</label>
+    <button onclick="send()">发送</button><button class="sec" onclick="clearQ()">清空队列</button>
+   </div>
+  </div>
+ </div>
+</div>
 <script>
-const $=id=>document.getElementById(id), out=t=>$("out").textContent=typeof t=="string"?t:JSON.stringify(t,null,2);
-["tok","sid"].forEach(k=>{$(k).value=localStorage["op_"+k]||"";$(k).oninput=()=>localStorage["op_"+k]=$(k).value});
+const $=id=>document.getElementById(id);
+$("tok").value=localStorage.op_tok||""; $("tok").oninput=()=>{localStorage.op_tok=$("tok").value;loadSessions();};
 const H=()=>({"X-Operator-Token":$("tok").value,"Content-Type":"application/json"});
-async function send(){try{const r=await fetch("/api/operator/inject",{method:"POST",headers:H(),body:JSON.stringify({session_id:$("sid").value,content:$("msg").value,sticky:$("sticky").checked})});const j=await r.json();out(r.ok?("已发送 ✓ "+JSON.stringify(j)):("失败 "+r.status+" "+JSON.stringify(j)));if(r.ok)$("msg").value=""}catch(e){out("错误 "+e)}}
-async function view(){try{const r=await fetch("/api/operator/inject/"+encodeURIComponent($("sid").value),{headers:H()});out(await r.json())}catch(e){out("错误 "+e)}}
-async function clr(){try{const r=await fetch("/api/operator/inject/"+encodeURIComponent($("sid").value),{method:"DELETE",headers:H()});out(r.ok?"已清空 ✓":("失败 "+r.status))}catch(e){out("错误 "+e)}}
+const st=t=>$("st").textContent=t;
+function el(t,c,x){const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;}
+function bub(role,name,text){const d=el("div","b "+role);if(name)d.appendChild(el("b",null,name+": "));d.appendChild(document.createTextNode(text));return d;}
+let cur=null;
+async function j(url,opt){const r=await fetch(url,opt||{headers:H()});if(!r.ok){st("✗ "+r.status+(r.status==503?" 未启用(没设OPERATOR_TOKEN)":r.status==403?" token不对":""));throw r;}st("");return r.json();}
+async function loadSessions(){try{const d=await j("/api/operator/sessions");const L=$("list");L.innerHTML="";(d.sessions||[]).forEach(s=>{const it=el("div","sess"+(s.id===cur?" on":""));it.appendChild(el("div","id",s.id));it.appendChild(el("div","meta",(s.turns||0)+" 轮 · "+String(s.updated_at||"").slice(0,16).replace("T"," ")));it.onclick=()=>select(s.id);L.appendChild(it);});if(!(d.sessions||[]).length)L.appendChild(el("div","meta","(没有 session)"));}catch(e){}}
+function select(id){cur=id;document.querySelectorAll(".sess").forEach(n=>n.classList.toggle("on",n.firstChild.textContent===id));loadSession();}
+async function loadSession(silent){if(!cur)return;try{const d=await j("/api/operator/session/"+encodeURIComponent(cur));const C=$("conv");const atBottom=C.scrollHeight-C.scrollTop-C.clientHeight<60;C.innerHTML="";(d.turns||[]).forEach(t=>{if(t.player_input)C.appendChild(bub("player","",t.player_input));if(t.narration)C.appendChild(el("div","narr",t.narration));(t.messages||[]).forEach(m=>C.appendChild(bub("char",m.name||m.character_id||"",m.text||"")));});const s=d.state||{},sc=s.scene||{};$("shdr").textContent=cur+"  ·  地点:"+(sc.location||"?")+"  ·  在场:"+((sc.present_characters||[]).join("、")||"?")+"  ·  第"+(s.turn_count||0)+"回合";const q=d.operator_inject||[];$("queue").textContent=q.length?("待注入 "+q.length+" 条:"+q.map(x=>(typeof x=="object"?x.content+(x.sticky?"[持续]":"[一次]"):x)).join(" / ")):"";if(!silent||atBottom)C.scrollTop=C.scrollHeight;}catch(e){}}
+async function send(){if(!cur){st("先选一个 session");return;}const m=$("msg").value.trim();if(!m)return;try{await j("/api/operator/inject",{method:"POST",headers:H(),body:JSON.stringify({session_id:cur,content:m,sticky:$("sticky").checked})});$("msg").value="";st("已发送 ✓");loadSession();}catch(e){}}
+async function clearQ(){if(!cur)return;try{await j("/api/operator/inject/"+encodeURIComponent(cur),{method:"DELETE",headers:H()});st("已清空 ✓");loadSession();}catch(e){}}
+loadSessions();
+setInterval(()=>{if(cur)loadSession(true);},4000);
 </script></body></html>"""
 
 
