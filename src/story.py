@@ -480,8 +480,17 @@ def _input_profile(action: str) -> str:
     return "自然语言输入:可能包含口语、玩梗、错字或不完整行动,优先按故事内意图处理。"
 
 
-def _apply_state_update(state: RuntimeState, update: dict[str, Any]) -> RuntimeState:
-    """把模型返回的状态补丁合并到 RuntimeState。格式故意宽松,防止模型小偏差。"""
+def _is_player_char(name: str, player_name: str) -> bool:
+    """名字是否就是玩家扮演的角色(归一化精确匹配)。引擎不替玩家发言、不把他当 NPC。"""
+    if not name or not player_name:
+        return False
+    return _norm_entity(name) == _norm_entity(player_name)
+
+
+def _apply_state_update(state: RuntimeState, update: dict[str, Any], player_name: str = "") -> RuntimeState:
+    """把模型返回的状态补丁合并到 RuntimeState。格式故意宽松,防止模型小偏差。
+    player_name:玩家扮演的角色名 —— 从 present_characters 里剔除,否则引擎会把玩家角色当 NPC 代说
+    (yorha-a2-team §16 bug#6:玩家扮阿格莱雅,present_characters 仍含她 → 她替玩家自答)。"""
     if not isinstance(update, dict) or not update:
         return state
     scene = update.get("scene")
@@ -494,6 +503,8 @@ def _apply_state_update(state: RuntimeState, update: dict[str, Any]) -> RuntimeS
             setattr(state.scene, key, str(scene[key]))
     for key in ("present_characters", "objects", "exits"):
         values = _as_text_list(scene.get(key))
+        if key == "present_characters" and player_name:  # bug#6:玩家扮演的角色不进"在场可发言集"
+            values = [v for v in values if not _is_player_char(v, player_name)]
         if values:
             setattr(state.scene, key, values)
 
@@ -846,10 +857,13 @@ def _prompt(
     entity_memory: dict[str, list[str]] | None = None,
 ) -> str:
     entity_memory = entity_memory or {}
+    player_name = (player.name or "").strip() if player else ""
     char_blocks = []
     for i, card in enumerate(characters):
         d = card.data
         cid = _char_id(card, i)
+        if _is_player_char(d.name, player_name):   # bug#6:玩家扮演的角色不作为可发言 NPC 块,引擎不替其发言
+            continue
         rules = "\n".join(f"- {r}" for r in d.speech_rules)
         block = (
             f"## {d.name} ({cid})\n"
@@ -871,7 +885,8 @@ def _prompt(
         char_blocks.append(block)
     # 单角色"场景":判断依据是本轮实际在场的角色数(运行时),不是上传了几张卡。
     # 多角色卡组里和某个角色单独相处的段落也会触发——那种段落最容易退化成一问一答的聊天。
-    present = [p for p in (state.scene.present_characters or [c.data.name for c in characters]) if p]
+    present = [p for p in (state.scene.present_characters or [c.data.name for c in characters])
+               if p and not _is_player_char(p, player_name)]  # bug#6:在场可发言集排除玩家扮演的角色
     solo_directive = ""
     if len(set(present)) <= 1:
         solo_directive = (
@@ -951,6 +966,8 @@ def _prompt(
         "不存在/未披露/不确定的设定不得编造;可以让角色以自身口吻说不知道或需要调查。\n"
         + kb_directive +
         "保持玩家自由度:不要替玩家做决定、不要描写玩家未选择的动作或心理。\n"
+        + (f"玩家正扮演【{player_name}】:你【绝不】为该角色生成台词或内心独白,也不要把他列进 present_characters / "
+           "活跃角色——他由玩家自己扮演,不在你要驱动的 NPC 之列。\n" if player_name else "") +
         "角色不是等待回复的机器人。每轮至少让一个在场角色做出符合性格的主动行为或主动判断,"
         "例如追问、质疑、观察、施压、试探、维护自身利益、提出交易条件、暴露情绪变化。"
         "主动行为只能基于已知事实和角色立场,不能替玩家解决核心问题,不能强行跳过玩家选择。\n"
@@ -1739,7 +1756,7 @@ async def _story_turn_impl(
         raw = await adapter.complete_main(bundle, json_mode=True, max_tokens=2400, on_delta=on_delta)
     except Exception as e:
         turn = _local_continuation_turn(action, state, characters, reason=f"LLM 调用失败:{e}")
-        state = _apply_state_update(state, turn.state_update)
+        state = _apply_state_update(state, turn.state_update, player.name if player else "")
         state.turn_count += 1
         turn.state = state
         return await _save_turn(session_id, data, messages, short_memory, state, action, turn, mode,
@@ -1759,7 +1776,7 @@ async def _story_turn_impl(
             raw = retry_raw
         except Exception as e:
             turn = _local_continuation_turn(action, state, characters, reason=f"空白输出且重试失败:{e}")
-            state = _apply_state_update(state, turn.state_update)
+            state = _apply_state_update(state, turn.state_update, player.name if player else "")
             state.turn_count += 1
             turn.state = state
             return await _save_turn(session_id, data, messages, short_memory, state, action, turn, mode,
@@ -1787,7 +1804,7 @@ async def _story_turn_impl(
             reason = f"重生成后仍解析失败:{e}"
         if not isinstance(obj, dict):
             turn = _local_continuation_turn(action, state, characters, reason=reason)
-            state = _apply_state_update(state, turn.state_update)
+            state = _apply_state_update(state, turn.state_update, player.name if player else "")
             state.turn_count += 1
             turn.state = state
             return await _save_turn(session_id, data, messages, short_memory, state, action, turn, mode,
@@ -1815,7 +1832,7 @@ async def _story_turn_impl(
             StoryChoice(id="act_carefully", label="谨慎采取下一步行动", intent="act"),
         ]
 
-    state = _apply_state_update(state, turn.state_update)
+    state = _apply_state_update(state, turn.state_update, player.name if player else "")
     _progress_events(state, turn.triggered_events)
     _check_ending_predicates(story, state)  # 谓词齐备即代码侧客观达成结局(无谓词的故事回退模型判定)
     state.turn_count += 1
