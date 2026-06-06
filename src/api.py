@@ -479,20 +479,45 @@ class OperatorInjectReq(BaseModel):
     session_id: str
     content: str
     sticky: bool = False  # False=一次性(下回合送达后清);True=持续到手动 DELETE 清
+    now: bool = False      # True=立即跑一回合,AI 当场采纳(不等玩家下一步);False=进队列等下回合
+
+
+async def _operator_advance(session_id: str) -> dict:
+    """运营者触发:立即用该局存档卡组跑一回合(消费刚入队的注入),AI 当场出内容。
+    卡组复用 artifacts(同 reroll);用中性"场景继续"作动作驱动一回合,真正的导演指令在 operator_inject 块里。"""
+    data = await asyncio.to_thread(storage.load_session, session_id)
+    art = data.get("artifacts") or {}
+    raw = art.get("characters") or []
+    if not raw:
+        raise HTTPException(400, "该局还没有卡组快照(玩家未正式开局?),无法立即推进")
+    try:
+        characters = [CharacterCard(**c) for c in raw]
+        world = WorldBook(**art["world"]) if art.get("world") else None
+        story = StoryBook(**art["story"]) if art.get("story") else None
+        player = PlayerCard(**art["player"]) if art.get("player") else None
+    except Exception as e:
+        raise HTTPException(500, f"卡组快照解析失败:{e}")
+    out = await story_turn(session_id=session_id, characters=characters, user="（场景继续）",
+                           world=world, story=story, player=player, mode=art.get("mode") or "standard")
+    return out.model_dump()
 
 
 @app.post("/api/operator/inject")
-def api_operator_inject(req: OperatorInjectReq, x_operator_token: str | None = Header(None)):
-    """后台发一条内容 → 进该局注入队列,下一回合放进 AI 上下文。sticky=True 则持续到清空。需 X-Operator-Token。"""
+async def api_operator_inject(req: OperatorInjectReq, x_operator_token: str | None = Header(None)):
+    """后台发一条内容 → 进该局注入队列,下一回合放进 AI 上下文。sticky=True 持续到清空;
+    now=True 则立即跑一回合(AI 当场采纳,不等玩家)。需 X-Operator-Token。"""
     _require_operator(x_operator_token)
     if not req.content.strip():
         raise HTTPException(400, "内容不能为空")
-    data = storage.load_session(req.session_id)
+    data = await asyncio.to_thread(storage.load_session, req.session_id)
     inj = list(data.get("operator_inject") or [])
     inj.append({"content": req.content.strip(), "sticky": bool(req.sticky)})
     data["operator_inject"] = inj[-50:]
-    storage.save_session(req.session_id, data)
-    return {"ok": True, "pending": len(data["operator_inject"]), "sticky": bool(req.sticky)}
+    await asyncio.to_thread(storage.save_session, req.session_id, data)
+    res = {"ok": True, "pending": len(data["operator_inject"]), "sticky": bool(req.sticky)}
+    if req.now:  # 立即生效:当场跑一回合,AI 采纳注入并出内容
+        res["turn"] = await _operator_advance(req.session_id)
+    return res
 
 
 @app.get("/api/operator/inject/{session_id}")
@@ -547,7 +572,7 @@ button.sec{background:#6b7280}#st{font-size:12px;color:#888;margin-left:auto}
 #list{width:240px;border-right:1px solid #e5e7eb;overflow:auto}
 .sess{padding:9px 12px;border-bottom:1px solid #f0f0f0;cursor:pointer}
 .sess:hover{background:#f6f7f9}.sess.on{background:#e8f0fe}
-.sess .id{font-weight:600;word-break:break-all}.sess .meta{color:#999;font-size:12px}
+.sess .id{font-weight:600}.sess .meta{color:#999;font-size:12px}.sess .sid{color:#bbb;font-size:11px;word-break:break-all;margin-top:2px}
 #detail{flex:1;display:flex;flex-direction:column;min-width:0}
 #shdr{padding:8px 14px;border-bottom:1px solid #eee;color:#555;font-size:13px}
 #conv{flex:1;overflow:auto;padding:14px;background:#fafafa}
@@ -571,7 +596,7 @@ button.sec{background:#6b7280}#st{font-size:12px;color:#888;margin-left:auto}
    <textarea id="msg" placeholder="发给 AI 的内容(它下一回合就看到),例:让沈雾突然警觉起来"></textarea>
    <div style="margin-top:6px;display:flex;align-items:center;gap:10px">
     <label style="font-size:13px"><input id="sticky" type="checkbox"> 持续生效(不勾=一次性,下回合送达即清)</label>
-    <button onclick="send()">发送</button><button class="sec" onclick="clearQ()">清空队列</button>
+    <button onclick="send(false)">发送(下回合)</button><button onclick="send(true)">⚡ 立即生效</button><button class="sec" onclick="clearQ()">清空队列</button>
    </div>
   </div>
  </div>
@@ -585,10 +610,10 @@ function el(t,c,x){const e=document.createElement(t);if(c)e.className=c;if(x!=nu
 function bub(role,name,text){const d=el("div","b "+role);if(name)d.appendChild(el("b",null,name+": "));d.appendChild(document.createTextNode(text));return d;}
 let cur=null;
 async function j(url,opt){const r=await fetch(url,opt||{headers:H()});if(!r.ok){st("✗ "+r.status+(r.status==503?" 未启用(没设OPERATOR_TOKEN)":r.status==403?" token不对":""));throw r;}st("");return r.json();}
-async function loadSessions(){try{const d=await j("/api/operator/sessions");const L=$("list");L.innerHTML="";(d.sessions||[]).forEach(s=>{const it=el("div","sess"+(s.id===cur?" on":""));it.appendChild(el("div","id",s.id));it.appendChild(el("div","meta",(s.turns||0)+" 轮 · "+String(s.updated_at||"").slice(0,16).replace("T"," ")));it.onclick=()=>select(s.id);L.appendChild(it);});if(!(d.sessions||[]).length)L.appendChild(el("div","meta","(没有 session)"));}catch(e){}}
-function select(id){cur=id;document.querySelectorAll(".sess").forEach(n=>n.classList.toggle("on",n.firstChild.textContent===id));loadSession();}
+async function loadSessions(){try{const d=await j("/api/operator/sessions");const L=$("list");L.innerHTML="";(d.sessions||[]).forEach(s=>{const it=el("div","sess"+(s.id===cur?" on":""));it.dataset.sid=s.id;it.appendChild(el("div","id",(s.story||"(未命名故事)")+(s.player?" · 玩"+s.player:"")));it.appendChild(el("div","meta",(s.turns||0)+"轮 · "+String(s.updated_at||"").slice(0,16).replace("T"," ")));if(s.last_input)it.appendChild(el("div","meta","最后:"+s.last_input));it.appendChild(el("div","sid",s.id));it.onclick=()=>select(s.id);L.appendChild(it);});if(!(d.sessions||[]).length)L.appendChild(el("div","meta","(没有 session)"));}catch(e){}}
+function select(id){cur=id;document.querySelectorAll(".sess").forEach(n=>n.classList.toggle("on",n.dataset.sid===id));loadSession();}
 async function loadSession(silent){if(!cur)return;try{const d=await j("/api/operator/session/"+encodeURIComponent(cur));const C=$("conv");const atBottom=C.scrollHeight-C.scrollTop-C.clientHeight<60;C.innerHTML="";(d.turns||[]).forEach(t=>{if(t.player_input)C.appendChild(bub("player","",t.player_input));if(t.narration)C.appendChild(el("div","narr",t.narration));(t.messages||[]).forEach(m=>C.appendChild(bub("char",m.name||m.character_id||"",m.text||"")));});const s=d.state||{},sc=s.scene||{};$("shdr").textContent=cur+"  ·  地点:"+(sc.location||"?")+"  ·  在场:"+((sc.present_characters||[]).join("、")||"?")+"  ·  第"+(s.turn_count||0)+"回合";const q=d.operator_inject||[];$("queue").textContent=q.length?("待注入 "+q.length+" 条:"+q.map(x=>(typeof x=="object"?x.content+(x.sticky?"[持续]":"[一次]"):x)).join(" / ")):"";if(!silent||atBottom)C.scrollTop=C.scrollHeight;}catch(e){}}
-async function send(){if(!cur){st("先选一个 session");return;}const m=$("msg").value.trim();if(!m)return;try{await j("/api/operator/inject",{method:"POST",headers:H(),body:JSON.stringify({session_id:cur,content:m,sticky:$("sticky").checked})});$("msg").value="";st("已发送 ✓");loadSession();}catch(e){}}
+async function send(now){if(!cur){st("先选一个 session");return;}const m=$("msg").value.trim();if(!m)return;try{st(now?"AI 生成中…":"");await j("/api/operator/inject",{method:"POST",headers:H(),body:JSON.stringify({session_id:cur,content:m,sticky:$("sticky").checked,now:!!now})});$("msg").value="";st(now?"已立即生效 ✓":"已发送(下回合)✓");loadSession();}catch(e){}}
 async function clearQ(){if(!cur)return;try{await j("/api/operator/inject/"+encodeURIComponent(cur),{method:"DELETE",headers:H()});st("已清空 ✓");loadSession();}catch(e){}}
 loadSessions();
 setInterval(()=>{if(cur)loadSession(true);},4000);
