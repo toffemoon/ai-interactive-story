@@ -474,10 +474,11 @@ def parse_storybook(text: str) -> StoryBook:
         elif cur_num:
             by_num.setdefault(cur_num, []).append(s)
 
-    # §1 前提
+    # §1 前提(容忍:标签 bullet 或 `## 基本前提` 子段散文)
     if "1" in by_num:
         lab = labeled(by_num["1"][0].lines)
-        book.premise = lab.get("基本前提", "") or by_num["1"][0].text
+        sub = next((s.text for s in by_num["1"] if "基本前提" in s.title), "")
+        book.premise = lab.get("基本前提", "") or sub or by_num["1"][0].text
         clock = re.search(r"-?\d+", lab.get("开局时钟 / 节奏", "") or lab.get("开局时钟", "") or "")
         if clock:
             book.clock_start = int(clock.group())
@@ -489,23 +490,23 @@ def parse_storybook(text: str) -> StoryBook:
         tl = bullets(by_num["3"][0].lines) or [l for l in by_num["3"][0].text.splitlines() if l.strip()]
         book.timeline = [t for t in tl if t]
 
-    # §4 主线阶段:每个 `### 阶段…` → 一条
+    # §4 主线阶段:每个 `### 阶段…` → 一条;无 L3 子段则取 §4 bullets(容忍 `- **阶段…**` 列表)
     for s in by_num.get("4", []):
         if s.level >= 3:
             lab = labeled(s.lines)
             goal = lab.get("核心目标", "")
             stage = _title_first_token(s.title)
             book.main_plot.append(f"{stage}:{goal}" if goal else stage)
+    if not book.main_plot and by_num.get("4"):
+        book.main_plot = bullets(by_num["4"][0].lines)
 
-    # §5 事件节点:每个 `### E01 · …` → StoryEvent
+    # §5 事件节点:每个 `### E01` / `## E00` · … → StoryEvent(容忍 L2/L3 事件标题;只取 E 开头的事件,跳过节标题)
     for s in by_num.get("5", []):
-        if s.level < 3:
+        m = re.match(r"^(E\d+|EH\d+)", s.title.strip())
+        if s.level < 2 or not m:
             continue
         lab = labeled(s.lines)
-        eid = ""
-        m = re.match(r"^(E?\d+|EH?\d+)", s.title.strip())
-        if m:
-            eid = m.group(1)
+        eid = m.group(1)
         ev = StoryEvent(
             event_id=eid,
             title=_title_first_token(_strip_node_marker(s.title)),
@@ -543,24 +544,33 @@ def parse_storybook(text: str) -> StoryBook:
                 title=_title_first_token(_strip_node_marker(s.title)),
                 conditions=_split_list(lab.get("达成条件", "")) or ([lab["达成条件"]] if lab.get("达成条件") else []),
                 summary=lab.get("结局内容", ""),
+                required_facts=_split_list(lab.get("required_facts", "")),
+                required_events=_split_list(lab.get("required_events", "")),
             )
         )
 
-    # §7 自由度规则
+    # §7 自由度规则(容忍:跨 7.1–7.x 子段收 bullets)
     if "7" in by_num:
-        book.freedom_rules = bullets(by_num["7"][0].lines)
+        fr: list[str] = []
+        for s in by_num["7"]:
+            fr += bullets(s.lines)
+        book.freedom_rules = fr or bullets(by_num["7"][0].lines)
 
-    # §8 角色信息边界:每个 `### 角色名` → CharacterBoundary
-    for s in by_num.get("8", []):
-        if s.level < 3:
-            continue
-        lab = labeled(s.lines)
-        cb = CharacterBoundary(character=_title_first_token(s.title))
-        cb.public = _split_list(lab.get("public", "")) or ([lab["public"]] if lab.get("public") else [])
-        cb.hidden = _split_list(lab.get("hidden", "")) or ([lab["hidden"]] if lab.get("hidden") else [])
-        cb.hard_limits = _split_list(lab.get("hard_limits", "")) or ([lab["hard_limits"]] if lab.get("hard_limits") else [])
-        if cb.public or cb.hidden or cb.hard_limits:
-            book.character_boundaries.append(cb)
+    # 角色信息边界:按标题定位「角色信息边界 / 角色边界」段(不限 §8 编号,防与「引擎适配」§8 撞号),
+    # 读其下 `### 角色名` 直到下一个同级或更高级标题。每个 → CharacterBoundary。
+    bidx = next((i for i, s in enumerate(secs) if "角色信息边界" in s.title or "角色边界" in s.title), -1)
+    if bidx >= 0:
+        blevel = secs[bidx].level
+        for s in secs[bidx + 1:]:
+            if s.level <= blevel:
+                break
+            lab = labeled(s.lines)
+            cb = CharacterBoundary(character=_title_first_token(s.title))
+            cb.public = _split_list(lab.get("public", "")) or ([lab["public"]] if lab.get("public") else [])
+            cb.hidden = _split_list(lab.get("hidden", "")) or ([lab["hidden"]] if lab.get("hidden") else [])
+            cb.hard_limits = _split_list(lab.get("hard_limits", "")) or ([lab["hard_limits"]] if lab.get("hard_limits") else [])
+            if cb.public or cb.hidden or cb.hard_limits:
+                book.character_boundaries.append(cb)
 
     # §E 待确认项
     if "E" in by_num:

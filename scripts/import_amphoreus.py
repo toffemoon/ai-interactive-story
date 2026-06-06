@@ -2,17 +2,17 @@
 """一次性:把 Obsidian《如我所书》翁法罗斯素材导入引擎卡库 (Postgres)。
 
 - 世界书:自定义逐条解析 ## 标题 + 关键词/来源/可见性/内容 → 保住 hidden gating
-  (引擎 story.py:642 认 visibility=="hidden" 直接跳过注入)。免 LLM。
-- 角色卡:14 公开 + 4 导演隐藏卡,走 identify() LLM。隐藏卡 lib name 加「导演隐藏卡」后缀
-  (作者可见、不与公开卡撞名、默认不进玩家 roster)。
-- 故事书:identify_storybook() LLM。
-- 玩家卡:读手写 玩家卡/*.md(玩家自己写的版本)。每张出两版:
-  A 原卡(parse_player_md 直接解析,免 LLM)+ B 模拟丢卡(同文喂 identify_player,模拟玩家前端丢卡,过 LLM);
-  模板(城邦小人物/外来旅人)只出 A。预设里两版各带 variant 标注、name 保持干净。
+  (引擎 story.py 认 visibility=="hidden" 跳过注入)。免 LLM。
+- 角色卡:14 张公开卡,走 parse_character() 确定性解析(免 LLM)。知识边界(hidden)/版本人格
+  只进 known_hidden/versions、不进会注入的 description(防折叠后 L4 泄漏);L4 注入+门控靠故事书 _BOUNDARIES。
+  (原 4 张导演隐藏卡已折叠进公开卡 hidden + 归档 90-Archive,不再单独导入。)
+- 故事书:parse_amphoreus_storybook() 确定性解析(免 LLM,大故事书不截断)。
+- 演出卡:读手写 演出卡/*.md,parse_player_md 确定性解析(免 LLM),库 key「X 原卡」。
+  保留开局不知道(unknown)/开局锚点(opening);不走 identify_player LLM(它会丢 unknown)。
 - 设定集 / 城邦:本脚本不导入(hidden 散在正文引用块,需单独抽取 + 人工过目,防泄底)。
 
 跑法:.venv/Scripts/python.exe scripts/import_amphoreus.py <mode>
-  mode: smoke(世界书+白厄1张) | world | chars | story | players | preset | players+preset | all | full(一把梭)
+  mode: smoke | world | chars | story | players | preset | players+preset | all | full(一把梭)
 """
 import re
 import sys
@@ -27,6 +27,8 @@ from src import storage
 from src.identify import identify, identify_storybook
 from src.models import (
     CharacterBoundary,
+    CharacterCard,
+    CharacterData,
     Ending,
     PlayerCard,
     StoryBook,
@@ -91,10 +93,119 @@ def _base_name(path: Path) -> str:
     return re.sub(r"\s*(角色卡|导演隐藏卡)\s*$", "", path.stem).strip()
 
 
+# ============ 角色卡:确定性解析(免 LLM)============
+# 角色卡走模板段确定性解析(2026-06-06,yufei 拍板),不再走 identify LLM。
+# 关键:知识边界(hidden) 只进 known_hidden、版本人格只进 versions,绝不进会注入的 description——
+# 折叠后公开卡正文含 L4(白厄=盗火行者 等),LLM 全文解析会把 L4 卷进 description 剧透;
+# 确定性路由按段映射,L4 隔离在 known_hidden/versions(引擎默认不注入),
+# 注入+门控仍靠故事书 _BOUNDARIES(已硬编码 4 主角)。
+
+def _fm_field(t: str, key: str) -> str:
+    m = re.match(r"^\s*---\n(.*?)\n---\n", t, re.S)
+    if not m:
+        return ""
+    mm = re.search(rf"^{key}\s*[:：]\s*(.+)$", m.group(1), re.M)
+    return mm.group(1).strip() if mm else ""
+
+
+def _char_sections(body: str) -> list[tuple[str, str]]:
+    out = []
+    for blk in re.split(r"\n(?=##\s)", body):
+        m = re.match(r"##\s+(.+)", blk)
+        if m:
+            out.append((m.group(1).strip(), blk[m.end():].strip()))
+    return out
+
+
+def _char_label(content: str, label: str) -> str:
+    m = re.search(rf"-\s*\*\*{re.escape(label)}\*\*(?:[（(][^）)]*[）)])?\s*[:：]\s*(.+)", content)
+    return m.group(1).strip() if m else ""
+
+
+def _char_bullets(content: str) -> list[str]:
+    out = []
+    for line in content.split("\n"):
+        s = line.strip()
+        if s.startswith("- ") and not s.startswith("- ---"):
+            out.append(re.sub(r"^-\s*", "", s).strip())
+    return out
+
+
+def _char_table_rules(content: str) -> list[str]:
+    """引擎摘要里的 speech_rules markdown 表 → ['自称:..', '称呼玩家:..', ..]"""
+    out = []
+    for line in content.split("\n"):
+        if not line.strip().startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) < 2:
+            continue
+        k, v = cells[0], cells[1]
+        if not k or k.lower() == "speech_rules" or set(k) <= set("-: "):
+            continue
+        if v:
+            out.append(f"{k}:{v}")
+    return out
+
+
+def _char_keys(s: str) -> list[str]:
+    return [k.strip() for k in re.split(r"[,，、/]", s) if k.strip()]
+
+
+# 这些段各有去处,不进 description;其余公开叙事段(身份/外貌/核心事迹/结局/神谕/人际关系/前史…)→ description
+_CHAR_SKIP = ("0. 引擎摘要", "引擎摘要", "性格", "开场白", "知识边界",
+              "版本人格", "状态轴", "召回关键词", "说话规则", "说话习惯", "不可 OOC", "不可OOC")
+
+
+def parse_character(text: str, name: str = "") -> CharacterCard:
+    """确定性解析角色卡模板 → CharacterCard(免 LLM,L4 不泄进 description)。"""
+    body = strip_fm(text)
+    secs = _char_sections(body)
+    get = lambda pred: next((c for t, c in secs if pred(t)), "")
+
+    summary = get(lambda t: "引擎摘要" in t)
+    rules = _char_table_rules(summary)
+    rules += _char_bullets(get(lambda t: t.startswith("说话规则")))
+    rules += [f"[不可OOC] {b}" for b in _char_bullets(get(lambda t: t.startswith("不可 OOC") or t.startswith("不可OOC")))]
+
+    keys = _char_keys(_fm_field(text, "召回关键词").strip("[] "))
+    if not keys:
+        keys = _char_keys(_char_label(summary, "召回关键词"))
+    if not keys:
+        keys = _char_keys(get(lambda t: t == "召回关键词"))
+
+    kb = get(lambda t: t.startswith("知识边界"))
+    pub, hid = [], []
+    for b in _char_bullets(kb):
+        core = re.sub(r"^\*\*[^*]*\*\*\s*[:：]?\s*", "", b).strip()
+        head = b[:16]
+        (hid if "hidden" in head else pub).append(core)
+
+    desc = "\n\n".join(f"【{t}】\n{c.strip()}" for t, c in secs
+                       if c.strip() and not any(t.startswith(p) for p in _CHAR_SKIP))
+
+    card = CharacterCard(data=CharacterData(
+        name=name,
+        description=desc,
+        personality=get(lambda t: t.startswith("性格")),
+        first_mes=get(lambda t: t.startswith("开场白")),
+        mes_example=get(lambda t: t.startswith("说话习惯")),
+        speech_rules=rules,
+        anchor=_char_label(summary, "一句话锚点"),
+        tension=_char_label(summary, "核心矛盾"),
+        look=_char_label(summary, "外貌锚点"),
+        keys=keys,
+        versions=_char_bullets(get(lambda t: t.startswith("版本人格") or "状态轴" in t)),
+        known_public=pub,
+        known_hidden=hid,
+        tags=_char_keys(_fm_field(text, "tags").strip("[] ")),
+    ))
+    return card
+
+
 def do_char(path: Path, hidden=False):
-    card = identify(strip_fm(path.read_text(encoding="utf-8")))
-    base = _base_name(path)  # 用文件名锚定显示名:防 identify 把真名/别名当名(那刻夏→阿那克萨戈拉斯)
-    card.data.name = base
+    card = parse_character(path.read_text(encoding="utf-8"), _base_name(path))
+    base = card.data.name
     libname = f"{base} 导演隐藏卡" if hidden else base
     key = storage.save_library("characters", libname, card.model_dump())
     print(f"  {'[导演隐藏]' if hidden else '[公开]  '} {path.stem:22} → {base!r}  "
@@ -263,6 +374,16 @@ _BOUNDARIES = [
         hidden=["真身=赞达尔分身、翁法罗斯实验的守门人(L4,城内角色不知)"],
         hard_limits=["玩家用越界/极度非常规力量(开挂、滥用法则、逼出「逃出循环」)时出面收束",
                      "终局保证再创世运行", "结局不可篡改:逐火不能真正成功/逃出循环"]),
+    CharacterBoundary(character="赛飞儿",
+        public=["出身盗贼之都多洛斯的贼星(真名赛法利娅/Cifera)、捷足的旅人",
+                "取「诡计」火种成诡计半神,神权=谎言只要世人相信便可弄假成真",
+                "油滑爱财、用谎言行善的猫属性侠盗;搭档贼灵巴特鲁斯;曾被阿格莱雅在市集收留"],
+        hidden=["巴特鲁斯其实是她当年击败后以谎保下、化形存活的诡计泰坦扎格列斯本体(仅她知此秘)",
+                "她探知黎明机器只能再维持三百年便熄灭,织出『黎明机器将永远照拂圣城』的弥天大谎为奥赫玛续命",
+                "因怕被阿格莱雅识破谎言而自我放逐千年(误会至死未解)"],
+        hard_limits=["巴特鲁斯=扎格列斯本体、黎明机器三百年大谎 两个秘密不主动说破,问到也只按披露节奏松口",
+                     "油滑玩世只是壳,底色是为众人牺牲的侠义;谎言是工具与神权,非恶意",
+                     "不预知自己结局(终局受白厄之托护负世火种、拖盗火行者而被刺死)"]),
 ]
 
 _FREEDOM = [
@@ -311,10 +432,14 @@ def parse_amphoreus_storybook(text: str) -> StoryBook:
 
 
 def do_story():
+    # 2026-06-06 切换到通用确定性解析器 src.parsers.parse_storybook:
+    # 故事书已补 §6.4 结局条目(3 结局 + required_facts 谓词) + 角色信息边界段(5 角色),
+    # 通用 parser 即可解析出 14 事件 / 3 结局 / 5 边界,弃本地硬编码 parse_amphoreus_storybook(见文末,留作参考)。
+    from src.parsers import parse_storybook
     f = next(VAULT.glob("故事书*.md"))
-    sb = parse_amphoreus_storybook(f.read_text(encoding="utf-8"))
+    sb = parse_storybook(f.read_text(encoding="utf-8"))
     key = storage.save_library("stories", sb.title, sb.model_dump())
-    print(f"[故事书·确定性解析] {sb.title!r}  events={len(sb.events)} endings={len(sb.endings)} "
+    print(f"[故事书·通用确定性解析] {sb.title!r}  events={len(sb.events)} endings={len(sb.endings)} "
           f"boundaries={len(sb.character_boundaries)} timeline={len(sb.timeline)} "
           f"main_plot={len(sb.main_plot)} freedom={len(sb.freedom_rules)}  lib={key}")
     print("  事件:", " ".join(f"{e.event_id}({e.severity})" for e in sb.events))
@@ -346,7 +471,7 @@ _PLAYER_FIELDS = {"role", "background", "goals", "abilities", "constraints", "kn
 
 
 def _player_base(path: Path) -> str:
-    return re.sub(r"\s*玩家卡\s*$", "", path.stem).strip()
+    return re.sub(r"\s*演出卡\s*$", "", path.stem).strip()
 
 
 def parse_player_md(text: str, name: str) -> PlayerCard:
@@ -385,61 +510,88 @@ def parse_player_md(text: str, name: str) -> PlayerCard:
 
 
 def do_players():
-    """玩家卡两套,都来自手写 玩家卡/*.md(改后的「玩家自己写的版本」),供两个预设各用一套:
-    - A 原卡(免 LLM):全 11 张直接解析,库 key「X 原卡」→ 喂「未过LLM」预设。
-    - B 模拟丢卡(过 LLM):全 11 张同文喂 identify_player(= 玩家前端丢卡的真实流程),库 key「X 模拟丢卡」
-      → 喂「过LLM」预设。能暴露引擎管线吃不吃得下「开局不知道」这类 schema 外字段。
-    两套 name 都保持干净(=角色名),区分落在库 key 与预设名,不污染叙事/选人页同名删除。"""
-    from src.identify import identify_player
-    pdir = VAULT / "玩家卡"
-    all_names = PLAYABLE_9 + PLAYER_TEMPLATES  # 11 名(9 黄金裔 + 2 模板),两套对齐
-    print("[玩家卡 A·原卡] 全 11 张直接解析(免 LLM):")
+    """演出卡(原卡 · 确定性解析,免 LLM):全 11 张手写演出卡按模板段直接解析,库 key「X 原卡」→ 喂「如我所书」预设。
+    保留「开局不知道(unknown)」「开局锚点(opening)」(折进 constraints/known_facts 带前缀);
+    identify_player LLM 路径会丢掉 unknown 这类 schema 外字段,故正式上线不用 LLM 重解析。name 保持干净(=角色名)。"""
+    pdir = VAULT / "演出卡"
+    print("[演出卡·原卡] 全 11 张确定性解析(免 LLM):")
     for f in sorted(pdir.glob("*.md")):
         base = _player_base(f)
         c = parse_player_md(f.read_text(encoding="utf-8"), base)
         key = storage.save_library("players", f"{base} 原卡", c.model_dump())
         print(f"  [原卡] {base:6} role={c.role[:12]:12} goals={len(c.goals)} abil={len(c.abilities)} "
               f"cons={len(c.constraints)} known={len(c.known_facts)}  lib={key}")
-    print("[玩家卡 B·模拟丢卡] 全 11 张走 identify_player(过 LLM):")
-    for base in all_names:
-        f = pdir / f"{base} 玩家卡.md"
-        try:
-            pc = identify_player(strip_fm(f.read_text(encoding="utf-8")))
-            d = pc.model_dump()
-            d["name"] = base  # 锚定干净名字(防 identify 把"X(玩家卡)"当名)
-            key = storage.save_library("players", f"{base} 模拟丢卡", d)
-            print(f"  [丢卡] {base:6} role={d.get('role','')[:12]:12} goals={len(d.get('goals',[]))} "
-                  f"abil={len(d.get('abilities',[]))} cons={len(d.get('constraints',[]))} "
-                  f"known={len(d.get('known_facts',[]))}  lib={key}")
-        except Exception as e:
-            print(f"  [失败] {base}: {str(e)[:80]}")
 
 
 _SYNOPSIS = ("崩坏:星穹铁道·翁法罗斯篇。一段注定失败的逐火轮回——黄金裔逐个弑泰坦回收火种、"
              "逐个牺牲,黑潮逼近,盗火行者的暗线如影随形。你从凯撒落幕、阿格莱雅起火前的交界进入,"
              "走到这一轮的终结。如昔涟所书,这只是三千万次里普通的一次。")
 
-# 两个预设,世界/角色/故事/封面全相同,只差玩家卡来源(整套过 / 不过引擎 LLM)。
+# 单个首页预设「如我所书」:完整世界书 + 14 张公开角色卡(确定性解析)+ 故事书 + 封面 + 11 张演出卡(原卡)。
 _PRESETS = [
-    ("如我所书 · 原卡(玩家直写·未过LLM)", "原卡", "玩家卡 = 手写卡直采,未过引擎 LLM。"),
-    ("如我所书 · 模拟丢卡(过引擎LLM)", "模拟丢卡", "玩家卡 = 手写卡丢进引擎 identify_player 后的产物。"),
+    ("如我所书", "原卡", "演出卡 = 手写卡确定性解析(保留开局已知 / 开局不知道边界)。"),
 ]
-_OLD_PRESET = "如我所书 · 某一个轮回里确实发生过"  # 旧合并版(20 张混一页),建新两版时删掉
+# 历次旧预设(建新版时清掉,完成「替换」):旧两变体 + 旧合并版。
+_OLD_PRESETS = [
+    "如我所书 · 原卡(玩家直写·未过LLM)",
+    "如我所书 · 模拟丢卡(过引擎LLM)",
+    "如我所书 · 某一个轮回里确实发生过",
+]
+
+
+def do_settings():
+    """7 城邦设定卡走 src.parsers.parse_settingcard 确定性解析,存库 kind=settings。
+    设定集(顶层世界母本)不导——不合设定卡模板(无引擎摘要/知识分层),其内容已在世界书 + 各城邦卡。"""
+    from src.parsers import parse_settingcard
+    cdir = VAULT / "城邦"
+    cards = []
+    for f in sorted(cdir.glob("*.md")):
+        sc = parse_settingcard(f.read_text(encoding="utf-8"))
+        key = storage.save_library("settings", sc.name, sc.model_dump())
+        cards.append(sc.model_dump())
+        print(f"  [设定卡] {sc.name[:18]:18} 类别={sc.category} 场景={sc.scene_type} "
+              f"public={len(sc.public)} hidden={len(sc.hidden)} sections={len(sc.sections)} hooks={len(sc.hooks)}  lib={key}")
+    print(f"  共 {len(cards)} 张城邦设定卡入库(设定集不导)")
+    return cards
+
+
+def _settings_to_world_entries(setting_cards: list[dict]) -> list[dict]:
+    """把设定卡 public/hidden 摊平成世界书条目(复用引擎现成的关键词注入 + hidden 门控,引擎不必改)。
+    每卡:1 条 public(概览+public 分层,按地点/关键词召回)+ 1 条 hidden(元真相,门控不说破)。"""
+    out = []
+    for sc in setting_cards:
+        keys = sc.get("keys") or [sc.get("name", "")[:12]]
+        pub = "；".join(sc.get("public") or [])
+        content_pub = ((sc.get("overview") or "").strip() + (("　知识分层(public)：" + pub) if pub else "")).strip()
+        if content_pub:
+            out.append(WorldEntry(keys=keys, content=content_pub, comment=f"{sc['name']}·设定(public)",
+                                  source="location", visibility="public", priority=50).model_dump())
+        hid = "；".join(sc.get("hidden") or [])
+        if hid:
+            out.append(WorldEntry(keys=keys, content=hid, comment=f"{sc['name']}·设定(hidden·元真相)",
+                                  source="location", visibility="hidden", priority=50).model_dump())
+    return out
 
 
 def do_preset():
-    """建两个首页预设:除玩家卡来源外完全相同——一个整套「原卡(未过LLM)」、一个整套「模拟丢卡(过LLM)」。
-    各内嵌 完整世界书 + 14 张公开卡 + 故事书 + 封面 + 11 张对应来源的玩家卡。"""
+    """建单个首页预设「如我所书」:完整世界书(并入 7 城邦设定卡摊平条目)+ 14 张公开角色卡 + 故事书 + 封面 + 11 张演出卡(原卡)。"""
     chars = {c["name"]: c["data"] for c in storage.list_library("characters")}
     worlds = {w["name"]: w["data"] for w in storage.list_library("worlds")}
     stories = {s["name"]: s["data"] for s in storage.list_library("stories")}
     players = {p["name"]: p["data"] for p in storage.list_library("players")}
+    setting_cards = [s["data"] for s in storage.list_library("settings")]
     cast = [chars[n] for n in PUBLIC_14 if n in chars]
     missing = [n for n in PUBLIC_14 if n not in chars]
     if missing:
         print("  ⚠ 缺角色:", missing)
     world = worlds.get("翁法罗斯世界书")
     story = stories.get("某一个轮回里确实发生过")
+    # 设定卡摊平成世界书条目并入 world(只进预设副本、不回写 world 库,re-run 幂等);引擎据此按地点召回 + hidden 门控注入,无需改引擎核心
+    world_for_preset = world
+    if world and setting_cards:
+        extra = _settings_to_world_entries(setting_cards)
+        world_for_preset = {**world, "entries": list(world.get("entries", [])) + extra}
+        print(f"  设定卡摊平:+{len(extra)} 条并入预设 world(原 {len(world.get('entries', []))} 条 → {len(world_for_preset['entries'])} 条)")
     roster = PLAYABLE_9 + PLAYER_TEMPLATES  # 11 名,两套对齐
 
     def pick(suffix):
@@ -456,7 +608,8 @@ def do_preset():
             "name": name,
             "characters": cast,
             "playables": pick(suffix),
-            "world": world,
+            "world": world_for_preset,
+            "settings": setting_cards,
             "story": story,
             "player": None,
             "mode": "deep",
@@ -469,8 +622,18 @@ def do_preset():
         print(f"  preset 已存:{name!r}  playables={len(payload['playables'])}/11  "
               f"cast={len(cast)}/14  world={'✓' if world else '✗'} story={'✓' if story else '✗'}  slug={key}")
 
-    if storage.delete_preset(_OLD_PRESET):
-        print(f"  已删旧合并版预设:{_OLD_PRESET!r}")
+    # 清旧 = 完成「替换」:删历次旧预设 + 折叠归档后残留的 4 张「X 导演隐藏卡」库条目。
+    new_slug = storage.slug("如我所书")
+    for old in _OLD_PRESETS:
+        if storage.delete_preset(old):
+            print(f"  已删旧预设:{old!r}")
+    for p in storage.list_presets():
+        if p["name"].startswith("如我所书-") and p["name"] != new_slug:
+            storage.delete_preset(p["name"])
+            print(f"  已删残留旧预设 slug:{p['name']!r}")
+    for n in ("白厄", "昔涟", "盗火行者", "来古士"):
+        if storage.delete_library("characters", f"{n} 导演隐藏卡"):
+            print(f"  已删折叠归档残留库条目:characters/{n} 导演隐藏卡")
 
 
 if __name__ == "__main__":
@@ -489,6 +652,8 @@ if __name__ == "__main__":
         do_story_llm()
     elif mode == "players":
         do_players()
+    elif mode == "settings":
+        do_settings()
     elif mode == "preset":
         do_preset()
     elif mode == "players+preset":
@@ -507,13 +672,14 @@ if __name__ == "__main__":
         do_world()
         do_chars()
         do_story()
-    elif mode == "full":   # 一把梭:世界书 + 角色卡 + 故事书 + 玩家卡(A/B) + 预设
+    elif mode == "full":   # 一把梭:世界书 + 角色卡 + 故事书 + 演出卡 + 城邦设定卡 + 预设
         do_world()
         do_chars()
         do_story()
         do_players()
+        do_settings()
         do_preset()
 
     print("\n=== 库内现状 ===")
-    for kind in ("worlds", "characters", "stories", "players"):
+    for kind in ("worlds", "characters", "stories", "players", "settings"):
         print(f"  {kind}: {[it['name'] for it in storage.list_library(kind)]}")
