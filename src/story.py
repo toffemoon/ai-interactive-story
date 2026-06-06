@@ -1735,11 +1735,16 @@ async def _story_turn_impl(
         f"主线静默 {state.idle_minutes} 故事分钟。本轮在 state_update.time_advance 给出经过的故事分钟数。"
     )
     # 后台注入:运营者经 /api/operator/inject(需 OPERATOR_TOKEN)发的内容,本回合放进 AI 上下文。
-    # 消费一次:本回合送达后清空,避免每回合重复注入(要持续指令就再发一条)。
+    # 每条可选 sticky:once(默认,送达即清)/ sticky(持续到手动 DELETE 清)。兼容旧的纯字符串=once。
     _oi = data.get("operator_inject") or []
-    operator_inject = "\n".join(f"- {str(x).strip()}" for x in _oi if str(x).strip())
-    if _oi:
-        data["operator_inject"] = []
+    def _oi_text(x):
+        return (x.get("content") if isinstance(x, dict) else str(x)) or ""
+    def _oi_sticky(x):
+        return bool(x.get("sticky")) if isinstance(x, dict) else False
+    operator_inject = "\n".join(f"- {_oi_text(x).strip()}" for x in _oi if _oi_text(x).strip())
+    remaining = [x for x in _oi if _oi_sticky(x)]  # once 的送达即清,sticky 的留到手动清
+    if remaining != _oi:
+        data["operator_inject"] = remaining
     # 组装模型无关的上下文包,交给适配器决定怎么发给具体模型(折叠 vs 多轮、用哪个模型)。
     # DeepSeekAdapter 复刻原行为:历史折进 system、只发 [system, user]——因为 DeepSeek 的
     # json_mode 一旦看到多轮 assistant 散文会间歇吐空白。换 ClaudeAdapter 则用真正的多轮历史。

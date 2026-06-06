@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -478,20 +478,21 @@ def _require_operator(token: str | None) -> None:
 class OperatorInjectReq(BaseModel):
     session_id: str
     content: str
+    sticky: bool = False  # False=一次性(下回合送达后清);True=持续到手动 DELETE 清
 
 
 @app.post("/api/operator/inject")
 def api_operator_inject(req: OperatorInjectReq, x_operator_token: str | None = Header(None)):
-    """后台发一条内容 → 进该局的注入队列,下一回合放进 AI 上下文(消费一次)。需 X-Operator-Token。"""
+    """后台发一条内容 → 进该局注入队列,下一回合放进 AI 上下文。sticky=True 则持续到清空。需 X-Operator-Token。"""
     _require_operator(x_operator_token)
     if not req.content.strip():
         raise HTTPException(400, "内容不能为空")
     data = storage.load_session(req.session_id)
     inj = list(data.get("operator_inject") or [])
-    inj.append(req.content.strip())
+    inj.append({"content": req.content.strip(), "sticky": bool(req.sticky)})
     data["operator_inject"] = inj[-50:]
     storage.save_session(req.session_id, data)
-    return {"ok": True, "pending": len(data["operator_inject"])}
+    return {"ok": True, "pending": len(data["operator_inject"]), "sticky": bool(req.sticky)}
 
 
 @app.get("/api/operator/inject/{session_id}")
@@ -503,12 +504,48 @@ def api_operator_inject_list(session_id: str, x_operator_token: str | None = Hea
 
 @app.delete("/api/operator/inject/{session_id}")
 def api_operator_inject_clear(session_id: str, x_operator_token: str | None = Header(None)):
-    """清空某局的待注入队列。需 X-Operator-Token。"""
+    """清空某局的待注入队列(once + sticky 全清)。需 X-Operator-Token。"""
     _require_operator(x_operator_token)
     data = storage.load_session(session_id)
     data["operator_inject"] = []
     storage.save_session(session_id, data)
     return {"ok": True}
+
+
+# 私人后台控制台:不从玩家前端链接过去;真正的闸是 token(页面只是表单,无 token 调不动接口)。
+# OPERATOR_TOKEN 没设则 404(功能关闭)。token 存浏览器 localStorage,同源 fetch 免 CORS。
+_OPERATOR_HTML = """<!doctype html><html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>后台注入</title>
+<style>body{font:15px/1.6 -apple-system,sans-serif;max-width:640px;margin:24px auto;padding:0 16px;color:#222}
+h2{margin:0 0 12px}label{display:block;margin:10px 0 4px;font-weight:600;font-size:13px;color:#555}
+input,textarea{width:100%;box-sizing:border-box;padding:8px;border:1px solid #ccc;border-radius:6px;font:inherit}
+textarea{min-height:80px}.row{display:flex;gap:8px;align-items:center;margin:10px 0}
+.row label{margin:0;font-weight:400}button{padding:9px 16px;border:0;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer;font:inherit;margin:4px 6px 4px 0}
+button.sec{background:#6b7280}#out{white-space:pre-wrap;background:#f6f7f9;border-radius:6px;padding:10px;margin-top:12px;font-size:13px;min-height:20px}</style>
+</head><body>
+<h2>后台注入控制台</h2>
+<label>OPERATOR_TOKEN(只你知道,存本机浏览器)</label><input id="tok" type="password" placeholder="X-Operator-Token">
+<label>局 ID(session_id)</label><input id="sid" placeholder="哪一局">
+<label>内容(要让 AI 看到的话)</label><textarea id="msg" placeholder="例:让沈雾突然警觉起来"></textarea>
+<div class="row"><input id="sticky" type="checkbox"><label for="sticky">持续生效(sticky:每回合都注入,直到手动清空;不勾=一次性,下回合送达即清)</label></div>
+<button onclick="send()">发送</button><button class="sec" onclick="view()">查看队列</button><button class="sec" onclick="clr()">清空</button>
+<div id="out"></div>
+<script>
+const $=id=>document.getElementById(id), out=t=>$("out").textContent=typeof t=="string"?t:JSON.stringify(t,null,2);
+["tok","sid"].forEach(k=>{$(k).value=localStorage["op_"+k]||"";$(k).oninput=()=>localStorage["op_"+k]=$(k).value});
+const H=()=>({"X-Operator-Token":$("tok").value,"Content-Type":"application/json"});
+async function send(){try{const r=await fetch("/api/operator/inject",{method:"POST",headers:H(),body:JSON.stringify({session_id:$("sid").value,content:$("msg").value,sticky:$("sticky").checked})});const j=await r.json();out(r.ok?("已发送 ✓ "+JSON.stringify(j)):("失败 "+r.status+" "+JSON.stringify(j)));if(r.ok)$("msg").value=""}catch(e){out("错误 "+e)}}
+async function view(){try{const r=await fetch("/api/operator/inject/"+encodeURIComponent($("sid").value),{headers:H()});out(await r.json())}catch(e){out("错误 "+e)}}
+async function clr(){try{const r=await fetch("/api/operator/inject/"+encodeURIComponent($("sid").value),{method:"DELETE",headers:H()});out(r.ok?"已清空 ✓":("失败 "+r.status))}catch(e){out("错误 "+e)}}
+</script></body></html>"""
+
+
+@app.get("/operator", response_class=HTMLResponse)
+def operator_console():
+    """私人后台注入控制台。OPERATOR_TOKEN 没设 → 404(功能关闭)。页面不做鉴权,真正的闸是各 /api/operator/* 端点的 token。"""
+    if not os.getenv("OPERATOR_TOKEN"):
+        raise HTTPException(404, "未启用")
+    return HTMLResponse(_OPERATOR_HTML)
 
 
 # 前端静态文件挂在根路径(html=True 让 / 返回 index.html)。
