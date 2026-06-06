@@ -37,6 +37,7 @@ class ContextBundle:
     summary: str = ""                      # 早前剧情滚动摘要(已压缩)
     recall_block: str = ""                 # 向量召回片段(深度模式)
     abstain_note: str = ""                 # 具体事实查询的 abstention 硬指令(有据照实/无据认忘绝不编)
+    operator_inject: str = ""              # 后台运营者实时下达的内容(最高优先,AI 本回合就看到)
     recap: str = ""                        # 近期若干轮折叠文本(给折叠型适配器)
     recent_messages: list[dict] = field(default_factory=list)  # 近期原始多轮(给多轮型适配器)
     anchor: str = ""                       # 主线锚点
@@ -103,6 +104,9 @@ class DeepSeekAdapter:
             )
         if b.clock_line:
             system += "\n\n# 故事内时钟\n" + b.clock_line
+        if b.operator_inject:  # 后台运营者实时下达,最高优先
+            system += ("\n\n# 后台注入(运营者/作者实时下达,最高优先级,本回合自然采纳并落实;"
+                       "这是台前看不到的导演指令或补充内容,别把这段原样念给玩家)\n" + b.operator_inject)
         if b.abstain_note:  # 放最后:具体事实查询的认忘指令,最高显著位(模型最后读到)
             system += "\n\n" + b.abstain_note
         return [{"role": "system", "content": system}, {"role": "user", "content": b.action_prompt}]
@@ -145,6 +149,8 @@ class ClaudeAdapter:
             sys_parts.append("<due_escalations>\n" + b.esc_text + "\n</due_escalations>")
         if b.clock_line:
             sys_parts.append("<world_clock>\n" + b.clock_line + "\n</world_clock>")
+        if b.operator_inject:  # 后台运营者实时下达,最高优先
+            sys_parts.append("<operator_injection priority='highest'>\n" + b.operator_inject + "\n</operator_injection>")
         if b.abstain_note:  # 放最后:最高显著位
             sys_parts.append("<abstention priority='highest'>\n" + b.abstain_note + "\n</abstention>")
         system = "\n\n".join(sys_parts)
