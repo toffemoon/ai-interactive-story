@@ -911,8 +911,39 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
   const [error, setError] = useState("");
   const [streaming, setStreaming] = useState(null); // 流式中实时显示的叙事 + 角色台词 {narration, messages}
   const inputRef = useRef(null);
+  // 实时轮询用:在 setInterval 里读最新值,避免 effect 反复重建。
+  const loadingRef = useRef(false); loadingRef.current = loading;
+  const streamingRef = useRef(null); streamingRef.current = streaming;
+  const turnsRef = useRef(turns); turnsRef.current = turns;
 
   const hasStoryTurn = turns.some((t) => t.kind === "story");
+
+  // 实时弹出:运营者「立即生效」或任何 server 端出的新回合,玩家界面每 ~3.5s 自己冒出来(不必刷新)。
+  // 玩家自己在出回合时(loading/streaming)不轮询,防与 runTurn 的本地追加竞态。只追加"故事"回合,
+  // 跳过 server 那条中性触发的 player_input(避免冒出一个像玩家自己说的假气泡)。
+  useEffect(() => {
+    if (!sessionId) return undefined;
+    let alive = true;
+    const tick = async () => {
+      if (loadingRef.current || streamingRef.current) return;
+      const have = turnsRef.current.filter((t) => t.kind === "story").length;
+      try {
+        const r = await fetch(`/api/session/${encodeURIComponent(sessionId)}/tail?after=${have}`);
+        if (!alive || !r.ok) return;
+        const d = await r.json();
+        const nt = d.new_turns || [];
+        if (!nt.length || loadingRef.current || streamingRef.current) return;  // 期间玩家可能动了,再判一次
+        setTurns((xs) => [...xs, ...nt.map((rec) => ({ kind: "story", data: {
+          narration: rec.narration || "", messages: rec.messages || [], choices: rec.choices || [],
+        } }))]);
+        const last = nt[nt.length - 1];
+        if (last.choices && last.choices.length) setChoices(last.choices);
+        if (d.state) setState(d.state);
+      } catch (e) { /* 轮询失败静默,不打扰玩家 */ }
+    };
+    const id = setInterval(tick, 3500);
+    return () => { alive = false; clearInterval(id); };
+  }, [sessionId]);
 
   // 每轮后更新存档注册表(存档列表显示轮数 / 最近游玩时间 / 标题)。
   useEffect(() => {
