@@ -1821,18 +1821,27 @@ function StoryModal({ entry, setTab, onClose, onStart }) {
     setLoading(false);
   }
 
-  // 角色公开层白名单:名 / 外貌 / 主设定 / 性格 / 公开可知 / 标签。绝不渲染 known_hidden、versions、tension、scenario、first_mes 等。
+  // 角色公开层白名单:名 / 外貌锚点 / 一句话锚点 / 标签 = 基础(默认只显示这些);
+  // 主设定 / 性格 / 公开可知收进「展开更多」(详情默认只讲基础,不铺全文)。
+  // anchor 是 §0 引擎摘要的公开一句话(不含 L4);绝不渲染 known_hidden、versions、tension、scenario、first_mes。
   function PublicChar({ c }) {
     const cd = (c && c.data) || c || {};
     const pub = cd.known_public || [];
+    const hasMore = cd.description || cd.personality || pub.length;
     return (
       <div className="modal-char">
         <b>{cd.name || "角色"}</b>
         {cd.look ? <p className="mc-look">{cd.look}</p> : null}
-        {cd.description ? <p>{cd.description}</p> : null}
-        {cd.personality ? <p className="mc-dim">{cd.personality}</p> : null}
-        {pub.length ? <ul className="mc-pub">{pub.map((x, i) => <li key={i}>{x}</li>)}</ul> : null}
+        {cd.anchor ? <p>{cd.anchor}</p> : null}
         {(cd.tags || []).length ? <div className="modal-char-tags">{(cd.tags || []).slice(0, 5).map((t, i) => <span className="tag" key={i}>{t}</span>)}</div> : null}
+        {hasMore ? (
+          <details className="mc-more">
+            <summary>展开更多</summary>
+            {cd.description ? <p>{cd.description}</p> : null}
+            {cd.personality ? <p className="mc-dim">{cd.personality}</p> : null}
+            {pub.length ? <ul className="mc-pub">{pub.map((x, i) => <li key={i}>{x}</li>)}</ul> : null}
+          </details>
+        ) : null}
       </div>
     );
   }
