@@ -1496,6 +1496,7 @@ async def _save_turn(
         "triggered_events": list(turn.triggered_events),
         "reasoning": turn.reasoning,
         "usage": turn.usage,
+        "operator_applied": data.pop("_operator_applied", []),  # 留痕:本回合采纳的导演注入(审计用)
     })
     data["turns"] = turns_log[-300:]
     data["updated_at"] = datetime.now(_TZ8).isoformat(timespec="seconds")
@@ -1759,6 +1760,11 @@ async def _story_turn_impl(
     remaining = [x for x in _oi if _oi_sticky(x)]  # once 的送达即清,sticky 的留到手动清
     if remaining != _oi:
         data["operator_inject"] = remaining
+    # 留痕:本回合采纳的导演注入,存进 data 供 _save_turn 记进回合记录(operator_applied),永久可审计。
+    applied = [{"mode": "director", "content": _oi_text(x).strip(), "sticky": _oi_sticky(x)}
+               for x in _oi if _oi_text(x).strip()]
+    if applied:
+        data["_operator_applied"] = applied
     # 组装模型无关的上下文包,交给适配器决定怎么发给具体模型(折叠 vs 多轮、用哪个模型)。
     # DeepSeekAdapter 复刻原行为:历史折进 system、只发 [system, user]——因为 DeepSeek 的
     # json_mode 一旦看到多轮 assistant 散文会间歇吐空白。换 ClaudeAdapter 则用真正的多轮历史。

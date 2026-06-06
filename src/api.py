@@ -491,8 +491,10 @@ def _require_operator(token: str | None) -> None:
 class OperatorInjectReq(BaseModel):
     session_id: str
     content: str
-    sticky: bool = False  # False=一次性(下回合送达后清);True=持续到手动 DELETE 清
-    now: bool = False      # True=立即跑一回合,AI 当场采纳(不等玩家下一步);False=进队列等下回合
+    mode: str = "director"  # director=幕后指令AI织进剧情 / direct=指定角色逐字台词(引擎直插) / narration=旁白(引擎直插)
+    target: str = ""         # direct 模式:说这句的角色名(空则退化为旁白)
+    sticky: bool = False     # 仅 director:每回合都注入,直到手动清空
+    now: bool = False        # 仅 director:立即跑一回合,AI 当场采纳(不等玩家)
 
 
 async def _operator_advance(session_id: str) -> dict:
@@ -517,18 +519,43 @@ async def _operator_advance(session_id: str) -> dict:
 
 @app.post("/api/operator/inject")
 async def api_operator_inject(req: OperatorInjectReq, x_operator_token: str | None = Header(None)):
-    """后台发一条内容 → 进该局注入队列,下一回合放进 AI 上下文。sticky=True 持续到清空;
-    now=True 则立即跑一回合(AI 当场采纳,不等玩家)。需 X-Operator-Token。"""
+    """后台对某局施加影响,三种模式(需 X-Operator-Token):
+    - director(默认):幕后指令进队列,AI 下回合织进剧情;sticky=持续每回合,now=立即跑一回合。
+    - direct:指定 target 角色【逐字】说出 content —— 引擎直插一条回合,不走 AI、即时、保证原样。
+    - narration:把 content 作为旁白【逐字】写进剧情 —— 引擎直插,不走 AI、即时。
+    direct/narration 即时落地(不看 sticky/now);两路都写 operator_applied 留痕。"""
     _require_operator(x_operator_token)
-    if not req.content.strip():
+    content = req.content.strip()
+    if not content:
         raise HTTPException(400, "内容不能为空")
     data = await asyncio.to_thread(storage.load_session, req.session_id)
+    mode = req.mode if req.mode in ("director", "direct", "narration") else "director"
+
+    if mode in ("direct", "narration"):
+        # 引擎直插一条回合:逐字、即时、零 LLM。direct 且给了角色 → 当台词;否则 → 当旁白。
+        as_line = mode == "direct" and bool(req.target.strip())
+        applied_mode = "direct" if as_line else "narration"
+        turn_rec = {
+            "player_input": "",
+            "narration": "" if as_line else content,
+            "messages": ([{"character_id": storage.slug(req.target, "char"),
+                           "name": req.target.strip(), "text": content}] if as_line else []),
+            "choices": [], "triggered_events": [], "reasoning": {}, "usage": {},
+            "operator_applied": [{"mode": applied_mode, "target": req.target.strip(), "content": content}],
+        }
+        turns = data.setdefault("turns", [])
+        turns.append(turn_rec)
+        data["turns"] = turns[-300:]
+        await asyncio.to_thread(storage.save_session, req.session_id, data)
+        return {"ok": True, "mode": applied_mode, "inserted": True, "turn": turn_rec}
+
+    # director:进队列(sticky 决定是否持续);now=true 立即跑一回合
     inj = list(data.get("operator_inject") or [])
-    inj.append({"content": req.content.strip(), "sticky": bool(req.sticky)})
+    inj.append({"content": content, "mode": "director", "sticky": bool(req.sticky)})
     data["operator_inject"] = inj[-50:]
     await asyncio.to_thread(storage.save_session, req.session_id, data)
-    res = {"ok": True, "pending": len(data["operator_inject"]), "sticky": bool(req.sticky)}
-    if req.now:  # 立即生效:当场跑一回合,AI 采纳注入并出内容
+    res = {"ok": True, "mode": "director", "pending": len(data["operator_inject"]), "sticky": bool(req.sticky)}
+    if req.now:
         res["turn"] = await _operator_advance(req.session_id)
     return res
 
@@ -592,6 +619,8 @@ button.sec{background:#6b7280}#st{font-size:12px;color:#888;margin-left:auto}
 .b{max-width:80%;margin:6px 0;padding:8px 11px;border-radius:10px;white-space:pre-wrap;word-break:break-word}
 .b.player{background:#2563eb;color:#fff;margin-left:auto}.b.char{background:#fff;border:1px solid #e5e7eb}
 .narr{color:#666;font-style:italic;margin:8px 4px;font-size:13px}
+.oplabel{font-size:11px;color:#7c3aed;background:#f3effe;border-radius:4px;padding:2px 7px;margin:7px 0;display:inline-block}
+#box select,#box #target{padding:5px 7px;border:1px solid #ccc;border-radius:6px;font:inherit}
 #box{border-top:1px solid #e5e7eb;padding:10px 14px}
 #box textarea{width:100%;min-height:52px;padding:8px;border:1px solid #ccc;border-radius:6px;font:inherit}
 #queue{font-size:12px;color:#a15;margin-bottom:4px}</style>
@@ -606,10 +635,18 @@ button.sec{background:#6b7280}#st{font-size:12px;color:#888;margin-left:auto}
   <div id="conv"></div>
   <div id="box">
    <div id="queue"></div>
-   <textarea id="msg" placeholder="发给 AI 的内容(它下一回合就看到),例:让沈雾突然警觉起来"></textarea>
-   <div style="margin-top:6px;display:flex;align-items:center;gap:10px">
-    <label style="font-size:13px"><input id="sticky" type="checkbox"> 持续生效(不勾=一次性,下回合送达即清)</label>
-    <button onclick="send(false)">发送(下回合)</button><button onclick="send(true)">⚡ 立即生效</button><button class="sec" onclick="clearQ()">清空队列</button>
+   <textarea id="msg" placeholder="导演=写指令(让X警觉…) / 直接台词=写那句话 / 旁白=写环境描写"></textarea>
+   <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <select id="mode" onchange="onMode()">
+     <option value="director">🎬 导演(AI 织进剧情)</option>
+     <option value="direct">🎤 直接台词(角色逐字说)</option>
+     <option value="narration">🌧 旁白(逐字写进剧情)</option>
+    </select>
+    <input id="target" type="text" placeholder="角色名" style="display:none;width:110px">
+    <label id="stickyL" style="font-size:13px"><input id="sticky" type="checkbox"> 持续</label>
+    <button id="bNext" onclick="send('next')">发送(下回合)</button>
+    <button id="bNow" onclick="send('now')">⚡ 立即</button>
+    <button class="sec" onclick="clearQ()">清空队列</button>
    </div>
   </div>
  </div>
@@ -625,9 +662,11 @@ let cur=null;
 async function j(url,opt){const r=await fetch(url,opt||{headers:H()});if(!r.ok){st("✗ "+r.status+(r.status==503?" 未启用(没设OPERATOR_TOKEN)":r.status==403?" token不对":""));throw r;}st("");return r.json();}
 async function loadSessions(){try{const d=await j("/api/operator/sessions");const L=$("list");L.innerHTML="";(d.sessions||[]).forEach(s=>{const it=el("div","sess"+(s.id===cur?" on":""));it.dataset.sid=s.id;it.appendChild(el("div","id",(s.story||"(未命名故事)")+(s.player?" · 玩"+s.player:"")));it.appendChild(el("div","meta",(s.turns||0)+"轮 · "+String(s.updated_at||"").slice(0,16).replace("T"," ")));if(s.last_input)it.appendChild(el("div","meta","最后:"+s.last_input));it.appendChild(el("div","sid",s.id));it.onclick=()=>select(s.id);L.appendChild(it);});if(!(d.sessions||[]).length)L.appendChild(el("div","meta","(没有 session)"));}catch(e){}}
 function select(id){cur=id;document.querySelectorAll(".sess").forEach(n=>n.classList.toggle("on",n.dataset.sid===id));loadSession();}
-async function loadSession(silent){if(!cur)return;try{const d=await j("/api/operator/session/"+encodeURIComponent(cur));const C=$("conv");const atBottom=C.scrollHeight-C.scrollTop-C.clientHeight<60;C.innerHTML="";(d.turns||[]).forEach(t=>{if(t.player_input)C.appendChild(bub("player","",t.player_input));if(t.narration)C.appendChild(el("div","narr",t.narration));(t.messages||[]).forEach(m=>C.appendChild(bub("char",m.name||m.character_id||"",m.text||"")));});const s=d.state||{},sc=s.scene||{};$("shdr").textContent=cur+"  ·  地点:"+(sc.location||"?")+"  ·  在场:"+((sc.present_characters||[]).join("、")||"?")+"  ·  第"+(s.turn_count||0)+"回合";const q=d.operator_inject||[];$("queue").textContent=q.length?("待注入 "+q.length+" 条:"+q.map(x=>(typeof x=="object"?x.content+(x.sticky?"[持续]":"[一次]"):x)).join(" / ")):"";if(!silent||atBottom)C.scrollTop=C.scrollHeight;}catch(e){}}
-async function send(now){if(!cur){st("先选一个 session");return;}const m=$("msg").value.trim();if(!m)return;try{st(now?"AI 生成中…":"");await j("/api/operator/inject",{method:"POST",headers:H(),body:JSON.stringify({session_id:cur,content:m,sticky:$("sticky").checked,now:!!now})});$("msg").value="";st(now?"已立即生效 ✓":"已发送(下回合)✓");loadSession();}catch(e){}}
+async function loadSession(silent){if(!cur)return;try{const d=await j("/api/operator/session/"+encodeURIComponent(cur));const C=$("conv");const atBottom=C.scrollHeight-C.scrollTop-C.clientHeight<60;C.innerHTML="";(d.turns||[]).forEach(t=>{(t.operator_applied||[]).forEach(a=>{const tag=a.mode==="direct"?("🎤 直接台词"+(a.target?"("+a.target+")":"")):(a.mode==="narration"?"🌧 旁白":"🎬 导演");C.appendChild(el("div","oplabel",tag+":"+(a.content||"")));});if(t.player_input)C.appendChild(bub("player","",t.player_input));if(t.narration)C.appendChild(el("div","narr",t.narration));(t.messages||[]).forEach(m=>C.appendChild(bub("char",m.name||m.character_id||"",m.text||"")));});const s=d.state||{},sc=s.scene||{};$("shdr").textContent=cur+"  ·  地点:"+(sc.location||"?")+"  ·  在场:"+((sc.present_characters||[]).join("、")||"?")+"  ·  第"+(s.turn_count||0)+"回合";const q=d.operator_inject||[];$("queue").textContent=q.length?("待注入 "+q.length+" 条:"+q.map(x=>(typeof x=="object"?x.content+(x.sticky?"[持续]":"[一次]"):x)).join(" / ")):"";if(!silent||atBottom)C.scrollTop=C.scrollHeight;}catch(e){}}
+function onMode(){const m=$("mode").value;$("target").style.display=m==="direct"?"":"none";$("stickyL").style.display=m==="director"?"":"none";$("bNext").style.display=m==="director"?"":"none";$("bNow").textContent=m==="director"?"⚡ 立即":"发送";}
+async function send(timing){if(!cur){st("先选一个 session");return;}const m=$("msg").value.trim();if(!m)return;const mode=$("mode").value;const now=(timing==="now"&&mode==="director");if(mode==="direct"&&!$("target").value.trim()){st("直接台词要填角色名(留空=旁白)");}try{st(now?"AI 生成中…":(mode!=="director"?"插入中…":""));await j("/api/operator/inject",{method:"POST",headers:H(),body:JSON.stringify({session_id:cur,content:m,mode,target:$("target").value.trim(),sticky:$("sticky").checked,now})});$("msg").value="";st("已发送 ✓");loadSession();}catch(e){}}
 async function clearQ(){if(!cur)return;try{await j("/api/operator/inject/"+encodeURIComponent(cur),{method:"DELETE",headers:H()});st("已清空 ✓");loadSession();}catch(e){}}
+onMode();
 loadSessions();
 setInterval(()=>{if(cur)loadSession(true);},4000);
 </script></body></html>"""
