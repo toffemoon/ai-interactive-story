@@ -1734,6 +1734,12 @@ async def _story_turn_impl(
         f"当前:{_fmt_clock(state.clock_minutes)}(累计 {state.clock_minutes} 故事分钟);"
         f"主线静默 {state.idle_minutes} 故事分钟。本轮在 state_update.time_advance 给出经过的故事分钟数。"
     )
+    # 后台注入:运营者经 /api/operator/inject(需 OPERATOR_TOKEN)发的内容,本回合放进 AI 上下文。
+    # 消费一次:本回合送达后清空,避免每回合重复注入(要持续指令就再发一条)。
+    _oi = data.get("operator_inject") or []
+    operator_inject = "\n".join(f"- {str(x).strip()}" for x in _oi if str(x).strip())
+    if _oi:
+        data["operator_inject"] = []
     # 组装模型无关的上下文包,交给适配器决定怎么发给具体模型(折叠 vs 多轮、用哪个模型)。
     # DeepSeekAdapter 复刻原行为:历史折进 system、只发 [system, user]——因为 DeepSeek 的
     # json_mode 一旦看到多轮 assistant 散文会间歇吐空白。换 ClaudeAdapter 则用真正的多轮历史。
@@ -1743,6 +1749,7 @@ async def _story_turn_impl(
         summary=summary,
         recall_block=recall_block,
         abstain_note=abstain_note,
+        operator_inject=operator_inject,
         recap=recap,
         recent_messages=messages[start_idx:],
         anchor=anchor,

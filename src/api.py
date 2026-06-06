@@ -7,10 +7,11 @@
 
 import asyncio
 import json
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -460,6 +461,54 @@ def api_save_preset(req: PresetReq):
 @app.delete("/api/presets/{name}")
 def api_delete_preset(name: str):
     return {"deleted": storage.delete_preset(name)}
+
+
+# ── 后台注入(运营者/作者)──────────────────────────────────────────
+# 让运营者把内容"发进"某局,引擎下一回合就放进 AI 的上下文(AI 会看到)。
+# 没有账号系统 → 用单一运营者密钥 OPERATOR_TOKEN 当闸:env 没设=整组端点关闭(默认安全);
+# 设了但请求头 X-Operator-Token 不对=403。玩家拿不到 token、前端也不暴露入口,故只有开发者能发。
+def _require_operator(token: str | None) -> None:
+    expected = os.getenv("OPERATOR_TOKEN", "")
+    if not expected:
+        raise HTTPException(503, "后台注入未启用:服务端未设置 OPERATOR_TOKEN")
+    if token != expected:
+        raise HTTPException(403, "operator token 不对")
+
+
+class OperatorInjectReq(BaseModel):
+    session_id: str
+    content: str
+
+
+@app.post("/api/operator/inject")
+def api_operator_inject(req: OperatorInjectReq, x_operator_token: str | None = Header(None)):
+    """后台发一条内容 → 进该局的注入队列,下一回合放进 AI 上下文(消费一次)。需 X-Operator-Token。"""
+    _require_operator(x_operator_token)
+    if not req.content.strip():
+        raise HTTPException(400, "内容不能为空")
+    data = storage.load_session(req.session_id)
+    inj = list(data.get("operator_inject") or [])
+    inj.append(req.content.strip())
+    data["operator_inject"] = inj[-50:]
+    storage.save_session(req.session_id, data)
+    return {"ok": True, "pending": len(data["operator_inject"])}
+
+
+@app.get("/api/operator/inject/{session_id}")
+def api_operator_inject_list(session_id: str, x_operator_token: str | None = Header(None)):
+    """看某局当前待注入(还没被消费)的内容。需 X-Operator-Token。"""
+    _require_operator(x_operator_token)
+    return {"operator_inject": storage.load_session(session_id).get("operator_inject") or []}
+
+
+@app.delete("/api/operator/inject/{session_id}")
+def api_operator_inject_clear(session_id: str, x_operator_token: str | None = Header(None)):
+    """清空某局的待注入队列。需 X-Operator-Token。"""
+    _require_operator(x_operator_token)
+    data = storage.load_session(session_id)
+    data["operator_inject"] = []
+    storage.save_session(session_id, data)
+    return {"ok": True}
 
 
 # 前端静态文件挂在根路径(html=True 让 / 返回 index.html)。
