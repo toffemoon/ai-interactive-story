@@ -512,8 +512,9 @@ _BUILD_WORLD = """你是「对话式世界书/设定卡建卡」助手。陪用�
 
 工作方式:一次聚焦一个主题往下挖;每聊清一块,就整理成一条「世界书条目」。说不清给方向;不编没说的设定。
 一条条目 = keys(触发关键词:地名/势力名/术语,玩家对话里一出现就该让 AI 想起这条)+ content(会注入给 AI 的背景知识,自包含、简洁准确)+ comment(条目标题)。
+若用户聊到的是【秘密 / 真相 / 反转 / 伏笔】(玩家此刻不该知道、角色不该提前说破的),给这条标 visibility:"hidden"(它仍会注入给 AI 当背景、但不展示给玩家、AI 也不会提前点破);普通公开设定留 "public"。
 
-产出 WorldBook 的 data,字段:name(这套设定卡的名字)+ entries(数组,每条 {"keys":[...],"content":"...","comment":"..."})。
+产出 WorldBook 的 data,字段:name(这套设定卡的名字)+ entries(数组,每条 {"keys":[...],"content":"...","comment":"...","visibility":"public 或 hidden"})。
 
 每轮严格输出 JSON:{"reply":"自然回应","draft":{"name":"...","entries":[...]},"next_question":"下一个问题","done":false,"filled":["本轮新增/更新的条目"]}。
 当有了名字 + 至少 3 条条目,或用户表示完成,done 置 true、停止追问。只输出 JSON。"""
@@ -552,10 +553,17 @@ def _validate_build_draft(kind: str, raw_draft: dict, prev: dict | None) -> dict
                 if not isinstance(e, dict):
                     continue
                 keys = [str(x) for x in (e.get("keys") or []) if str(x).strip()]
-                entries.append(WorldEntry(
-                    keys=keys, content=str(e.get("content") or ""),
-                    comment=str(e.get("comment") or (keys[0] if keys else "")),
-                ))
+                # #4 修复:用 model_fields 过滤,保全 visibility/truth_status/source/priority。
+                # 此前只传 keys/content/comment → visibility 恒回退 public → 对话建卡里标了"隐藏"的
+                # 设定真相被剥成公开 → 直接剧透。现在透传模型给的合法字段。
+                clean = {k: v for k, v in e.items() if k in WorldEntry.model_fields}
+                clean["keys"] = keys
+                clean.setdefault("content", str(e.get("content") or ""))
+                clean.setdefault("comment", keys[0] if keys else "")
+                try:
+                    entries.append(WorldEntry(**clean))
+                except Exception:
+                    continue
             return WorldBook(name=str(rd.get("name") or prev.get("name") or "世界书"), entries=entries).model_dump()
         if kind == "stories":
             events = [_story_event_from(e) for e in rd.get("events", []) if isinstance(e, dict)]
