@@ -131,19 +131,25 @@ def delete_session(session_id: str) -> bool:
 
 
 def list_sessions(limit: int = 300) -> list[dict[str, Any]]:
-    """列出会话 (后台控制台用): id + 更新时间 + 回合数。按最近更新排序。"""
+    """列出会话 (后台控制台用): id + 更新时间 + 回合数 + 人话标签(故事名/玩家/最后一句)。按最近更新排序。
+    标签让运营者一眼认出哪局是哪局,不用对着 hex id 猜。"""
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(
             """select id, updated_at,
                       coalesce(jsonb_array_length(
-                        case when jsonb_typeof(data->'turns')='array' then data->'turns' else '[]'::jsonb end), 0) as turns
+                        case when jsonb_typeof(data->'turns')='array' then data->'turns' else '[]'::jsonb end), 0) as turns,
+                      data->'artifacts'->'story'->>'title' as story,
+                      data->'artifacts'->'player'->>'name' as player,
+                      case when jsonb_typeof(data->'turns')='array' and jsonb_array_length(data->'turns') > 0
+                           then left(data->'turns'->-1->>'player_input', 40) else null end as last_input
                from sessions order by updated_at desc nulls last limit %s""",
             (limit,),
         )
         return [{"id": r["id"],
                  "updated_at": str(r["updated_at"]) if r["updated_at"] else None,
-                 "turns": r["turns"]} for r in cur.fetchall()]
+                 "turns": r["turns"], "story": r["story"], "player": r["player"],
+                 "last_input": r["last_input"]} for r in cur.fetchall()]
 
 
 # ---------------- 卡库 (cards) ----------------
