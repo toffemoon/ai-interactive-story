@@ -33,6 +33,7 @@ from . import db
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
+OC_DIR = ROOT / "oc"  # OC 集:用户 OC 的设定/世界观/立绘/地图(operator 控制台「OC集」用)
 
 
 @asynccontextmanager
@@ -598,9 +599,40 @@ def api_operator_session(session_id: str, x_operator_token: str | None = Header(
     }
 
 
+@app.get("/api/operator/oc")
+def api_operator_oc(x_operator_token: str | None = Header(None)):
+    """OC 集:列出各用户的 OC(角色设定 + 世界观 + 立绘 + 地图)。需 X-Operator-Token。
+    数据读 oc/index.json + 它引用的 .md;图走 /oc-assets 静态路由(<img> 直接取)。"""
+    _require_operator(x_operator_token)
+    idx = OC_DIR / "index.json"
+    if not idx.is_file():
+        return {"ocs": []}
+    try:
+        entries = json.loads(idx.read_text(encoding="utf-8"))
+    except Exception:
+        return {"ocs": []}
+
+    def _read(rel: str) -> str:
+        p = (OC_DIR / rel) if rel else None
+        return p.read_text(encoding="utf-8") if (p and p.is_file()) else ""
+
+    def _asset(rel: str) -> str:
+        return ("/oc-assets/" + rel) if rel and (OC_DIR / rel).is_file() else ""
+
+    ocs = [{
+        "user": e.get("user", ""),
+        "character": e.get("character", ""),
+        "profile": _read(e.get("profile", "")),
+        "world": _read(e.get("world", "")),
+        "art": _asset(e.get("art", "")),
+        "map": _asset(e.get("map", "")),
+    } for e in entries]
+    return {"ocs": ocs}
+
+
 # 私人后台控制台:不从玩家前端链接过去;真正的闸是 token(页面只是表单,无 token 调不动接口)。
 # OPERATOR_TOKEN 没设则 404(功能关闭)。token 存浏览器 localStorage,同源 fetch 免 CORS。
-_OPERATOR_HTML = """<!doctype html><html lang="zh"><head><meta charset="utf-8">
+_OPERATOR_HTML = r"""<!doctype html><html lang="zh"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>后台控制台</title>
 <style>*{box-sizing:border-box}body{font:14px/1.55 -apple-system,system-ui,sans-serif;margin:0;color:#1f2328;background:#fff}
 header{display:flex;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid #e5e7eb;flex-wrap:wrap}
@@ -623,9 +655,23 @@ button.sec{background:#6b7280}#st{font-size:12px;color:#888;margin-left:auto}
 #box select,#box #target{padding:5px 7px;border:1px solid #ccc;border-radius:6px;font:inherit}
 #box{border-top:1px solid #e5e7eb;padding:10px 14px}
 #box textarea{width:100%;min-height:52px;padding:8px;border:1px solid #ccc;border-radius:6px;font:inherit}
-#queue{font-size:12px;color:#a15;margin-bottom:4px}</style>
+#queue{font-size:12px;color:#a15;margin-bottom:4px}
+.tab{background:#eef1f5;color:#333}.tab.on{background:#2563eb;color:#fff}
+#ocwrap{display:none;height:calc(100vh - 53px)}
+#oclist{width:230px;border-right:1px solid #e5e7eb;overflow:auto}
+#ocdetail{flex:1;overflow:auto;padding:16px 26px;min-width:0}
+#ocdetail h3{margin:20px 0 8px;font-size:15px;color:#b1442f;border-bottom:2px solid #f0c9bf;padding-bottom:4px}
+#ocdetail h4{margin:14px 0 5px;font-size:14px}#ocdetail h5{margin:11px 0 4px;font-size:13px;color:#555}
+#ocdetail p{margin:5px 0}#ocdetail ul{margin:5px 0;padding-left:20px}#ocdetail li{margin:2px 0}
+#ocdetail blockquote{margin:8px 0;padding:6px 10px;background:#f7f8fa;border-left:3px solid #cbd2d9;color:#555;font-size:13px}
+#ocdetail code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px}
+.trow{display:flex;gap:10px;padding:3px 0;border-bottom:1px solid #f3f3f3}.trow span:first-child{min-width:96px;color:#666;font-weight:600}
+.ocimg{max-width:360px;width:100%;border-radius:10px;border:1px solid #eee;display:block;margin:4px 0 16px}
+.ocsec{max-width:780px}</style>
 </head><body>
 <header><h1>后台控制台</h1>
+<button id="tabSess" class="tab on" onclick="showView('sessions')">🎭 对局</button>
+<button id="tabOC" class="tab" onclick="showView('oc')">🍎 OC集</button>
 <input id="tok" type="password" placeholder="OPERATOR_TOKEN" size="22">
 <button class="sec" onclick="loadSessions()">刷新列表</button><span id="st"></span></header>
 <div id="wrap">
@@ -651,6 +697,10 @@ button.sec{background:#6b7280}#st{font-size:12px;color:#888;margin-left:auto}
   </div>
  </div>
 </div>
+<div id="ocwrap">
+ <div id="oclist"></div>
+ <div id="ocdetail"></div>
+</div>
 <script>
 const $=id=>document.getElementById(id);
 $("tok").value=localStorage.op_tok||""; $("tok").oninput=()=>{localStorage.op_tok=$("tok").value;loadSessions();};
@@ -666,6 +716,11 @@ async function loadSession(silent){if(!cur)return;try{const d=await j("/api/oper
 function onMode(){const m=$("mode").value;$("target").style.display=m==="direct"?"":"none";$("stickyL").style.display=m==="director"?"":"none";$("bNext").style.display=m==="director"?"":"none";$("bNow").textContent=m==="director"?"⚡ 立即":"发送";}
 async function send(timing){if(!cur){st("先选一个 session");return;}const m=$("msg").value.trim();if(!m)return;const mode=$("mode").value;const now=(timing==="now"&&mode==="director");if(mode==="direct"&&!$("target").value.trim()){st("直接台词要填角色名(留空=旁白)");}try{st(now?"AI 生成中…":(mode!=="director"?"插入中…":""));await j("/api/operator/inject",{method:"POST",headers:H(),body:JSON.stringify({session_id:cur,content:m,mode,target:$("target").value.trim(),sticky:$("sticky").checked,now})});$("msg").value="";st("已发送 ✓");loadSession();}catch(e){}}
 async function clearQ(){if(!cur)return;try{await j("/api/operator/inject/"+encodeURIComponent(cur),{method:"DELETE",headers:H()});st("已清空 ✓");loadSession();}catch(e){}}
+let ocs=[],ocLoaded=false;
+function showView(v){$("wrap").style.display=v==="oc"?"none":"flex";$("ocwrap").style.display=v==="oc"?"flex":"none";$("tabSess").classList.toggle("on",v!=="oc");$("tabOC").classList.toggle("on",v==="oc");if(v==="oc"&&!ocLoaded){ocLoaded=true;loadOC();}}
+function mdToHtml(t){t=(t||"").replace(/^---\n[\s\S]*?\n---\n/,"").replace(/!\[\[.*?\]\]/g,"").replace(/\[\[(?:[^\]|]*\|)?([^\]]+)\]\]/g,"$1");const esc=s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;");const inl=s=>esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`([^`]+)`/g,"<code>$1</code>");let h="",ul=false;const cu=()=>{if(ul){h+="</ul>";ul=false;}};for(const line of t.split("\n")){if(!line.trim()){cu();continue;}let m;if(m=line.match(/^(#{1,6})\s+(.*)$/)){cu();const lv=Math.min(m[1].length+1,6);h+="<h"+lv+">"+inl(m[2])+"</h"+lv+">";}else if(m=line.match(/^\s*>\s?(.*)$/)){cu();h+="<blockquote>"+inl(m[1])+"</blockquote>";}else if(m=line.match(/^\s*[-*]\s+(.*)$/)){if(!ul){h+="<ul>";ul=true;}h+="<li>"+inl(m[1])+"</li>";}else if(/^\s*\|/.test(line)){cu();const c=line.replace(/^\s*\|/,"").replace(/\|\s*$/,"").split("|").map(x=>x.trim());if(c.every(x=>/^[-:\s]*$/.test(x)))continue;h+="<div class=trow>"+c.map(x=>"<span>"+inl(x)+"</span>").join("")+"</div>";}else{cu();h+="<p>"+inl(line)+"</p>";}}cu();return h;}
+async function loadOC(){try{const d=await j("/api/operator/oc");ocs=d.ocs||[];const L=$("oclist");L.innerHTML="";ocs.forEach((o,i)=>{const it=el("div","sess");it.appendChild(el("div","id","🍎 "+(o.character||"OC")));it.appendChild(el("div","meta","用户:"+(o.user||"?")));it.onclick=()=>showOC(i);L.appendChild(it);});if(ocs.length)showOC(0);else $("ocdetail").innerHTML="<p style=color:#999>(oc/index.json 里没有 OC)</p>";}catch(e){}}
+function showOC(i){const o=ocs[i];if(!o)return;document.querySelectorAll("#oclist .sess").forEach((n,k)=>n.classList.toggle("on",k===i));let h="<div class=ocsec><h3>🍎 "+o.character+"　·　用户 "+o.user+"</h3>";if(o.art)h+="<img class=ocimg src='"+o.art+"' alt=立绘>";h+=mdToHtml(o.profile)+"</div><div class=ocsec><h3>🗺 世界观</h3>";if(o.map)h+="<img class=ocimg src='"+o.map+"' alt=地图>";h+=mdToHtml(o.world)+"</div>";$("ocdetail").innerHTML=h;$("ocdetail").scrollTop=0;}
 onMode();
 loadSessions();
 setInterval(()=>{if(cur)loadSession(true);},4000);
@@ -684,5 +739,8 @@ def operator_console():
 # 前端目录存在 → 同时服务前端 + /api/* 接口(给人玩);目录不存在 → 退化为纯后端
 # (只剩 /api/* + /docs + /openapi.json,给 AI / 调用方按 schema 直接调),且不会启动崩溃。
 # 这样"既保留前端、又能纯后端被 AI 直接调用"在同一份代码里共存。
+if OC_DIR.is_dir():  # OC 集图片(立绘/地图)走静态;须在 "/" catch-all 之前挂
+    app.mount("/oc-assets", StaticFiles(directory=str(OC_DIR)), name="oc-assets")
+
 if FRONTEND.is_dir():
     app.mount("/", StaticFiles(directory=str(FRONTEND), html=True), name="frontend")
