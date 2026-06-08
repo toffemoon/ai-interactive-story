@@ -302,6 +302,7 @@ function CharacterEditor({ card, index, onChange, onClose }) {
         </div>
         <button onClick={onClose}>收起</button>
       </div>
+      {/* 基础 */}
       <label>
         名字
         <input value={data.name || ""} onChange={(e) => update("name", e.target.value)} />
@@ -311,40 +312,85 @@ function CharacterEditor({ card, index, onChange, onClose }) {
         <input value={data.character_id || ""} onChange={(e) => update("character_id", e.target.value)} placeholder="可选,留空会按名字生成" />
       </label>
       <label>
-        主设定
-        <textarea rows="5" value={data.description || ""} onChange={(e) => update("description", e.target.value)} />
-      </label>
-      <label>
-        性格
-        <textarea rows="4" value={data.personality || ""} onChange={(e) => update("personality", e.target.value)} />
-      </label>
-      <label>
-        当前情境
-        <textarea rows="3" value={data.scenario || ""} onChange={(e) => update("scenario", e.target.value)} />
-      </label>
-      <label>
-        开场白
-        <textarea rows="3" value={data.first_mes || ""} onChange={(e) => update("first_mes", e.target.value)} />
-      </label>
-      <label>
-        说话范例
-        <textarea rows="3" value={data.mes_example || ""} onChange={(e) => update("mes_example", e.target.value)} />
-      </label>
-      <label>
-        说话规则,一行一条
-        <textarea
-          rows="5"
-          value={rulesText}
-          onChange={(e) => update("speech_rules", linesToList(e.target.value))}
-        />
-      </label>
-      <label>
         标签,用逗号分隔
         <input
           value={(data.tags || []).join(", ")}
           onChange={(e) => update("tags", e.target.value.split(/[,，]/).map((x) => x.trim()).filter(Boolean))}
         />
       </label>
+
+      <div className="ed-section">引擎摘要<span>给引擎快速解析的核心,人也能一眼读懂</span></div>
+      <label>
+        一句话锚点(anchor)
+        <textarea rows="2" value={data.anchor || ""} onChange={(e) => update("anchor", e.target.value)} placeholder="角色是谁、对玩家是什么、底色" />
+      </label>
+      <label>
+        核心矛盾(tension)
+        <textarea rows="2" value={data.tension || ""} onChange={(e) => update("tension", e.target.value)} placeholder="不该被抹平的内在张力" />
+      </label>
+      <label>
+        外貌锚点(look)
+        <textarea rows="2" value={data.look || ""} onChange={(e) => update("look", e.target.value)} placeholder="一句话视觉印象 + 标志特征" />
+      </label>
+      <label>
+        召回关键词(keys),用逗号分隔
+        <input value={(data.keys || []).join(", ")} onChange={(e) => update("keys", e.target.value.split(/[,，]/).map((x) => x.trim()).filter(Boolean))} placeholder="标志性专名,比 tags 更细" />
+      </label>
+      <label>
+        说话规则(speech_rules),一行一条
+        <textarea rows="5" value={rulesText} onChange={(e) => update("speech_rules", linesToList(e.target.value))} />
+      </label>
+
+      <div className="ed-section">正文</div>
+      <label>
+        身份 / 主设定(description)
+        <textarea rows="5" value={data.description || ""} onChange={(e) => update("description", e.target.value)} />
+      </label>
+      <label>
+        性格(personality)
+        <textarea rows="4" value={data.personality || ""} onChange={(e) => update("personality", e.target.value)} />
+      </label>
+      <label>
+        当前情境(scenario)
+        <textarea rows="3" value={data.scenario || ""} onChange={(e) => update("scenario", e.target.value)} />
+      </label>
+      <label>
+        开场白(first_mes)
+        <textarea rows="3" value={data.first_mes || ""} onChange={(e) => update("first_mes", e.target.value)} />
+      </label>
+      <label>
+        说话范例(mes_example)
+        <textarea rows="3" value={data.mes_example || ""} onChange={(e) => update("mes_example", e.target.value)} />
+      </label>
+
+      <div className="ed-section">知识边界<span>hidden 注入给 AI 但披露前不说破</span></div>
+      <label>
+        公开可知(known_public),一行一条
+        <textarea rows="3" value={listToLines(data.known_public)} onChange={(e) => update("known_public", linesToList(e.target.value))} />
+      </label>
+      <label>
+        隐藏真相(known_hidden),一行一条
+        <textarea rows="3" value={listToLines(data.known_hidden)} onChange={(e) => update("known_hidden", linesToList(e.target.value))} />
+      </label>
+
+      <div className="ed-section">版本人格 / 状态轴</div>
+      <label>
+        版本人格(versions),一行一条 · 揭穿后覆盖
+        <textarea rows="3" value={listToLines(data.versions)} onChange={(e) => update("versions", linesToList(e.target.value))} />
+      </label>
+
+      <div className="ed-section">满配段<span>主要NPC 默认完整;没内容留空即可 · 引擎接 model 后自动生效</span></div>
+      <label>存活与死亡(survival)<textarea rows="2" value={data.survival || ""} onChange={(e) => update("survival", e.target.value)} placeholder="默认可死、死后下线;特殊:可复活 / 冥界可见 / 记忆态…" /></label>
+      <label>核心事迹(deeds)<textarea rows="3" value={data.deeds || ""} onChange={(e) => update("deeds", e.target.value)} placeholder="驱动剧情 / 解释人格的关键往事,几条" /></label>
+      <label>能力 / 机制(ability)<textarea rows="3" value={data.ability || ""} onChange={(e) => update("ability", e.target.value)} placeholder="能力怎么运作:触发条件 / 代价 / 冷却 / 失败反噬" /></label>
+      <label>关键道具(items)<textarea rows="2" value={data.items || ""} onChange={(e) => update("items", e.target.value)} placeholder="专属物件:外观 + 规则作用 + 来历 + 失去后果" /></label>
+      <label>结局 / 命运倾向(fate)<textarea rows="2" value={data.fate || ""} onChange={(e) => update("fate", e.target.value)} placeholder="大概率去向 / 牺牲倾向;只给倾向,不锁画面" /></label>
+      <label>说话方式细则 + 例句(speech_detail)<textarea rows="3" value={data.speech_detail || ""} onChange={(e) => update("speech_detail", e.target.value)} placeholder="speech_rules 的展开:句式 / 用词 / 标志台词 + 例句" /></label>
+      <label>人际关系(relations)<textarea rows="3" value={data.relations || ""} onChange={(e) => update("relations", e.target.value)} placeholder="每个关系人:态度 + 一句角色化表达(写起点)" /></label>
+      <label>情绪雷区 / 触发点(triggers)<textarea rows="2" value={data.triggers || ""} onChange={(e) => update("triggers", e.target.value)} placeholder="创伤 / 禁区:内核 + 触发条件 + 触发后行为 + 能否安抚" /></label>
+      <label>前史(backstory)<textarea rows="2" value={data.backstory || ""} onChange={(e) => update("backstory", e.target.value)} placeholder="开局之前已定、玩家改不了的出身与经历" /></label>
+      <label>快速扮演规则卡(quick_rules)<textarea rows="2" value={data.quick_rules || ""} onChange={(e) => update("quick_rules", e.target.value)} placeholder="必须像 / 不能像 / 一句话锚点" /></label>
+      <label>彩蛋触发(easter_eggs)<textarea rows="2" value={data.easter_eggs || ""} onChange={(e) => update("easter_eggs", e.target.value)} placeholder="触发词 → 反应 / 台词" /></label>
     </section>
   );
 }
@@ -578,12 +624,22 @@ function DraftPreview({ kind, draft }) {
     <div className="builder-draft">
       <h4>{(KIND_META[kind] || {}).title || "草稿"}</h4>
       {kind === "characters" && <>
-        <Row k="名字" v={d.name} /><Row k="锚点" v={d.anchor} /><Row k="核心矛盾" v={d.tension} />
-        <Row k="主设定" v={d.description} /><Row k="性格" v={d.personality} /><Row k="外貌" v={d.look} />
+        <Row k="名字" v={d.name} />
+        <div className="draft-sec">引擎摘要</div>
+        <Row k="锚点" v={d.anchor} /><Row k="核心矛盾" v={d.tension} /><Row k="外貌" v={d.look} />
+        <ListBlock k="召回关键词" items={d.keys} /><ListBlock k="说话规则" items={d.speech_rules} />
+        <div className="draft-sec">正文</div>
+        <Row k="主设定" v={d.description} /><Row k="性格" v={d.personality} />
         <Row k="情境" v={d.scenario} /><Row k="开场白" v={d.first_mes} /><Row k="说话范例" v={d.mes_example} />
-        <ListBlock k="说话规则" items={d.speech_rules} /><ListBlock k="召回关键词" items={d.keys} />
-        <ListBlock k="知识·公开" items={d.known_public} /><ListBlock k="知识·隐藏" items={d.known_hidden} />
+        <div className="draft-sec">知识边界</div>
+        <ListBlock k="公开" items={d.known_public} /><ListBlock k="隐藏" items={d.known_hidden} />
+        <div className="draft-sec">版本人格</div>
         <ListBlock k="版本人格" items={d.versions} />
+        <div className="draft-sec">满配段</div>
+        <Row k="存活死亡" v={d.survival} /><Row k="核心事迹" v={d.deeds} /><Row k="能力机制" v={d.ability} />
+        <Row k="关键道具" v={d.items} /><Row k="结局倾向" v={d.fate} /><Row k="说话细则" v={d.speech_detail} />
+        <Row k="人际关系" v={d.relations} /><Row k="情绪雷区" v={d.triggers} /><Row k="前史" v={d.backstory} />
+        <Row k="规则卡" v={d.quick_rules} /><Row k="彩蛋" v={d.easter_eggs} />
       </>}
       {kind === "players" && <>
         <Row k="名字" v={d.name} /><Row k="身份" v={d.role} /><Row k="背景" v={d.background} />
@@ -1855,10 +1911,13 @@ function StoryModal({ entry, setTab, onClose, onStart }) {
   const premise = (d.story && d.story.premise) || "";
   const worldEntries = (((d.world && d.world.entries) || [])).filter((e) => (e.visibility || "public") === "public"); // 只公开条目
   const chars = d.characters || [];
+  // 详情「角色」tab 与出演兜底只取有展示内容(外貌/性格)的角色;次要NPC名册卡(内容全空的空壳)过滤掉,不当空角色卡显示。
+  // 根治需引擎侧补「次要NPC名册解析」(现 parse_character 不认名册结构,内容没 parse 进来)——已记入给 Gengyue 的引擎待办。
+  const shownChars = chars.filter((c) => { const cd = (c && c.data) || c || {}; return cd.look || cd.personality; });
   // 可扮演:有 playables 用之;否则 §2 兜底=全体角色(从 NPC 卡降级出名/一句设定)
   const playables = (d.playables && d.playables.length)
     ? d.playables
-    : chars.map((c) => ({ name: (c.data || {}).name || "角色", role: ((c.data || {}).description || "").slice(0, 40) }));
+    : shownChars.map((c) => ({ name: (c.data || {}).name || "角色", role: ((c.data || {}).description || "").slice(0, 40) }));
 
   const TABS = [["intro", "简介"], ["bg", "故事背景"], ["chars", "角色"], ["cast", "出演"]];
   const [castMode, setCastMode] = useState("list"); // list | custom
@@ -1878,22 +1937,29 @@ function StoryModal({ entry, setTab, onClose, onStart }) {
   // anchor 是 §0 引擎摘要的公开一句话(不含 L4);绝不渲染 known_hidden、versions、tension、scenario、first_mes。
   function PublicChar({ c }) {
     const cd = (c && c.data) || c || {};
-    const pub = cd.known_public || [];
-    const hasMore = cd.description || cd.personality || pub.length;
+    const [flipped, setFlipped] = useState(false);
     return (
-      <div className="modal-char">
-        <b>{cd.name || "角色"}</b>
-        {cd.look ? <p className="mc-look">{cd.look}</p> : null}
-        {cd.anchor ? <p>{cd.anchor}</p> : null}
-        {(cd.tags || []).length ? <div className="modal-char-tags">{(cd.tags || []).slice(0, 5).map((t, i) => <span className="tag" key={i}>{t}</span>)}</div> : null}
-        {hasMore ? (
-          <details className="mc-more">
-            <summary>展开更多</summary>
-            {cd.description ? <p>{cd.description}</p> : null}
-            {cd.personality ? <p className="mc-dim">{cd.personality}</p> : null}
-            {pub.length ? <ul className="mc-pub">{pub.map((x, i) => <li key={i}>{x}</li>)}</ul> : null}
-          </details>
-        ) : null}
+      <div className={"modal-char flip" + (flipped ? " flipped" : "")}>
+        <div className="flip-inner">
+          <div className="flip-face flip-front">
+            <div className="mc-scroll">
+              <div className="mc-name">{cd.name || "角色"}</div>
+              {cd.look ? (
+                <div className="mc-block"><div className="mc-sub">外貌</div><p>{cd.look}</p></div>
+              ) : null}
+              {cd.personality ? (
+                <div className="mc-block"><div className="mc-sub">性格</div><p>{cd.personality}</p></div>
+              ) : null}
+            </div>
+            <button className="flip-btn" onClick={() => setFlipped(true)} aria-label="翻到背面看角色图" title="看角色图">↻</button>
+          </div>
+          <div className="flip-face flip-back">
+            {cd.image
+              ? <img src={cd.image} alt={cd.name || "角色"} />
+              : <div className="flip-img-placeholder">暂无角色图</div>}
+            <button className="flip-btn" onClick={() => setFlipped(false)} aria-label="翻回正面看设定" title="返回设定">↺</button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -1943,9 +2009,9 @@ function StoryModal({ entry, setTab, onClose, onStart }) {
             </div>
           )}
           {tab === "chars" && (
-            <div className="modal-pane" data-coach="modal-chars">
-              {chars.length
-                ? <Carousel items={chars} render={(c) => <PublicChar c={c} />} />
+            <div className="modal-pane modal-pane-chars" data-coach="modal-chars">
+              {shownChars.length
+                ? <Carousel items={shownChars} render={(c, i) => <PublicChar key={i} c={c} />} />
                 : <div className="pane-scroll"><p className="empty">(没有登场人物信息)</p></div>}
             </div>
           )}
