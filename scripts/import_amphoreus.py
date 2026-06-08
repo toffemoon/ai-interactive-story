@@ -614,7 +614,7 @@ def do_preset():
             "player": None,
             "mode": "deep",
             "cover": "/covers/ruwoshushu.jpg",
-            "synopsis": _SYNOPSIS + "  【" + note + "】",
+            "synopsis": _SYNOPSIS,
             "author": "太妃月 / Toffeemoon",
             "tags": ["崩铁", "翁法罗斯", "群像", "轮回", "逐火"],
         }

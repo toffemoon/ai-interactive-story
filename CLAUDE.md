@@ -126,6 +126,8 @@ git push origin yufei
 gh pr create --base main --head yufei ... # 没 open PR 才开; 有就 push 自动 add
 ```
 
+> **推送前必 rebase(2026-06-07 加 · 硬规则)**:任何功能分支 —— 尤其存在几天的老分支 —— `push` 前先 `git fetch origin && git rebase origin/main`,确保 PR 始终接在最新 main 上。`git pull`(只同步本分支自己的远程)**不会**把 main 合进来,旧分支照样落后;落后的 PR 会让 Gengyue review 看不清、PR 历史对不上他的合并序列。起因:`card-templates`(PR #21)一度落后 main 36 个 commit。
+
 主理人 (Gengyue) review 全部架构/技术层面并负责合入 main；Yufei 的内容/前端/素材/部署改动可自行迭代,但**凡碰引擎核心逻辑(记忆/状态机/召回/abstention/story 引擎)必须经 Gengyue 审 + 压测验证才合 main**。
 
 ## 7. 自动记忆触发（强制，全模式 default-on）
