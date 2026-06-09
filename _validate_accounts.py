@@ -19,7 +19,13 @@ os.environ.setdefault("OPERATOR_TOKEN", "")  # 不用后门,纯角色测
 import sys
 from fastapi.testclient import TestClient
 from src.api import app
-from src import auth, storage, db
+from src import auth, storage, db, email_send
+
+# 保险:绝不在配了 SMTP 的情况下跑(否则会真往 @example.com 发信致退信轰炸收件箱)。
+assert not email_send.configured(), (
+    "❌ 拒绝运行:检测到 SMTP 已配置。本测试只能 dev 模式跑(顶部已置 SMTP_USER/PASS='');"
+    "若仍触发说明 .env 覆盖了它——先确保 send_code 不会真发信再跑。"
+)
 
 SUPER = "acctest_super@example.com"
 ADMIN = "acctest_admin@example.com"
