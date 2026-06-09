@@ -33,3 +33,23 @@ services:
         sync: false            # 你的 DeepSeek key,Render 控制台填
       - key: DATABASE_URL
         sync: false            # Supabase session pooler 连接串,Render 控制台填
+      # ── 账户系统(账户系统路线图 Phase 1)──
+      # 稳定配置写死在这;3 个"激活项"标 sync:false → Render 控制台填(其余自动)。
+      # ⚠️ 顺序:先在控制台填 AUTH_TOKEN_PEPPER + SMTP_PASS,再把 AUTH_ENABLED 设 1。
+      #   (AUTH_ENABLED=1 但 SMTP 未配 → 发码端点 503 fail-closed,注册发不出码。)
+      - key: SUPERADMIN_EMAIL
+        value: gengyue081@gmail.com   # 这个邮箱的账号永远是 superadmin(只一个)
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        value: gengyue081@gmail.com
+      - key: SMTP_FROM
+        value: gengyue081@gmail.com
+      - key: AUTH_ENABLED
+        sync: false            # 控制台设 "1" 开启账户系统(先填好下面两个密钥再开)
+      - key: AUTH_TOKEN_PEPPER
+        sync: false            # 随机长串(用之前生成的那个),控制台填;改了会让已发 token/验证码失效
+      - key: SMTP_PASS
+        sync: false            # Gmail 应用专用密码,控制台填
