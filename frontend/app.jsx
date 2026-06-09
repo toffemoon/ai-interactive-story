@@ -1461,14 +1461,37 @@ function TopNav({ view, setView, sessionId, authEnabled, user, onLogout }) {
 }
 
 // 登录 / 注册页(AUTH_ENABLED 时未登录则全屏拦在此)。纯 JSX,无构建工具。
+// 注册:邮箱 + 发送验证码 + 验证码 + 密码(可选用户名)。登录:邮箱/用户名 + 密码。
 function LoginView({ onAuthed }) {
-  const [tab, setTab] = useState("login");          // login | register
-  const [identifier, setIdentifier] = useState("");  // 登录:用户名或邮箱
-  const [username, setUsername] = useState("");       // 注册:用户名
-  const [email, setEmail] = useState("");             // 注册:邮箱(可选)
+  const [tab, setTab] = useState("login");           // login | register
+  const [identifier, setIdentifier] = useState("");   // 登录:邮箱或用户名
+  const [email, setEmail] = useState("");             // 注册:邮箱(主身份)
+  const [username, setUsername] = useState("");       // 注册:可选登录名
+  const [code, setCode] = useState("");               // 注册:邮箱验证码
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sentHint, setSentHint] = useState("");       // 发码后的提示(含 dev_code)
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return undefined;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  async function sendCode() {
+    if (sending || cooldown > 0) return;
+    if (!email.trim() || email.indexOf("@") < 0) { setErr("先填邮箱"); return; }
+    setSending(true); setErr(""); setSentHint("");
+    try {
+      const data = await authApi("/api/auth/email/send_code", { email: email.trim() });
+      setCooldown(60);
+      setSentHint(data.dev_code ? `验证码已发(本地测试码:${data.dev_code})` : "验证码已发到邮箱,10 分钟内有效");
+    } catch (e) { setErr(e.message || "发送失败"); }
+    finally { setSending(false); }
+  }
 
   async function submit() {
     if (busy) return;
@@ -1476,7 +1499,10 @@ function LoginView({ onAuthed }) {
     try {
       const data = tab === "login"
         ? await authApi("/api/auth/login", { identifier: identifier.trim(), password })
-        : await authApi("/api/auth/register", { username: username.trim(), email: email.trim() || null, password });
+        : await authApi("/api/auth/register", {
+            email: email.trim(), password, code: code.trim(),
+            username: username.trim() || null,
+          });
       onAuthed(data.user, data.token);
     } catch (e) { setErr(e.message || "失败"); }
     finally { setBusy(false); }
@@ -1492,14 +1518,22 @@ function LoginView({ onAuthed }) {
           <button className={tab === "register" ? "on" : ""} onClick={() => { setTab("register"); setErr(""); }}>注册</button>
         </div>
         {tab === "login" ? (
-          <input className="login-input" placeholder="用户名或邮箱" value={identifier}
+          <input className="login-input" placeholder="邮箱或用户名" value={identifier}
                  onChange={(e) => setIdentifier(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
         ) : (
           <>
-            <input className="login-input" placeholder="用户名" value={username}
-                   onChange={(e) => setUsername(e.target.value)} />
-            <input className="login-input" placeholder="邮箱(可选)" value={email}
+            <input className="login-input" type="email" placeholder="邮箱" value={email}
                    onChange={(e) => setEmail(e.target.value)} />
+            <div className="login-code-row">
+              <input className="login-input" placeholder="邮箱验证码" value={code}
+                     onChange={(e) => setCode(e.target.value)} />
+              <button className="login-code-btn" disabled={sending || cooldown > 0} onClick={sendCode}>
+                {cooldown > 0 ? `${cooldown}s` : (sending ? "…" : "发送验证码")}
+              </button>
+            </div>
+            {sentHint && <div className="login-hint">{sentHint}</div>}
+            <input className="login-input" placeholder="用户名(可选,用于登录)" value={username}
+                   onChange={(e) => setUsername(e.target.value)} />
           </>
         )}
         <input className="login-input" type="password" placeholder="密码" value={password}

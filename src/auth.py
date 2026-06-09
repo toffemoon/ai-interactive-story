@@ -22,13 +22,49 @@ from datetime import datetime, timedelta, timezone
 from fastapi import Header, HTTPException
 
 from .db import get_pool
+from . import email_send
 
 _PBKDF2_ITER = 600_000          # OWASP 2023 建议下限
 _TOKEN_TTL_DAYS = 60
+_OTP_TTL_MIN = 10               # 邮箱验证码有效期(分钟)
+_OTP_MAX_ATTEMPTS = 5           # 单个验证码最多试几次
+_ROLE_RANK = {"user": 0, "admin": 1, "superadmin": 2}
 
 
 def enabled() -> bool:
     return os.getenv("AUTH_ENABLED", "0").strip().lower() in ("1", "true", "yes", "on")
+
+
+# ── 角色:super/admin/user ──────────────────────────────────────────
+# superadmin 由 .env SUPERADMIN_EMAIL 钉死(保证只有一个);admin 由 super 用 set_user_role 提。
+def effective_role(row) -> str:
+    """按 .env SUPERADMIN_EMAIL 钉 super,否则取库里的 role 列。"""
+    su = os.getenv("SUPERADMIN_EMAIL", "").strip().lower()
+    email = (row["email"] or "").strip().lower() if row["email"] else ""
+    if su and email == su:
+        return "superadmin"
+    try:
+        role = row["role"]
+    except (KeyError, TypeError):
+        role = "user"
+    return role if role in _ROLE_RANK else "user"
+
+
+def role_at_least(role: str, minimum: str) -> bool:
+    return _ROLE_RANK.get(role or "user", 0) >= _ROLE_RANK.get(minimum, 99)
+
+
+def set_user_role(identifier: str, role: str) -> bool:
+    """super 用:把某用户设成 admin / user(不能经此设 superadmin —— 那由 env 钉)。"""
+    if role not in ("admin", "user"):
+        raise HTTPException(400, "role 只能是 admin 或 user(superadmin 由 .env 钉死)")
+    uid = find_user_id(identifier)
+    if not uid:
+        return False
+    pool = get_pool()
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute("update users set role = %s where id = %s::uuid", (role, uid))
+        return cur.rowcount > 0
 
 
 # ── 密码 ────────────────────────────────────────────────────────────
@@ -56,47 +92,56 @@ def _token_hash(token: str) -> str:
 
 
 def _row_to_user(r) -> dict:
+    role = effective_role(r)
     return {"id": str(r["id"]), "username": r["username"], "email": r["email"],
-            "display_name": r["display_name"], "is_admin": bool(r["is_admin"]),
+            "display_name": r["display_name"], "role": role,
+            "is_admin": role in ("admin", "superadmin"),
+            "email_verified": bool(r["email_verified_at"]) if "email_verified_at" in r.keys() else True,
             "status": r["status"]}
 
 
+_USER_COLS = "id, username, email, display_name, role, email_verified_at, status"
+
+
 # ── 用户 CRUD / 认证 ─────────────────────────────────────────────────
-def create_user(username: str, password: str, email: str | None = None,
-                display_name: str | None = None) -> dict:
-    username = (username or "").strip()
-    email = (email or "").strip() or None
-    if not username or not password:
-        raise HTTPException(400, "用户名和密码不能为空")
+def create_user(email: str, password: str, username: str | None = None,
+                display_name: str | None = None, email_verified: bool = False) -> dict:
+    """email 为已验证主身份(必填);username 可选(给个好记的登录名)。"""
+    email = (email or "").strip().lower()
+    username = (username or "").strip() or None
+    if not email or "@" not in email:
+        raise HTTPException(400, "邮箱不合法")
+    if not password or len(password) < 6:
+        raise HTTPException(400, "密码至少 6 位")
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
-        cur.execute("select 1 from users where username = %s", (username,))
+        cur.execute("select 1 from users where email = %s", (email,))
         if cur.fetchone():
-            raise HTTPException(409, "用户名已被占用")
-        if email:
-            cur.execute("select 1 from users where email = %s", (email,))
+            raise HTTPException(409, "邮箱已注册")
+        if username:
+            cur.execute("select 1 from users where username = %s", (username,))
             if cur.fetchone():
-                raise HTTPException(409, "邮箱已被占用")
+                raise HTTPException(409, "用户名已被占用")
         cur.execute(
-            """insert into users (username, email, password_hash, display_name)
-               values (%s, %s, %s, %s)
-               returning id, username, email, display_name, is_admin, status""",
-            (username, email, hash_password(password), display_name or username),
+            f"""insert into users (username, email, password_hash, display_name, email_verified_at)
+               values (%s, %s, %s, %s, {('now()' if email_verified else 'null')})
+               returning {_USER_COLS}""",
+            (username, email, hash_password(password), display_name or username or email.split("@")[0]),
         )
         return _row_to_user(cur.fetchone())
 
 
 def authenticate(identifier: str, password: str) -> dict | None:
-    """identifier 可为用户名或邮箱。"""
+    """identifier 可为邮箱或用户名。"""
     identifier = (identifier or "").strip()
     if not identifier or not password:
         return None
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(
-            """select id, username, email, display_name, is_admin, status, password_hash
-               from users where username = %s or email = %s limit 1""",
-            (identifier, identifier),
+            f"""select {_USER_COLS}, password_hash
+               from users where email = %s or username = %s limit 1""",
+            (identifier.lower(), identifier),
         )
         r = cur.fetchone()
         if not r or r["status"] != "active":
@@ -131,7 +176,7 @@ def resolve_token(token: str) -> dict | None:
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(
-            """select u.id, u.username, u.email, u.display_name, u.is_admin, u.status
+            """select u.id, u.username, u.email, u.display_name, u.role, u.email_verified_at, u.status
                from auth_tokens t join users u on u.id = t.user_id
                where t.token_hash = %s and t.revoked_at is null and t.expires_at > now()""",
             (_token_hash(token),),
@@ -198,22 +243,26 @@ def session_owner(session_id: str) -> str | None:
 
 
 def list_users() -> list[dict]:
-    """运营者迁移用:列出所有用户(id + 用户名 + 邮箱 + 该用户存档数)。"""
+    """admin/super 用:列出所有用户(id + 用户名 + 邮箱 + 角色 + 该用户存档数)。"""
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(
-            """select u.id, u.username, u.email, u.display_name, u.is_admin, u.created_at,
+            """select u.id, u.username, u.email, u.display_name, u.role, u.email_verified_at, u.status,
+                      u.created_at,
                       (select count(*) from sessions s where s.user_id = u.id) as sessions
                from users u order by u.created_at"""
         )
-        return [{"id": str(r["id"]), "username": r["username"], "email": r["email"],
-                 "display_name": r["display_name"], "is_admin": bool(r["is_admin"]),
-                 "created_at": str(r["created_at"]), "sessions": r["sessions"]}
-                for r in cur.fetchall()]
+        out = []
+        for r in cur.fetchall():
+            u = _row_to_user(r)
+            u["created_at"] = str(r["created_at"])
+            u["sessions"] = r["sessions"]
+            out.append(u)
+        return out
 
 
 def find_user_id(identifier: str) -> str | None:
-    """按 用户名 / 邮箱 / uuid 找 user_id(运营者迁移用)。"""
+    """按 用户名 / 邮箱 / uuid 找 user_id(分发/迁移用)。"""
     identifier = (identifier or "").strip()
     if not identifier:
         return None
@@ -221,7 +270,7 @@ def find_user_id(identifier: str) -> str | None:
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(
             "select id from users where username = %s or email = %s or id::text = %s limit 1",
-            (identifier, identifier, identifier),
+            (identifier, identifier.lower(), identifier),
         )
         r = cur.fetchone()
         return str(r["id"]) if r else None
@@ -238,3 +287,66 @@ def claim_session(session_id: str, user_id: str) -> str:
             (session_id, user_id),
         )
         return str(cur.fetchone()["user_id"])
+
+
+# ── 邮箱验证码(OTP)──────────────────────────────────────────────────
+def _otp_hash(email: str, code: str) -> str:
+    pepper = os.getenv("AUTH_TOKEN_PEPPER", "")
+    return hashlib.sha256((email.strip().lower() + ":" + code + pepper).encode("utf-8")).hexdigest()
+
+
+def send_email_code(email: str, purpose: str = "register") -> dict:
+    """生成验证码 → 存 hash → 发邮件。SMTP 没配则记日志并把码回给调用方(dev_code)供本地测试。
+    简单限流:同邮箱+用途 60 秒内只发一次。"""
+    email = (email or "").strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(400, "邮箱不合法")
+    pool = get_pool()
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            "select created_at from email_otp where email = %s and purpose = %s "
+            "order by created_at desc limit 1",
+            (email, purpose),
+        )
+        last = cur.fetchone()
+        if last and (datetime.now(timezone.utc) - last["created_at"]).total_seconds() < 60:
+            raise HTTPException(429, "验证码刚发过,请 1 分钟后再试")
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        expires = datetime.now(timezone.utc) + timedelta(minutes=_OTP_TTL_MIN)
+        cur.execute(
+            "insert into email_otp (email, code_hash, purpose, expires_at) values (%s, %s, %s, %s)",
+            (email, _otp_hash(email, code), purpose, expires),
+        )
+    email_send.send_email(email, "你的验证码",
+                          f"你的验证码是 {code},{_OTP_TTL_MIN} 分钟内有效。如非本人操作请忽略。")
+    out = {"sent": True}
+    if not email_send.configured():
+        out["dev_code"] = code  # SMTP 未配置(本地)→ 回码给前端,方便没配邮箱也能跑通
+    return out
+
+
+def verify_email_code(email: str, code: str, purpose: str = "register") -> bool:
+    """校验最近一条验证码:未消费 + 未过期 + 未超次 + 匹配 → 标消费返回 True;否则记一次失败返回 False。"""
+    email = (email or "").strip().lower()
+    code = (code or "").strip()
+    if not email or not code:
+        return False
+    pool = get_pool()
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            "select id, code_hash, expires_at, attempts, consumed_at from email_otp "
+            "where email = %s and purpose = %s order by created_at desc limit 1",
+            (email, purpose),
+        )
+        r = cur.fetchone()
+        if not r or r["consumed_at"] is not None:
+            return False
+        if r["expires_at"] <= datetime.now(timezone.utc):
+            return False
+        if r["attempts"] >= _OTP_MAX_ATTEMPTS:
+            return False
+        if not hmac.compare_digest(r["code_hash"], _otp_hash(email, code)):
+            cur.execute("update email_otp set attempts = attempts + 1 where id = %s", (r["id"],))
+            return False
+        cur.execute("update email_otp set consumed_at = now() where id = %s", (r["id"],))
+        return True

@@ -1329,3 +1329,11 @@ main.single-view { display: block; }
   background: var(--soft); color: var(--muted); cursor: pointer; font: inherit; font-size: 12px;
 }
 .user-chip .logout-btn:hover { color: var(--ink); border-color: var(--muted); }
+.login-code-row { display: flex; gap: 8px; }
+.login-code-row .login-input { flex: 1; margin-bottom: 10px; }
+.login-code-btn {
+  flex: 0 0 auto; height: 40px; padding: 0 12px; border: 1px solid var(--green);
+  border-radius: 7px; background: var(--panel); color: var(--green); font: inherit; cursor: pointer; white-space: nowrap;
+}
+.login-code-btn:disabled { opacity: .55; cursor: default; }
+.login-hint { font-size: 12px; color: var(--green); margin: -4px 0 10px; }

@@ -225,12 +225,22 @@ def delete_library(kind: str, name: str, user_id: str | None = None,
 
 
 def assign_card_owner(kind: str, name: str, user_id: str | None) -> bool:
-    """运营者手动迁移:把某张(原全局)卡归到某用户(或 None 设回官方)。"""
+    """分发:把某张(原全局/官方)卡归到某用户(或 None 设回官方)。"""
     name_key = slug(name, kind)
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute("update cards set user_id = %s::uuid where kind = %s and name = %s and user_id is null",
                     (user_id, kind, name_key))
+        return cur.rowcount > 0
+
+
+def assign_preset_owner(name: str, user_id: str | None) -> bool:
+    """分发:把某个(原全局/官方)预设归到某用户(或 None 设回官方)。"""
+    name_key = slug(name, "preset")
+    pool = get_pool()
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute("update presets set user_id = %s::uuid where name = %s and user_id is null",
+                    (user_id, name_key))
         return cur.rowcount > 0
 
 

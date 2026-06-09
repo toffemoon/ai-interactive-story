@@ -100,16 +100,19 @@ create table if not exists spend_daily (
 
 -- ── 账户系统(账户系统路线图 Phase 1;见 decisions/2026-06-09-账户系统路线图-*)──
 -- 默认关闭(.env AUTH_ENABLED=0);建表只是前置,翻开关才按 user 隔离。
+-- email = 已验证主身份(注册走邮箱验证码);username 可选登录名;role = user/admin/superadmin。
+-- superadmin 由 .env SUPERADMIN_EMAIL 钉(不存进 role 列也算 super)。
 create table if not exists users (
-  id            uuid          primary key default gen_random_uuid(),
-  username      text          not null unique,
-  email         text          unique,
-  password_hash text          not null,            -- pbkdf2_sha256$iter$salt$hash
-  display_name  text,
-  is_admin      boolean       not null default false,
-  status        text          not null default 'active',  -- active / blocked
-  created_at    timestamptz   not null default now(),
-  last_seen_at  timestamptz
+  id                uuid          primary key default gen_random_uuid(),
+  username          text          unique,
+  email             text          not null unique,
+  password_hash     text          not null,            -- pbkdf2_sha256$iter$salt$hash
+  display_name      text,
+  role              text          not null default 'user',   -- user / admin / superadmin
+  email_verified_at timestamptz,
+  status            text          not null default 'active',  -- active / blocked
+  created_at        timestamptz   not null default now(),
+  last_seen_at      timestamptz
 );
 
 -- 不透明 token 会话(登出/吊销=UPDATE;库里只存 sha256(token+pepper))
@@ -122,3 +125,16 @@ create table if not exists auth_tokens (
   revoked_at    timestamptz
 );
 create index if not exists idx_auth_tokens_user on auth_tokens (user_id);
+
+-- 邮箱验证码(注册时发码验证邮箱;只存 sha256(email:code+pepper))
+create table if not exists email_otp (
+  id          bigserial   primary key,
+  email       text        not null,
+  code_hash   text        not null,
+  purpose     text        not null default 'register',
+  expires_at  timestamptz not null,
+  attempts    integer     not null default 0,
+  consumed_at timestamptz,
+  created_at  timestamptz not null default now()
+);
+create index if not exists idx_email_otp_lookup on email_otp (email, purpose, created_at desc);
