@@ -1990,7 +1990,7 @@ function coverStyle(cover) {
 // 判断某个 preset 是不是新手教学局(给探索页那张卡打引导锚点 / startTutorial 找它都用)。
 function isTutorialPreset(p) {
   const d = (p && p.data) || {};
-  return ((d.tags || []).includes("教学")) || (((p && p.name) || "").includes("渡口")) || ((d.name || "").includes("渡口"));
+  return ((d.tags || []).includes("教学")) || (((p && p.name) || "").includes("新人入店")) || ((d.name || "").includes("新人入店"));
 }
 
 function StoryTile({ d, fallbackName, sub, actions, coach, onOpen }) {
@@ -2563,7 +2563,7 @@ const COACH = {
     { sel: '[data-coach="gallery"]', title: "挑一个故事", body: "这里是故事库。选一个预设故事,点卡片上的「开始」就能进入开玩。" },
     { sel: '[data-coach="new-story"]', title: "或者自己造一个", body: "想做属于自己的故事?点「新建故事」,一步步把世界、角色、剧情建出来。" },
     { sel: '[data-coach="help-btn"]', title: "随时能重看", body: "不知道怎么操作?任何时候点右下角这个「?」,就能重看当前页面的引导。" },
-    { sel: '[data-coach="tutorial-tile"]', title: "第一次来?从这局学起", body: "这就是新手教学《渡口》。点它的「开始」(或下面的按钮)进去走一遍,5 分钟摸清怎么玩——进去后我会在每一屏接着指给你看。", actionId: "tutorial", actionLabel: "开始新手教学" },
+    { sel: '[data-coach="tutorial-tile"]', title: "第一次来?从这局学起", body: "这就是新手教学《新人入店》。点它的「开始」(或下面的按钮)进去走一遍——推门进沐言书坊,摸清怎么玩,进去后我会在每一屏接着指给你看。", actionId: "tutorial", actionLabel: "开始新手教学" },
   ],
   modal: [
     { tab: "intro", sel: '[data-coach="modal-tab-intro"]', title: "① 简介", body: "封面、一句钩子、作者、标签——先大概了解这个故事是什么。" },
@@ -2822,12 +2822,12 @@ function App() {
     setView("game");
   }
 
-  // coach marks「开始新手教学」CTA:开《渡口》modal 直接落出演 tab → select 引导接力(闭环)。
+  // coach marks「开始新手教学」CTA:开《新人入店》modal 直接落出演 tab → select 引导接力(闭环)。
   function startTutorial() {
     const t = presets.find(isTutorialPreset);
     setCoachRun(null);
     if (t) openStoryModal(t, "intro");   // 从简介开始,逐 section 走查,不直接进出演
-    else { setView("home"); alert("没找到教学故事《渡口》。请先在后端 seed:python _seed_tutorial.py"); }
+    else { setView("home"); alert("没找到教学故事《新人入店》。请先导入:python scripts/import_story.py <新人入店文件夹>"); }
   }
 
   // 选人页定主角(预设候选 or 自定义识别结果):设为 player + 从 NPC 阵容拿掉同名角色,再开玩。
