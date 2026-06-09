@@ -8,6 +8,7 @@
 import asyncio
 import json
 import os
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -27,6 +28,7 @@ from .identify import (
 )
 from .chat import reply
 from .models import CharacterCard, PlayerCard, RuntimeState, StoryBook, WorldBook
+from .parsers import parse_character
 from .story import story_turn
 from . import storage
 from . import db
@@ -498,9 +500,10 @@ class OperatorInjectReq(BaseModel):
     now: bool = False        # 仅 director:立即跑一回合,AI 当场采纳(不等玩家)
 
 
-async def _operator_advance(session_id: str) -> dict:
-    """运营者触发:立即用该局存档卡组跑一回合(消费刚入队的注入),AI 当场出内容。
-    卡组复用 artifacts(同 reroll);用中性"场景继续"作动作驱动一回合,真正的导演指令在 operator_inject 块里。"""
+async def _operator_advance(session_id: str, user: str = "（场景继续）") -> dict:
+    """运营者触发:立即用该局存档卡组跑一回合,AI 当场出内容。
+    卡组复用 artifacts(同 reroll)。user 默认中性"场景继续"(导演 now 用);
+    传入玩家输入则等于运营者以玩家身份发话(/api/operator/say 用)。"""
     data = await asyncio.to_thread(storage.load_session, session_id)
     art = data.get("artifacts") or {}
     raw = art.get("characters") or []
@@ -513,7 +516,7 @@ async def _operator_advance(session_id: str) -> dict:
         player = PlayerCard(**art["player"]) if art.get("player") else None
     except Exception as e:
         raise HTTPException(500, f"卡组快照解析失败:{e}")
-    out = await story_turn(session_id=session_id, characters=characters, user="（场景继续）",
+    out = await story_turn(session_id=session_id, characters=characters, user=user,
                            world=world, story=story, player=player, mode=art.get("mode") or "standard")
     return out.model_dump()
 
@@ -626,8 +629,49 @@ def api_operator_oc(x_operator_token: str | None = Header(None)):
         "world": _read(e.get("world", "")),
         "art": _asset(e.get("art", "")),
         "map": _asset(e.get("map", "")),
+        "card": bool(e.get("card") and (OC_DIR / e["card"]).is_file()),  # 有引擎卡才可「开测」
     } for e in entries]
     return {"ocs": ocs}
+
+
+class OCStartReq(BaseModel):
+    index: int = 0
+
+
+@app.post("/api/operator/oc/start")
+async def api_operator_oc_start(req: OCStartReq, x_operator_token: str | None = Header(None)):
+    """用某个 OC 的引擎角色卡直接开一局测试会话(跑开场回合)。需 X-Operator-Token。
+    返回 {session_id, character, turn};该会话即普通 session,可在「对局」里继续(/api/operator/say)+ 导演注入。"""
+    _require_operator(x_operator_token)
+    idx_file = OC_DIR / "index.json"
+    if not idx_file.is_file():
+        raise HTTPException(404, "没有 OC 数据")
+    entries = json.loads(idx_file.read_text(encoding="utf-8"))
+    if not (0 <= req.index < len(entries)):
+        raise HTTPException(400, "OC index 越界")
+    e = entries[req.index]
+    card_path = (OC_DIR / e["card"]) if e.get("card") else None
+    if not (card_path and card_path.is_file()):
+        raise HTTPException(400, f"该 OC 没有引擎角色卡(card.md):{e.get('character', '')}")
+    card = parse_character(card_path.read_text(encoding="utf-8"))
+    session_id = "octest-" + uuid.uuid4().hex[:12]
+    out = await story_turn(session_id=session_id, characters=[card], user="", mode="standard")
+    return {"session_id": session_id, "character": e.get("character", ""), "turn": out.model_dump()}
+
+
+class OperatorSayReq(BaseModel):
+    session_id: str
+    user: str
+
+
+@app.post("/api/operator/say")
+async def api_operator_say(req: OperatorSayReq, x_operator_token: str | None = Header(None)):
+    """以【玩家】身份给某局发一句、推进一回合(用该局存档卡组)。需 X-Operator-Token。
+    给运营者在控制台直接测试对话用;与导演注入(/inject)互补:say=玩家行动,inject=幕后导演。"""
+    _require_operator(x_operator_token)
+    if not req.user.strip():
+        raise HTTPException(400, "玩家输入不能为空")
+    return await _operator_advance(req.session_id, user=req.user.strip())
 
 
 # 私人后台控制台:不从玩家前端链接过去;真正的闸是 token(页面只是表单,无 token 调不动接口)。
@@ -667,19 +711,26 @@ button.sec{background:#6b7280}#st{font-size:12px;color:#888;margin-left:auto}
 #ocdetail code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px}
 .trow{display:flex;gap:10px;padding:3px 0;border-bottom:1px solid #f3f3f3}.trow span:first-child{min-width:96px;color:#666;font-weight:600}
 .ocimg{max-width:360px;width:100%;border-radius:10px;border:1px solid #eee;display:block;margin:4px 0 16px}
-.ocsec{max-width:780px}</style>
+.ocsec{max-width:780px}
+.octest{background:#16a34a;margin:2px 0 12px}
+#box .boxrow{display:flex;gap:8px;margin-bottom:6px}
+#box #playmsg{flex:1;padding:7px 9px;border:1px solid #ccc;border-radius:6px;font:inherit}
+#box .boxhint{font-size:12px;color:#999;margin:2px 0 5px}
+#clk{font-size:12px;color:#0a7;margin-left:8px}</style>
 </head><body>
 <header><h1>后台控制台</h1>
 <button id="tabSess" class="tab on" onclick="showView('sessions')">🎭 对局</button>
 <button id="tabOC" class="tab" onclick="showView('oc')">🍎 OC集</button>
 <input id="tok" type="password" placeholder="OPERATOR_TOKEN" size="22">
-<button class="sec" onclick="loadSessions()">刷新列表</button><span id="st"></span></header>
+<button class="sec" onclick="loadSessions()">刷新列表</button><span id="clk"></span><span id="st"></span></header>
 <div id="wrap">
  <div id="list"></div>
  <div id="detail">
   <div id="shdr">← 左边点一个 session 看上下文</div>
   <div id="conv"></div>
   <div id="box">
+   <div class="boxrow"><input id="playmsg" type="text" placeholder="🎮 以玩家身份说一句、推进一回合(测试对话)… 回车发送" onkeydown="if(event.key==='Enter')playSay()"><button onclick="playSay()">▶ 玩家发送</button></div>
+   <div class="boxhint">↑ 玩家行动(你来对话)　|　↓ 🎬 导演(幕后影响这局)</div>
    <div id="queue"></div>
    <textarea id="msg" placeholder="导演=写指令(让X警觉…) / 直接台词=写那句话 / 旁白=写环境描写"></textarea>
    <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -710,7 +761,7 @@ function el(t,c,x){const e=document.createElement(t);if(c)e.className=c;if(x!=nu
 function bub(role,name,text){const d=el("div","b "+role);if(name)d.appendChild(el("b",null,name+": "));d.appendChild(document.createTextNode(text));return d;}
 let cur=null;
 async function j(url,opt){const r=await fetch(url,opt||{headers:H()});if(!r.ok){st("✗ "+r.status+(r.status==503?" 未启用(没设OPERATOR_TOKEN)":r.status==403?" token不对":""));throw r;}st("");return r.json();}
-async function loadSessions(){try{const d=await j("/api/operator/sessions");const L=$("list");L.innerHTML="";(d.sessions||[]).forEach(s=>{const it=el("div","sess"+(s.id===cur?" on":""));it.dataset.sid=s.id;it.appendChild(el("div","id",(s.story||"(未命名故事)")+(s.player?" · 玩"+s.player:"")));it.appendChild(el("div","meta",(s.turns||0)+"轮 · "+String(s.updated_at||"").slice(0,16).replace("T"," ")));if(s.last_input)it.appendChild(el("div","meta","最后:"+s.last_input));it.appendChild(el("div","sid",s.id));it.onclick=()=>select(s.id);L.appendChild(it);});if(!(d.sessions||[]).length)L.appendChild(el("div","meta","(没有 session)"));}catch(e){}}
+async function loadSessions(){try{const d=await j("/api/operator/sessions");const L=$("list");L.innerHTML="";(d.sessions||[]).forEach(s=>{const it=el("div","sess"+(s.id===cur?" on":""));it.dataset.sid=s.id;it.appendChild(el("div","id",(s.story||"(未命名故事)")+(s.player?" · 玩"+s.player:"")));it.appendChild(el("div","meta",(s.turns||0)+"轮 · "+sgt(s.updated_at)));if(s.last_input)it.appendChild(el("div","meta","最后:"+s.last_input));it.appendChild(el("div","sid",s.id));it.onclick=()=>select(s.id);L.appendChild(it);});if(!(d.sessions||[]).length)L.appendChild(el("div","meta","(没有 session)"));}catch(e){}}
 function select(id){cur=id;document.querySelectorAll(".sess").forEach(n=>n.classList.toggle("on",n.dataset.sid===id));loadSession();}
 async function loadSession(silent){if(!cur)return;try{const d=await j("/api/operator/session/"+encodeURIComponent(cur));const C=$("conv");const atBottom=C.scrollHeight-C.scrollTop-C.clientHeight<60;C.innerHTML="";(d.turns||[]).forEach(t=>{(t.operator_applied||[]).forEach(a=>{const tag=a.mode==="direct"?("🎤 直接台词"+(a.target?"("+a.target+")":"")):(a.mode==="narration"?"🌧 旁白":"🎬 导演");C.appendChild(el("div","oplabel",tag+":"+(a.content||"")));});if(t.player_input)C.appendChild(bub("player","",t.player_input));if(t.narration)C.appendChild(el("div","narr",t.narration));(t.messages||[]).forEach(m=>C.appendChild(bub("char",m.name||m.character_id||"",m.text||"")));});const s=d.state||{},sc=s.scene||{};$("shdr").textContent=cur+"  ·  地点:"+(sc.location||"?")+"  ·  在场:"+((sc.present_characters||[]).join("、")||"?")+"  ·  第"+(s.turn_count||0)+"回合";const q=d.operator_inject||[];$("queue").textContent=q.length?("待注入 "+q.length+" 条:"+q.map(x=>(typeof x=="object"?x.content+(x.sticky?"[持续]":"[一次]"):x)).join(" / ")):"";if(!silent||atBottom)C.scrollTop=C.scrollHeight;}catch(e){}}
 function onMode(){const m=$("mode").value;$("target").style.display=m==="direct"?"":"none";$("stickyL").style.display=m==="director"?"":"none";$("bNext").style.display=m==="director"?"":"none";$("bNow").textContent=m==="director"?"⚡ 立即":"发送";}
@@ -720,7 +771,12 @@ let ocs=[],ocLoaded=false;
 function showView(v){$("wrap").style.display=v==="oc"?"none":"flex";$("ocwrap").style.display=v==="oc"?"flex":"none";$("tabSess").classList.toggle("on",v!=="oc");$("tabOC").classList.toggle("on",v==="oc");if(v==="oc"&&!ocLoaded){ocLoaded=true;loadOC();}}
 function mdToHtml(t){t=(t||"").replace(/^---\n[\s\S]*?\n---\n/,"").replace(/!\[\[.*?\]\]/g,"").replace(/\[\[(?:[^\]|]*\|)?([^\]]+)\]\]/g,"$1");const esc=s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;");const inl=s=>esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`([^`]+)`/g,"<code>$1</code>");let h="",ul=false;const cu=()=>{if(ul){h+="</ul>";ul=false;}};for(const line of t.split("\n")){if(!line.trim()){cu();continue;}let m;if(m=line.match(/^(#{1,6})\s+(.*)$/)){cu();const lv=Math.min(m[1].length+1,6);h+="<h"+lv+">"+inl(m[2])+"</h"+lv+">";}else if(m=line.match(/^\s*>\s?(.*)$/)){cu();h+="<blockquote>"+inl(m[1])+"</blockquote>";}else if(m=line.match(/^\s*[-*]\s+(.*)$/)){if(!ul){h+="<ul>";ul=true;}h+="<li>"+inl(m[1])+"</li>";}else if(/^\s*\|/.test(line)){cu();const c=line.replace(/^\s*\|/,"").replace(/\|\s*$/,"").split("|").map(x=>x.trim());if(c.every(x=>/^[-:\s]*$/.test(x)))continue;h+="<div class=trow>"+c.map(x=>"<span>"+inl(x)+"</span>").join("")+"</div>";}else{cu();h+="<p>"+inl(line)+"</p>";}}cu();return h;}
 async function loadOC(){try{const d=await j("/api/operator/oc");ocs=d.ocs||[];const L=$("oclist");L.innerHTML="";ocs.forEach((o,i)=>{const it=el("div","sess");it.appendChild(el("div","id","🍎 "+(o.character||"OC")));it.appendChild(el("div","meta","用户:"+(o.user||"?")));it.onclick=()=>showOC(i);L.appendChild(it);});if(ocs.length)showOC(0);else $("ocdetail").innerHTML="<p style=color:#999>(oc/index.json 里没有 OC)</p>";}catch(e){}}
-function showOC(i){const o=ocs[i];if(!o)return;document.querySelectorAll("#oclist .sess").forEach((n,k)=>n.classList.toggle("on",k===i));let h="<div class=ocsec><h3>🍎 "+o.character+"　·　用户 "+o.user+"</h3>";if(o.art)h+="<img class=ocimg src='"+o.art+"' alt=立绘>";h+=mdToHtml(o.profile)+"</div><div class=ocsec><h3>🗺 世界观</h3>";if(o.map)h+="<img class=ocimg src='"+o.map+"' alt=地图>";h+=mdToHtml(o.world)+"</div>";$("ocdetail").innerHTML=h;$("ocdetail").scrollTop=0;}
+function showOC(i){const o=ocs[i];if(!o)return;document.querySelectorAll("#oclist .sess").forEach((n,k)=>n.classList.toggle("on",k===i));let h="<div class=ocsec><h3>🍎 "+o.character+"　·　用户 "+o.user+"</h3>"+(o.card?"<button class=octest onclick='startOCTest("+i+")'>▶ 用「"+o.character+"」开测对话</button>":"<p style=color:#999>(没有引擎角色卡 card.md,不能开测)</p>");if(o.art)h+="<img class=ocimg src='"+o.art+"' alt=立绘>";h+=mdToHtml(o.profile)+"</div><div class=ocsec><h3>🗺 世界观</h3>";if(o.map)h+="<img class=ocimg src='"+o.map+"' alt=地图>";h+=mdToHtml(o.world)+"</div>";$("ocdetail").innerHTML=h;$("ocdetail").scrollTop=0;}
+function sgt(x){if(!x)return"";try{return new Date(String(x).replace(" ","T")).toLocaleString("zh-CN",{timeZone:"Asia/Singapore",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});}catch(e){return String(x).slice(0,16);}}
+async function playSay(){if(!cur){st("先选一个 session(或去 OC集 开测)");return;}const m=$("playmsg").value.trim();if(!m)return;try{st("🎮 玩家发送…AI 生成中");await j("/api/operator/say",{method:"POST",headers:H(),body:JSON.stringify({session_id:cur,user:m})});$("playmsg").value="";st("已发送 ✓");loadSession();}catch(e){}}
+async function startOCTest(i){st("开局中…AI 生成开场");try{const d=await j("/api/operator/oc/start",{method:"POST",headers:H(),body:JSON.stringify({index:i})});cur=d.session_id;showView("sessions");await loadSessions();select(d.session_id);st("已用「"+(d.character||"")+"」开局 ✓ 下方可玩家对话 / 导演注入");}catch(e){}}
+function tickClk(){var c=$("clk");if(c)c.textContent="🇸🇬 SGT "+new Date().toLocaleString("zh-CN",{timeZone:"Asia/Singapore",hour12:false});}
+tickClk();setInterval(tickClk,1000);
 onMode();
 loadSessions();
 setInterval(()=>{if(cur)loadSession(true);},4000);
