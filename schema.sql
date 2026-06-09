@@ -2,103 +2,71 @@
 -- 幂等。全新库一键建表:
 --     psql "$DATABASE_URL" -f schema.sql
 --   或  python _init_schema.py   (读 DATABASE_URL,执行本文件)
--- 说明:此前 repo 无 DDL 文件、表靠手动建;本文件按线上 schema 内省补齐,供部署到新库用。
+--
+-- 对齐策略(2026-06-09,见 decisions/2026-06-09-schema线上分歧-对齐方向-提案.md):
+--   **本文件以线上 PROD 结构为准**。核心表用自然键主键(sessions=id、messages=(session_id,seq)、
+--   memory_vec=(session_id,scope,ext_id))、cards/presets 不用代理 id(app 的 storage.py 全走自然键)。
+--   早先这里声明的 `id` 代理列 / `created_at` 是 PROD 没有的,已删除以消除"按 schema.sql 建的新库 ≠ PROD"的坑。
 
 create extension if not exists vector;
 
--- 会话:整局存 data jsonb(不枚举字段,避免丢字段)。user_id = 归属(账户系统;NULL=遗留/匿名)
+-- 会话:整局存 data jsonb(不枚举字段)。user_id = 归属(账户系统;NULL=遗留/匿名)。
 create table if not exists sessions (
-  id          text primary key,
+  id          text        primary key,
   user_id     uuid,
   data        jsonb       not null default '{}'::jsonb,
-  created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
 create index if not exists idx_sessions_user on sessions (user_id);
 
--- 对话:append-only 行,每回合 INSERT 新行
+-- 对话:append-only,自然键主键 (session_id, seq);删会话级联删消息。
 create table if not exists messages (
-  id          bigserial   primary key,
-  session_id  text        not null,
-  seq         integer     not null,
-  data        jsonb       not null,
-  created_at  timestamptz not null default now(),
-  unique (session_id, seq)
+  session_id  text    not null references sessions(id) on delete cascade,
+  seq         integer not null,
+  data        jsonb   not null,
+  primary key (session_id, seq)
 );
-create index if not exists idx_messages_session on messages (session_id, seq);
 
--- 卡库(角色/世界书/故事书/玩家卡)。user_id NULL=官方公共卡;非 NULL=用户私有卡。
+-- 卡库(角色/世界书/故事书/玩家卡)。自然键、无代理 id。
+-- user_id NULL=官方公共卡(只读可见);非 NULL=用户私有卡。唯一性走部分唯一索引(无全局 unique)。
 create table if not exists cards (
-  id          uuid        primary key default gen_random_uuid(),
-  user_id     uuid,
   kind        text        not null,
   name        text        not null,
   data        jsonb       not null default '{}'::jsonb,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+  updated_at  timestamptz not null default now(),
+  user_id     uuid
 );
--- 唯一性:官方行(NULL)按 (kind,name);用户行按 (user_id,kind,name)
-create unique index if not exists uq_cards_official on cards (kind, name)         where user_id is null;
-create unique index if not exists uq_cards_user     on cards (user_id, kind, name) where user_id is not null;
+create index if not exists cards_kind_idx on cards (kind);
+create unique index if not exists uq_cards_official on cards (kind, name)          where user_id is null;
+create unique index if not exists uq_cards_user     on cards (user_id, kind, name)  where user_id is not null;
 
--- 预设(成套开局)。同卡库:user_id NULL=官方公共预设;非 NULL=用户私有。
+-- 预设(成套开局)。同卡库:NULL=官方公共预设;非 NULL=用户私有。
 create table if not exists presets (
-  id          uuid        primary key default gen_random_uuid(),
-  user_id     uuid,
   name        text        not null,
   data        jsonb       not null default '{}'::jsonb,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+  updated_at  timestamptz not null default now(),
+  user_id     uuid
 );
 create unique index if not exists uq_presets_official on presets (name)          where user_id is null;
 create unique index if not exists uq_presets_user     on presets (user_id, name)  where user_id is not null;
 
--- 长期记忆向量(深度模式;scope: turn/lm/kb;embedding = bge-small-zh-v1.5 512 维)
+-- 长期记忆向量(深度模式;scope: turn/lm/kb;embedding = bge-small-zh-v1.5 512 维)。
+-- 自然键主键 (session_id, scope, ext_id);embedding 可空(降级/未就绪时不写向量)。
 create table if not exists memory_vec (
-  id          bigserial   primary key,
   session_id  text        not null,
-  user_id     uuid,
   scope       text        not null,
   ext_id      text        not null,
   content     text        not null,
-  embedding   vector(512) not null,
+  embedding   vector(512),
   meta        jsonb       not null default '{}'::jsonb,
   created_at  timestamptz not null default now(),
-  unique (session_id, scope, ext_id)
+  user_id     uuid,
+  primary key (session_id, scope, ext_id)
 );
 create index if not exists idx_memory_vec_lookup on memory_vec (session_id, scope);
 create index if not exists idx_memory_vec_ann    on memory_vec using hnsw (embedding vector_cosine_ops);
 
--- ── Phase 0 成本熔断 + 限流(账户系统路线图 Phase 0;见 decisions/2026-06-09-phase0-*)──
--- 默认关闭(.env COST_GUARD_ENABLED=0);建表只是前置,翻开关才生效。
-
--- 限流计数器:key = 'ip:<addr>'(Phase 1 起也用 'user:<uuid>')
-create table if not exists rate_limits (
-  key           text        primary key,
-  count         integer     not null default 0,
-  window_start  timestamptz not null default now()
-);
-
--- 每来源每日用量账本:subject = 'ip:<addr>'(Phase 1 起 'user:<uuid>')
-create table if not exists usage_daily (
-  subject     text          not null,
-  day         date          not null,
-  turns       integer       not null default 0,
-  tokens      bigint        not null default 0,
-  usd         numeric(12,6) not null default 0,
-  updated_at  timestamptz   not null default now(),
-  primary key (subject, day)
-);
-create index if not exists idx_usage_daily_day on usage_daily (day, usd desc);
-
--- 全局每日花费熔断单行(热路径用 pg_advisory_xact_lock 串行化)
-create table if not exists spend_daily (
-  day      date          primary key,
-  usd      numeric(12,6) not null default 0,
-  tripped  boolean       not null default false
-);
-
--- ── 账户系统(账户系统路线图 Phase 1;见 decisions/2026-06-09-账户系统路线图-*)──
+-- ── 账户系统(账户系统路线图 Phase 1;见 decisions/2026-06-09-账户系统路线图-*)── PROD 已建。
 -- 默认关闭(.env AUTH_ENABLED=0);建表只是前置,翻开关才按 user 隔离。
 -- email = 已验证主身份(注册走邮箱验证码);username 可选登录名;role = user/admin/superadmin。
 -- superadmin 由 .env SUPERADMIN_EMAIL 钉(不存进 role 列也算 super)。
@@ -138,3 +106,27 @@ create table if not exists email_otp (
   created_at  timestamptz not null default now()
 );
 create index if not exists idx_email_otp_lookup on email_otp (email, purpose, created_at desc);
+
+-- ── Phase 0 成本熔断 + 限流(账户系统路线图 Phase 0;见 decisions/2026-06-09-phase0-*)──
+-- 注意:此功能已搁置,**PROD 暂未建这三张表**;本文件保留 DDL,供 fresh build / 将来启用时一键就位。
+-- 默认关闭(.env COST_GUARD_ENABLED=0)。
+create table if not exists rate_limits (
+  key           text        primary key,
+  count         integer     not null default 0,
+  window_start  timestamptz not null default now()
+);
+create table if not exists usage_daily (
+  subject     text          not null,          -- 'ip:<addr>'(Phase 1 起 'user:<uuid>')
+  day         date          not null,
+  turns       integer       not null default 0,
+  tokens      bigint        not null default 0,
+  usd         numeric(12,6) not null default 0,
+  updated_at  timestamptz   not null default now(),
+  primary key (subject, day)
+);
+create index if not exists idx_usage_daily_day on usage_daily (day, usd desc);
+create table if not exists spend_daily (
+  day      date          primary key,
+  usd      numeric(12,6) not null default 0,
+  tripped  boolean       not null default false
+);
