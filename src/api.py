@@ -12,7 +12,7 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -32,6 +32,8 @@ from .parsers import parse_character
 from .story import story_turn
 from . import storage
 from . import db
+from . import costguard
+from . import auth
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
@@ -87,6 +89,136 @@ class ReRollReq(BaseModel):
     session_id: str
 
 
+# ── 账户系统(AUTH_ENABLED 门控;关时全程不影响现有行为)──────────────────
+async def current_user_dep(authorization: str | None = Header(None),
+                           x_auth_token: str | None = Header(None)) -> dict | None:
+    """取当前用户(可选):无 token→None;有但无效→401。给端点 Depends 用。"""
+    return await asyncio.to_thread(auth.current_user, authorization, x_auth_token)
+
+
+def _write_owner(user: dict | None) -> str | None:
+    """写操作的归属:AUTH 关→None(旧全局);AUTH 开→必须登录,返回 user_id。"""
+    if not auth.enabled():
+        return None
+    if user is None:
+        raise HTTPException(401, "请先登录")
+    return user["id"]
+
+
+def _read_scope(user: dict | None) -> tuple[str | None, bool]:
+    """读操作的范围:返回 (user_id, legacy_all)。AUTH 关→legacy_all=True(旧全局)。"""
+    if not auth.enabled():
+        return None, True
+    return (user["id"] if user else None), False
+
+
+def _write_scope(user: dict | None) -> tuple[str | None, bool]:
+    """写/删操作的范围:AUTH 关→(None, legacy_all=True);开→必须登录,返回 (user_id, False)。"""
+    if not auth.enabled():
+        return None, True
+    if user is None:
+        raise HTTPException(401, "请先登录")
+    return user["id"], False
+
+
+def require_role(min_role: str):
+    """角色门:返回一个 FastAPI 依赖,要求调用者 role >= min_role。
+    认证 = 登录 token 的角色;OPERATOR_TOKEN 作 superadmin 应急后门(AUTH 关时仍可用,沿用旧控制台)。"""
+    async def dep(authorization: str | None = Header(None),
+                  x_auth_token: str | None = Header(None),
+                  x_operator_token: str | None = Header(None)) -> dict:
+        op = os.getenv("OPERATOR_TOKEN", "")
+        if op and x_operator_token == op:           # 应急后门 = superadmin
+            return {"id": None, "username": "(operator)", "email": None,
+                    "role": "superadmin", "is_admin": True}
+        user = await asyncio.to_thread(auth.current_user, authorization, x_auth_token)
+        if user is None:
+            raise HTTPException(401, "请先登录")
+        if not auth.role_at_least(user.get("role", "user"), min_role):
+            raise HTTPException(403, f"需要 {min_role} 权限")
+        return user
+    return dep
+
+
+class SendCodeReq(BaseModel):
+    email: str
+
+
+class RegisterReq(BaseModel):
+    email: str
+    password: str
+    code: str                       # 邮箱验证码
+    username: str | None = None     # 可选登录名
+    display_name: str | None = None
+
+
+class LoginReq(BaseModel):
+    identifier: str   # 邮箱或用户名
+    password: str
+
+
+class SetRoleReq(BaseModel):
+    user: str         # 用户名 / 邮箱 / user_id
+    role: str         # admin | user
+
+
+@app.post("/api/auth/email/send_code")
+def api_send_code(req: SendCodeReq):
+    """给邮箱发注册验证码。SMTP 未配置(本地)时返回里带 dev_code 方便测试。"""
+    return auth.send_email_code(req.email, purpose="register")
+
+
+@app.post("/api/auth/register")
+def api_register(req: RegisterReq):
+    """注册:邮箱 + 验证码 + 密码(可选用户名)。验证码对 → 建号(邮箱已验证)→ 返回 token + user。"""
+    if not auth.verify_email_code(req.email, req.code, purpose="register"):
+        raise HTTPException(400, "验证码不对或已过期")
+    user = auth.create_user(req.email, req.password, req.username, req.display_name, email_verified=True)
+    token = auth.issue_token(user["id"])
+    return {"token": token, "user": user}
+
+
+@app.post("/api/auth/login")
+def api_login(req: LoginReq):
+    """登录(邮箱/用户名 + 密码),返回 token + user。"""
+    user = auth.authenticate(req.identifier, req.password)
+    if not user:
+        raise HTTPException(401, "邮箱/用户名或密码错误")
+    token = auth.issue_token(user["id"])
+    return {"token": token, "user": user}
+
+
+@app.post("/api/admin/set_role")
+def api_set_role(req: SetRoleReq, actor: dict = Depends(require_role("superadmin"))):
+    """superadmin 把某用户设成 admin / user。需 superadmin。"""
+    if not auth.set_user_role(req.user, req.role):
+        raise HTTPException(404, f"找不到用户:{req.user}")
+    return {"ok": True, "user": req.user, "role": req.role}
+
+
+@app.post("/api/auth/logout")
+def api_logout(authorization: str | None = Header(None), x_auth_token: str | None = Header(None)):
+    """登出:吊销当前 token。"""
+    tok = auth._extract(authorization, x_auth_token)
+    if tok:
+        auth.revoke_token(tok)
+    return {"ok": True}
+
+
+@app.get("/api/auth/me")
+def api_me(user: dict | None = Depends(current_user_dep)):
+    """当前登录用户(未登录返回 {user:null})。"""
+    return {"user": user, "auth_enabled": auth.enabled()}
+
+
+@app.get("/api/my/sessions")
+def api_my_sessions(user: dict | None = Depends(current_user_dep)):
+    """「我的存档」:列出当前用户的会话(跨设备可见)。需登录。"""
+    if user is None:
+        raise HTTPException(401, "请先登录")
+    return storage.list_sessions(user_id=user["id"])
+
+
 @app.get("/api/health")
 def api_health():
     """健康检查:确认后端在线 + DB 可达 + 是否带前端 + deep 向量召回依赖是否就绪。
@@ -117,52 +249,56 @@ def api_health():
 
 
 @app.post("/api/identify")
-def api_identify(req: TextReq):
+def api_identify(req: TextReq, user: dict | None = Depends(current_user_dep)):
     """散文设定 → 角色 Card V2。"""
     if not req.text.strip():
         raise HTTPException(400, "设定文字不能为空")
+    owner = _write_owner(user)
     try:
         card = identify(req.text)
-        storage.save_library("characters", card.data.name, card.model_dump())
+        storage.save_library("characters", card.data.name, card.model_dump(), user_id=owner)
         return card.model_dump()
     except Exception as e:
         raise HTTPException(500, f"识别失败:{e}")
 
 
 @app.post("/api/identify_world")
-def api_identify_world(req: TextReq):
+def api_identify_world(req: TextReq, user: dict | None = Depends(current_user_dep)):
     """世界观文字 → 多条带关键词的世界书条目。"""
     if not req.text.strip():
         raise HTTPException(400, "世界观文字不能为空")
+    owner = _write_owner(user)
     try:
         world = identify_worldbook(req.text)
-        storage.save_library("worlds", world.name, world.model_dump())
+        storage.save_library("worlds", world.name, world.model_dump(), user_id=owner)
         return world.model_dump()
     except Exception as e:
         raise HTTPException(500, f"识别失败:{e}")
 
 
 @app.post("/api/identify_story")
-def api_identify_story(req: TextReq):
+def api_identify_story(req: TextReq, user: dict | None = Depends(current_user_dep)):
     """故事书文字 → 时间线 / 主线 / 可触发事件节点。"""
     if not req.text.strip():
         raise HTTPException(400, "故事书文字不能为空")
+    owner = _write_owner(user)
     try:
         story = identify_storybook(req.text)
-        storage.save_library("stories", story.title, story.model_dump())
+        storage.save_library("stories", story.title, story.model_dump(), user_id=owner)
         return story.model_dump()
     except Exception as e:
         raise HTTPException(500, f"识别失败:{e}")
 
 
 @app.post("/api/identify_player")
-def api_identify_player(req: TextReq):
+def api_identify_player(req: TextReq, user: dict | None = Depends(current_user_dep)):
     """玩家设定 → PlayerCard。"""
     if not req.text.strip():
         raise HTTPException(400, "玩家设定不能为空")
+    owner = _write_owner(user)
     try:
         player = identify_player(req.text)
-        storage.save_library("players", player.name, player.model_dump())
+        storage.save_library("players", player.name, player.model_dump(), user_id=owner)
         return player.model_dump()
     except Exception as e:
         raise HTTPException(500, f"识别失败:{e}")
@@ -181,13 +317,14 @@ def api_build_card(req: BuildCardReq):
 
 
 @app.post("/api/identify_auto")
-def api_identify_auto(req: AutoReq):
+def api_identify_auto(req: AutoReq, user: dict | None = Depends(current_user_dep)):
     """统一上传入口:AI 判类型(角色/世界/故事/玩家)→ 路由到对应解析 → 存进对应库。
 
     返回 {kind, confidence, reason, data}。前端据 kind 放进对应卡槽;判错时可带 kind 重调改判。
     """
     if not req.text.strip():
         raise HTTPException(400, "上传内容不能为空")
+    owner = _write_owner(user)
     try:
         out = identify_auto(req.text, kind=req.kind)
     except Exception as e:
@@ -195,13 +332,13 @@ def api_identify_auto(req: AutoReq):
     kind, data = out["kind"], out["data"]
     try:
         if kind == "character":
-            storage.save_library("characters", (data.get("data") or {}).get("name") or "角色", data)
+            storage.save_library("characters", (data.get("data") or {}).get("name") or "角色", data, user_id=owner)
         elif kind == "world":
-            storage.save_library("worlds", data.get("name") or "世界书", data)
+            storage.save_library("worlds", data.get("name") or "世界书", data, user_id=owner)
         elif kind == "story":
-            storage.save_library("stories", data.get("title") or "故事书", data)
+            storage.save_library("stories", data.get("title") or "故事书", data, user_id=owner)
         elif kind == "player":
-            storage.save_library("players", data.get("name") or "玩家", data)
+            storage.save_library("players", data.get("name") or "玩家", data, user_id=owner)
     except Exception:
         pass  # 入库失败不影响返回识别结果
     return out
@@ -221,10 +358,11 @@ async def api_upload(request: Request, filename: str = "upload.txt"):
 
 
 @app.post("/api/chat")
-def api_chat(req: ChatReq):
+def api_chat(req: ChatReq, user: dict | None = Depends(current_user_dep)):
     """与角色对话。历史由后端按 session_id 维护,前端只传当轮输入。"""
     if not req.user.strip():
         raise HTTPException(400, "消息不能为空")
+    auth.authorize_session(req.session_id, user)  # 归属闸(AUTH 关时 no-op):防跨用户污染会话/记忆
     try:
         text = reply(req.card, req.session_id, req.user, req.world)
     except Exception as e:
@@ -260,10 +398,15 @@ def _fallback_turn_dict(req: StoryTurnReq, e: Exception) -> dict:
 
 
 @app.post("/api/story_turn")
-async def api_story_turn(req: StoryTurnReq):
+async def api_story_turn(req: StoryTurnReq, request: Request,
+                         user: dict | None = Depends(current_user_dep)):
     """v2 故事回合(异步):多角色 + 世界书 + 故事书 + 玩家卡 + 状态/选项/记忆。非流式,作降级路径。"""
     if not req.characters:
         raise HTTPException(400, "至少需要一个角色卡")
+    # 归属闸(AUTH_ENABLED=0 时 no-op):无主→认领给当前用户;他人有主→拒。放 try 之前,401/403 不被保底吞。
+    await asyncio.to_thread(auth.authorize_session, req.session_id, user)
+    # Phase 0 成本闸:全局熔断 + 限流 + 预扣(COST_GUARD_ENABLED=0 时全程 no-op)。
+    res = await asyncio.to_thread(costguard.preflight, costguard.client_ip(request))
     try:
         out = await story_turn(
             session_id=req.session_id,
@@ -276,12 +419,15 @@ async def api_story_turn(req: StoryTurnReq):
             mode=req.mode,
         )
     except Exception as e:
+        await asyncio.to_thread(costguard.record, res, {})  # 保底回合≈零成本,退回预扣
         return _fallback_turn_dict(req, e)
+    await asyncio.to_thread(costguard.record, res, out.usage)
     return out.model_dump()
 
 
 @app.post("/api/story_turn_stream")
-async def api_story_turn_stream(req: StoryTurnReq):
+async def api_story_turn_stream(req: StoryTurnReq, request: Request,
+                               user: dict | None = Depends(current_user_dep)):
     """流式故事回合(SSE)。主回合叙事逐字推给前端(delta 事件),回合算完再推完整结构体(done 事件)。
 
     协议:每行 `data: {json}\\n\\n`。事件 type:
@@ -291,6 +437,9 @@ async def api_story_turn_stream(req: StoryTurnReq):
     """
     if not req.characters:
         raise HTTPException(400, "至少需要一个角色卡")
+    # 归属闸 + Phase 0 成本闸:开流前先过(401/403/503/429 在这里抛,不进 SSE 流);两个门控关时 no-op。
+    await asyncio.to_thread(auth.authorize_session, req.session_id, user)
+    res = await asyncio.to_thread(costguard.preflight, costguard.client_ip(request))
 
     async def event_stream():
         q: asyncio.Queue = asyncio.Queue()
@@ -299,6 +448,7 @@ async def api_story_turn_stream(req: StoryTurnReq):
             await q.put({"type": "delta", "text": text})
 
         async def runner():
+            usage_for_record: dict = {}
             try:
                 out = await story_turn(
                     session_id=req.session_id,
@@ -311,10 +461,12 @@ async def api_story_turn_stream(req: StoryTurnReq):
                     mode=req.mode,
                     on_delta=on_delta,
                 )
+                usage_for_record = out.usage
                 await q.put({"type": "done", "turn": out.model_dump()})
             except Exception as e:
                 await q.put({"type": "error", "turn": _fallback_turn_dict(req, e)})
             finally:
+                await asyncio.to_thread(costguard.record, res, usage_for_record)  # 出错时 {}→退预扣
                 await q.put(None)
 
         task = asyncio.create_task(runner())
@@ -333,11 +485,13 @@ async def api_story_turn_stream(req: StoryTurnReq):
 
 
 @app.post("/api/reroll")
-async def api_reroll(req: ReRollReq):
+async def api_reroll(req: ReRollReq, request: Request,
+                     user: dict | None = Depends(current_user_dep)):
     """对上一回合不满意时重新生成:回滚上一轮副作用(恢复 pre-turn 快照),用相同输入重跑。
 
     卡组取自当前已落盘的 artifacts(即上一轮实际用的卡),输入/模式取自 _reroll 记录。
     """
+    await asyncio.to_thread(auth.authorize_session, req.session_id, user)  # 归属闸(AUTH 关时 no-op)
     data = await asyncio.to_thread(storage.load_session, req.session_id)
     reroll = data.get("_reroll")
     if not isinstance(reroll, dict) or not isinstance(reroll.get("snapshot"), dict):
@@ -354,6 +508,8 @@ async def api_reroll(req: ReRollReq):
     except Exception as e:
         raise HTTPException(500, f"卡组快照解析失败:{e}")
     mode = reroll.get("mode") or art.get("mode") or "standard"
+    # Phase 0 成本闸:重跑也烧 LLM,过闸(在回滚之前;COST_GUARD_ENABLED=0 时 no-op)。
+    res = await asyncio.to_thread(costguard.preflight, costguard.client_ip(request))
     # 回滚:把会话恢复到上一轮之前的镜像,丢弃刚生成的那一轮(含其 messages/state/累计用量)。
     await asyncio.to_thread(storage.save_session, req.session_id, reroll["snapshot"])
     try:
@@ -368,29 +524,40 @@ async def api_reroll(req: ReRollReq):
             mode=mode,
         )
     except Exception as e:
+        await asyncio.to_thread(costguard.record, res, {})
         raise HTTPException(500, f"重新生成失败:{e}")
+    await asyncio.to_thread(costguard.record, res, out.usage)
     return out.model_dump()
 
 
 @app.get("/api/session/{session_id}")
-def api_session(session_id: str):
+def api_session(session_id: str, user: dict | None = Depends(current_user_dep)):
     """查看持久化会话:调试/状态面板/续玩还原用。剔除内部重 roll 快照,避免把 ~2x 体量的镜像发给前端。"""
+    auth.authorize_session(session_id, user, claim=False)  # 读:只校验不认领(AUTH 关时 no-op)
     data = storage.load_session(session_id)
     data.pop("_reroll", None)
     return data
 
 
 @app.delete("/api/session/{session_id}")
-def api_delete_session(session_id: str):
+def api_delete_session(session_id: str, user: dict | None = Depends(current_user_dep)):
     """删除一局存档(存档列表的删除)。删会话 + 级联 messages;深度模式向量数据(memory_vec)留作孤儿(无害)。"""
+    if auth.enabled():
+        if user is None:
+            raise HTTPException(401, "请先登录")
+        owner = auth.session_owner(session_id)
+        # 删是破坏性的:有主只 owner/super 能删;无主(遗留)只 super 能删 —— 不让任意登录用户删别人/遗留存档。
+        if user.get("role") != "superadmin" and owner != user["id"]:
+            raise HTTPException(403, "无权删除该存档")
     return {"deleted": storage.delete_session(session_id)}
 
 
 @app.get("/api/session/{session_id}/tail")
-def api_session_tail(session_id: str, after: int = 0):
+def api_session_tail(session_id: str, after: int = 0, user: dict | None = Depends(current_user_dep)):
     """玩家端实时轮询:返回该局第 after 条之后的新回合 + 当前状态(轻量,只回新回合)。
     用途:运营者「立即生效」或任何 server 端出的新回合,玩家界面自己冒出来(不必刷新)。
-    无 token —— 同 /api/session(玩家本来就能读自己这局;session_id 随机难猜)。"""
+    AUTH 开时按归属校验(他人有主存档拒);关时沿用旧「session_id 随机难猜」模型。"""
+    auth.authorize_session(session_id, user, claim=False)  # 读:只校验不认领(AUTH 关时 no-op)
     d = storage.load_session(session_id)
     turns = d.get("turns") or []
     n = len(turns)
@@ -403,11 +570,12 @@ _LIB_KINDS = {"characters", "worlds", "stories", "players"}
 
 
 @app.get("/api/library/{kind}")
-def api_library(kind: str):
-    """列出卡库里已保存的角色/世界/故事/玩家卡 JSON。"""
+def api_library(kind: str, user: dict | None = Depends(current_user_dep)):
+    """列出卡库:AUTH 开时 = 官方公共卡 + 当前用户私有卡(各带 official 标记);关时 = 旧全局。"""
     if kind not in _LIB_KINDS:
         raise HTTPException(400, "kind 必须是 characters/worlds/stories/players")
-    return storage.list_library(kind)
+    uid, legacy = _read_scope(user)
+    return storage.list_library(kind, user_id=uid, legacy_all=legacy)
 
 
 class LibSaveReq(BaseModel):
@@ -416,10 +584,11 @@ class LibSaveReq(BaseModel):
 
 
 @app.post("/api/library/save")
-def api_library_save(req: LibSaveReq):
-    """把一张卡存进卡库(建好/编辑过的卡完成时自动入库;上传识别的卡已在识别端点入库)。"""
+def api_library_save(req: LibSaveReq, user: dict | None = Depends(current_user_dep)):
+    """把一张卡存进卡库(建好/编辑过的卡完成时自动入库;上传识别的卡已在识别端点入库)。AUTH 开时存进当前用户私有库。"""
     if req.kind not in _LIB_KINDS:
         raise HTTPException(400, "kind 必须是 characters/worlds/stories/players")
+    owner = _write_owner(user)
     d = req.data or {}
     if req.kind == "characters":
         name = (d.get("data") or {}).get("name") or "角色"
@@ -430,18 +599,20 @@ def api_library_save(req: LibSaveReq):
     else:
         name = d.get("name") or "玩家"
     try:
-        storage.save_library(req.kind, name, d)
+        storage.save_library(req.kind, name, d, user_id=owner)
     except Exception as e:
         raise HTTPException(500, f"入库失败:{e}")
     return {"saved": True, "name": storage.slug(name)}
 
 
 @app.delete("/api/library/{kind}/{name}")
-def api_delete_library(kind: str, name: str):
-    """从卡库删除一张卡(name 取自 list 返回的 stem)。"""
+def api_delete_library(kind: str, name: str, user: dict | None = Depends(current_user_dep)):
+    """从卡库删除一张卡(name 取自 list 返回的 stem)。AUTH 开时只能删自己的(官方卡仅 admin)。"""
     if kind not in _LIB_KINDS:
         raise HTTPException(400, "kind 必须是 characters/worlds/stories/players")
-    return {"deleted": storage.delete_library(kind, name)}
+    uid, legacy = _write_scope(user)
+    return {"deleted": storage.delete_library(kind, name, user_id=uid,
+                                              is_admin=bool(user and user.get("is_admin")), legacy_all=legacy)}
 
 
 class PresetReq(BaseModel):
@@ -459,24 +630,28 @@ class PresetReq(BaseModel):
 
 
 @app.get("/api/presets")
-def api_list_presets():
-    """列出已保存的故事预设(配好的卡组,主界面复用开新局)。"""
-    return storage.list_presets()
+def api_list_presets(user: dict | None = Depends(current_user_dep)):
+    """列出故事预设:AUTH 开时 = 官方公共预设 + 当前用户私有(各带 official 标记);关时 = 旧全局。"""
+    uid, legacy = _read_scope(user)
+    return storage.list_presets(user_id=uid, legacy_all=legacy)
 
 
 @app.post("/api/presets")
-def api_save_preset(req: PresetReq):
+def api_save_preset(req: PresetReq, user: dict | None = Depends(current_user_dep)):
     if not req.name.strip():
         raise HTTPException(400, "预设名不能为空")
     if not req.characters:
         raise HTTPException(400, "故事预设至少要一个角色卡")
-    storage.save_preset(req.name, req.model_dump())
+    owner = _write_owner(user)
+    storage.save_preset(req.name, req.model_dump(), user_id=owner)
     return {"saved": True, "name": storage.slug(req.name)}
 
 
 @app.delete("/api/presets/{name}")
-def api_delete_preset(name: str):
-    return {"deleted": storage.delete_preset(name)}
+def api_delete_preset(name: str, user: dict | None = Depends(current_user_dep)):
+    uid, legacy = _write_scope(user)
+    return {"deleted": storage.delete_preset(name, user_id=uid,
+                                             is_admin=bool(user and user.get("is_admin")), legacy_all=legacy)}
 
 
 # ── 后台注入(运营者/作者)──────────────────────────────────────────
@@ -522,13 +697,12 @@ async def _operator_advance(session_id: str, user: str = "（场景继续）") -
 
 
 @app.post("/api/operator/inject")
-async def api_operator_inject(req: OperatorInjectReq, x_operator_token: str | None = Header(None)):
+async def api_operator_inject(req: OperatorInjectReq, _actor: dict = Depends(require_role("superadmin"))):
     """后台对某局施加影响,三种模式(需 X-Operator-Token):
     - director(默认):幕后指令进队列,AI 下回合织进剧情;sticky=持续每回合,now=立即跑一回合。
     - direct:指定 target 角色【逐字】说出 content —— 引擎直插一条回合,不走 AI、即时、保证原样。
     - narration:把 content 作为旁白【逐字】写进剧情 —— 引擎直插,不走 AI、即时。
     direct/narration 即时落地(不看 sticky/now);两路都写 operator_applied 留痕。"""
-    _require_operator(x_operator_token)
     content = req.content.strip()
     if not content:
         raise HTTPException(400, "内容不能为空")
@@ -565,16 +739,14 @@ async def api_operator_inject(req: OperatorInjectReq, x_operator_token: str | No
 
 
 @app.get("/api/operator/inject/{session_id}")
-def api_operator_inject_list(session_id: str, x_operator_token: str | None = Header(None)):
+def api_operator_inject_list(session_id: str, _actor: dict = Depends(require_role("superadmin"))):
     """看某局当前待注入(还没被消费)的内容。需 X-Operator-Token。"""
-    _require_operator(x_operator_token)
     return {"operator_inject": storage.load_session(session_id).get("operator_inject") or []}
 
 
 @app.delete("/api/operator/inject/{session_id}")
-def api_operator_inject_clear(session_id: str, x_operator_token: str | None = Header(None)):
+def api_operator_inject_clear(session_id: str, _actor: dict = Depends(require_role("superadmin"))):
     """清空某局的待注入队列(once + sticky 全清)。需 X-Operator-Token。"""
-    _require_operator(x_operator_token)
     data = storage.load_session(session_id)
     data["operator_inject"] = []
     storage.save_session(session_id, data)
@@ -582,16 +754,14 @@ def api_operator_inject_clear(session_id: str, x_operator_token: str | None = He
 
 
 @app.get("/api/operator/sessions")
-def api_operator_sessions(x_operator_token: str | None = Header(None)):
+def api_operator_sessions(_actor: dict = Depends(require_role("superadmin"))):
     """列出所有 session(控制台左栏点选用)。需 X-Operator-Token。"""
-    _require_operator(x_operator_token)
     return {"sessions": storage.list_sessions()}
 
 
 @app.get("/api/operator/session/{session_id}")
-def api_operator_session(session_id: str, x_operator_token: str | None = Header(None)):
+def api_operator_session(session_id: str, _actor: dict = Depends(require_role("superadmin"))):
     """看某局完整上下文:回合记录(玩家输入 + 叙事 + 角色发言)+ 当前状态 + 注入队列。需 X-Operator-Token。"""
-    _require_operator(x_operator_token)
     d = storage.load_session(session_id)
     return {
         "session_id": session_id,
@@ -603,10 +773,9 @@ def api_operator_session(session_id: str, x_operator_token: str | None = Header(
 
 
 @app.get("/api/operator/oc")
-def api_operator_oc(x_operator_token: str | None = Header(None)):
+def api_operator_oc(_actor: dict = Depends(require_role("admin"))):
     """OC 集:列出各用户的 OC(角色设定 + 世界观 + 立绘 + 地图)。需 X-Operator-Token。
     数据读 oc/index.json + 它引用的 .md;图走 /oc-assets 静态路由(<img> 直接取)。"""
-    _require_operator(x_operator_token)
     idx = OC_DIR / "index.json"
     if not idx.is_file():
         return {"ocs": []}
@@ -639,10 +808,9 @@ class OCStartReq(BaseModel):
 
 
 @app.post("/api/operator/oc/start")
-async def api_operator_oc_start(req: OCStartReq, x_operator_token: str | None = Header(None)):
+async def api_operator_oc_start(req: OCStartReq, _actor: dict = Depends(require_role("superadmin"))):
     """用某个 OC 的引擎角色卡直接开一局测试会话(跑开场回合)。需 X-Operator-Token。
     返回 {session_id, character, turn};该会话即普通 session,可在「对局」里继续(/api/operator/say)+ 导演注入。"""
-    _require_operator(x_operator_token)
     idx_file = OC_DIR / "index.json"
     if not idx_file.is_file():
         raise HTTPException(404, "没有 OC 数据")
@@ -665,13 +833,79 @@ class OperatorSayReq(BaseModel):
 
 
 @app.post("/api/operator/say")
-async def api_operator_say(req: OperatorSayReq, x_operator_token: str | None = Header(None)):
+async def api_operator_say(req: OperatorSayReq, _actor: dict = Depends(require_role("superadmin"))):
     """以【玩家】身份给某局发一句、推进一回合(用该局存档卡组)。需 X-Operator-Token。
     给运营者在控制台直接测试对话用;与导演注入(/inject)互补:say=玩家行动,inject=幕后导演。"""
-    _require_operator(x_operator_token)
     if not req.user.strip():
         raise HTTPException(400, "玩家输入不能为空")
     return await _operator_advance(req.session_id, user=req.user.strip())
+
+
+# ── Phase 0 成本闸观测 / 急停(见 src/costguard.py)──────────────────
+class KillReq(BaseModel):
+    tripped: bool = True  # True=立即停服调 LLM;False=恢复
+
+
+@app.get("/api/operator/usage")
+def api_operator_usage(_actor: dict = Depends(require_role("superadmin"))):
+    """看今日全局花费 / 是否熔断 / Top 来源用量。需 X-Operator-Token。"""
+    return costguard.stats()
+
+
+@app.post("/api/operator/usage/kill")
+def api_operator_usage_kill(req: KillReq, _actor: dict = Depends(require_role("superadmin"))):
+    """手动急停/恢复:翻今天的全局熔断开关。需 X-Operator-Token。"""
+    return costguard.set_tripped(req.tripped)
+
+
+# ── 账户迁移(运营者手动把老存档/卡归到某用户)──────────────────────
+class AssignSessionReq(BaseModel):
+    session_id: str
+    user: str          # 用户名 / 邮箱 / user_id
+
+
+class AssignCardReq(BaseModel):
+    kind: str          # characters / worlds / stories / players
+    name: str          # list 返回的 stem(slug)
+    user: str          # 用户名 / 邮箱 / user_id;留空("")=设回官方公共
+
+
+class AssignPresetReq(BaseModel):
+    name: str          # 预设 stem(slug)
+    user: str          # 用户名 / 邮箱 / user_id;留空("")=设回官方公共
+
+
+@app.get("/api/operator/users")
+def api_operator_users(_actor: dict = Depends(require_role("admin"))):
+    """列出所有用户(迁移时查 user_id 用)。需 X-Operator-Token。"""
+    return {"users": auth.list_users()}
+
+
+@app.post("/api/operator/assign_session")
+def api_operator_assign_session(req: AssignSessionReq, _actor: dict = Depends(require_role("superadmin"))):
+    """把某局存档归到某用户(账户系统迁移老存档)。需 X-Operator-Token。"""
+    uid = auth.find_user_id(req.user)
+    if not uid:
+        raise HTTPException(404, f"找不到用户:{req.user}")
+    return {"assigned": storage.assign_session_owner(req.session_id, uid), "user_id": uid}
+
+
+@app.post("/api/operator/assign_card")
+def api_operator_assign_card(req: AssignCardReq, _actor: dict = Depends(require_role("admin"))):
+    """把某张(原全局/官方)卡归到某用户;user 留空=设回官方公共。需 X-Operator-Token。"""
+    uid = auth.find_user_id(req.user) if req.user.strip() else None
+    if req.user.strip() and not uid:
+        raise HTTPException(404, f"找不到用户:{req.user}")
+    return {"assigned": storage.assign_card_owner(req.kind, req.name, uid), "user_id": uid}
+
+
+@app.post("/api/operator/assign_preset")
+def api_operator_assign_preset(req: AssignPresetReq, _actor: dict = Depends(require_role("admin"))):
+    """把某个(原全局/官方)预设归到某用户;user 留空=设回官方公共。需 admin。"""
+    uid = auth.find_user_id(req.user) if req.user.strip() else None
+    if req.user.strip() and not uid:
+        raise HTTPException(404, f"找不到用户:{req.user}")
+    return {"assigned": storage.assign_preset_owner(req.name, uid), "user_id": uid}
 
 
 # 私人后台控制台:不从玩家前端链接过去;真正的闸是 token(页面只是表单,无 token 调不动接口)。
@@ -716,13 +950,18 @@ button.sec{background:#6b7280}#st{font-size:12px;color:#888;margin-left:auto}
 #box .boxrow{display:flex;gap:8px;margin-bottom:6px}
 #box #playmsg{flex:1;padding:7px 9px;border:1px solid #ccc;border-radius:6px;font:inherit}
 #box .boxhint{font-size:12px;color:#999;margin:2px 0 5px}
-#clk{font-size:12px;color:#0a7;margin-left:8px}</style>
+#clk{font-size:12px;color:#0a7;margin-left:8px}
+#distwrap{display:none;height:calc(100vh - 53px);overflow:auto}
+.drow{margin:9px 0;display:flex;gap:8px;align-items:center}
+.drow select,.drow input{padding:5px 8px;border:1px solid #ccc;border-radius:6px;font:inherit}
+.drow input{min-width:240px}</style>
 </head><body>
 <header><h1>后台控制台</h1>
 <button id="tabSess" class="tab on" onclick="showView('sessions')">🎭 对局</button>
 <button id="tabOC" class="tab" onclick="showView('oc')">🍎 OC集</button>
-<input id="tok" type="password" placeholder="OPERATOR_TOKEN" size="22">
-<button class="sec" onclick="loadSessions()">刷新列表</button><span id="clk"></span><span id="st"></span></header>
+<button id="tabDist" class="tab" onclick="showView('dist')">📦 分发</button>
+<input id="tok" type="password" placeholder="OPERATOR_TOKEN(后门,可空)" size="22">
+<span id="who" style="font-size:12px;color:#555"></span><span id="clk"></span><span id="st"></span></header>
 <div id="wrap">
  <div id="list"></div>
  <div id="detail">
@@ -752,10 +991,27 @@ button.sec{background:#6b7280}#st{font-size:12px;color:#888;margin-left:auto}
  <div id="oclist"></div>
  <div id="ocdetail"></div>
 </div>
+<div id="distwrap">
+ <div class="ocsec" style="padding:20px 26px;max-width:680px">
+  <h3 style="color:#b1442f">📦 分发内容给用户</h3>
+  <p style="color:#666">把官方/公共的卡或预设指派给某个用户(成为他私有)。存档分发仅 superadmin。</p>
+  <div class="drow">用户 <select id="distUser"></select> <button class="sec" onclick="loadUsers()">↻ 刷新</button></div>
+  <div class="drow">类型 <select id="distType" onchange="distType()">
+    <option value="card">卡</option><option value="preset">预设</option>
+    <option id="distSessOpt" value="session">存档(super)</option></select></div>
+  <div class="drow" id="distCardKindRow">卡种 <select id="distCardKind">
+    <option>characters</option><option>worlds</option><option>stories</option><option>players</option></select></div>
+  <div class="drow">名称 <input id="distName" placeholder="卡 slug"></div>
+  <div class="drow"><button onclick="doAssign(false)">分发给该用户</button>
+    <button class="sec" onclick="doAssign(true)">设回官方</button></div>
+  <div id="distMsg" style="margin-top:6px"></div>
+ </div>
+</div>
 <script>
 const $=id=>document.getElementById(id);
-$("tok").value=localStorage.op_tok||""; $("tok").oninput=()=>{localStorage.op_tok=$("tok").value;loadSessions();};
-const H=()=>({"X-Operator-Token":$("tok").value,"Content-Type":"application/json"});
+$("tok").value=localStorage.op_tok||""; $("tok").oninput=()=>{localStorage.op_tok=$("tok").value;boot();};
+let ROLE="";
+const H=()=>{const h={"Content-Type":"application/json"};if($("tok").value)h["X-Operator-Token"]=$("tok").value;const t=localStorage.ais_auth_token;if(t)h["Authorization"]="Bearer "+t;return h;};
 const st=t=>$("st").textContent=t;
 function el(t,c,x){const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;}
 function bub(role,name,text){const d=el("div","b "+role);if(name)d.appendChild(el("b",null,name+": "));d.appendChild(document.createTextNode(text));return d;}
@@ -768,7 +1024,10 @@ function onMode(){const m=$("mode").value;$("target").style.display=m==="direct"
 async function send(timing){if(!cur){st("先选一个 session");return;}const m=$("msg").value.trim();if(!m)return;const mode=$("mode").value;const now=(timing==="now"&&mode==="director");if(mode==="direct"&&!$("target").value.trim()){st("直接台词要填角色名(留空=旁白)");}try{st(now?"AI 生成中…":(mode!=="director"?"插入中…":""));await j("/api/operator/inject",{method:"POST",headers:H(),body:JSON.stringify({session_id:cur,content:m,mode,target:$("target").value.trim(),sticky:$("sticky").checked,now})});$("msg").value="";st("已发送 ✓");loadSession();}catch(e){}}
 async function clearQ(){if(!cur)return;try{await j("/api/operator/inject/"+encodeURIComponent(cur),{method:"DELETE",headers:H()});st("已清空 ✓");loadSession();}catch(e){}}
 let ocs=[],ocLoaded=false;
-function showView(v){$("wrap").style.display=v==="oc"?"none":"flex";$("ocwrap").style.display=v==="oc"?"flex":"none";$("tabSess").classList.toggle("on",v!=="oc");$("tabOC").classList.toggle("on",v==="oc");if(v==="oc"&&!ocLoaded){ocLoaded=true;loadOC();}}
+function showView(v){$("wrap").style.display=v==="sessions"?"flex":"none";$("ocwrap").style.display=v==="oc"?"flex":"none";$("distwrap").style.display=v==="dist"?"block":"none";$("tabSess").classList.toggle("on",v==="sessions");$("tabOC").classList.toggle("on",v==="oc");$("tabDist").classList.toggle("on",v==="dist");if(v==="oc"&&!ocLoaded){ocLoaded=true;loadOC();}if(v==="dist")loadUsers();}
+async function loadUsers(){try{const d=await j("/api/operator/users");const S=$("distUser");S.innerHTML="";(d.users||[]).forEach(u=>{const o=el("option",null,(u.email||u.username||u.id)+"  ·  "+u.role+"  ·  "+(u.sessions||0)+"局");o.value=u.id;S.appendChild(o);});if(!(d.users||[]).length)S.appendChild(el("option",null,"(还没有用户)"));}catch(e){}}
+function distType(){const t=$("distType").value;$("distCardKindRow").style.display=t==="card"?"flex":"none";$("distName").placeholder=t==="card"?"卡 slug":(t==="preset"?"预设 slug":"session id");}
+async function doAssign(official){const uid=official?"":$("distUser").value;const t=$("distType").value;const name=$("distName").value.trim();const M=$("distMsg");if(!name){M.style.color="#a15";M.textContent="先填名称";return;}let url,body;if(t==="card"){url="/api/operator/assign_card";body={kind:$("distCardKind").value,name,user:uid};}else if(t==="preset"){url="/api/operator/assign_preset";body={name,user:uid};}else{url="/api/operator/assign_session";body={session_id:name,user:uid};}try{const d=await j(url,{method:"POST",headers:H(),body:JSON.stringify(body)});M.style.color=d.assigned?"#0a7":"#a15";M.textContent=d.assigned?("✓ 已"+(official?"设回官方":"分发给该用户")):"未匹配(只能分发官方/公共行,或名称不对)";loadUsers();}catch(e){M.style.color="#a15";M.textContent="失败(权限或网络)";}}
 function mdToHtml(t){t=(t||"").replace(/^---\n[\s\S]*?\n---\n/,"").replace(/!\[\[.*?\]\]/g,"").replace(/\[\[(?:[^\]|]*\|)?([^\]]+)\]\]/g,"$1");const esc=s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;");const inl=s=>esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`([^`]+)`/g,"<code>$1</code>");let h="",ul=false;const cu=()=>{if(ul){h+="</ul>";ul=false;}};for(const line of t.split("\n")){if(!line.trim()){cu();continue;}let m;if(m=line.match(/^(#{1,6})\s+(.*)$/)){cu();const lv=Math.min(m[1].length+1,6);h+="<h"+lv+">"+inl(m[2])+"</h"+lv+">";}else if(m=line.match(/^\s*>\s?(.*)$/)){cu();h+="<blockquote>"+inl(m[1])+"</blockquote>";}else if(m=line.match(/^\s*[-*]\s+(.*)$/)){if(!ul){h+="<ul>";ul=true;}h+="<li>"+inl(m[1])+"</li>";}else if(/^\s*\|/.test(line)){cu();const c=line.replace(/^\s*\|/,"").replace(/\|\s*$/,"").split("|").map(x=>x.trim());if(c.every(x=>/^[-:\s]*$/.test(x)))continue;h+="<div class=trow>"+c.map(x=>"<span>"+inl(x)+"</span>").join("")+"</div>";}else{cu();h+="<p>"+inl(line)+"</p>";}}cu();return h;}
 async function loadOC(){try{const d=await j("/api/operator/oc");ocs=d.ocs||[];const L=$("oclist");L.innerHTML="";ocs.forEach((o,i)=>{const it=el("div","sess");it.appendChild(el("div","id","🍎 "+(o.character||"OC")));it.appendChild(el("div","meta","用户:"+(o.user||"?")));it.onclick=()=>showOC(i);L.appendChild(it);});if(ocs.length)showOC(0);else $("ocdetail").innerHTML="<p style=color:#999>(oc/index.json 里没有 OC)</p>";}catch(e){}}
 function showOC(i){const o=ocs[i];if(!o)return;document.querySelectorAll("#oclist .sess").forEach((n,k)=>n.classList.toggle("on",k===i));let h="<div class=ocsec><h3>🍎 "+o.character+"　·　用户 "+o.user+"</h3>"+(o.card?"<button class=octest onclick='startOCTest("+i+")'>▶ 用「"+o.character+"」开测对话</button>":"<p style=color:#999>(没有引擎角色卡 card.md,不能开测)</p>");if(o.art)h+="<img class=ocimg src='"+o.art+"' alt=立绘>";h+=mdToHtml(o.profile)+"</div><div class=ocsec><h3>🗺 世界观</h3>";if(o.map)h+="<img class=ocimg src='"+o.map+"' alt=地图>";h+=mdToHtml(o.world)+"</div>";$("ocdetail").innerHTML=h;$("ocdetail").scrollTop=0;}
@@ -778,15 +1037,29 @@ async function startOCTest(i){st("开局中…AI 生成开场");try{const d=awai
 function tickClk(){var c=$("clk");if(c)c.textContent="🇸🇬 SGT "+new Date().toLocaleString("zh-CN",{timeZone:"Asia/Singapore",hour12:false});}
 tickClk();setInterval(tickClk,1000);
 onMode();
-loadSessions();
-setInterval(()=>{if(cur)loadSession(true);},4000);
+async function boot(){
+  ROLE="";
+  try{const r=await fetch("/api/auth/me",{headers:H()});const d=r.ok?await r.json():{};const u=d&&d.user;
+    if(u){ROLE=u.role||"user";$("who").textContent="👤 "+(u.email||u.username||"")+" · "+ROLE;}
+    else if($("tok").value){$("who").textContent="🔑 OPERATOR 后门 · superadmin";}
+    else{$("who").textContent="未登录 —— 去主站登录(admin/super)或填 OPERATOR_TOKEN";}
+  }catch(e){$("who").textContent="";}
+  const isSuper=ROLE==="superadmin"||(!ROLE&&!!$("tok").value);
+  $("tabSess").style.display=isSuper?"":"none";   // 对局/导演 = super
+  $("distSessOpt").style.display=isSuper?"":"none"; // 存档分发 = super
+  if(isSuper){showView("sessions");loadSessions();}
+  else{showView("dist");}                          // admin/未授权 默认进分发
+}
+boot();
+setInterval(()=>{if(cur&&ROLE!=="admin")loadSession(true);},4000);
 </script></body></html>"""
 
 
 @app.get("/operator", response_class=HTMLResponse)
 def operator_console():
-    """私人后台注入控制台。OPERATOR_TOKEN 没设 → 404(功能关闭)。页面不做鉴权,真正的闸是各 /api/operator/* 端点的 token。"""
-    if not os.getenv("OPERATOR_TOKEN"):
+    """后台控制台(admin/superadmin)。页面不做鉴权,真正的闸是各 /api/operator/* 端点按角色校验。
+    可达条件:设了 OPERATOR_TOKEN(后门)或开了账户系统(AUTH_ENABLED)——后者下由登录用户的角色决定能做什么。"""
+    if not (os.getenv("OPERATOR_TOKEN") or auth.enabled()):
         raise HTTPException(404, "未启用")
     return HTMLResponse(_OPERATOR_HTML)
 
