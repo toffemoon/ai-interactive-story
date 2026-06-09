@@ -1,0 +1,275 @@
+/* ============================================================
+   沐言书坊 · 视觉系统「入书」 — 共享令牌与基元
+   双态:纸(浏览层,店内白天) / 幕(游玩层,剧场暗幕)
+   原则:线先行 · 墨与纸的物理 · 印章作确认 · 不依赖卡片
+   ============================================================ */
+
+:root {
+  /* —— 纸 · 浏览层 —— */
+  --mu-paper:        #eae2cf;   /* 做旧纸底(参考 1999:更赭) */
+  --mu-paper-deep:   #ddd1b6;   /* 旧页 / 凹陷区 */
+  --mu-paper-bright: #f5efdf;   /* 新页 / 浮起面 */
+  --mu-ink:          #2b2620;   /* 墨 */
+  --mu-ink-soft:     #6e6657;   /* 淡墨 */
+  --mu-ink-faint:    #998e79;   /* 极淡墨,辅助说明 */
+  --mu-line:         #cdc1a4;   /* 界栏细线 */
+  --mu-line-strong:  #a3936f;   /* 界栏重线 */
+
+  /* —— 色 · 三色律:黛青为主,朱砂为印,鎏金为线 —— */
+  --mu-pine:         #2e4b44;   /* 黛青(退居第三色:链接/安静状态) */
+  --mu-pine-deep:    #1f3530;
+  --mu-pine-wash:    #dde4da;   /* 黛青染纸 */
+  --mu-cinnabar:     #b5402e;   /* 朱砂(1999 式:主 CTA/戳记/选中,可大胆用) */
+  --mu-cinnabar-deep:#8e3122;
+  --mu-cinnabar-wash:#ecd9cd;
+  --mu-gilt:         #b08a2e;   /* 芥末黄(线、序号、装饰字) */
+
+  /* —— 幕 · 游玩层 —— */
+  --mu-stage:        #14191a;   /* 暗幕底(墨绿倾向,非纯黑) */
+  --mu-stage-soft:   #1c2324;   /* 幕上浮层 */
+  --mu-stage-line:   rgba(214,196,152,.28); /* 幕上鎏金线 */
+  --mu-stage-line-dim: rgba(214,196,152,.13);
+  --mu-moon:         #eae4d3;   /* 月白(幕上正文) */
+  --mu-moon-dim:     #a09a8b;   /* 幕上次级 */
+  --mu-stage-pine:   #6fa692;   /* 幕上黛青(提亮版) */
+  --mu-stage-cinnabar:#c96b5c;  /* 幕上朱砂(提亮版) */
+
+  /* —— 字 —— */
+  --mu-serif: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --mu-kai:   "LXGW WenKai Lite", "LXGW WenKai", "Kaiti SC", "STKaiti", "KaiTi", serif;
+  --mu-mono:  "Cascadia Mono", Consolas, monospace;
+
+  /* —— 动效 —— */
+  --mu-ease:      cubic-bezier(.22, 1, .36, 1);   /* 出锋:快起慢收 */
+  --mu-ease-snap: cubic-bezier(.7, 0, .2, 1);     /* 盖印:蓄力后落定 */
+  --mu-t-fast: 180ms;
+  --mu-t-mid:  420ms;
+  --mu-t-slow: 760ms;
+}
+
+/* ============ 纸面基底 ============ */
+.mu-paper-bg {
+  background:
+    /* 朱丝栏:极淡的竖向朱线,古籍稿纸的骨 */
+    repeating-linear-gradient(90deg,
+      rgba(168, 63, 50, .035) 0, rgba(168, 63, 50, .035) 1px,
+      transparent 1px, transparent 36px),
+    /* 纸纤维感:两层极浅斜纹 */
+    repeating-linear-gradient(173deg,
+      rgba(43, 38, 32, .016) 0, rgba(43, 38, 32, .016) 1px,
+      transparent 1px, transparent 7px),
+    var(--mu-paper);
+  color: var(--mu-ink);
+  font-family: var(--mu-kai);
+}
+
+.mu-stage-bg {
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(111, 166, 146, .05), transparent 55%),
+    var(--mu-stage);
+  color: var(--mu-moon);
+  font-family: var(--mu-kai);
+}
+
+/* ============ 字阶 ============ */
+.mu-display { font-family: var(--mu-serif); font-weight: 700; letter-spacing: .04em; line-height: 1.18; }
+.mu-h1 { font-family: var(--mu-serif); font-weight: 600; font-size: 34px; letter-spacing: .06em; line-height: 1.25; }
+.mu-h2 { font-family: var(--mu-serif); font-weight: 600; font-size: 22px; letter-spacing: .08em; line-height: 1.3; }
+.mu-h3 { font-family: var(--mu-serif); font-weight: 600; font-size: 16px; letter-spacing: .1em; }
+.mu-body { font-family: var(--mu-kai); font-size: 15px; line-height: 1.85; }
+.mu-small { font-family: var(--mu-kai); font-size: 12.5px; line-height: 1.7; color: var(--mu-ink-soft); }
+.mu-tag-t { font-family: var(--mu-serif); font-size: 11px; letter-spacing: .32em; text-transform: none; color: var(--mu-ink-soft); }
+.mu-num { font-family: var(--mu-serif); font-variant-numeric: tabular-nums; }
+
+/* 竖排(禁止换列:设计中竖排均为单列) */
+.mu-vtext { writing-mode: vertical-rl; text-orientation: mixed; letter-spacing: .18em; white-space: nowrap; }
+
+/* ============ 线系统 ============ */
+/* 界栏框:细线 + 四角短出头(出头是关键,避免"圆角卡片"味) */
+.mu-frame { position: relative; border: 1px solid var(--mu-line); background: transparent; }
+.mu-frame::before, .mu-frame::after {
+  content: ""; position: absolute; inset: -5px; pointer-events: none;
+}
+.mu-frame::before {
+  border-top: 1px solid var(--mu-line-strong);
+  border-bottom: 1px solid var(--mu-line-strong);
+  left: 14px; right: 14px;
+}
+.mu-frame::after {
+  border-left: 1px solid var(--mu-line-strong);
+  border-right: 1px solid var(--mu-line-strong);
+  top: 14px; bottom: 14px;
+}
+
+/* 幕上的框:鎏金细线版 */
+.mu-frame-stage { position: relative; border: 1px solid var(--mu-stage-line-dim); }
+.mu-frame-stage::before, .mu-frame-stage::after { content: ""; position: absolute; pointer-events: none; }
+.mu-frame-stage::before { inset: -5px; left: 14px; right: 14px; border-top: 1px solid var(--mu-stage-line); border-bottom: 1px solid var(--mu-stage-line); }
+.mu-frame-stage::after { inset: -5px; top: 14px; bottom: 14px; border-left: 1px solid var(--mu-stage-line); border-right: 1px solid var(--mu-stage-line); }
+
+/* 分隔:鱼尾纹分隔线(中点小菱) */
+.mu-divider { display: flex; align-items: center; gap: 10px; color: var(--mu-line-strong); }
+.mu-divider::before, .mu-divider::after { content: ""; flex: 1; height: 1px; background: currentColor; opacity: .6; }
+.mu-divider i { width: 5px; height: 5px; background: currentColor; transform: rotate(45deg); flex: none; }
+
+/* ============ 印章 ============ */
+.mu-seal {
+  display: inline-grid; place-items: center;
+  width: 38px; height: 38px;
+  background: var(--mu-cinnabar); color: #f5ede2;
+  font-family: var(--mu-serif); font-weight: 700; font-size: 13px;
+  letter-spacing: .04em; line-height: 1.15;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1.5px rgba(245, 237, 226, .55), inset 0 0 0 3px var(--mu-cinnabar);
+  text-align: center;
+}
+.mu-seal.lg { width: 52px; height: 52px; font-size: 16px; }
+
+/* ============ 按钮:三阶 ============ */
+/* 一阶(主):墨实面默认;每屏唯一最重 CTA 用朱砂 .red(1999 式用色) */
+.mu-btn {
+  appearance: none; cursor: pointer;
+  font-family: var(--mu-serif); font-weight: 600; letter-spacing: .14em;
+  font-size: 14px; padding: 11px 26px;
+  background: var(--mu-ink); color: #f0e9d8;
+  border: 1px solid #17130e; border-radius: 2px;
+  position: relative; white-space: nowrap;
+  transition: transform var(--mu-t-fast) var(--mu-ease), box-shadow var(--mu-t-fast) var(--mu-ease), background var(--mu-t-fast);
+  box-shadow: 2px 2px 0 rgba(43, 38, 32, .25);
+}
+.mu-btn:hover { background: #17130e; transform: translate(-1px, -1px); box-shadow: 3px 3px 0 rgba(43, 38, 32, .3); }
+.mu-btn:active { transform: translate(1px, 1px); box-shadow: 0 0 0 rgba(0,0,0,0); }
+.mu-btn.red { background: var(--mu-cinnabar); border-color: var(--mu-cinnabar-deep); box-shadow: 2px 2px 0 rgba(142,49,34,.28); }
+.mu-btn.red:hover { background: var(--mu-cinnabar-deep); }
+.mu-btn.ink { background: var(--mu-ink); border-color: #17130e; box-shadow: 2px 2px 0 rgba(43,38,32,.22); }
+.mu-btn.ink:hover { background: #17130e; }
+
+/* 二阶(次):纸面字 + 划线自左向右描出 */
+.mu-btn-line {
+  appearance: none; cursor: pointer; background: none; border: none;
+  font-family: var(--mu-serif); font-weight: 600; font-size: 14px; letter-spacing: .12em;
+  color: var(--mu-ink); padding: 8px 2px; position: relative; white-space: nowrap;
+}
+.mu-btn-line::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 2px; height: 1px;
+  background: currentColor; transform: scaleX(0); transform-origin: left center;
+  transition: transform var(--mu-t-mid) var(--mu-ease);
+}
+.mu-btn-line:hover::after { transform: scaleX(1); }
+.mu-btn-line.lit { color: var(--mu-moon); }
+.mu-btn-line.red { color: var(--mu-cinnabar); }
+
+/* 三阶(微):小字 + 前置短线伸长 */
+.mu-btn-tick {
+  appearance: none; cursor: pointer; background: none; border: none;
+  font-family: var(--mu-kai); font-size: 13px; color: var(--mu-ink-soft);
+  display: inline-flex; align-items: center; gap: 8px; padding: 4px 0;
+}
+.mu-btn-tick::before { content: ""; width: 12px; height: 1px; background: currentColor; transition: width var(--mu-t-fast) var(--mu-ease); }
+.mu-btn-tick:hover { color: var(--mu-ink); }
+.mu-btn-tick:hover::before { width: 22px; }
+
+/* ============ 输入 ============ */
+.mu-input {
+  width: 100%; font-family: var(--mu-kai); font-size: 15px;
+  color: var(--mu-ink); background: transparent;
+  border: none; border-bottom: 1px solid var(--mu-line-strong);
+  padding: 9px 2px; outline: none; border-radius: 0;
+  transition: border-color var(--mu-t-fast);
+}
+.mu-input:focus { border-bottom-color: var(--mu-ink); }
+.mu-input::placeholder { color: var(--mu-ink-faint); }
+/* 聚焦时下划线上再描一道朱砂,自左描出 */
+.mu-input-wrap { position: relative; }
+.mu-input-wrap::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1.5px;
+  background: var(--mu-cinnabar); transform: scaleX(0); transform-origin: left center; transition: transform var(--mu-t-mid) var(--mu-ease);
+}
+.mu-input-wrap:focus-within::after { transform: scaleX(1); }
+
+/* ============ 书签 tab(右缘悬挑) ============ */
+.mu-bookmark {
+  writing-mode: vertical-rl; letter-spacing: .22em;
+  font-family: var(--mu-serif); font-size: 12px; font-weight: 600;
+  padding: 14px 7px 18px;
+  background: var(--mu-paper-deep); color: var(--mu-ink-soft);
+  border: 1px solid var(--mu-line); border-right: none;
+  position: relative; cursor: pointer;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 8px), 0 100%); /* 燕尾 */
+  transition: background var(--mu-t-fast), color var(--mu-t-fast), transform var(--mu-t-fast) var(--mu-ease);
+}
+.mu-bookmark.active { background: var(--mu-cinnabar); color: #f5ede2; border-color: var(--mu-cinnabar); transform: translateX(-4px); }
+.mu-bookmark:hover:not(.active) { transform: translateX(-3px); color: var(--mu-ink); }
+
+/* ============ 关键帧 ============ */
+/* 线描入:横线自左描出 */
+@keyframes mu-draw-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+/* 线描入:竖线自上描出 */
+@keyframes mu-draw-y { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+/* 盖印:悬空落下 + 微转正 */
+@keyframes mu-stamp {
+  0%   { opacity: 0; transform: scale(1.5) rotate(-7deg); }
+  62%  { opacity: 1; transform: scale(.96) rotate(.6deg); }
+  80%  { transform: scale(1.03) rotate(0); }
+  100% { transform: scale(1) rotate(0); }
+}
+/* 字浮:墨迹自下渗上来 */
+@keyframes mu-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* 涟漪转场:入书 */
+@keyframes mu-ripple {
+  from { transform: scale(0); opacity: .9; }
+  to   { transform: scale(3.2); opacity: 0; }
+}
+/* 翻页斜扫(Persona 斜切的纸化版) */
+@keyframes mu-pagewipe {
+  from { clip-path: polygon(0 0, 12% 0, -8% 100%, 0 100%); }
+  to   { clip-path: polygon(0 0, 118% 0, 98% 100%, 0 100%); }
+}
+@keyframes mu-flicker { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+/* 走线:行进中的虚线 */
+@keyframes mu-march { to { background-position: 24px 0; } }
+/* 旋转印环 */
+@keyframes mu-spin { to { transform: rotate(360deg); } }
+
+/* ── 1999 式装饰基元 ── */
+/* 英文小注(中英混排) */
+.mu-en { font-family: var(--mu-serif); font-size: 9.5px; font-weight: 600; letter-spacing: .34em; text-transform: uppercase; color: var(--mu-ink-faint); white-space: nowrap; }
+.mu-en.red { color: var(--mu-cinnabar); }
+.mu-en.gilt { color: var(--mu-gilt); }
+/* 行进虚线 */
+.mu-dash { height: 1px; background: repeating-linear-gradient(90deg, var(--mu-line-strong) 0 8px, transparent 8px 16px); background-size: 24px 1px; }
+.mu-dash.red { background: repeating-linear-gradient(90deg, var(--mu-cinnabar) 0 8px, transparent 8px 16px); background-size: 24px 1px; opacity: .75; }
+.mu-dash.live { animation: mu-march 1.4s linear infinite; }
+/* 旋转虚线印环(套在印章/元素外) */
+.mu-ring { position: relative; }
+.mu-ring::before { content: ""; position: absolute; inset: -9px; border: 1px dashed var(--mu-cinnabar); border-radius: 50%; opacity: .5; animation: mu-spin 18s linear infinite; }
+/* 圆形邮戳/检印 */
+.mu-postmark { display: inline-grid; place-items: center; width: 66px; height: 66px; border: 1.5px solid var(--mu-cinnabar); border-radius: 50%; color: var(--mu-cinnabar); font-family: var(--mu-serif); font-size: 10px; font-weight: 600; letter-spacing: .18em; text-align: center; line-height: 1.6; transform: rotate(-9deg); opacity: .82; }
+/* 斜纹带 */
+.mu-hatch { background: repeating-linear-gradient(-45deg, rgba(43,38,32,.15) 0 5px, transparent 5px 11px); }
+/* 齿孔分隔(票据边) */
+.mu-perf { border: none; border-top: 2px dotted var(--mu-line-strong); margin: 0; }
+
+/* 通用入场工具类(配合 animation-delay 编排)。
+   注意:基态保持可见(端态即基态),入场由 fill-mode:both 在延迟期内套用 from 帧;
+   动画不跑(打印/截图/降级)时内容照常可见。 */
+.mu-in { animation: mu-rise var(--mu-t-slow) var(--mu-ease) both; }
+.mu-line-in { transform-origin: left center; animation: mu-draw-x var(--mu-t-slow) var(--mu-ease) both; }
+.mu-line-in-y { transform-origin: top center; animation: mu-draw-y var(--mu-t-slow) var(--mu-ease) both; }
+.mu-stamp-in { animation: mu-stamp 640ms var(--mu-ease-snap) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mu-in, .mu-line-in, .mu-line-in-y, .mu-stamp-in { animation-duration: 1ms; }
+}
+
+/* ── 动画守门 ──
+   入场动画只有在「真的在渲染帧」的环境才播放(body.mu-anim 由 rAF 回调添加)。
+   截图器/打印/被节流的隐藏 iframe 里时间轴冻结,fill:both 会把内容永远卡在 from 帧;
+   此规则把一切动画时长归零 → 立即落到 to 末态,内容始终可见。 */
+body:not(.mu-anim) *, body:not(.mu-anim) *::before, body:not(.mu-anim) *::after {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+}
