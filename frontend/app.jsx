@@ -1453,24 +1453,47 @@ async function saveToVault(kind, data) {
   catch (e) { return false; }
 }
 
+// 店招(沐言书坊)—— muyan 双态:纸态店招,印章 logo + 走线选中态。
 function TopNav({ view, setView, sessionId, authEnabled, user, onLogout }) {
-  const tabs = [["home", "探索"], ["game", "当前故事"], ["build", "创作"], ["chat", "聊天"], ["mine", "我的"]];
+  const tabs = [["home", "书库"], ["game", "当前故事"], ["build", "创作"], ["chat", "聊天"], ["mine", "我的"]];
+  const who = authEnabled ? (user ? (user.display_name || user.username) : "访客") : "";
   return (
-    <header className="topnav">
-      <div className="brand"><h1>AI 互动故事</h1></div>
-      <nav className="nav-tabs">
+    <header className="mu-top mu-paper-bg">
+      <style>{`
+        .mu-top { display:flex; align-items:center; gap:38px; padding:0 40px; height:72px; flex:none; position:relative; z-index:30; }
+        .mu-top::after { content:""; position:absolute; left:40px; right:40px; bottom:0; height:2px; background:var(--mu-ink); transform-origin:left center; }
+        body.mu-anim .mu-top::after { animation: mu-draw-x .8s var(--mu-ease) .1s both; }
+        .mu-top-brand { display:flex; align-items:center; gap:14px; }
+        .mu-top-brand h1 { margin:0; font-family:var(--mu-serif); font-size:21px; font-weight:700; letter-spacing:.3em; color:var(--mu-ink); }
+        .mu-top-brand .enl { display:flex; align-items:center; gap:8px; margin-top:3px; }
+        .mu-top-nav { display:flex; gap:30px; margin-left:auto; }
+        .mu-top-nav button { font-family:var(--mu-serif); font-size:14px; letter-spacing:.14em; color:var(--mu-ink-soft); background:none; border:none; cursor:pointer; position:relative; padding:6px 0; }
+        .mu-top-nav button:hover { color:var(--mu-ink); }
+        .mu-top-nav button::after { content:""; position:absolute; left:0; right:0; bottom:0; height:2px; background:repeating-linear-gradient(90deg,var(--mu-cinnabar) 0 8px,transparent 8px 16px); background-size:24px 2px; opacity:0; transition:opacity .3s; }
+        .mu-top-nav button:hover::after, .mu-top-nav button.on::after { opacity:1; animation: mu-march 1.4s linear infinite; }
+        .mu-top-nav button.on { color:var(--mu-cinnabar); font-weight:600; }
+        .mu-top-user { display:flex; align-items:center; gap:12px; margin-left:36px; font-family:var(--mu-kai); font-size:12.5px; color:var(--mu-ink-soft); white-space:nowrap; }
+        .mu-top-user .lo { font-family:var(--mu-serif); font-size:12px; color:var(--mu-cinnabar); background:none; border:none; cursor:pointer; letter-spacing:.1em; padding:0; }
+        @media (max-width:680px){ .mu-top{ gap:14px; padding:0 16px; height:60px; } .mu-top-brand .enl{ display:none; } .mu-top-nav{ gap:16px; } .mu-top-nav button{ font-size:13px; letter-spacing:.08em; } .mu-top-user{ margin-left:10px; } }
+      `}</style>
+      <div className="mu-top-brand">
+        <span className="mu-seal mu-ring">坊</span>
+        <div>
+          <h1>沐言书坊</h1>
+          <div className="enl"><span className="mu-en">Muyan Bookstore</span><span className="mu-en red">EST. 2026</span></div>
+        </div>
+      </div>
+      <nav className="mu-top-nav">
         {tabs.map(([k, label]) => (
-          <button key={k} data-coach={k === "home" ? "nav-explore" : undefined} className={view === k ? "active" : ""} onClick={() => setView(k)}>{label}</button>
+          <button key={k} data-coach={k === "home" ? "nav-explore" : undefined} className={view === k ? "on" : ""} onClick={() => setView(k)}>{label}</button>
         ))}
       </nav>
-      <div className="header-right">
-        {authEnabled && user && (
-          <span className="user-chip">👤 {user.display_name || user.username}
-            <button className="logout-btn" onClick={onLogout}>退出</button>
-          </span>
-        )}
-        <span className="session">session {sessionId.slice(0, 8)}</span>
-      </div>
+      {who && (
+        <div className="mu-top-user">
+          <span>{who}</span>
+          {user && <button className="lo" onClick={onLogout}>退出</button>}
+        </div>
+      )}
     </header>
   );
 }
@@ -2196,27 +2219,136 @@ function StoryModal({ entry, setTab, onClose, onStart }) {
   );
 }
 
-function StoriesHome({ onNew, presets, onLaunchPreset, onDeletePreset }) {
-  return (
-    <section className="stories-home">
-      <div className="home-hero">
-        <div><h2>开始你的故事</h2><p>从一个预设故事书开局,或新建一个属于你的故事。</p></div>
-        <button className="primary big" data-coach="new-story" onClick={onNew}>+ 新建故事</button>
-      </div>
+// —— muyan 封面墙:做旧纸·错位微倾的 CSS 色块封面(刻意少图,走线条风)——
+const HM_COVERS = [
+  { c: "#2b2620", tone: "#ece4d0" }, { c: "#b5402e", tone: "#f2e8d4" },
+  { c: "#33474a", tone: "#e7e0cc" }, { c: "#5e5039", tone: "#ece4d0" }, { c: "#8a753f", tone: "#f0e9d6" },
+];
+const HM_ROT = [-1.2, 0.8, -0.6, 1.1, -0.9, 1.4];
+const HM_OFF = [0, 26, 8, 30, 4, 24];
+function pName(p) { return (p && p.data && p.data.name) || (p && p.name) || "故事"; }
+function pField(p, k) { return (p && p.data && p.data[k]); }
 
-      <div className="home-section">
-        <h3>故事书<small> 配好的世界 + 角色 + 故事,点一下开新局</small></h3>
-        <div className="story-gallery" data-coach="gallery">
-          {!presets.length && <p className="empty">还没有预设故事书。</p>}
-          {presets.map((p, i) => (
-            <StoryTile key={i} d={p.data || {}} fallbackName={p.name}
-              coach={isTutorialPreset(p) ? "tutorial-tile" : undefined}
-              onOpen={() => onLaunchPreset(p)}
-              actions={<button className="primary" onClick={() => onLaunchPreset(p)}>开始</button>} />
-          ))}
-        </div>
+function HmBook({ p, i, isNew, coach, onOpen }) {
+  const cov = isNew ? { c: "#ddd1b6", tone: "#8e3122" } : HM_COVERS[i % HM_COVERS.length];
+  const name = pName(p);
+  const author = pField(p, "author") || "店内收录";
+  const tags = pField(p, "tags") || [];
+  const tag = tags.slice(0, 2).join(" · ") || ((pField(p, "characters") || []).length + " 角色");
+  return (
+    <div className="hm-book mu-in" data-coach={coach || undefined} onClick={onOpen}
+         style={{ animationDelay: (300 + i * 80) + "ms", marginTop: HM_OFF[i % HM_OFF.length], "--rot": HM_ROT[i % HM_ROT.length] + "deg" }}>
+      <div className="hm-cover" style={{ background: cov.c, color: cov.tone }}>
+        <span className="hm-cover-rule"></span>
+        <span className="mu-vtext hm-cover-title">{name.slice(0, 8)}</span>
+        <span className="mu-vtext hm-cover-author">{author}</span>
+        {isNew && <span className="hm-new">本周新进</span>}
       </div>
-    </section>
+      <div className="hm-book-meta"><b>{name}</b><span>{tag}</span></div>
+    </div>
+  );
+}
+
+function StoriesHome({ onNew, presets, onLaunchPreset, onDeletePreset }) {
+  const list = presets || [];
+  const tutorial = list.find(isTutorialPreset);
+  const featured = list.find((p) => !isTutorialPreset(p)) || list[0] || null;
+  const fsyn = featured ? (pField(featured, "synopsis") || (pField(featured, "story") && pField(featured, "story").premise) || "") : "";
+  const ftags = featured ? (pField(featured, "tags") || []) : [];
+  return (
+    <div className="mu-paper-bg hm-root">
+      <style>{`
+        .hm-root { position:relative; height:100%; min-height:0; display:flex; flex-direction:column; overflow:auto; }
+        .hm-ghost { position:absolute; right:-20px; bottom:80px; writing-mode:vertical-rl; font-family:var(--mu-serif); font-weight:900; font-size:80px; letter-spacing:.08em; color:rgba(43,38,32,.05); pointer-events:none; white-space:nowrap; z-index:0; }
+        .hm-main { flex:1; display:grid; grid-template-columns:minmax(340px,500px) 1fr; padding:28px 48px 0; min-height:0; position:relative; z-index:1; }
+        .hm-feature { padding:16px 48px 0 0; position:relative; }
+        .hm-feature::after { content:""; position:absolute; right:0; top:22px; bottom:18px; width:1px; background:linear-gradient(180deg,transparent,var(--mu-line-strong) 10%,var(--mu-line-strong) 90%,transparent); }
+        .hm-stamp { display:inline-flex; flex-direction:column; gap:2px; align-items:center; padding:8px 13px 7px; border:1.5px solid var(--mu-cinnabar); color:var(--mu-cinnabar); transform:rotate(-3deg); background:rgba(245,239,223,.6); }
+        .hm-stamp b { font-family:var(--mu-serif); font-size:13px; letter-spacing:.42em; font-weight:700; margin-right:-.42em; }
+        .hm-stamp i { font-style:normal; font-family:var(--mu-serif); font-size:8px; letter-spacing:.3em; margin-right:-.3em; }
+        .hm-feature h2 { font-family:var(--mu-serif); font-weight:900; font-size:52px; letter-spacing:.04em; line-height:1.16; margin:18px 0 0; color:var(--mu-ink); }
+        .hm-syn { font-family:var(--mu-kai); font-size:15px; line-height:1.9; color:var(--mu-ink-soft); margin:18px 0 0; }
+        .hm-ticket { margin-top:22px; border-top:2px dotted var(--mu-line-strong); border-bottom:2px dotted var(--mu-line-strong); padding:12px 2px; display:flex; }
+        .hm-ticket > div { flex:1; display:flex; flex-direction:column; gap:3px; padding:0 16px; border-right:1px solid var(--mu-line); }
+        .hm-ticket > div:first-child { padding-left:2px; } .hm-ticket > div:last-child { border-right:none; }
+        .hm-ticket b { font-family:var(--mu-serif); font-size:19px; font-weight:700; color:var(--mu-ink); }
+        .hm-cta-row { display:flex; align-items:center; gap:24px; margin-top:26px; }
+        .hm-empty { padding-top:36px; } .hm-empty h2{ font-family:var(--mu-serif); font-size:30px; margin:0 0 10px; } .hm-empty p{ color:var(--mu-ink-soft); margin:0 0 18px; }
+        .hm-wall { padding:16px 0 30px 48px; display:flex; flex-direction:column; min-height:0; }
+        .hm-wall-head { display:flex; align-items:baseline; gap:14px; }
+        .hm-wall-head h3 { margin:0; font-family:var(--mu-serif); font-size:16px; letter-spacing:.22em; font-weight:700; white-space:nowrap; color:var(--mu-ink); }
+        .hm-wall-head .mu-dash { flex:1; align-self:center; }
+        .hm-shelf { display:grid; grid-template-columns:repeat(3,1fr); gap:28px; margin-top:22px; align-items:start; }
+        .hm-book { cursor:pointer; }
+        .hm-cover { height:228px; position:relative; padding:15px 13px; box-sizing:border-box; display:flex; justify-content:flex-end; gap:9px; box-shadow:-5px 7px 0 rgba(43,38,32,.14); transform:rotate(var(--rot,0deg)); transition:transform .5s var(--mu-ease),box-shadow .5s var(--mu-ease); }
+        .hm-book:hover .hm-cover { transform:rotate(0deg) translateY(-10px); box-shadow:-8px 20px 0 rgba(43,38,32,.18); }
+        .hm-cover-rule { position:absolute; inset:8px; border:1px solid currentColor; opacity:.4; pointer-events:none; }
+        .hm-cover-title { font-family:var(--mu-serif); font-weight:700; font-size:23px; letter-spacing:.26em; }
+        .hm-cover-author { font-family:var(--mu-kai); font-size:11px; opacity:.68; letter-spacing:.3em; margin-top:auto; }
+        .hm-new { position:absolute; left:-7px; bottom:18px; background:var(--mu-cinnabar); color:#f2e8d4; font-family:var(--mu-serif); font-size:10px; letter-spacing:.26em; padding:4px 10px; box-shadow:2px 2px 0 rgba(43,38,32,.2); }
+        .hm-book-meta { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-top:11px; border-bottom:1px solid transparent; transition:border-color .3s; padding-bottom:4px; }
+        .hm-book:hover .hm-book-meta { border-bottom-color:var(--mu-cinnabar); }
+        .hm-book-meta b { font-family:var(--mu-serif); font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--mu-ink); }
+        .hm-book-meta span { font-family:var(--mu-kai); font-size:11px; color:var(--mu-ink-faint); white-space:nowrap; }
+        .hm-foot { flex:none; min-height:54px; margin:0 48px; border-top:1px solid var(--mu-line-strong); display:flex; align-items:center; gap:24px; flex-wrap:wrap; position:relative; z-index:1; }
+        .hm-foot p { margin:0; font-family:var(--mu-kai); font-size:12.5px; color:var(--mu-ink-faint); }
+        .hm-foot .hm-foot-hl { color:var(--mu-cinnabar); font-family:var(--mu-serif); margin:0 4px; cursor:pointer; }
+        .hm-foot .sp { flex:1; }
+        @media (max-width:920px){ .hm-main{ grid-template-columns:1fr; padding:18px 20px 0; } .hm-feature{ padding:0 0 22px; } .hm-feature::after{ display:none; } .hm-feature h2{ font-size:38px; } .hm-wall{ padding:6px 0 24px; } .hm-shelf{ grid-template-columns:repeat(2,1fr); gap:20px; } .hm-foot{ margin:0 20px; } .hm-ghost{ display:none; } }
+        @media (max-width:520px){ .hm-cover{ height:170px; } .hm-cover-title{ font-size:19px; } }
+      `}</style>
+      <span className="hm-ghost">沐言 · MUYAN</span>
+      <div className="hm-main">
+        <section className="hm-feature">
+          {featured ? (
+            <>
+              <div className="hm-stamp mu-stamp-in" style={{ animationDelay: "360ms" }}><b>今日荐书</b><i>DAILY PICK</i></div>
+              <h2 className="mu-in" style={{ animationDelay: "420ms" }}>{pName(featured)}</h2>
+              <p className="hm-syn mu-in" style={{ animationDelay: "520ms" }}>{fsyn || "翻开它,从场景里开始你的故事——书里已经有人在等你说第一句话。"}</p>
+              <div className="hm-ticket mu-in" style={{ animationDelay: "620ms" }}>
+                <div><span className="mu-en">Characters</span><b className="mu-num">{(pField(featured, "characters") || []).length || "—"}</b></div>
+                <div><span className="mu-en">Theme</span><b style={{ fontSize: 15 }}>{ftags[0] || "故事"}</b></div>
+                <div><span className="mu-en">Curator</span><b style={{ fontSize: 15 }}>{pField(featured, "author") || "店内收录"}</b></div>
+              </div>
+              <div className="hm-cta-row mu-in" style={{ animationDelay: "720ms" }}>
+                <button className="mu-btn red" onClick={() => onLaunchPreset(featured)}>取下这本书</button>
+                <button className="mu-btn-line" onClick={() => onLaunchPreset(featured)}>先看简介</button>
+              </div>
+            </>
+          ) : (
+            <div className="hm-empty">
+              <div className="hm-stamp mu-stamp-in"><b>空架</b><i>EMPTY</i></div>
+              <h2 style={{ fontSize: 40 }}>书架空着</h2>
+              <p>还没有预设故事。去创作,写第一本。</p>
+              <button className="mu-btn red" onClick={onNew}>自己写一本</button>
+            </div>
+          )}
+        </section>
+        <section className="hm-wall">
+          <div className="hm-wall-head mu-in" style={{ animationDelay: "320ms" }}>
+            <h3>架上 · 全部故事</h3>
+            <span className="mu-en">On the Shelf</span>
+            <span className="mu-dash live"></span>
+            <button className="mu-btn-tick" data-coach="new-story" onClick={onNew}>自己写一本 → 创作</button>
+          </div>
+          <div className="hm-shelf" data-coach="gallery">
+            {!list.length && <p className="mu-small" style={{ gridColumn: "1/-1" }}>还没有预设故事书。</p>}
+            {list.map((p, i) => (
+              <HmBook key={i} p={p} i={i} isNew={isTutorialPreset(p)}
+                coach={isTutorialPreset(p) ? "tutorial-tile" : undefined}
+                onOpen={() => onLaunchPreset(p)} />
+            ))}
+          </div>
+        </section>
+      </div>
+      <footer className="hm-foot mu-in" style={{ animationDelay: "900ms" }}>
+        {tutorial
+          ? <p>第一次来?<b className="hm-foot-hl" onClick={() => onLaunchPreset(tutorial)}>「新人入店」</b>是一局十分钟的教学故事。</p>
+          : <p>把设定文档扔进创作,AI 替你建卡。</p>}
+        <span className="sp"></span>
+        <button className="mu-btn-tick" onClick={onNew}>把设定文档扔进来,AI 替你建卡</button>
+      </footer>
+    </div>
   );
 }
 
