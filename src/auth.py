@@ -229,7 +229,8 @@ def authorize_session(session_id: str, user: dict | None, claim: bool = True) ->
         if claim:
             claim_session(session_id, user["id"])    # 无主 → 归到当前用户(仅玩/写时)
         return
-    if owner != user["id"] and not user.get("is_admin"):
+    # 只有 superadmin 能越权访问别人的存档(admin 管内容,不偷看玩家存档)。
+    if owner != user["id"] and user.get("role") != "superadmin":
         raise HTTPException(403, "无权访问该存档")
 
 
