@@ -32,6 +32,7 @@ from .parsers import parse_character
 from .story import story_turn
 from . import storage
 from . import db
+from . import costguard
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
@@ -260,10 +261,12 @@ def _fallback_turn_dict(req: StoryTurnReq, e: Exception) -> dict:
 
 
 @app.post("/api/story_turn")
-async def api_story_turn(req: StoryTurnReq):
+async def api_story_turn(req: StoryTurnReq, request: Request):
     """v2 故事回合(异步):多角色 + 世界书 + 故事书 + 玩家卡 + 状态/选项/记忆。非流式,作降级路径。"""
     if not req.characters:
         raise HTTPException(400, "至少需要一个角色卡")
+    # Phase 0 成本闸:全局熔断 + 限流 + 预扣(COST_GUARD_ENABLED=0 时全程 no-op)。放 try 之前,503/429 不被保底吞。
+    res = await asyncio.to_thread(costguard.preflight, costguard.client_ip(request))
     try:
         out = await story_turn(
             session_id=req.session_id,
@@ -276,12 +279,14 @@ async def api_story_turn(req: StoryTurnReq):
             mode=req.mode,
         )
     except Exception as e:
+        await asyncio.to_thread(costguard.record, res, {})  # 保底回合≈零成本,退回预扣
         return _fallback_turn_dict(req, e)
+    await asyncio.to_thread(costguard.record, res, out.usage)
     return out.model_dump()
 
 
 @app.post("/api/story_turn_stream")
-async def api_story_turn_stream(req: StoryTurnReq):
+async def api_story_turn_stream(req: StoryTurnReq, request: Request):
     """流式故事回合(SSE)。主回合叙事逐字推给前端(delta 事件),回合算完再推完整结构体(done 事件)。
 
     协议:每行 `data: {json}\\n\\n`。事件 type:
@@ -291,6 +296,8 @@ async def api_story_turn_stream(req: StoryTurnReq):
     """
     if not req.characters:
         raise HTTPException(400, "至少需要一个角色卡")
+    # Phase 0 成本闸:开流前先过(503/429 在这里抛,不进 SSE 流);COST_GUARD_ENABLED=0 时 no-op。
+    res = await asyncio.to_thread(costguard.preflight, costguard.client_ip(request))
 
     async def event_stream():
         q: asyncio.Queue = asyncio.Queue()
@@ -299,6 +306,7 @@ async def api_story_turn_stream(req: StoryTurnReq):
             await q.put({"type": "delta", "text": text})
 
         async def runner():
+            usage_for_record: dict = {}
             try:
                 out = await story_turn(
                     session_id=req.session_id,
@@ -311,10 +319,12 @@ async def api_story_turn_stream(req: StoryTurnReq):
                     mode=req.mode,
                     on_delta=on_delta,
                 )
+                usage_for_record = out.usage
                 await q.put({"type": "done", "turn": out.model_dump()})
             except Exception as e:
                 await q.put({"type": "error", "turn": _fallback_turn_dict(req, e)})
             finally:
+                await asyncio.to_thread(costguard.record, res, usage_for_record)  # 出错时 {}→退预扣
                 await q.put(None)
 
         task = asyncio.create_task(runner())
@@ -333,7 +343,7 @@ async def api_story_turn_stream(req: StoryTurnReq):
 
 
 @app.post("/api/reroll")
-async def api_reroll(req: ReRollReq):
+async def api_reroll(req: ReRollReq, request: Request):
     """对上一回合不满意时重新生成:回滚上一轮副作用(恢复 pre-turn 快照),用相同输入重跑。
 
     卡组取自当前已落盘的 artifacts(即上一轮实际用的卡),输入/模式取自 _reroll 记录。
@@ -354,6 +364,8 @@ async def api_reroll(req: ReRollReq):
     except Exception as e:
         raise HTTPException(500, f"卡组快照解析失败:{e}")
     mode = reroll.get("mode") or art.get("mode") or "standard"
+    # Phase 0 成本闸:重跑也烧 LLM,过闸(在回滚之前;COST_GUARD_ENABLED=0 时 no-op)。
+    res = await asyncio.to_thread(costguard.preflight, costguard.client_ip(request))
     # 回滚:把会话恢复到上一轮之前的镜像,丢弃刚生成的那一轮(含其 messages/state/累计用量)。
     await asyncio.to_thread(storage.save_session, req.session_id, reroll["snapshot"])
     try:
@@ -368,7 +380,9 @@ async def api_reroll(req: ReRollReq):
             mode=mode,
         )
     except Exception as e:
+        await asyncio.to_thread(costguard.record, res, {})
         raise HTTPException(500, f"重新生成失败:{e}")
+    await asyncio.to_thread(costguard.record, res, out.usage)
     return out.model_dump()
 
 
@@ -672,6 +686,25 @@ async def api_operator_say(req: OperatorSayReq, x_operator_token: str | None = H
     if not req.user.strip():
         raise HTTPException(400, "玩家输入不能为空")
     return await _operator_advance(req.session_id, user=req.user.strip())
+
+
+# ── Phase 0 成本闸观测 / 急停(见 src/costguard.py)──────────────────
+class KillReq(BaseModel):
+    tripped: bool = True  # True=立即停服调 LLM;False=恢复
+
+
+@app.get("/api/operator/usage")
+def api_operator_usage(x_operator_token: str | None = Header(None)):
+    """看今日全局花费 / 是否熔断 / Top 来源用量。需 X-Operator-Token。"""
+    _require_operator(x_operator_token)
+    return costguard.stats()
+
+
+@app.post("/api/operator/usage/kill")
+def api_operator_usage_kill(req: KillReq, x_operator_token: str | None = Header(None)):
+    """手动急停/恢复:翻今天的全局熔断开关。需 X-Operator-Token。"""
+    _require_operator(x_operator_token)
+    return costguard.set_tripped(req.tripped)
 
 
 # 私人后台控制台:不从玩家前端链接过去;真正的闸是 token(页面只是表单,无 token 调不动接口)。
