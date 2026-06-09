@@ -2726,7 +2726,8 @@ function App() {
       .catch(() => setAuth({ ready: true, enabled: false, user: null }));
   }, []);
   function onAuthed(user, token) { setToken(token); setAuth((a) => ({ ...a, user })); }
-  function onLogout() { setToken(""); location.reload(); }
+  // 先 POST 吊销(此时 token 还在,fetch 钩子会带上),再清本地 → 服务端 token 立即失效,不留 60 天活口。
+  async function onLogout() { try { await fetch("/api/auth/logout", { method: "POST" }); } catch (e) {} setToken(""); location.reload(); }
 
   // 顶部导航:点「创作」tab 直接进步骤式引导(创作界面=步骤式);其余 tab 正常切。
   function navTo(k) {

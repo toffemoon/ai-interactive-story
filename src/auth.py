@@ -302,6 +302,11 @@ def send_email_code(email: str, purpose: str = "register") -> dict:
     email = (email or "").strip().lower()
     if not email or "@" not in email:
         raise HTTPException(400, "邮箱不合法")
+    dev = os.getenv("AUTH_DEV_OTP", "") == "1"   # 仅本地测试显式开;生产绝不开
+    # 生产 fail-closed:账户系统开着却没配 SMTP 且没开 dev 开关 → 拒发,绝不把码回前端。
+    # (防「dev 回码」泄漏被任何人读到 → 冒名注册 superadmin 邮箱 → 接管;邮件没配也不该假装发出去)
+    if not email_send.configured() and enabled() and not dev:
+        raise HTTPException(503, "邮件服务未配置(SMTP),暂时无法发送验证码,请联系管理员")
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(
@@ -321,8 +326,8 @@ def send_email_code(email: str, purpose: str = "register") -> dict:
     email_send.send_email(email, "你的验证码",
                           f"你的验证码是 {code},{_OTP_TTL_MIN} 分钟内有效。如非本人操作请忽略。")
     out = {"sent": True}
-    if not email_send.configured():
-        out["dev_code"] = code  # SMTP 未配置(本地)→ 回码给前端,方便没配邮箱也能跑通
+    if not email_send.configured() and dev:
+        out["dev_code"] = code  # 仅 AUTH_DEV_OTP=1(本地测试)才回码;生产永不回
     return out
 
 

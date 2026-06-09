@@ -358,10 +358,11 @@ async def api_upload(request: Request, filename: str = "upload.txt"):
 
 
 @app.post("/api/chat")
-def api_chat(req: ChatReq):
+def api_chat(req: ChatReq, user: dict | None = Depends(current_user_dep)):
     """与角色对话。历史由后端按 session_id 维护,前端只传当轮输入。"""
     if not req.user.strip():
         raise HTTPException(400, "消息不能为空")
+    auth.authorize_session(req.session_id, user)  # 归属闸(AUTH 关时 no-op):防跨用户污染会话/记忆
     try:
         text = reply(req.card, req.session_id, req.user, req.world)
     except Exception as e:
@@ -541,7 +542,13 @@ def api_session(session_id: str, user: dict | None = Depends(current_user_dep)):
 @app.delete("/api/session/{session_id}")
 def api_delete_session(session_id: str, user: dict | None = Depends(current_user_dep)):
     """删除一局存档(存档列表的删除)。删会话 + 级联 messages;深度模式向量数据(memory_vec)留作孤儿(无害)。"""
-    auth.authorize_session(session_id, user, claim=False)  # 删:只校验不认领(AUTH 关时 no-op)
+    if auth.enabled():
+        if user is None:
+            raise HTTPException(401, "请先登录")
+        owner = auth.session_owner(session_id)
+        # 删是破坏性的:有主只 owner/super 能删;无主(遗留)只 super 能删 —— 不让任意登录用户删别人/遗留存档。
+        if user.get("role") != "superadmin" and owner != user["id"]:
+            raise HTTPException(403, "无权删除该存档")
     return {"deleted": storage.delete_session(session_id)}
 
 

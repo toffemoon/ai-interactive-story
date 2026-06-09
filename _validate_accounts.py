@@ -8,6 +8,7 @@ DATABASE_URL 走 .env(真库)。
 """
 import os
 os.environ.setdefault("AUTH_ENABLED", "1")
+os.environ.setdefault("AUTH_DEV_OTP", "1")  # 本地测试:没配 SMTP 也回 dev_code(生产绝不设)
 os.environ.setdefault("SUPERADMIN_EMAIL", "acctest_super@example.com")
 os.environ.setdefault("AUTH_TOKEN_PEPPER", "acctest-pepper")
 os.environ.pop("SMTP_USER", None)
@@ -137,6 +138,17 @@ def main():
         check("OTP locked after 5 wrong", locked is False)
         with db.get_pool().connection() as conn, conn.cursor() as cur:
             cur.execute("delete from email_otp where email='acctest_otp@example.com'")
+
+        # 12) 安全修复:发码 fail-closed(AUTH 开 + 无 SMTP + 无 dev 开关 → 503,绝不回码)
+        os.environ.pop("AUTH_DEV_OTP", None)
+        fc = c.post("/api/auth/email/send_code", json={"email": "acctest_fc@example.com"})
+        check("send_code fail-closed -> 503 (no dev_code leak)", fc.status_code == 503 and "dev_code" not in fc.text, fc.text)
+        os.environ["AUTH_DEV_OTP"] = "1"
+
+        # 13) 安全修复:登出吊销服务端 token(旧 token 立刻失效)
+        c.post("/api/auth/logout", headers=H(tok_user2))
+        me_rev = c.get("/api/auth/me", headers=H(tok_user2))
+        check("token revoked after logout -> 401", me_rev.status_code == 401)
 
     cleanup()
     npass = sum(1 for _, ok in _results if ok)
