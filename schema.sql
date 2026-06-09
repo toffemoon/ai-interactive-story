@@ -6,13 +6,15 @@
 
 create extension if not exists vector;
 
--- 会话:整局存 data jsonb(不枚举字段,避免丢字段)
+-- 会话:整局存 data jsonb(不枚举字段,避免丢字段)。user_id = 归属(账户系统;NULL=遗留/匿名)
 create table if not exists sessions (
   id          text primary key,
+  user_id     uuid,
   data        jsonb       not null default '{}'::jsonb,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
+create index if not exists idx_sessions_user on sessions (user_id);
 
 -- 对话:append-only 行,每回合 INSERT 新行
 create table if not exists messages (
@@ -25,30 +27,37 @@ create table if not exists messages (
 );
 create index if not exists idx_messages_session on messages (session_id, seq);
 
--- 卡库(角色/世界书/故事书/玩家卡)
+-- 卡库(角色/世界书/故事书/玩家卡)。user_id NULL=官方公共卡;非 NULL=用户私有卡。
 create table if not exists cards (
   id          uuid        primary key default gen_random_uuid(),
+  user_id     uuid,
   kind        text        not null,
   name        text        not null,
   data        jsonb       not null default '{}'::jsonb,
   created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now(),
-  unique (kind, name)
+  updated_at  timestamptz not null default now()
 );
+-- 唯一性:官方行(NULL)按 (kind,name);用户行按 (user_id,kind,name)
+create unique index if not exists uq_cards_official on cards (kind, name)         where user_id is null;
+create unique index if not exists uq_cards_user     on cards (user_id, kind, name) where user_id is not null;
 
--- 预设(成套开局)
+-- 预设(成套开局)。同卡库:user_id NULL=官方公共预设;非 NULL=用户私有。
 create table if not exists presets (
   id          uuid        primary key default gen_random_uuid(),
-  name        text        not null unique,
+  user_id     uuid,
+  name        text        not null,
   data        jsonb       not null default '{}'::jsonb,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
+create unique index if not exists uq_presets_official on presets (name)          where user_id is null;
+create unique index if not exists uq_presets_user     on presets (user_id, name)  where user_id is not null;
 
 -- 长期记忆向量(深度模式;scope: turn/lm/kb;embedding = bge-small-zh-v1.5 512 维)
 create table if not exists memory_vec (
   id          bigserial   primary key,
   session_id  text        not null,
+  user_id     uuid,
   scope       text        not null,
   ext_id      text        not null,
   content     text        not null,
@@ -88,3 +97,28 @@ create table if not exists spend_daily (
   usd      numeric(12,6) not null default 0,
   tripped  boolean       not null default false
 );
+
+-- ── 账户系统(账户系统路线图 Phase 1;见 decisions/2026-06-09-账户系统路线图-*)──
+-- 默认关闭(.env AUTH_ENABLED=0);建表只是前置,翻开关才按 user 隔离。
+create table if not exists users (
+  id            uuid          primary key default gen_random_uuid(),
+  username      text          not null unique,
+  email         text          unique,
+  password_hash text          not null,            -- pbkdf2_sha256$iter$salt$hash
+  display_name  text,
+  is_admin      boolean       not null default false,
+  status        text          not null default 'active',  -- active / blocked
+  created_at    timestamptz   not null default now(),
+  last_seen_at  timestamptz
+);
+
+-- 不透明 token 会话(登出/吊销=UPDATE;库里只存 sha256(token+pepper))
+create table if not exists auth_tokens (
+  token_hash    text          primary key,
+  user_id       uuid          not null references users(id) on delete cascade,
+  created_at    timestamptz   not null default now(),
+  expires_at    timestamptz   not null,
+  last_used_at  timestamptz,
+  revoked_at    timestamptz
+);
+create index if not exists idx_auth_tokens_user on auth_tokens (user_id);

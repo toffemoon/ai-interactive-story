@@ -130,21 +130,23 @@ def delete_session(session_id: str) -> bool:
         return cur.rowcount > 0
 
 
-def list_sessions(limit: int = 300) -> list[dict[str, Any]]:
-    """列出会话 (后台控制台用): id + 更新时间 + 回合数 + 人话标签(故事名/玩家/最后一句)。按最近更新排序。
-    标签让运营者一眼认出哪局是哪局,不用对着 hex id 猜。"""
+def list_sessions(limit: int = 300, user_id: str | None = None) -> list[dict[str, Any]]:
+    """列出会话: id + 更新时间 + 回合数 + 人话标签(故事名/玩家/最后一句)。按最近更新排序。
+    user_id 给定 → 只列该用户的存档(玩家「我的存档」);None → 全部(运营者控制台)。"""
+    where = "where user_id = %s::uuid " if user_id else ""
+    params: tuple = (user_id, limit) if user_id else (limit,)
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(
-            """select id, updated_at,
+            f"""select id, updated_at,
                       coalesce(jsonb_array_length(
                         case when jsonb_typeof(data->'turns')='array' then data->'turns' else '[]'::jsonb end), 0) as turns,
                       data->'artifacts'->'story'->>'title' as story,
                       data->'artifacts'->'player'->>'name' as player,
                       case when jsonb_typeof(data->'turns')='array' and jsonb_array_length(data->'turns') > 0
                            then left(data->'turns'->-1->>'player_input', 40) else null end as last_input
-               from sessions order by updated_at desc nulls last limit %s""",
-            (limit,),
+               from sessions {where}order by updated_at desc nulls last limit %s""",
+            params,
         )
         return [{"id": r["id"],
                  "updated_at": str(r["updated_at"]) if r["updated_at"] else None,
@@ -152,65 +154,136 @@ def list_sessions(limit: int = 300) -> list[dict[str, Any]]:
                  "last_input": r["last_input"]} for r in cur.fetchall()]
 
 
-# ---------------- 卡库 (cards) ----------------
+def assign_session_owner(session_id: str, user_id: str) -> bool:
+    """运营者手动迁移:强制把某局存档归到某用户(账户系统迁移老存档用)。"""
+    pool = get_pool()
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute("update sessions set user_id = %s::uuid where id = %s", (user_id, session_id))
+        return cur.rowcount > 0
 
-def save_library(kind: str, name: str, payload: dict[str, Any]) -> str:
-    """保存用户上传/识别出的卡。name 用 slug(原名) 作 key, 重名覆盖 (跟旧文件版一致)。"""
+
+# ---------------- 卡库 (cards) ----------------
+# 账户系统:user_id 为 NULL = 官方公共卡(所有人只读可见);非 NULL = 该用户私有卡。
+# 唯一性走部分索引:用户行 (user_id,kind,name) 唯一,官方行 (kind,name) 唯一(见 migration)。
+# 旧 unique(kind,name) 约束已 drop,故这里用 update-then-insert(避免 on conflict 目标失效;
+# `is not distinct from` 正确处理 NULL)。legacy_all=True 时退化为旧全局语义(AUTH 关时)。
+
+def save_library(kind: str, name: str, payload: dict[str, Any], user_id: str | None = None) -> str:
+    """保存卡。user_id=None 入官方公共库(AUTH 关时即旧全局行为);非 None 入该用户私有库。"""
     name_key = slug(name, kind)
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(
-            """insert into cards (kind, name, data, updated_at)
-               values (%s, %s, %s, now())
-               on conflict (kind, name) do update set data = excluded.data, updated_at = now()""",
-            (kind, name_key, Jsonb(payload)),
+            "update cards set data = %s, updated_at = now() "
+            "where kind = %s and name = %s and user_id is not distinct from %s::uuid",
+            (Jsonb(payload), kind, name_key, user_id),
         )
+        if cur.rowcount == 0:
+            cur.execute(
+                "insert into cards (kind, name, data, user_id) values (%s, %s, %s, %s::uuid)",
+                (kind, name_key, Jsonb(payload), user_id),
+            )
     return name_key
 
 
-def list_library(kind: str) -> list[dict[str, Any]]:
+def list_library(kind: str, user_id: str | None = None, legacy_all: bool = False) -> list[dict[str, Any]]:
+    """legacy_all → 全部(AUTH 关);否则官方(NULL)+ 该用户(user_id 给定时)。official 标记给前端区分。"""
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
-        cur.execute(
-            "select name, data from cards where kind = %s order by updated_at desc",
-            (kind,),
-        )
-        return [{"name": r["name"], "path": None, "data": r["data"]} for r in cur.fetchall()]
+        if legacy_all:
+            cur.execute("select name, data, user_id from cards where kind = %s order by updated_at desc", (kind,))
+        elif user_id is None:
+            cur.execute("select name, data, user_id from cards where kind = %s and user_id is null order by updated_at desc", (kind,))
+        else:
+            cur.execute(
+                "select name, data, user_id from cards where kind = %s and (user_id is null or user_id = %s::uuid) "
+                "order by (user_id is null), updated_at desc",
+                (kind, user_id),
+            )
+        return [{"name": r["name"], "path": None, "data": r["data"],
+                 "official": r["user_id"] is None} for r in cur.fetchall()]
 
 
-def delete_library(kind: str, name: str) -> bool:
+def delete_library(kind: str, name: str, user_id: str | None = None,
+                   is_admin: bool = False, legacy_all: bool = False) -> bool:
     name_key = slug(name, kind)
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
-        cur.execute("delete from cards where kind = %s and name = %s", (kind, name_key))
+        if legacy_all:
+            cur.execute("delete from cards where kind = %s and name = %s", (kind, name_key))
+        elif user_id is None:
+            # 无用户上下文(脚本/seed/admin 默认)→ 删官方行(user_id is null)。
+            # 注:API 匿名写/删走 _write_scope 已挡(401),不会传到这里。
+            cur.execute("delete from cards where kind = %s and name = %s and user_id is null", (kind, name_key))
+        elif is_admin:
+            cur.execute("delete from cards where kind = %s and name = %s and (user_id = %s::uuid or user_id is null)",
+                        (kind, name_key, user_id))
+        else:
+            cur.execute("delete from cards where kind = %s and name = %s and user_id = %s::uuid",
+                        (kind, name_key, user_id))
+        return cur.rowcount > 0
+
+
+def assign_card_owner(kind: str, name: str, user_id: str | None) -> bool:
+    """运营者手动迁移:把某张(原全局)卡归到某用户(或 None 设回官方)。"""
+    name_key = slug(name, kind)
+    pool = get_pool()
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute("update cards set user_id = %s::uuid where kind = %s and name = %s and user_id is null",
+                    (user_id, kind, name_key))
         return cur.rowcount > 0
 
 
 # ---------------- 故事预设 (presets) ----------------
+# 同卡库:user_id NULL = 官方公共预设;非 NULL = 用户私有。
 
-def save_preset(name: str, payload: dict[str, Any]) -> str:
+def save_preset(name: str, payload: dict[str, Any], user_id: str | None = None) -> str:
     name_key = slug(name, "preset")
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(
-            """insert into presets (name, data, updated_at)
-               values (%s, %s, now())
-               on conflict (name) do update set data = excluded.data, updated_at = now()""",
-            (name_key, Jsonb(payload)),
+            "update presets set data = %s, updated_at = now() "
+            "where name = %s and user_id is not distinct from %s::uuid",
+            (Jsonb(payload), name_key, user_id),
         )
+        if cur.rowcount == 0:
+            cur.execute(
+                "insert into presets (name, data, user_id) values (%s, %s, %s::uuid)",
+                (name_key, Jsonb(payload), user_id),
+            )
     return name_key
 
 
-def list_presets() -> list[dict[str, Any]]:
+def list_presets(user_id: str | None = None, legacy_all: bool = False) -> list[dict[str, Any]]:
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
-        cur.execute("select name, data from presets order by updated_at desc")
-        return [{"name": r["name"], "data": r["data"]} for r in cur.fetchall()]
+        if legacy_all:
+            cur.execute("select name, data, user_id from presets order by updated_at desc")
+        elif user_id is None:
+            cur.execute("select name, data, user_id from presets where user_id is null order by updated_at desc")
+        else:
+            cur.execute(
+                "select name, data, user_id from presets where user_id is null or user_id = %s::uuid "
+                "order by (user_id is null), updated_at desc",
+                (user_id,),
+            )
+        return [{"name": r["name"], "data": r["data"], "official": r["user_id"] is None}
+                for r in cur.fetchall()]
 
 
-def delete_preset(name: str) -> bool:
+def delete_preset(name: str, user_id: str | None = None,
+                  is_admin: bool = False, legacy_all: bool = False) -> bool:
     name_key = slug(name, "preset")
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
-        cur.execute("delete from presets where name = %s", (name_key,))
+        if legacy_all:
+            cur.execute("delete from presets where name = %s", (name_key,))
+        elif user_id is None:
+            # 无用户上下文(脚本/seed/admin 默认)→ 删官方行。API 匿名走 _write_scope 已挡。
+            cur.execute("delete from presets where name = %s and user_id is null", (name_key,))
+        elif is_admin:
+            cur.execute("delete from presets where name = %s and (user_id = %s::uuid or user_id is null)",
+                        (name_key, user_id))
+        else:
+            cur.execute("delete from presets where name = %s and user_id = %s::uuid", (name_key, user_id))
         return cur.rowcount > 0
