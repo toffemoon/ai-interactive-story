@@ -1287,3 +1287,45 @@ main.single-view { display: block; }
 .cast-extra { display: flex; gap: 10px; justify-content: center; }
 
 @media (max-width: 680px) { .modal-backdrop { padding: 0; } .story-modal { height: 100%; border-radius: 0; width: 100%; } }
+
+/* ── 账户:登录页 + 顶栏用户 ───────────────────────────────────── */
+.login-wrap {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px;
+  background:
+    linear-gradient(90deg, rgba(32,32,29,.035) 1px, transparent 1px) 0 0 / 28px 28px,
+    linear-gradient(rgba(32,32,29,.03) 1px, transparent 1px) 0 0 / 28px 28px,
+    var(--bg);
+}
+.login-card {
+  width: 100%; max-width: 360px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 12px; padding: 28px 26px;
+  box-shadow: 0 8px 30px rgba(32,32,29,.08);
+}
+.login-title { margin: 0 0 4px; font-size: 22px; letter-spacing: .03em; color: var(--ink); }
+.login-sub { margin: 0 0 18px; font-size: 13px; color: var(--muted); }
+.login-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.login-tabs button {
+  flex: 1; padding: 8px; border: 1px solid var(--line); border-radius: 7px;
+  background: var(--soft); color: var(--muted); cursor: pointer; font: inherit;
+}
+.login-tabs button.on { background: var(--green); color: #fff; border-color: var(--green); }
+.login-input {
+  width: 100%; box-sizing: border-box; margin-bottom: 10px; padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: 7px; font: inherit; background: #fbf8f2; color: var(--ink);
+}
+.login-input:focus { outline: none; border-color: var(--green); }
+.login-err { color: var(--red); font-size: 13px; margin: 2px 0 10px; }
+.login-submit {
+  width: 100%; padding: 11px; margin-top: 4px; border: 0; border-radius: 7px;
+  background: var(--green); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+}
+.login-submit:disabled { opacity: .6; cursor: default; }
+.user-chip {
+  display: inline-flex; align-items: center; gap: 8px; margin-right: 12px;
+  font-size: 13px; color: var(--ink);
+}
+.user-chip .logout-btn {
+  padding: 3px 9px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--soft); color: var(--muted); cursor: pointer; font: inherit; font-size: 12px;
+}
+.user-chip .logout-btn:hover { color: var(--ink); border-color: var(--muted); }

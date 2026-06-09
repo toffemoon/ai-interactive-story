@@ -1,5 +1,40 @@
 const { useEffect, useMemo, useRef, useState } = React;
 
+// ── 账户:token 存取 + 给所有 /api 请求自动带 Authorization ───────────────
+// 集中注入(包住 window.fetch),不必逐个改 fetch 调用,保证 streamTurn / uploadFile / 各裸 fetch 都带上。
+// 仅当本地有 token 且 URL 以 /api/ 开头时加;无 token(未登录 / AUTH 关)时与现状逐字节一致。
+const TOKEN_KEY = "ais_auth_token";
+function getToken() { try { return localStorage.getItem(TOKEN_KEY) || ""; } catch (e) { return ""; } }
+function setToken(t) { try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch (e) {} }
+(function patchFetch() {
+  if (window.__ais_fetch_patched) return;
+  window.__ais_fetch_patched = true;
+  const _f = window.fetch.bind(window);
+  window.fetch = function (url, opts) {
+    opts = opts || {};
+    try {
+      const t = getToken();
+      if (t && typeof url === "string" && url.indexOf("/api/") === 0) {
+        const h = new Headers(opts.headers || {});
+        if (!h.has("Authorization")) h.set("Authorization", "Bearer " + t);
+        opts = Object.assign({}, opts, { headers: h });
+      }
+    } catch (e) {}
+    return _f(url, opts);
+  };
+})();
+
+// 登录/注册/me 调用:返回 json,失败抛后端 detail。
+async function authApi(path, body) {
+  const opts = body === undefined
+    ? {}
+    : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  const r = await fetch(path, opts);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || "请求失败");
+  return data;
+}
+
 async function postJSON(url, body) {
   const r = await fetch(url, {
     method: "POST",
@@ -1403,7 +1438,7 @@ async function saveToVault(kind, data) {
   catch (e) { return false; }
 }
 
-function TopNav({ view, setView, sessionId }) {
+function TopNav({ view, setView, sessionId, authEnabled, user, onLogout }) {
   const tabs = [["home", "探索"], ["game", "当前故事"], ["build", "创作"], ["chat", "聊天"], ["mine", "我的"]];
   return (
     <header className="topnav">
@@ -1414,9 +1449,67 @@ function TopNav({ view, setView, sessionId }) {
         ))}
       </nav>
       <div className="header-right">
+        {authEnabled && user && (
+          <span className="user-chip">👤 {user.display_name || user.username}
+            <button className="logout-btn" onClick={onLogout}>退出</button>
+          </span>
+        )}
         <span className="session">session {sessionId.slice(0, 8)}</span>
       </div>
     </header>
+  );
+}
+
+// 登录 / 注册页(AUTH_ENABLED 时未登录则全屏拦在此)。纯 JSX,无构建工具。
+function LoginView({ onAuthed }) {
+  const [tab, setTab] = useState("login");          // login | register
+  const [identifier, setIdentifier] = useState("");  // 登录:用户名或邮箱
+  const [username, setUsername] = useState("");       // 注册:用户名
+  const [email, setEmail] = useState("");             // 注册:邮箱(可选)
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit() {
+    if (busy) return;
+    setBusy(true); setErr("");
+    try {
+      const data = tab === "login"
+        ? await authApi("/api/auth/login", { identifier: identifier.trim(), password })
+        : await authApi("/api/auth/register", { username: username.trim(), email: email.trim() || null, password });
+      onAuthed(data.user, data.token);
+    } catch (e) { setErr(e.message || "失败"); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="login-wrap">
+      <div className="login-card">
+        <h1 className="login-title">AI 互动故事</h1>
+        <p className="login-sub">登录后你的存档与卡片只属于你。</p>
+        <div className="login-tabs">
+          <button className={tab === "login" ? "on" : ""} onClick={() => { setTab("login"); setErr(""); }}>登录</button>
+          <button className={tab === "register" ? "on" : ""} onClick={() => { setTab("register"); setErr(""); }}>注册</button>
+        </div>
+        {tab === "login" ? (
+          <input className="login-input" placeholder="用户名或邮箱" value={identifier}
+                 onChange={(e) => setIdentifier(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
+        ) : (
+          <>
+            <input className="login-input" placeholder="用户名" value={username}
+                   onChange={(e) => setUsername(e.target.value)} />
+            <input className="login-input" placeholder="邮箱(可选)" value={email}
+                   onChange={(e) => setEmail(e.target.value)} />
+          </>
+        )}
+        <input className="login-input" type="password" placeholder="密码" value={password}
+               onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
+        {err && <div className="login-err">{err}</div>}
+        <button className="login-submit" disabled={busy} onClick={submit}>
+          {busy ? "…" : (tab === "login" ? "登录" : "注册并进入")}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -2094,11 +2187,27 @@ function ChatView() {
 // 「我的」中心(§5/§6):把作者/个人资产从主导航收进来——存档进度 + 我建的预设 + 我的卡库。
 // 第一阶段=localStorage / 本地 API 聚合壳,无账号系统(P0 属后端域,本批次不引入登录)。
 // dashboard 三面板布局(yufei 模板):上排 存档表格 + 预设横排;下排整宽卡库。
-function MineView({ saves, presets, activeId, onResume, onDeleteSave, onGoExplore, onOpenStory, onDeletePreset,
+function MineView({ saves, presets, activeId, authEnabled, user, onResume, onDeleteSave, onGoExplore, onOpenStory, onDeletePreset,
                     addCharacter, addWorld, setStory, setPlayer, completeCard, goGame }) {
   const [cardCount, setCardCount] = useState(null);
+  const loggedIn = authEnabled && user;
+  // 已登录:存档源走后端「我的存档」(跨设备,绑定账号);未登录/AUTH 关:走本地浏览器存档。
+  const [serverSaves, setServerSaves] = useState(null);
+  useEffect(() => {
+    if (!loggedIn) { setServerSaves(null); return undefined; }
+    let alive = true;
+    fetch("/api/my/sessions").then((r) => (r.ok ? r.json() : [])).then((list) => {
+      if (!alive) return;
+      setServerSaves((list || []).map((s) => ({
+        id: s.id, name: s.story || "", turns: s.turns || 0,
+        summary: s.last_input || "", updated: (s.updated_at || "").replace("T", " ").slice(0, 16),
+      })));
+    }).catch(() => { if (alive) setServerSaves([]); });
+    return () => { alive = false; };
+  }, [loggedIn, activeId]);
+  const source = loggedIn && serverSaves != null ? serverSaves : (saves || []);
   // 只展示真正玩过/有内容的存档(过滤掉启动时登记的空占位 session)。
-  const realSaves = (saves || []).filter((s) => s.turns > 0 || (s.name && s.name.trim()) || (s.summary && s.summary.trim()));
+  const realSaves = source.filter((s) => s.turns > 0 || (s.name && s.name.trim()) || (s.summary && s.summary.trim()));
 
   // 头部统计 chip 的卡库总数(角色 + 玩家 + 世界 + 故事;事件随故事书不单算)。
   useEffect(() => {
@@ -2112,7 +2221,7 @@ function MineView({ saves, presets, activeId, onResume, onDeleteSave, onGoExplor
   return (
     <section className="mine-view">
       <div className="mine-head">
-        <div><h2>我的</h2><p>本地保存,账号系统后续接入。</p></div>
+        <div><h2>我的</h2><p>{loggedIn ? `已登录:${user.display_name || user.username} · 存档已绑定账号(跨设备可见)` : "本地保存(未登录)。"}</p></div>
         <div className="mine-stats">
           <span className="mine-stat"><b>{realSaves.length}</b>个存档</span>
           <span className="mine-stat"><b>{(presets || []).length}</b>个我建的故事</span>
@@ -2521,6 +2630,7 @@ function App() {
   const [assembling, setAssembling] = useState(false);
   const [sessionId, setSessionId] = useState(loadOrCreateSessionId);
   const [restoring, setRestoring] = useState(true);
+  const [auth, setAuth] = useState({ ready: false, enabled: false, user: null }); // 账户:AUTH 是否开 + 当前用户
   const [restoredTurns, setRestoredTurns] = useState(null);
   const [restoredState, setRestoredState] = useState(null);
   const [restoredChoices, setRestoredChoices] = useState([]);
@@ -2570,6 +2680,19 @@ function App() {
     fetch("/api/presets").then((r) => (r.ok ? r.json() : [])).then(setPresets).catch(() => setPresets([]));
   }
   useEffect(() => { refreshHome(); }, []);
+
+  // 账户:开局查 /api/auth/me —— 判断 AUTH 是否开 + 是否已登录(token 失效则清掉)。
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => {
+        if (r.status === 401) { setToken(""); return { user: null, auth_enabled: true }; }
+        return r.ok ? r.json() : { user: null, auth_enabled: false };
+      })
+      .then((d) => setAuth({ ready: true, enabled: !!d.auth_enabled, user: d.user || null }))
+      .catch(() => setAuth({ ready: true, enabled: false, user: null }));
+  }, []);
+  function onAuthed(user, token) { setToken(token); setAuth((a) => ({ ...a, user })); }
+  function onLogout() { setToken(""); location.reload(); }
 
   // 顶部导航:点「创作」tab 直接进步骤式引导(创作界面=步骤式);其余 tab 正常切。
   function navTo(k) {
@@ -2753,7 +2876,7 @@ function App() {
   // 右下角「?」:重放当前屏引导(无对应屏则回退到 home 概览,目标缺失会降级为居中说明卡)。
   function replayCoach() { setCoachRun({ screen: coachScreen || "home", manual: true }); }
 
-  if (restoring) {
+  if (restoring || !auth.ready) {
     return (
       <div className="app">
         <header><div><h1>AI 互动故事</h1><p>读取存档中…</p></div></header>
@@ -2761,9 +2884,15 @@ function App() {
     );
   }
 
+  // AUTH 开且未登录 → 全屏拦在登录页(数据独立的前提:每个人先有身份)。AUTH 关时此分支不触发,行为同现状。
+  if (auth.enabled && !auth.user) {
+    return <LoginView onAuthed={onAuthed} />;
+  }
+
   return (
     <div className="app">
-      <TopNav view={view} setView={navTo} sessionId={sessionId} />
+      <TopNav view={view} setView={navTo} sessionId={sessionId}
+              authEnabled={auth.enabled} user={auth.user} onLogout={onLogout} />
 
       {view === "home" && (
         <main className="single-view">
@@ -2786,6 +2915,7 @@ function App() {
         <main className="single-view">
           <MineView
             saves={saves} presets={presets} activeId={sessionId}
+            authEnabled={auth.enabled} user={auth.user}
             onResume={resumeSave} onDeleteSave={deleteSaveHandler} onGoExplore={() => setView("home")}
             onOpenStory={openStoryModal} onDeletePreset={deletePreset}
             addCharacter={addCharacter} addWorld={addWorld} setStory={setStory} setPlayer={setPlayer}

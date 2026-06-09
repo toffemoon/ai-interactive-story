@@ -157,7 +157,10 @@ def _extract(authorization: str | None, x_auth_token: str | None) -> str | None:
 
 
 def current_user(authorization: str | None = None, x_auth_token: str | None = None) -> dict | None:
-    """可选取用户:无 token → None;有但无效/过期 → 401(坏 token 不该静默放行)。"""
+    """可选取用户:无 token → None;有但无效/过期 → 401(坏 token 不该静默放行)。
+    AUTH 关时:完全忽略 token(返回 None),避免遗留 token 在关闭账户时把前端卡在登录页。"""
+    if not enabled():
+        return None
     token = _extract(authorization, x_auth_token)
     if not token:
         return None
