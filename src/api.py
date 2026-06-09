@@ -908,151 +908,52 @@ def api_operator_assign_preset(req: AssignPresetReq, _actor: dict = Depends(requ
     return {"assigned": storage.assign_preset_owner(req.name, uid), "user_id": uid}
 
 
+# ── 账户中心(super 主入口):看某账户的对话 / 列无主老存档 / 分发 OC ──────────
+@app.get("/api/operator/account_sessions/{user_id}")
+def api_operator_account_sessions(user_id: str, _actor: dict = Depends(require_role("superadmin"))):
+    """列某账户的所有对话(账户中心点开账户用)。需 superadmin。"""
+    return {"sessions": storage.list_sessions(user_id=user_id)}
+
+
+@app.get("/api/operator/unowned_sessions")
+def api_operator_unowned_sessions(_actor: dict = Depends(require_role("superadmin"))):
+    """列无主老存档(供「分发老存档」挑选)。需 superadmin。"""
+    return {"sessions": storage.list_sessions(unowned=True)}
+
+
+class AssignOcReq(BaseModel):
+    index: int = 0
+    user: str          # 用户名 / 邮箱 / user_id
+
+
+@app.post("/api/operator/assign_oc")
+async def api_operator_assign_oc(req: AssignOcReq, _actor: dict = Depends(require_role("superadmin"))):
+    """把某个 OC 分发给用户:用 OC 引擎卡开一局(生成开场)、存档归属设为该用户 → 他在「我的存档」即可续玩。需 superadmin。"""
+    uid = auth.find_user_id(req.user)
+    if not uid:
+        raise HTTPException(404, f"找不到用户:{req.user}")
+    idx_file = OC_DIR / "index.json"
+    if not idx_file.is_file():
+        raise HTTPException(404, "没有 OC 数据")
+    entries = json.loads(idx_file.read_text(encoding="utf-8"))
+    if not (0 <= req.index < len(entries)):
+        raise HTTPException(400, "OC index 越界")
+    e = entries[req.index]
+    card_path = (OC_DIR / e["card"]) if e.get("card") else None
+    if not (card_path and card_path.is_file()):
+        raise HTTPException(400, f"该 OC 没有引擎角色卡(card.md):{e.get('character', '')}")
+    card = parse_character(card_path.read_text(encoding="utf-8"))
+    session_id = "oc-" + uuid.uuid4().hex[:12]
+    await asyncio.to_thread(auth.claim_session, session_id, uid)   # 先把空存档归到该用户
+    out = await story_turn(session_id=session_id, characters=[card], user="", mode="standard")  # 跑开场(归属保持)
+    return {"ok": True, "session_id": session_id, "character": e.get("character", ""), "user_id": uid}
+
+
 # 私人后台控制台:不从玩家前端链接过去;真正的闸是 token(页面只是表单,无 token 调不动接口)。
 # OPERATOR_TOKEN 没设则 404(功能关闭)。token 存浏览器 localStorage,同源 fetch 免 CORS。
-_OPERATOR_HTML = r"""<!doctype html><html lang="zh"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>后台控制台</title>
-<style>*{box-sizing:border-box}body{font:14px/1.55 -apple-system,system-ui,sans-serif;margin:0;color:#1f2328;background:#fff}
-header{display:flex;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid #e5e7eb;flex-wrap:wrap}
-header h1{font-size:15px;margin:0 10px 0 0}
-header input{padding:6px 8px;border:1px solid #ccc;border-radius:6px;font:inherit}
-button{padding:6px 12px;border:0;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer;font:inherit}
-button.sec{background:#6b7280}#st{font-size:12px;color:#888;margin-left:auto}
-#wrap{display:flex;height:calc(100vh - 53px)}
-#list{width:240px;border-right:1px solid #e5e7eb;overflow:auto}
-.sess{padding:9px 12px;border-bottom:1px solid #f0f0f0;cursor:pointer}
-.sess:hover{background:#f6f7f9}.sess.on{background:#e8f0fe}
-.sess .id{font-weight:600}.sess .meta{color:#999;font-size:12px}.sess .sid{color:#bbb;font-size:11px;word-break:break-all;margin-top:2px}
-#detail{flex:1;display:flex;flex-direction:column;min-width:0}
-#shdr{padding:8px 14px;border-bottom:1px solid #eee;color:#555;font-size:13px}
-#conv{flex:1;overflow:auto;padding:14px;background:#fafafa}
-.b{max-width:80%;margin:6px 0;padding:8px 11px;border-radius:10px;white-space:pre-wrap;word-break:break-word}
-.b.player{background:#2563eb;color:#fff;margin-left:auto}.b.char{background:#fff;border:1px solid #e5e7eb}
-.narr{color:#666;font-style:italic;margin:8px 4px;font-size:13px}
-.oplabel{font-size:11px;color:#7c3aed;background:#f3effe;border-radius:4px;padding:2px 7px;margin:7px 0;display:inline-block}
-#box select,#box #target{padding:5px 7px;border:1px solid #ccc;border-radius:6px;font:inherit}
-#box{border-top:1px solid #e5e7eb;padding:10px 14px}
-#box textarea{width:100%;min-height:52px;padding:8px;border:1px solid #ccc;border-radius:6px;font:inherit}
-#queue{font-size:12px;color:#a15;margin-bottom:4px}
-.tab{background:#eef1f5;color:#333}.tab.on{background:#2563eb;color:#fff}
-#ocwrap{display:none;height:calc(100vh - 53px)}
-#oclist{width:230px;border-right:1px solid #e5e7eb;overflow:auto}
-#ocdetail{flex:1;overflow:auto;padding:16px 26px;min-width:0}
-#ocdetail h3{margin:20px 0 8px;font-size:15px;color:#b1442f;border-bottom:2px solid #f0c9bf;padding-bottom:4px}
-#ocdetail h4{margin:14px 0 5px;font-size:14px}#ocdetail h5{margin:11px 0 4px;font-size:13px;color:#555}
-#ocdetail p{margin:5px 0}#ocdetail ul{margin:5px 0;padding-left:20px}#ocdetail li{margin:2px 0}
-#ocdetail blockquote{margin:8px 0;padding:6px 10px;background:#f7f8fa;border-left:3px solid #cbd2d9;color:#555;font-size:13px}
-#ocdetail code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px}
-.trow{display:flex;gap:10px;padding:3px 0;border-bottom:1px solid #f3f3f3}.trow span:first-child{min-width:96px;color:#666;font-weight:600}
-.ocimg{max-width:360px;width:100%;border-radius:10px;border:1px solid #eee;display:block;margin:4px 0 16px}
-.ocsec{max-width:780px}
-.octest{background:#16a34a;margin:2px 0 12px}
-#box .boxrow{display:flex;gap:8px;margin-bottom:6px}
-#box #playmsg{flex:1;padding:7px 9px;border:1px solid #ccc;border-radius:6px;font:inherit}
-#box .boxhint{font-size:12px;color:#999;margin:2px 0 5px}
-#clk{font-size:12px;color:#0a7;margin-left:8px}
-#distwrap{display:none;height:calc(100vh - 53px);overflow:auto}
-.drow{margin:9px 0;display:flex;gap:8px;align-items:center}
-.drow select,.drow input{padding:5px 8px;border:1px solid #ccc;border-radius:6px;font:inherit}
-.drow input{min-width:240px}</style>
-</head><body>
-<header><h1>后台控制台</h1>
-<button id="tabSess" class="tab on" onclick="showView('sessions')">🎭 对局</button>
-<button id="tabOC" class="tab" onclick="showView('oc')">🍎 OC集</button>
-<button id="tabDist" class="tab" onclick="showView('dist')">📦 分发</button>
-<input id="tok" type="password" placeholder="OPERATOR_TOKEN(后门,可空)" size="22">
-<span id="who" style="font-size:12px;color:#555"></span><span id="clk"></span><span id="st"></span></header>
-<div id="wrap">
- <div id="list"></div>
- <div id="detail">
-  <div id="shdr">← 左边点一个 session 看上下文</div>
-  <div id="conv"></div>
-  <div id="box">
-   <div class="boxrow"><input id="playmsg" type="text" placeholder="🎮 以玩家身份说一句、推进一回合(测试对话)… 回车发送" onkeydown="if(event.key==='Enter')playSay()"><button onclick="playSay()">▶ 玩家发送</button></div>
-   <div class="boxhint">↑ 玩家行动(你来对话)　|　↓ 🎬 导演(幕后影响这局)</div>
-   <div id="queue"></div>
-   <textarea id="msg" placeholder="导演=写指令(让X警觉…) / 直接台词=写那句话 / 旁白=写环境描写"></textarea>
-   <div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-    <select id="mode" onchange="onMode()">
-     <option value="director">🎬 导演(AI 织进剧情)</option>
-     <option value="direct">🎤 直接台词(角色逐字说)</option>
-     <option value="narration">🌧 旁白(逐字写进剧情)</option>
-    </select>
-    <input id="target" type="text" placeholder="角色名" style="display:none;width:110px">
-    <label id="stickyL" style="font-size:13px"><input id="sticky" type="checkbox"> 持续</label>
-    <button id="bNext" onclick="send('next')">发送(下回合)</button>
-    <button id="bNow" onclick="send('now')">⚡ 立即</button>
-    <button class="sec" onclick="clearQ()">清空队列</button>
-   </div>
-  </div>
- </div>
-</div>
-<div id="ocwrap">
- <div id="oclist"></div>
- <div id="ocdetail"></div>
-</div>
-<div id="distwrap">
- <div class="ocsec" style="padding:20px 26px;max-width:680px">
-  <h3 style="color:#b1442f">📦 分发内容给用户</h3>
-  <p style="color:#666">把官方/公共的卡或预设指派给某个用户(成为他私有)。存档分发仅 superadmin。</p>
-  <div class="drow">用户 <select id="distUser"></select> <button class="sec" onclick="loadUsers()">↻ 刷新</button></div>
-  <div class="drow">类型 <select id="distType" onchange="distType()">
-    <option value="card">卡</option><option value="preset">预设</option>
-    <option id="distSessOpt" value="session">存档(super)</option></select></div>
-  <div class="drow" id="distCardKindRow">卡种 <select id="distCardKind">
-    <option>characters</option><option>worlds</option><option>stories</option><option>players</option></select></div>
-  <div class="drow">名称 <input id="distName" placeholder="卡 slug"></div>
-  <div class="drow"><button onclick="doAssign(false)">分发给该用户</button>
-    <button class="sec" onclick="doAssign(true)">设回官方</button></div>
-  <div id="distMsg" style="margin-top:6px"></div>
- </div>
-</div>
-<script>
-const $=id=>document.getElementById(id);
-$("tok").value=localStorage.op_tok||""; $("tok").oninput=()=>{localStorage.op_tok=$("tok").value;boot();};
-let ROLE="";
-const H=()=>{const h={"Content-Type":"application/json"};if($("tok").value)h["X-Operator-Token"]=$("tok").value;const t=localStorage.ais_auth_token;if(t)h["Authorization"]="Bearer "+t;return h;};
-const st=t=>$("st").textContent=t;
-function el(t,c,x){const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;}
-function bub(role,name,text){const d=el("div","b "+role);if(name)d.appendChild(el("b",null,name+": "));d.appendChild(document.createTextNode(text));return d;}
-let cur=null;
-async function j(url,opt){const r=await fetch(url,opt||{headers:H()});if(!r.ok){st("✗ "+r.status+(r.status==503?" 未启用(没设OPERATOR_TOKEN)":r.status==403?" token不对":""));throw r;}st("");return r.json();}
-async function loadSessions(){try{const d=await j("/api/operator/sessions");const L=$("list");L.innerHTML="";(d.sessions||[]).forEach(s=>{const it=el("div","sess"+(s.id===cur?" on":""));it.dataset.sid=s.id;it.appendChild(el("div","id",(s.story||"(未命名故事)")+(s.player?" · 玩"+s.player:"")));it.appendChild(el("div","meta",(s.turns||0)+"轮 · "+sgt(s.updated_at)));if(s.last_input)it.appendChild(el("div","meta","最后:"+s.last_input));it.appendChild(el("div","sid",s.id));it.onclick=()=>select(s.id);L.appendChild(it);});if(!(d.sessions||[]).length)L.appendChild(el("div","meta","(没有 session)"));}catch(e){}}
-function select(id){cur=id;document.querySelectorAll(".sess").forEach(n=>n.classList.toggle("on",n.dataset.sid===id));loadSession();}
-async function loadSession(silent){if(!cur)return;try{const d=await j("/api/operator/session/"+encodeURIComponent(cur));const C=$("conv");const atBottom=C.scrollHeight-C.scrollTop-C.clientHeight<60;C.innerHTML="";(d.turns||[]).forEach(t=>{(t.operator_applied||[]).forEach(a=>{const tag=a.mode==="direct"?("🎤 直接台词"+(a.target?"("+a.target+")":"")):(a.mode==="narration"?"🌧 旁白":"🎬 导演");C.appendChild(el("div","oplabel",tag+":"+(a.content||"")));});if(t.player_input)C.appendChild(bub("player","",t.player_input));if(t.narration)C.appendChild(el("div","narr",t.narration));(t.messages||[]).forEach(m=>C.appendChild(bub("char",m.name||m.character_id||"",m.text||"")));});const s=d.state||{},sc=s.scene||{};$("shdr").textContent=cur+"  ·  地点:"+(sc.location||"?")+"  ·  在场:"+((sc.present_characters||[]).join("、")||"?")+"  ·  第"+(s.turn_count||0)+"回合";const q=d.operator_inject||[];$("queue").textContent=q.length?("待注入 "+q.length+" 条:"+q.map(x=>(typeof x=="object"?x.content+(x.sticky?"[持续]":"[一次]"):x)).join(" / ")):"";if(!silent||atBottom)C.scrollTop=C.scrollHeight;}catch(e){}}
-function onMode(){const m=$("mode").value;$("target").style.display=m==="direct"?"":"none";$("stickyL").style.display=m==="director"?"":"none";$("bNext").style.display=m==="director"?"":"none";$("bNow").textContent=m==="director"?"⚡ 立即":"发送";}
-async function send(timing){if(!cur){st("先选一个 session");return;}const m=$("msg").value.trim();if(!m)return;const mode=$("mode").value;const now=(timing==="now"&&mode==="director");if(mode==="direct"&&!$("target").value.trim()){st("直接台词要填角色名(留空=旁白)");}try{st(now?"AI 生成中…":(mode!=="director"?"插入中…":""));await j("/api/operator/inject",{method:"POST",headers:H(),body:JSON.stringify({session_id:cur,content:m,mode,target:$("target").value.trim(),sticky:$("sticky").checked,now})});$("msg").value="";st("已发送 ✓");loadSession();}catch(e){}}
-async function clearQ(){if(!cur)return;try{await j("/api/operator/inject/"+encodeURIComponent(cur),{method:"DELETE",headers:H()});st("已清空 ✓");loadSession();}catch(e){}}
-let ocs=[],ocLoaded=false;
-function showView(v){$("wrap").style.display=v==="sessions"?"flex":"none";$("ocwrap").style.display=v==="oc"?"flex":"none";$("distwrap").style.display=v==="dist"?"block":"none";$("tabSess").classList.toggle("on",v==="sessions");$("tabOC").classList.toggle("on",v==="oc");$("tabDist").classList.toggle("on",v==="dist");if(v==="oc"&&!ocLoaded){ocLoaded=true;loadOC();}if(v==="dist")loadUsers();}
-async function loadUsers(){try{const d=await j("/api/operator/users");const S=$("distUser");S.innerHTML="";(d.users||[]).forEach(u=>{const o=el("option",null,(u.email||u.username||u.id)+"  ·  "+u.role+"  ·  "+(u.sessions||0)+"局");o.value=u.id;S.appendChild(o);});if(!(d.users||[]).length)S.appendChild(el("option",null,"(还没有用户)"));}catch(e){}}
-function distType(){const t=$("distType").value;$("distCardKindRow").style.display=t==="card"?"flex":"none";$("distName").placeholder=t==="card"?"卡 slug":(t==="preset"?"预设 slug":"session id");}
-async function doAssign(official){const uid=official?"":$("distUser").value;const t=$("distType").value;const name=$("distName").value.trim();const M=$("distMsg");if(!name){M.style.color="#a15";M.textContent="先填名称";return;}let url,body;if(t==="card"){url="/api/operator/assign_card";body={kind:$("distCardKind").value,name,user:uid};}else if(t==="preset"){url="/api/operator/assign_preset";body={name,user:uid};}else{url="/api/operator/assign_session";body={session_id:name,user:uid};}try{const d=await j(url,{method:"POST",headers:H(),body:JSON.stringify(body)});M.style.color=d.assigned?"#0a7":"#a15";M.textContent=d.assigned?("✓ 已"+(official?"设回官方":"分发给该用户")):"未匹配(只能分发官方/公共行,或名称不对)";loadUsers();}catch(e){M.style.color="#a15";M.textContent="失败(权限或网络)";}}
-function mdToHtml(t){t=(t||"").replace(/^---\n[\s\S]*?\n---\n/,"").replace(/!\[\[.*?\]\]/g,"").replace(/\[\[(?:[^\]|]*\|)?([^\]]+)\]\]/g,"$1");const esc=s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;");const inl=s=>esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`([^`]+)`/g,"<code>$1</code>");let h="",ul=false;const cu=()=>{if(ul){h+="</ul>";ul=false;}};for(const line of t.split("\n")){if(!line.trim()){cu();continue;}let m;if(m=line.match(/^(#{1,6})\s+(.*)$/)){cu();const lv=Math.min(m[1].length+1,6);h+="<h"+lv+">"+inl(m[2])+"</h"+lv+">";}else if(m=line.match(/^\s*>\s?(.*)$/)){cu();h+="<blockquote>"+inl(m[1])+"</blockquote>";}else if(m=line.match(/^\s*[-*]\s+(.*)$/)){if(!ul){h+="<ul>";ul=true;}h+="<li>"+inl(m[1])+"</li>";}else if(/^\s*\|/.test(line)){cu();const c=line.replace(/^\s*\|/,"").replace(/\|\s*$/,"").split("|").map(x=>x.trim());if(c.every(x=>/^[-:\s]*$/.test(x)))continue;h+="<div class=trow>"+c.map(x=>"<span>"+inl(x)+"</span>").join("")+"</div>";}else{cu();h+="<p>"+inl(line)+"</p>";}}cu();return h;}
-async function loadOC(){try{const d=await j("/api/operator/oc");ocs=d.ocs||[];const L=$("oclist");L.innerHTML="";ocs.forEach((o,i)=>{const it=el("div","sess");it.appendChild(el("div","id","🍎 "+(o.character||"OC")));it.appendChild(el("div","meta","用户:"+(o.user||"?")));it.onclick=()=>showOC(i);L.appendChild(it);});if(ocs.length)showOC(0);else $("ocdetail").innerHTML="<p style=color:#999>(oc/index.json 里没有 OC)</p>";}catch(e){}}
-function showOC(i){const o=ocs[i];if(!o)return;document.querySelectorAll("#oclist .sess").forEach((n,k)=>n.classList.toggle("on",k===i));let h="<div class=ocsec><h3>🍎 "+o.character+"　·　用户 "+o.user+"</h3>"+(o.card?"<button class=octest onclick='startOCTest("+i+")'>▶ 用「"+o.character+"」开测对话</button>":"<p style=color:#999>(没有引擎角色卡 card.md,不能开测)</p>");if(o.art)h+="<img class=ocimg src='"+o.art+"' alt=立绘>";h+=mdToHtml(o.profile)+"</div><div class=ocsec><h3>🗺 世界观</h3>";if(o.map)h+="<img class=ocimg src='"+o.map+"' alt=地图>";h+=mdToHtml(o.world)+"</div>";$("ocdetail").innerHTML=h;$("ocdetail").scrollTop=0;}
-function sgt(x){if(!x)return"";try{return new Date(String(x).replace(" ","T")).toLocaleString("zh-CN",{timeZone:"Asia/Singapore",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});}catch(e){return String(x).slice(0,16);}}
-async function playSay(){if(!cur){st("先选一个 session(或去 OC集 开测)");return;}const m=$("playmsg").value.trim();if(!m)return;try{st("🎮 玩家发送…AI 生成中");await j("/api/operator/say",{method:"POST",headers:H(),body:JSON.stringify({session_id:cur,user:m})});$("playmsg").value="";st("已发送 ✓");loadSession();}catch(e){}}
-async function startOCTest(i){st("开局中…AI 生成开场");try{const d=await j("/api/operator/oc/start",{method:"POST",headers:H(),body:JSON.stringify({index:i})});cur=d.session_id;showView("sessions");await loadSessions();select(d.session_id);st("已用「"+(d.character||"")+"」开局 ✓ 下方可玩家对话 / 导演注入");}catch(e){}}
-function tickClk(){var c=$("clk");if(c)c.textContent="🇸🇬 SGT "+new Date().toLocaleString("zh-CN",{timeZone:"Asia/Singapore",hour12:false});}
-tickClk();setInterval(tickClk,1000);
-onMode();
-async function boot(){
-  ROLE="";
-  try{const r=await fetch("/api/auth/me",{headers:H()});const d=r.ok?await r.json():{};const u=d&&d.user;
-    if(u){ROLE=u.role||"user";$("who").textContent="👤 "+(u.email||u.username||"")+" · "+ROLE;}
-    else if($("tok").value){$("who").textContent="🔑 OPERATOR 后门 · superadmin";}
-    else{$("who").textContent="未登录 —— 去主站登录(admin/super)或填 OPERATOR_TOKEN";}
-  }catch(e){$("who").textContent="";}
-  const isSuper=ROLE==="superadmin"||(!ROLE&&!!$("tok").value);
-  $("tabSess").style.display=isSuper?"":"none";   // 对局/导演 = super
-  $("distSessOpt").style.display=isSuper?"":"none"; // 存档分发 = super
-  if(isSuper){showView("sessions");loadSessions();}
-  else{showView("dist");}                          // admin/未授权 默认进分发
-}
-boot();
-setInterval(()=>{if(cur&&ROLE!=="admin")loadSession(true);},4000);
-</script></body></html>"""
+def _load_console_html() -> str:
+    p = ROOT / "operator_console.html"
+    return p.read_text(encoding="utf-8") if p.is_file() else "<h1>控制台文件缺失</h1>"
 
 
 @app.get("/operator", response_class=HTMLResponse)
@@ -1061,7 +962,7 @@ def operator_console():
     可达条件:设了 OPERATOR_TOKEN(后门)或开了账户系统(AUTH_ENABLED)——后者下由登录用户的角色决定能做什么。"""
     if not (os.getenv("OPERATOR_TOKEN") or auth.enabled()):
         raise HTTPException(404, "未启用")
-    return HTMLResponse(_OPERATOR_HTML)
+    return HTMLResponse(_load_console_html())
 
 
 # 前端静态文件挂在根路径(html=True 让 / 返回 index.html)。

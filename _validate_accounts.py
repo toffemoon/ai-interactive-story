@@ -11,8 +11,9 @@ os.environ.setdefault("AUTH_ENABLED", "1")
 os.environ.setdefault("AUTH_DEV_OTP", "1")  # 本地测试:没配 SMTP 也回 dev_code(生产绝不设)
 os.environ.setdefault("SUPERADMIN_EMAIL", "acctest_super@example.com")
 os.environ.setdefault("AUTH_TOKEN_PEPPER", "acctest-pepper")
-os.environ.pop("SMTP_USER", None)
-os.environ.pop("SMTP_PASS", None)
+# 强制 dev 模式:设空串,load_dotenv(override=False) 就不会用 .env 里的真 SMTP → 走 dev_code,不真发信
+os.environ["SMTP_USER"] = ""
+os.environ["SMTP_PASS"] = ""
 os.environ.setdefault("OPERATOR_TOKEN", "")  # 不用后门,纯角色测
 
 import sys
@@ -149,6 +150,17 @@ def main():
         c.post("/api/auth/logout", headers=H(tok_user2))
         me_rev = c.get("/api/auth/me", headers=H(tok_user2))
         check("token revoked after logout -> 401", me_rev.status_code == 401)
+
+        # 14) 账户中心端点(account_sessions / unowned_sessions / assign_oc 角色 gate)
+        check("super account_sessions -> 200", c.get(f"/api/operator/account_sessions/{uid_user}", headers=H(tok_super)).status_code == 200)
+        check("admin account_sessions -> 403", c.get(f"/api/operator/account_sessions/{uid_user}", headers=H(tok_admin)).status_code == 403)
+        check("super unowned_sessions -> 200", c.get("/api/operator/unowned_sessions", headers=H(tok_super)).status_code == 200)
+        check("admin unowned_sessions -> 403", c.get("/api/operator/unowned_sessions", headers=H(tok_admin)).status_code == 403)
+        check("user assign_oc -> 403", c.post("/api/operator/assign_oc", json={"index": 0, "user": USER}, headers=H(tok_user)).status_code == 403)
+        check("admin assign_oc -> 403", c.post("/api/operator/assign_oc", json={"index": 0, "user": USER}, headers=H(tok_admin)).status_code == 403)
+        # super 用越界 index → 过了角色gate但 400/404(不跑 story_turn,零 LLM)
+        oc_s = c.post("/api/operator/assign_oc", json={"index": 99999, "user": USER}, headers=H(tok_super))
+        check("super assign_oc passes gate (4xx not 403)", oc_s.status_code in (400, 404), oc_s.text)
 
     cleanup()
     npass = sum(1 for _, ok in _results if ok)

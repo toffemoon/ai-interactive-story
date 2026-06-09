@@ -130,11 +130,16 @@ def delete_session(session_id: str) -> bool:
         return cur.rowcount > 0
 
 
-def list_sessions(limit: int = 300, user_id: str | None = None) -> list[dict[str, Any]]:
+def list_sessions(limit: int = 300, user_id: str | None = None,
+                  unowned: bool = False) -> list[dict[str, Any]]:
     """列出会话: id + 更新时间 + 回合数 + 人话标签(故事名/玩家/最后一句)。按最近更新排序。
-    user_id 给定 → 只列该用户的存档(玩家「我的存档」);None → 全部(运营者控制台)。"""
-    where = "where user_id = %s::uuid " if user_id else ""
-    params: tuple = (user_id, limit) if user_id else (limit,)
+    unowned=True → 只列无主(user_id null)老存档(供分发);user_id 给定 → 只列该用户的;都不给 → 全部。"""
+    if unowned:
+        where, params = "where user_id is null ", (limit,)
+    elif user_id:
+        where, params = "where user_id = %s::uuid ", (user_id, limit)
+    else:
+        where, params = "", (limit,)
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(

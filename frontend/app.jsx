@@ -1006,6 +1006,19 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
   const loadingRef = useRef(false); loadingRef.current = loading;
   const streamingRef = useRef(null); streamingRef.current = streaming;
   const turnsRef = useRef(turns); turnsRef.current = turns;
+  const feedRef = useRef(null);
+  const [showToBottom, setShowToBottom] = useState(false);
+  function onFeedScroll() {
+    const el = feedRef.current; if (!el) return;
+    setShowToBottom(el.scrollHeight - el.scrollTop - el.clientHeight > 120);  // 离底超过 ~120px 才显示「回到底部」
+  }
+  function scrollToBottom() {
+    const el = feedRef.current; if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }
+  // 新回合/流式到达时:若用户本来就在底部(没显示按钮)就跟随到底;若往上翻了则不打扰。
+  useEffect(() => {
+    if (!showToBottom) { const el = feedRef.current; if (el) el.scrollTop = el.scrollHeight; }
+  }, [turns, streaming]);
 
   const hasStoryTurn = turns.some((t) => t.kind === "story");
 
@@ -1174,7 +1187,7 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
         </div>
       </div>
 
-      <div className="story-feed">
+      <div className="story-feed" ref={feedRef} onScroll={onFeedScroll}>
         {!turns.length && !loading && <div className="empty">点击“生成开场”，从场景而不是纯聊天开始。</div>}
         {turns.map((turn, i) => {
           if (turn.kind === "player") return <div className="player-action" key={i}>{turn.text}</div>;
@@ -1211,6 +1224,8 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
         )}
         {loading && !(streaming && (streaming.narration || streaming.messages.length > 0)) && <div className="empty">故事引擎正在推演...</div>}
       </div>
+
+      {showToBottom && <button className="to-bottom" onClick={scrollToBottom} title="回到最新">↓ 回到底部</button>}
 
       <div className="choice-bar">
         {choices.map((c) => (

@@ -393,7 +393,23 @@ main {
   grid-template-rows: auto minmax(280px, 1fr) auto auto auto;
   padding: 0;
   overflow: hidden;
+  position: relative;
 }
+.to-bottom {
+  position: absolute;
+  right: 20px;
+  bottom: 104px;
+  z-index: 6;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--green);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(32, 32, 29, .22);
+}
+.to-bottom:hover { filter: brightness(1.06); }
 
 .story-top {
   display: flex;
