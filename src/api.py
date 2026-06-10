@@ -53,6 +53,13 @@ log = logging.getLogger("api")
 async def lifespan(app: FastAPI):
     # 启动: 建 Postgres 连接池 (DATABASE_URL 见 .env)。关闭: 释放池。
     db.init_pool()
+    # P3-2 过期数据清理(token/otp/rate_limits 只增不减 → 启动时批量删;fail-open 不挡启动)。
+    try:
+        cleaned = await asyncio.to_thread(auth.cleanup_expired)
+        if any(cleaned.values()):
+            log.info("cleanup_expired: %s", cleaned)
+    except Exception:
+        log.exception("cleanup_expired failed (non-fatal)")
     yield
     db.close_pool()
 
@@ -147,6 +154,13 @@ def require_role(min_role: str):
 
 class SendCodeReq(BaseModel):
     email: str
+    purpose: str = "register"   # register | reset(忘记密码),分用途存码防跨流程复用
+
+
+class ResetPasswordReq(BaseModel):
+    email: str
+    code: str
+    new_password: str
 
 
 class RegisterReq(BaseModel):
@@ -180,10 +194,23 @@ def api_send_code(req: SendCodeReq, request: Request):
     带限流(P2-11):原有的「单邮箱 60s」之外,补按 IP 窗口与单邮箱日上限,防换邮箱轰炸/耗 SMTP 配额。"""
     ip = costguard.client_ip(request)
     em = (req.email or "").strip().lower()
+    if req.purpose not in ("register", "reset"):
+        raise HTTPException(400, "purpose 只能是 register 或 reset")
     if not costguard.hit_rate(f"sendcode:ip:{ip}", 3600, _RL_CODE_IP) or \
        not costguard.hit_rate(f"sendcode:em:{em}", 86400, _RL_CODE_EM):
         raise HTTPException(429, "发送过于频繁,请稍后再试")
-    return auth.send_email_code(req.email, purpose="register")
+    return auth.send_email_code(req.email, purpose=req.purpose)
+
+
+@app.post("/api/auth/reset_password")
+def api_reset_password(req: ResetPasswordReq):
+    """忘记密码:邮箱验证码(purpose=reset)+ 新密码。验证码即邮箱所有权证明;
+    重置成功同时吊销该用户全部存活 token(旧设备立即失效),需重新登录。"""
+    if not auth.verify_email_code(req.email, req.code, purpose="reset"):
+        raise HTTPException(400, "验证码不对或已过期")
+    if not auth.reset_password(req.email, req.new_password):
+        raise HTTPException(404, "该邮箱未注册")
+    return {"ok": True}
 
 
 @app.post("/api/auth/register")
@@ -231,7 +258,17 @@ def api_logout(authorization: str | None = Header(None), x_auth_token: str | Non
 
 @app.get("/api/auth/me")
 def api_me(user: dict | None = Depends(current_user_dep)):
-    """当前登录用户(未登录返回 {user:null})。"""
+    """当前登录用户(未登录返回 {user:null})。
+    avatar 在此单独补:认证热路径 resolve_token 已不带它(P2-22),me 是低频端点拖得起。"""
+    if user is not None and user.get("avatar") is None:
+        try:
+            from .db import get_pool
+            with get_pool().connection() as conn, conn.cursor() as cur:
+                cur.execute("select avatar from users where id = %s::uuid", (user["id"],))
+                r = cur.fetchone()
+                user = {**user, "avatar": r["avatar"] if r else None}
+        except Exception:
+            user = {**user, "avatar": None}
     return {"user": user, "auth_enabled": auth.enabled()}
 
 

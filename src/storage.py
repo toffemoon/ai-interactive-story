@@ -123,9 +123,11 @@ def save_session(session_id: str, data: dict[str, Any]) -> None:
 
 
 def delete_session(session_id: str) -> bool:
-    """删会话 (messages 级联删)。替代旧 session_path(id).unlink()。"""
+    """删会话 (messages 级联删;memory_vec 无 FK,同事务补删防孤儿向量——P2-20)。
+    不用 FK cascade:引擎写入顺序是先写向量后建 sessions 行,级联 FK 会让新局首回合失败。"""
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute("delete from memory_vec where session_id = %s", (session_id,))
         cur.execute("delete from sessions where id = %s", (session_id,))
         return cur.rowcount > 0
 
@@ -170,22 +172,26 @@ def assign_session_owner(session_id: str, user_id: str) -> bool:
 # ---------------- 卡库 (cards) ----------------
 # 账户系统:user_id 为 NULL = 官方公共卡(所有人只读可见);非 NULL = 该用户私有卡。
 # 唯一性走部分索引:用户行 (user_id,kind,name) 唯一,官方行 (kind,name) 唯一(见 migration)。
-# 旧 unique(kind,name) 约束已 drop,故这里用 update-then-insert(避免 on conflict 目标失效;
-# `is not distinct from` 正确处理 NULL)。legacy_all=True 时退化为旧全局语义(AUTH 关时)。
+# upsert 按 user_id 分支用 on conflict 对准对应部分索引(带 where 谓词)——单语句原子,
+# 根治旧 update-then-insert 在并发首存时撞唯一索引 500(P2-19)。
 
 def save_library(kind: str, name: str, payload: dict[str, Any], user_id: str | None = None) -> str:
     """保存卡。user_id=None 入官方公共库(AUTH 关时即旧全局行为);非 None 入该用户私有库。"""
     name_key = slug(name, kind)
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
-        cur.execute(
-            "update cards set data = %s, updated_at = now() "
-            "where kind = %s and name = %s and user_id is not distinct from %s::uuid",
-            (Jsonb(payload), kind, name_key, user_id),
-        )
-        if cur.rowcount == 0:
+        if user_id is None:
             cur.execute(
-                "insert into cards (kind, name, data, user_id) values (%s, %s, %s, %s::uuid)",
+                """insert into cards (kind, name, data) values (%s, %s, %s)
+                   on conflict (kind, name) where user_id is null
+                   do update set data = excluded.data, updated_at = now()""",
+                (kind, name_key, Jsonb(payload)),
+            )
+        else:
+            cur.execute(
+                """insert into cards (kind, name, data, user_id) values (%s, %s, %s, %s::uuid)
+                   on conflict (user_id, kind, name) where user_id is not null
+                   do update set data = excluded.data, updated_at = now()""",
                 (kind, name_key, Jsonb(payload), user_id),
             )
     return name_key
@@ -253,17 +259,22 @@ def assign_preset_owner(name: str, user_id: str | None) -> bool:
 # 同卡库:user_id NULL = 官方公共预设;非 NULL = 用户私有。
 
 def save_preset(name: str, payload: dict[str, Any], user_id: str | None = None) -> str:
+    # 同 save_library:on conflict 对准部分唯一索引,单语句原子(P2-19)。
     name_key = slug(name, "preset")
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
-        cur.execute(
-            "update presets set data = %s, updated_at = now() "
-            "where name = %s and user_id is not distinct from %s::uuid",
-            (Jsonb(payload), name_key, user_id),
-        )
-        if cur.rowcount == 0:
+        if user_id is None:
             cur.execute(
-                "insert into presets (name, data, user_id) values (%s, %s, %s::uuid)",
+                """insert into presets (name, data) values (%s, %s)
+                   on conflict (name) where user_id is null
+                   do update set data = excluded.data, updated_at = now()""",
+                (name_key, Jsonb(payload)),
+            )
+        else:
+            cur.execute(
+                """insert into presets (name, data, user_id) values (%s, %s, %s::uuid)
+                   on conflict (user_id, name) where user_id is not null
+                   do update set data = excluded.data, updated_at = now()""",
                 (name_key, Jsonb(payload), user_id),
             )
     return name_key

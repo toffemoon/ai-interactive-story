@@ -90,8 +90,9 @@ function ReconProfile(props) {
   };
   const recent = saves.slice(0, 4).map((s) => {
     const nm = s.name || s.summary || "未命名存档";
-    return { id: s.id, cover: _coverOf(nm), nm, rd: "第 " + (s.turns || 0) + " 回合" };
+    return { id: s.id, cover: _coverOf(nm), nm, rd: "第 " + (s.turns || 0) + " 回合", local: !!s.local };
   });
+  const hasLocal = recent.some((r) => r.local);
 
   // ---- 派生：我的资产（用户自己的卡;无 prop 时回退 presets 推导）----
   const assets = [
@@ -220,6 +221,8 @@ function ReconProfile(props) {
   
   .cv-profile .recent {display:flex; gap:14px;}
   .cv-profile .rcard {flex:1; background:var(--paper); border:1px solid var(--line); padding:7px;}
+  .cv-profile .rcard .loc {position:absolute; left:10px; top:10px; z-index:2; font-family:var(--serif); font-size:9px; letter-spacing:.1em;
+    color:#6f6757; background:rgba(250,244,234,.92); border:1px solid var(--line2); padding:1px 6px;}
   .cv-profile .rcard .th {width:100%; height:100px; object-fit:cover; border:1px solid rgba(169,138,99,.3); display:block;}
   .cv-profile .rcard .thn {background:linear-gradient(160deg,#efe6d2,#e0d3b6); display:grid; place-items:center;}
   .cv-profile .rcard .thn b {font-family:var(--serif); font-size:18px; letter-spacing:.18em; color:var(--gold); font-weight:700;}
@@ -327,24 +330,37 @@ function ReconProfile(props) {
         <div className="cols">
           {/* 左栏 */}
           <div className="colL">
-            <div className="sec-h"><b>最近游玩</b><span className="en">RECENT PLAYED</span><span className="all" style={{ cursor: "pointer" }} onClick={() => onNav("home")}>查看全部 ›</span></div>
+            {/* 「查看全部」此前货不对板(跳故事库/创作向导)→ 文案兑现实际去向 */}
+            <div className="sec-h"><b>最近游玩</b><span className="en">RECENT PLAYED</span><span className="all" style={{ cursor: "pointer" }} onClick={() => onNav("home")}>去故事库 ›</span></div>
             <div className="recent">
-              {!recent.length && (
+              {P.savesErr && (
+                <div className="rcard" style={{ flex: "1 0 100%", textAlign: "center", padding: "16px 14px", cursor: "pointer" }} onClick={() => P.onRetrySaves && P.onRetrySaves()}>
+                  <div className="nm">云端存档加载失败</div>
+                  <div className="rd" style={{ marginTop: 8 }}>点击重试(本机存档不受影响)</div>
+                </div>
+              )}
+              {!recent.length && !P.savesErr && (
                 <div className="rcard" style={{ flex: "1 0 100%", textAlign: "center", padding: "22px 14px", cursor: "pointer" }} onClick={onNew}>
                   <div className="nm">还没有进行中的故事</div>
                   <div className="rd" style={{ marginTop: 8 }}>去「创作」开局,写下你的第一回合 ›</div>
                 </div>
               )}
               {recent.map((r, i) => (
-                <div className="rcard" key={i} style={{ cursor: "pointer" }} onClick={() => onResume(r.id)}>
+                <div className="rcard" key={i} style={{ cursor: "pointer", position: "relative" }} onClick={() => onResume(r.id)}>
+                  {r.local && <span className="loc">仅本机</span>}
                   {r.cover
                     ? <img className="th" src={r.cover} alt="" />
                     : <div className="th thn"><b>{(r.nm || "书").slice(0, 4)}</b></div>}
                   <div className="nm">{r.nm}</div><div className="rd">{r.rd}</div></div>
               ))}
             </div>
+            {hasLocal && (
+              <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 8, letterSpacing: ".04em" }}>
+                标记「仅本机」的存档只保存在当前浏览器;登录后玩的对局会跟随账号、可跨设备继续。
+              </div>
+            )}
 
-            <div className="sec-h" style={{ marginTop: "24px" }}><b>我的资产</b><span className="en">MY ASSETS</span><span className="all" style={{ cursor: "pointer" }} onClick={() => onNav("build")}>查看全部 ›</span></div>
+            <div className="sec-h" style={{ marginTop: "24px" }}><b>我的资产</b><span className="en">MY ASSETS</span><span className="all" style={{ cursor: "pointer" }} onClick={() => onNav("build")}>去创作 ›</span></div>
             <div className="assets" style={{ marginTop: "0" }}>
               {[
                 <svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="3" width="18" height="24"/><circle cx="15" cy="12" r="3.4"/><path d="M9.5 22c1-3 3.2-4.4 5.5-4.4S19.5 19 20.5 22"/></svg>,

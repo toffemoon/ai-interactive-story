@@ -283,12 +283,14 @@
   }
 
   // —— 探索/故事库 ——
-  function MExplore({ presets, onOpenStory, onNew, onNav }) {
+  function MExplore({ presets, onOpenStory, onNew, onNav, loadErr, onRetry }) {
     const list = presets || [];
     return (
       <MShell title="故事库" en="Library" active="home" onNav={onNav}
         topAct={<span className="act" onClick={onNew}>＋ 写一本</span>}>
-        {list.length ? list.map((p, i) => <MStoryCard key={i} p={p} i={i} onOpen={() => onOpenStory(p)} />) : (
+        {list.length ? list.map((p, i) => <MStoryCard key={i} p={p} i={i} onOpen={() => onOpenStory(p)} />) : loadErr ? (
+          <div className="m-empty"><div className="pan"><h3>书架加载失败</h3><p>没能从服务器取到故事列表,<br />可能是网络抖动。</p><span className="gbtn" onClick={() => onRetry && onRetry()}>点击重试</span></div></div>
+        ) : (
           <div className="m-empty"><div className="pan"><h3>书架还空着</h3><p>去「创作」从一张角色卡开始,<br />聊着聊着,一本书就长出来了。</p><span className="gbtn" onClick={onNew}>去创作</span></div></div>
         )}
       </MShell>
@@ -524,7 +526,7 @@
   }
 
   // —— 我的 ——
-  function MMine({ user, presets, saves, assets, onResume, onNav, onLogout, onAvatar, onNew }) {
+  function MMine({ user, presets, saves, assets, onResume, onNav, onLogout, onAvatar, onNew, savesErr, onRetrySaves }) {
     const { useRef } = React;
     const fileRef = useRef(null);
     const _coverOf = (nm) => {
@@ -564,18 +566,27 @@
           <div className="me-stat"><b>{charCount}</b><span>角色卡</span></div>
         </div>
         <div className="sec-h"><b>最近游玩</b><span className="en">RECENT</span><i></i></div>
+        {savesErr && (
+          <div className="me-save" onClick={() => onRetrySaves && onRetrySaves()} style={{ cursor: "pointer" }}>
+            <span className="bd"><b>云端存档加载失败</b><span>点击重试(本机存档不受影响)</span></span>
+            <span className="go">重试</span>
+          </div>
+        )}
         {(saves || []).length ? (saves || []).slice(0, 8).map((s, i) => {
           const nm = s.name || s.summary || "未命名存档";
           const cov = _coverOf(nm);
           return (
             <div className="me-save" key={i} onClick={() => onResume && onResume(s.id)} style={{ cursor: "pointer" }}>
               <span className="cv" style={cov ? { backgroundImage: "url(" + cov + ")" } : undefined}>{!cov && <b>{nm.slice(0, 2)}</b>}</span>
-              <span className="bd"><b>{nm}</b><span>第 {s.turns || 0} 回合{s.updated ? " · " + s.updated : ""}</span></span>
+              <span className="bd"><b>{nm}{s.local ? <i style={{ fontStyle: "normal", fontSize: 9, color: "var(--faint)", border: "1px solid var(--line2)", padding: "0 4px", marginLeft: 6 }}>仅本机</i> : null}</b><span>第 {s.turns || 0} 回合{s.updated ? " · " + s.updated : ""}</span></span>
               <span className="go">续读 ›</span>
             </div>
           );
-        }) : (
+        }) : !savesErr ? (
           <div className="m-empty" style={{ padding: "20px 0" }}><div className="pan"><h3>还没有进行中的故事</h3><p>去「探索」取下一本书开局。</p><span className="gbtn" onClick={() => onNav && onNav("home")}>去探索</span></div></div>
+        ) : null}
+        {(saves || []).some((s) => s && s.local) && (
+          <div style={{ fontSize: 10.5, color: "var(--faint)", margin: "6px 2px 0" }}>标记「仅本机」的存档只在当前浏览器;登录后玩的对局跟随账号。</div>
         )}
       </MShell>
     );

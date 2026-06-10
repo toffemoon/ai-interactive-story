@@ -176,10 +176,13 @@ def revoke_token(token: str) -> None:
 
 
 def resolve_token(token: str) -> dict | None:
+    """认证热路径(每个带 token 请求都走):SELECT 不带 avatar(P2-22,prod 实查 avatar 最大 17KB,
+    拖着它每请求传一遍纯浪费;/api/auth/me 低频端点单独补,见 api.py);
+    last_used_at 节流写(>5min 才 UPDATE),把"每请求一写"降为"每会话每 5 分钟一写"。"""
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(
-            """select u.id, u.username, u.email, u.display_name, u.role, u.email_verified_at, u.status, u.avatar
+            """select u.id, u.username, u.email, u.display_name, u.role, u.email_verified_at, u.status
                from auth_tokens t join users u on u.id = t.user_id
                where t.token_hash = %s and t.revoked_at is null and t.expires_at > now()""",
             (_token_hash(token),),
@@ -187,8 +190,11 @@ def resolve_token(token: str) -> dict | None:
         r = cur.fetchone()
         if not r or r["status"] != "active":
             return None
-        cur.execute("update auth_tokens set last_used_at = now() where token_hash = %s",
-                    (_token_hash(token),))
+        cur.execute(
+            """update auth_tokens set last_used_at = now()
+               where token_hash = %s and (last_used_at is null or last_used_at < now() - interval '5 minutes')""",
+            (_token_hash(token),),
+        )
         return _row_to_user(r)
 
 
@@ -359,3 +365,43 @@ def verify_email_code(email: str, code: str, purpose: str = "register") -> bool:
             return False
         cur.execute("update email_otp set consumed_at = now() where id = %s", (r["id"],))
         return True
+
+
+def reset_password(email: str, new_password: str) -> bool:
+    """重置密码(调用方须先 verify_email_code(purpose='reset') 通过——验证码即邮箱所有权证明)。
+    重置后吊销该用户全部存活 token:旧设备/可能泄露的会话立即失效。"""
+    email = (email or "").strip().lower()
+    if not new_password or len(new_password) < 6:
+        raise HTTPException(400, "密码至少 6 位")
+    pool = get_pool()
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            "update users set password_hash = %s where email = %s and status = 'active' returning id",
+            (hash_password(new_password), email),
+        )
+        r = cur.fetchone()
+        if not r:
+            return False
+        cur.execute(
+            "update auth_tokens set revoked_at = now() where user_id = %s and revoked_at is null",
+            (r["id"],),
+        )
+        return True
+
+
+def cleanup_expired() -> dict:
+    """过期数据批量清理(P3-2,启动时调,fail-open):
+    - auth_tokens:过期/吊销超 30 天(resolve_token 本就过滤这些行,删除零行为变化)
+    - email_otp:过期超 7 天(验证码 10 分钟有效,留 7 天足够排查)
+    - rate_limits:窗口起点超 2 天(最长窗口 24h,2 天外必然只读不写)"""
+    pool = get_pool()
+    out = {}
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute("delete from auth_tokens where expires_at < now() - interval '30 days' "
+                    "or revoked_at < now() - interval '30 days'")
+        out["auth_tokens"] = cur.rowcount
+        cur.execute("delete from email_otp where expires_at < now() - interval '7 days'")
+        out["email_otp"] = cur.rowcount
+        cur.execute("delete from rate_limits where window_start < now() - interval '2 days'")
+        out["rate_limits"] = cur.rowcount
+    return out
