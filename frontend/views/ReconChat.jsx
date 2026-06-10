@@ -328,6 +328,10 @@ function ReconChat(props) {
 
       {/* 对话区（messages 映射；who==="me" → 右侧玩家泡，否则左侧角色泡带名） */}
       <div className="chat" ref={chatRef}>
+        {/* 会话来源提示:恢复的对话 vs 全新相遇,一行说清,新手不再迷惑"上次聊的去哪了" */}
+        {characters.length > 0 && messages.length > 0 && (
+          <div className="syscue"><span>{P.restored ? "已接上上次的对话 · 点左下「新建对话」可重新开始" : "✦ 新的相遇已开始"}</span></div>
+        )}
         {!characters.length ? (
           <>
             <div className="syscue"><span>还没有可聊的角色</span></div>

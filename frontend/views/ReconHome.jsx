@@ -239,7 +239,10 @@ function ReconHome(props) {
         </div>
         <div className="nr">
           <div className="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
-          <div className="login" onClick={user ? undefined : onLogin} style={{ cursor: user ? "default" : "pointer" }}><div className="zh">{user ? (user.display_name || user.username) : "登录"}</div><div className="en">{user ? "ACCOUNT" : "LOGIN"}</div></div>
+          {/* 已登录显示账号(点击进个人中心);未登录(=AUTH 关的部署,登录墙不会放未登录用户到这)不摆死按钮 */}
+          {user ? (
+            <div className="login" onClick={onLogin} style={{ cursor: "pointer" }}><div className="zh">{user.display_name || user.username}</div><div className="en">ACCOUNT</div></div>
+          ) : null}
           <div className="cta" onClick={goExplore}>
             <span className="cmp"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2 8 8 2-8 2-2 8-2-8-8-2 8-2z"/></svg></span>
             <span className="zh">开始探索</span><span className="en">EXPLORE</span>

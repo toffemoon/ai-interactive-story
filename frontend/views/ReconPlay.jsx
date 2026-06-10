@@ -6,7 +6,21 @@ function ReconPlay(props) {
   const onChange = p.onChange;
   const onReroll = p.onReroll || null;
   const canReroll = !!p.canReroll;
+  const onUndo = p.onUndo || null;
+  const canUndo = !!p.canUndo;
+  const history = p.history || [];   // 全量回合流 [{kind:'player'|'story', ...}],驱动「故事记录」抽屉
   const busy = !!p.busy;
+  const [logOpen, setLogOpen] = React.useState(false);
+  // 一次性提示(轻引导):选项只是建议,可自由输入——看过(关掉)就不再出现。
+  const [hintGone, setHintGone] = React.useState(() => {
+    try { return localStorage.getItem("ais_hint_play_free") === "1"; } catch (e) { return true; }
+  });
+  const dismissHint = () => { setHintGone(true); try { localStorage.setItem("ais_hint_play_free", "1"); } catch (e) {} };
+  // 抽屉打开时滚到最新一轮
+  const logRef = React.useRef(null);
+  React.useEffect(() => {
+    if (logOpen && logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [logOpen, history.length]);
   const story = p.story || "未命名故事";
   const worldTime = p.worldTime || "—";
   const round = p.round || "ROUND 01";
@@ -103,6 +117,31 @@ function ReconPlay(props) {
   .cv-play .gen {margin-left:12px; font-family:var(--kai); font-size:11.5px; color:#8a6f49;}
   .cv-play .gen i {display:inline-block; font-style:normal; animation:rcp-blink 1s steps(2) infinite;}
   @keyframes rcp-blink {50% {opacity:0;}}
+  /* 故事记录抽屉:右侧滑入,全量回合流(玩家行动 + 叙事 + 台词 + 事件) */
+  .cv-play .logwrap {position:absolute; inset:0; z-index:60; background:rgba(34,28,18,.32);}
+  .cv-play .logpanel {position:absolute; right:0; top:0; bottom:0; width:560px; background:var(--paper); border-left:1px solid var(--line2);
+    display:flex; flex-direction:column; box-shadow:-18px 0 44px -22px rgba(43,38,32,.5); animation:rcp-log .28s cubic-bezier(.22,1,.36,1) both;}
+  @keyframes rcp-log { from {transform:translateX(40px); opacity:0;} to {transform:none; opacity:1;} }
+  @media (prefers-reduced-motion: reduce){ .cv-play .logpanel {animation-duration:1ms;} }
+  .cv-play .loghead {flex:none; display:flex; align-items:center; gap:10px; padding:16px 20px 13px; border-bottom:1px solid var(--line);}
+  .cv-play .loghead b {font-family:var(--serif); font-size:16px; letter-spacing:.1em; color:var(--ink);}
+  .cv-play .loghead .en {font-family:var(--serifen); font-size:8px; letter-spacing:.22em; color:var(--gold);}
+  .cv-play .loghead .cnt {margin-left:auto; font-family:var(--serifen); font-size:11px; color:var(--faint);}
+  .cv-play .loghead .x {cursor:pointer; color:var(--soft); padding:2px 8px; font-size:14px;}
+  .cv-play .logbody {flex:1; min-height:0; overflow-y:auto; padding:14px 22px 20px;}
+  .cv-play .logbody::-webkit-scrollbar {width:6px;} .cv-play .logbody::-webkit-scrollbar-thumb {background:var(--line2);}
+  .cv-play .lg-me {margin:14px 0 10px; padding:9px 13px; background:rgba(52,70,61,.07); border-left:2px solid var(--green); font-family:var(--kai); font-size:12.5px; color:var(--ink);}
+  .cv-play .lg-me span {font-family:var(--serif); font-size:10.5px; color:var(--green); margin-right:8px; font-weight:700;}
+  .cv-play .lg-turn {padding:4px 0 10px; border-bottom:1px solid #ece2cf;}
+  .cv-play .lg-rd {font-family:var(--serifen); font-size:9px; letter-spacing:.18em; color:var(--gold); margin:8px 0 6px;}
+  .cv-play .lg-nar {font-family:var(--kai); font-size:12.5px; line-height:1.95; color:#5b5346; margin:0 0 6px; white-space:pre-wrap;}
+  .cv-play .lg-line {display:flex; gap:8px; margin:4px 0; font-size:12.5px;}
+  .cv-play .lg-line b {flex:none; font-family:var(--serif); color:var(--ink);}
+  .cv-play .lg-line span {font-family:var(--kai); color:var(--soft); line-height:1.8;}
+  .cv-play .lg-ev {font-family:var(--kai); font-size:10.5px; color:#8a6f49; margin-top:5px;}
+  /* 一次性轻引导:看过即消失 */
+  .cv-play .freehint {display:flex; align-items:center; gap:8px; margin-top:14px; font-family:var(--kai); font-size:11.5px; color:#8a6f49;}
+  .cv-play .freehint .x {cursor:pointer; color:var(--faint); margin-left:auto; padding:0 4px;}
   .cv-play .titem .ic {width:18px; height:18px; display:grid; place-items:center; flex:none;}
   .cv-play .titem .tt {display:flex; flex-direction:column; line-height:1;}
   .cv-play .titem .zh {font-family:var(--serif); font-size:12px; letter-spacing:.04em;}
@@ -272,9 +311,21 @@ function ReconPlay(props) {
           <span className="ti">《{story}》</span>
           <span className="ed">✎</span>
         </div>
-        {/* 顶栏只留真实可用的:重生成(接 /api/reroll)+ 自动存档状态指示 + 回合进度。
-            存档按钮(本就自动存,点了无事发生)/回溯本轮/SUPERVISOR/齿轮 = 未实现 → 隐藏,不用选中态假装可用。 */}
+        {/* 顶栏全部真实可用:故事记录(全量回看)/ 撤回上一轮(恢复 pre-turn 快照,零 LLM)/
+            重生成(接 /api/reroll)/ 自动存档状态指示。SUPERVISOR/齿轮仍未实现 → 不摆。 */}
         <div className="topr">
+          <div className={"titem" + (history.length ? "" : " dis")}
+            title="回看这一局从头到现在的全部回合"
+            onClick={() => history.length && setLogOpen(true)}>
+            <span className="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M5 4h11l3 3v13H5z"/><path d="M9 9h8M9 13h8M9 17h5"/></svg></span>
+            <span className="tt"><span className="zh">故事记录</span><span className="en">STORY LOG</span></span>
+          </div>
+          <div className={"titem" + (busy || !canUndo || !onUndo ? " dis" : "")}
+            title="撤回上一轮:回到你输入之前,输入会回填供修改(只能撤最近一轮)"
+            onClick={() => { if (!busy && canUndo && onUndo) onUndo(); }}>
+            <span className="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 9a8 8 0 1 1 1 5"/><path d="M4 4v5h5"/></svg></span>
+            <span className="tt"><span className="zh">撤回上一轮</span><span className="en">UNDO TURN</span></span>
+          </div>
           <div className={"titem" + (busy || !canReroll || !onReroll ? " dis" : "")}
             title="对上一回合不满意?丢弃它并用相同输入重新生成"
             onClick={() => { if (!busy && canReroll && onReroll) onReroll(); }}>
@@ -328,6 +379,14 @@ function ReconPlay(props) {
             )}
           </div>
         </div>
+
+        {/* 一次性轻引导(替代已拆除的多步 coach):点破「选项只是建议」 */}
+        {!hintGone && (
+          <div className="freehint">
+            <span>✦ 选项只是建议——你随时可以在下方说出自己的任何行动,故事会接住</span>
+            <span className="x" onClick={dismissHint}>✕ 知道了</span>
+          </div>
+        )}
 
         {/* 自由行动 */}
         <div className="free">
@@ -386,6 +445,41 @@ function ReconPlay(props) {
           <img className="chibi" src="assets/recon/play-chibi-br.png" alt="" />
         </div>
       </div>
+
+      {/* 故事记录抽屉:全量回合流回看(点遮罩或 ✕ 关闭) */}
+      {logOpen && (
+        <div className="logwrap" onClick={(e) => { if (e.target.classList && e.target.classList.contains("logwrap")) setLogOpen(false); }}>
+          <div className="logpanel">
+            <div className="loghead">
+              <b>故事记录</b><span className="en">STORY LOG</span>
+              <span className="cnt">{history.filter((t) => t.kind === "story").length} 回合</span>
+              <span className="x" onClick={() => setLogOpen(false)}>✕</span>
+            </div>
+            <div className="logbody" ref={logRef}>
+              {(() => {
+                let n = 0;
+                return history.map((t, i) => {
+                  if (t.kind === "player") return <div className="lg-me" key={i}><span>你</span>{t.text}</div>;
+                  n++;
+                  const d = t.data || {};
+                  return (
+                    <div className="lg-turn" key={i}>
+                      <div className="lg-rd">ROUND {String(n).padStart(2, "0")}</div>
+                      {d.narration && <p className="lg-nar">{d.narration}</p>}
+                      {(d.messages || []).map((m, j) => (
+                        <div className="lg-line" key={j}><b>{m.name || m.character_id || "?"}</b><span>{m.text}</span></div>
+                      ))}
+                      {(d.triggered_events || []).length > 0 && (
+                        <div className="lg-ev">触发事件:{d.triggered_events.join("、")}</div>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

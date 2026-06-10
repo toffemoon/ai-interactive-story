@@ -227,14 +227,12 @@ function setActiveId(id) {
   try { localStorage.setItem(SESSION_KEY + _savesScope, id); } catch (e) {}
 }
 
-// 确保有一个活动存档并登记;同一浏览器重开还是同一局(后端数据一直持久化)。
+// 确保有一个活动存档 id;同一浏览器重开还是同一局(后端数据一直持久化)。
+// 不再在此登记 0 回合占位存档:登记延迟到第一回合真正发生(StoryPanel 的 touchSave)——
+// 新用户没玩过就不会看到「未命名存档 · 第 0 回合」和虚高的「进行中 N 局」。
 function loadOrCreateSessionId() {
   let id = getActiveId();
-  let saves = loadSaves();
   if (!id) { id = newSessionId(); setActiveId(id); }
-  if (!saves.some((s) => s.id === id)) {
-    persistSaves([{ id, name: "", updated: "", turns: 0, summary: "" }, ...saves]);
-  }
   return id;
 }
 
@@ -1030,6 +1028,7 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
           setTurns(structured.length ? restoreTurns(structured) : messagesToTurns(msgs));
           setChoices(structured.length ? (structured[structured.length - 1].choices || []) : []);
           setState((data && data.state) || null);
+          setCanUndo(true);   // 续玩局:最后一轮的快照持久在服务端,可撤
         }
         setHydrated(true);   // 后端也空(全新局没玩过)→ 保持空,但补水已完成
       })
@@ -1077,6 +1076,7 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
       setTurns((xs) => [...xs, { kind: "story", data: finalTurn }]);
       setChoices(finalTurn.choices || []);
       setState(finalTurn.state || null);
+      setCanUndo(true);   // 新回合落地 → 服务端已写好它的 pre-turn 快照
       if (onTurn) onTurn();
     } catch (e) {
       setStreaming(null);
@@ -1108,6 +1108,40 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
     requestAnimationFrame(() => inputRef.current?.focus());
   }
 
+  // 撤回上一轮:恢复服务端 pre-turn 快照(与 reroll 同一套镜像,零 LLM 调用),
+  // 本地同步裁掉最后一条剧情和它的玩家气泡,被撤回的输入回填输入框供修改。
+  // 快照只有一层(镜像不含 _reroll 防嵌套)→ 撤完要等新回合产生才能再撤(canUndo 管这件事)。
+  const [canUndo, setCanUndo] = useState(() => !!(initialTurns && initialTurns.length));
+  async function undoLast() {
+    if (loading || !canUndo) return;
+    setLoading(true);
+    setError("");
+    try {
+      const out = await postJSON("/api/undo_last", { session_id: sessionId });
+      setTurns((xs) => {
+        const ys = [...xs];
+        for (let i = ys.length - 1; i >= 0; i--) {
+          if (ys[i].kind === "story") {
+            ys.splice(i, 1);
+            if (i > 0 && ys[i - 1] && ys[i - 1].kind === "player") ys.splice(i - 1, 1);
+            break;
+          }
+        }
+        return ys;
+      });
+      setChoices((out.last_turn && out.last_turn.choices) || []);
+      setState(out.state || null);
+      setStreaming(null);
+      setInput(out.undone_input || "");
+      setCanUndo(false);
+      if (onTurn) onTurn();
+    } catch (e) {
+      setError("撤回失败: " + e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // 对上一回合不满意:回滚副作用 + 用相同输入重新生成,只替换最后一条剧情(玩家行动保持不变)。
   async function rerollLast() {
     if (loading) return;
@@ -1124,6 +1158,7 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
       setTurns((xs) => xs.map((t, i) => (i === idx ? { kind: "story", data: out } : t)));
       setChoices(out.choices || []);
       setState(out.state || null);
+      setCanUndo(true);   // 重生成 = 新回合落盘,快照随之更新
       if (onTurn) onTurn();
     } catch (e) {
       setError("重新生成失败: " + e.message);
@@ -1165,6 +1200,9 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
         onChoice={(c) => runTurn({ choice: c.label || c.title })}
         onReroll={rerollLast}
         canReroll={storyTurns.length > 0}
+        onUndo={undoLast}
+        canUndo={canUndo}
+        history={turns}
         busy={loading}
         playerName={pname}
       />
@@ -1275,12 +1313,14 @@ async function saveToVault(kind, data) {
 // 注册:邮箱 + 发送验证码 + 验证码 + 密码(可选用户名)。登录:邮箱/用户名 + 密码。
 function LoginView({ onAuthed, onBack, initialTab }) {
   const [tab, setTab] = useState(initialTab === "register" ? "register" : "login"); // login | register,按入口预选
+  const [resetMode, setResetMode] = useState(false);  // 登录 tab 下的「忘记密码」子模式
   const [identifier, setIdentifier] = useState("");   // 登录:邮箱或用户名
-  const [email, setEmail] = useState("");             // 注册:邮箱(主身份)
+  const [email, setEmail] = useState("");             // 注册/重置:邮箱(主身份)
   const [username, setUsername] = useState("");       // 注册:可选登录名
-  const [code, setCode] = useState("");               // 注册:邮箱验证码
+  const [code, setCode] = useState("");               // 注册/重置:邮箱验证码
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
+  const [ok, setOk] = useState("");                   // 成功提示(重置完成后引导回登录)
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
   const [sentHint, setSentHint] = useState("");       // 发码后的提示(含 dev_code)
@@ -1297,7 +1337,8 @@ function LoginView({ onAuthed, onBack, initialTab }) {
     if (!email.trim() || email.indexOf("@") < 0) { setErr("先填邮箱"); return; }
     setSending(true); setErr(""); setSentHint("");
     try {
-      const data = await authApi("/api/auth/email/send_code", { email: email.trim() });
+      const data = await authApi("/api/auth/email/send_code",
+        { email: email.trim(), purpose: resetMode ? "reset" : "register" });
       setCooldown(60);
       setSentHint(data.dev_code ? `验证码已发(本地测试码:${data.dev_code})` : "验证码已发到邮箱,10 分钟内有效;没收到请翻翻垃圾邮件,60 秒后可重发");
     } catch (e) { setErr(e.message || "发送失败"); }
@@ -1306,8 +1347,16 @@ function LoginView({ onAuthed, onBack, initialTab }) {
 
   async function submit() {
     if (busy) return;
-    setBusy(true); setErr("");
+    setBusy(true); setErr(""); setOk("");
     try {
+      if (resetMode) {
+        await authApi("/api/auth/reset_password",
+          { email: email.trim(), code: code.trim(), new_password: password });
+        setResetMode(false); setPassword(""); setCode(""); setSentHint("");
+        setIdentifier(email.trim());
+        setOk("密码已重置,旧设备已全部下线——用新密码登录吧");
+        return;
+      }
       const data = tab === "login"
         ? await authApi("/api/auth/login", { identifier: identifier.trim(), password })
         : await authApi("/api/auth/register", {
@@ -1357,16 +1406,31 @@ function LoginView({ onAuthed, onBack, initialTab }) {
         .cv-login .go:hover:not(:disabled) {background:#2c3a32; color:#f3ead6;}
         .cv-login .go:disabled {opacity:.6;}
         .cv-login .back {position:absolute; left:42px; top:-34px; font-family:Georgia,serif; font-size:12px; letter-spacing:.2em; color:rgba(240,234,222,.75); cursor:pointer;}
+        .cv-login .forgot {margin-top:14px; text-align:center; font-size:12.5px; color:#6f6757; cursor:pointer; letter-spacing:.06em;}
+        .cv-login .forgot:hover {color:#2b2620; text-decoration:underline;}
       `}</style>
       <div className="card">
         {onBack && <span className="back" onClick={onBack}>‹ BACK</span>}
         <h1>叙事引擎</h1>
         <div className="sub">NARRATIVE ENGINE · SIGN IN</div>
         <div className="tabs">
-          <button className={tab === "login" ? "on" : ""} onClick={() => { setTab("login"); setErr(""); }}>登录 · 回到故事</button>
-          <button className={tab === "register" ? "on" : ""} onClick={() => { setTab("register"); setErr(""); }}>注册 · 初次到来</button>
+          <button className={tab === "login" ? "on" : ""} onClick={() => { setTab("login"); setResetMode(false); setErr(""); setOk(""); }}>登录 · 回到故事</button>
+          <button className={tab === "register" ? "on" : ""} onClick={() => { setTab("register"); setResetMode(false); setErr(""); setOk(""); }}>注册 · 初次到来</button>
         </div>
-        {tab === "login" ? (
+        {resetMode ? (
+          <>
+            <input type="email" placeholder="注册时用的邮箱" value={email}
+                   onChange={(e) => setEmail(e.target.value)} />
+            <div className="coderow">
+              <input placeholder="邮箱验证码" value={code}
+                     onChange={(e) => setCode(e.target.value)} />
+              <button disabled={sending || cooldown > 0} onClick={sendCode}>
+                {cooldown > 0 ? `${cooldown}s` : (sending ? "…" : "发送验证码")}
+              </button>
+            </div>
+            {sentHint && <div className="hint">{sentHint}</div>}
+          </>
+        ) : tab === "login" ? (
           <input placeholder="邮箱或用户名" value={identifier}
                  onChange={(e) => setIdentifier(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !(e.nativeEvent || e).isComposing && submit()} />
         ) : (
@@ -1385,12 +1449,18 @@ function LoginView({ onAuthed, onBack, initialTab }) {
                    onChange={(e) => setUsername(e.target.value)} />
           </>
         )}
-        <input type="password" placeholder="密码" value={password}
-               onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
+        <input type="password" placeholder={resetMode ? "新密码(至少 6 位)" : "密码"} value={password}
+               onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !(e.nativeEvent || e).isComposing && submit()} />
+        {ok && <div className="hint">{ok}</div>}
         {err && <div className="err">{err}</div>}
         <button className="go" disabled={busy} onClick={submit}>
-          {busy ? "…" : (tab === "login" ? "进入故事" : "注册并进入")}
+          {busy ? "…" : (resetMode ? "重置密码" : (tab === "login" ? "进入故事" : "注册并进入"))}
         </button>
+        {tab === "login" && (
+          <div className="forgot" onClick={() => { setResetMode(!resetMode); setErr(""); setOk(""); setSentHint(""); setCode(""); setPassword(""); }}>
+            {resetMode ? "‹ 返回登录" : "忘记密码?"}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2145,7 +2215,7 @@ function ReconShell({ designW, designH, bg, onNav, onPrimary, children }) {
 
 // 角色聊天控制器:OC 就是角色——/api/my/oc 的 OC 与预设角色合成同一份「角色」列表
 // (OC 排前、带真立绘,按名去重)。统一卡主导一对一,共用 /api/chat,历史按角色名维护。
-function ReconChatLive({ presets, onNav, mobile }) {
+function ReconChatLive({ presets, onNav, mobile, uid }) {
   const presetCards = React.useMemo(() => {
     const out = []; const seen = new Set();
     (presets || []).forEach((p) => ((p.data && p.data.characters) || []).forEach((c) => {
@@ -2154,15 +2224,43 @@ function ReconChatLive({ presets, onNav, mobile }) {
     return out;
   }, [presets]);
   const [ocs, setOcs] = React.useState([]);
+  const [myCards, setMyCards] = React.useState([]); // 用户自己建的角色卡(创作桌入库的)也能聊——闭环建卡→使用
   const [activeKey, setActiveKey] = React.useState("");
-  const [byKey, setByKey] = React.useState({});
+  // 会话持久化:对话与会话 id 落 localStorage(按账号隔离),切走/刷新回来接着聊,
+  // 「近期聊天」终于名实相符;「新建对话」才重开。每角色只留最近 60 条防爆容量。
+  const CHAT_KEY = "ais_chat_hist_v1" + (uid ? "_u_" + uid : "");
+  const restoredRef = React.useRef({});  // 哪些角色是从本机恢复的(给「已接上上次对话」提示)
+  const [byKey, setByKey] = React.useState(() => {
+    try {
+      const d = JSON.parse(localStorage.getItem(CHAT_KEY)) || {};
+      const out = {};
+      Object.keys(d).forEach((k) => {
+        if (d[k] && Array.isArray(d[k].msgs) && d[k].msgs.length) { out[k] = d[k].msgs; restoredRef.current[k] = true; }
+      });
+      return out;
+    } catch (e) { return {}; }
+  });
   const [input, setInput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  React.useEffect(() => {
+    try {
+      const out = {};
+      Object.keys(byKey).forEach((k) => {
+        // 滤掉纯「……」占位(开场进行中被打断的残留),避免恢复出一条死占位
+        const msgs = (byKey[k] || []).filter((m) => !(m && m.who !== "me" && m.text === "……")).slice(-60);
+        if (msgs.length) out[k] = { sid: sidsRef.current[k] || "", msgs };
+      });
+      localStorage.setItem(CHAT_KEY, JSON.stringify(out));
+    } catch (e) {}
+  }, [byKey]);
   React.useEffect(() => {
     let alive = true;
     fetch("/api/my/oc").then((r) => (r.ok ? r.json() : { ocs: [] }))
       .then((d) => { if (alive) setOcs(d.ocs || []); })
       .catch(() => { if (alive) setOcs([]); });
+    fetch("/api/library/characters").then((r) => (r.ok ? r.json() : []))
+      .then((rows) => { if (alive) setMyCards((rows || []).filter((x) => x && !x.official)); })
+      .catch(() => { if (alive) setMyCards([]); });
     return () => { alive = false; };
   }, []);
   const list = React.useMemo(() => {
@@ -2170,19 +2268,37 @@ function ReconChatLive({ presets, onNav, mobile }) {
     (ocs || []).forEach((o) => {
       if (o.character && !seen.has(o.character)) { seen.add(o.character); out.push({ name: o.character, persona: o.persona, avatar: o.art || undefined, anim: o.anim || undefined, card: o.card }); }
     });
+    // 自有卡库角色排在 OC 后、预设角色前(自己造的人优先看到)
+    (myCards || []).forEach((c) => {
+      const d = (c.data && c.data.data) || c.data || {};
+      const nm = d.name || c.name;
+      if (nm && !seen.has(nm)) { seen.add(nm); out.push({ name: nm, persona: d.persona || d.personality, description: d.description, card: c.data }); }
+    });
     presetCards.forEach((c) => {
       const nm = (c.data && c.data.name) || c.name;
       if (nm && !seen.has(nm)) { seen.add(nm); out.push({ name: nm, persona: c.data && c.data.persona, description: c.data && c.data.description, card: c }); }
     });
     return out;
-  }, [ocs, presetCards]);
+  }, [ocs, myCards, presetCards]);
   const activeName = activeKey || (list[0] && list[0].name) || "";
   const activeItem = list.find((x) => x.name === activeName) || null;
   const messages = byKey[activeName] || [];
-  // 每次进入与某角色的对话 = 开一个全新故事:会话 id 带随机串,不复用旧局;
-  // 旧会话(历史 id)服务端原样保留,不受影响。
-  const sidsRef = React.useRef({});
-  const openedRef = React.useRef({});
+  // 会话 id:有本机记录就续用上次的 sid(服务端按 sid 保留完整历史,续聊有上下文);
+  // 没有才开新串。「新建对话」显式换新 sid,旧会话服务端原样保留。
+  const sidsRef = React.useRef(null);
+  const openedRef = React.useRef(null);
+  if (sidsRef.current === null) {
+    const sids = {}, opened = {};
+    try {
+      const d = JSON.parse(localStorage.getItem(CHAT_KEY)) || {};
+      Object.keys(d).forEach((k) => {
+        if (d[k] && d[k].sid) sids[k] = d[k].sid;
+        if (d[k] && Array.isArray(d[k].msgs) && d[k].msgs.length) opened[k] = true; // 已有对话 → 不再自动开场
+      });
+    } catch (e) {}
+    sidsRef.current = sids;
+    openedRef.current = opened;
+  }
   const [chatNonce, setChatNonce] = React.useState(0); // 「新建对话」重开会话的触发器
   const sidFor = (nm) => {
     if (!sidsRef.current[nm]) sidsRef.current[nm] = "chat-" + nm + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -2217,6 +2333,7 @@ function ReconChatLive({ presets, onNav, mobile }) {
     if (!nm || busy) return;
     delete sidsRef.current[nm];
     openedRef.current[nm] = false;
+    delete restoredRef.current[nm];
     setByKey((m) => { const n = { ...m }; delete n[nm]; return n; });
     setChatNonce((x) => x + 1);
   }
@@ -2244,6 +2361,7 @@ function ReconChatLive({ presets, onNav, mobile }) {
       activeName={activeName} messages={messages} value={input}
       onChange={setInput} onSend={send} onNav={onNav}
       busy={busy} canChat={!!(activeItem && activeItem.card)} onNewChat={newChat}
+      restored={!!(restoredRef.current[activeName] && messages.length)}
       onPick={(nm) => setActiveKey(nm)} />
   );
 }
@@ -2286,7 +2404,12 @@ function ReconCreateLive({ onNav, refreshHome, mobile }) {
     try {
       await postJSON("/api/library/save", { kind: k, data: k === "characters" ? { data: d } : d });
       if (refreshHome) refreshHome();
-      alert("已收入卡库。");
+      // 入库提示带出路(此前只 alert 一句死胡同):角色卡直通聊天页,聊天列表已并入自有卡库角色。
+      if (k === "characters") {
+        if (confirm("已收入卡库。现在就去和 TA 聊聊吗?")) { onNav("chat"); return; }
+      } else {
+        alert("已收入卡库,可在个人中心查看。");
+      }
     } catch (e) { alert("入库失败：" + e.message); }
   }
   const d = draft || {};
@@ -2427,9 +2550,15 @@ function App() {
     setView("build");
   };
 
+  // 故事库加载失败 ≠ 书架为空:失败置 presetsErr,探索页给「加载失败 · 重试」而非假空态;
+  // 失败时保留上次成功的列表(短暂网络抖动不清屏)。
+  const [presetsErr, setPresetsErr] = useState(false);
   function refreshHome() {
     setSaves(loadSaves());
-    fetch("/api/presets").then((r) => (r.ok ? r.json() : [])).then(setPresets).catch(() => setPresets([]));
+    fetch("/api/presets")
+      .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then((rows) => { setPresets(rows); setPresetsErr(false); })
+      .catch(() => setPresetsErr(true));
   }
   useEffect(() => { refreshHome(); }, []);
 
@@ -2455,8 +2584,27 @@ function App() {
     return () => { alive = false; };
   }, []);
   // 本地存档作用域跟随账号:登录 = 只看自己这个号在本机的存档(新号=空);游客/AUTH 关 = 旧全局 key。
+  // 游客存档并入:登录后若本机旧全局 key 下有玩过的游客存档(turns>0),问一次要不要并进这个账号——
+  // 注册不再凭空"弄丢"游客期的进度。每个账号只问一次(标记记 localStorage)。
   useEffect(() => {
-    setSavesScope(auth.enabled && auth.user ? auth.user.id : "");
+    const uid = auth.enabled && auth.user ? auth.user.id : "";
+    setSavesScope(uid);
+    if (uid) {
+      try {
+        const flagKey = "ais_guest_merged_" + uid;
+        if (!localStorage.getItem(flagKey)) {
+          const legacy = (JSON.parse(localStorage.getItem(SAVES_KEY) || "[]") || [])
+            .filter((s) => s && s.id && (s.turns || 0) > 0);
+          const cur = loadSaves();
+          const fresh = legacy.filter((s) => !cur.some((c) => c && c.id === s.id));
+          if (fresh.length && confirm(
+            "检测到本机有 " + fresh.length + " 局游客存档。要并入这个账号吗?\n并入后可在「最近游玩」继续;不并入则它们留在游客模式里。")) {
+            persistSaves([...fresh, ...cur]);
+          }
+          localStorage.setItem(flagKey, "1");
+        }
+      } catch (e) {}
+    }
     setSaves(loadSaves());
   }, [auth.enabled, auth.user && auth.user.id]);
   // 登录后:深链(#/chat 等)保留原目的地;否则进功能页(故事库)。
@@ -2467,16 +2615,19 @@ function App() {
   }, [auth.ready, auth.user]);
 
   // 登录后拉服务器侧「我的会话」(跨设备/运营分发的故事局),与本机存档合并给「我的·最近游玩」。
+  // 失败 ≠ 没存档:置 savesErr 给个人中心显示「加载失败 · 重试」,并保留上次成功的列表。
   const [serverSaves, setServerSaves] = useState([]);
+  const [savesErr, setSavesErr] = useState(false);
+  const [savesReload, setSavesReload] = useState(0);
   useEffect(() => {
-    if (!auth.user) { setServerSaves([]); return undefined; }
+    if (!auth.user) { setServerSaves([]); setSavesErr(false); return undefined; }
     let alive = true;
     fetch("/api/my/sessions")
-      .then((r) => (r.ok ? r.json() : []))
-      .then((rows) => { if (alive) setServerSaves(Array.isArray(rows) ? rows : []); })
-      .catch(() => { if (alive) setServerSaves([]); });
+      .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then((rows) => { if (alive) { setServerSaves(Array.isArray(rows) ? rows : []); setSavesErr(false); } })
+      .catch(() => { if (alive) setSavesErr(true); });
     return () => { alive = false; };
-  }, [auth.user, view]);   // 切视图时顺带刷新,玩完一局回「我的」立即可见
+  }, [auth.user, view, savesReload]);   // 切视图时顺带刷新,玩完一局回「我的」立即可见
 
   // 「我的资产」= 用户自己的卡(AUTH 开时滤掉 official 官方公共卡;关时本机即本人,全算)。
   // 此前个人中心把官方故事库整库算成新号资产(40 张角色卡等),与事实不符。
@@ -2540,7 +2691,9 @@ function App() {
       updated: s.updated_at ? String(s.updated_at).replace("T", " ").slice(0, 16) : "",
     }));
     const ids = new Set(server.map((s) => s.id));
-    const localOnly = (saves || []).filter((s) => s && s.id && !ids.has(s.id));
+    // 仅本机条目:标 local 给 UI 加「仅本机」角标;过滤 0 回合占位残留(老版本登记的空档)。
+    const localOnly = (saves || []).filter((s) => s && s.id && !ids.has(s.id) && (s.turns || 0) > 0)
+      .map((s) => ({ ...s, local: true }));
     return [...localOnly, ...server];
   }, [saves, serverSaves]);
   // 先 POST 吊销(此时 token 还在,fetch 钩子会带上),再清本地 → 服务端 token 立即失效,不留 60 天活口。
@@ -2766,19 +2919,20 @@ function App() {
 
       {/* 功能版探索/故事库(登录后的主页) */}
       {view === "home" && (isMobile ? (
-        <window.MExplore presets={presets} onOpenStory={openStoryModal} onNew={onNew} onNav={navTo} />
+        <window.MExplore presets={presets} loadErr={presetsErr} onRetry={refreshHome}
+          onOpenStory={openStoryModal} onNew={onNew} onNav={navTo} />
       ) : (
         <ReconShell designW={1536} designH={1024}>
-          <window.ReconExplore presets={presets} user={auth.user}
+          <window.ReconExplore presets={presets} user={auth.user} loadErr={presetsErr} onRetry={refreshHome}
             onOpenStory={openStoryModal} onNew={onNew} onNav={navTo} />
         </ReconShell>
       ))}
 
       {view === "chat" && (isMobile ? (
-        <ReconChatLive presets={presets} onNav={navTo} mobile />
+        <ReconChatLive presets={presets} onNav={navTo} uid={auth.user ? auth.user.id : ""} mobile />
       ) : (
         <ReconShell designW={1536} designH={1024}>
-          <ReconChatLive presets={presets} onNav={navTo} />
+          <ReconChatLive presets={presets} onNav={navTo} uid={auth.user ? auth.user.id : ""} />
         </ReconShell>
       ))}
 
@@ -2789,12 +2943,15 @@ function App() {
             setAuth((a) => ({ ...a, user: a.user ? { ...a.user, avatar: (r && r.avatar) || dataUri } : a.user }));
           } catch (e) { alert("头像上传失败:" + e.message); }
         };
+        const retrySaves = () => setSavesReload((x) => x + 1);
         return isMobile ? (
           <window.MMine user={auth.user} presets={presets} saves={mineSaves} assets={myAssets}
+            savesErr={savesErr} onRetrySaves={retrySaves}
             onNav={navTo} onResume={resumeSave} onNew={onNew} onLogout={onLogout} onAvatar={onAvatarUp} />
         ) : (
           <ReconShell designW={1536} designH={1024}>
             <window.ReconProfile user={auth.user} presets={presets} saves={mineSaves} assets={myAssets}
+              savesErr={savesErr} onRetrySaves={retrySaves}
               onNav={navTo} onResume={resumeSave} onNew={onNew} onLogout={onLogout} onAvatar={onAvatarUp} />
           </ReconShell>
         );

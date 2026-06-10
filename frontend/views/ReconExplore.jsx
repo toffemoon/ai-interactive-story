@@ -105,6 +105,15 @@ function ReconExplore(props) {
             );
           })}
         </div>
+      ) : P.loadErr ? (
+        /* 加载失败 ≠ 书架为空:失败要长得像失败,给重试出路 */
+        <div className="empty">
+          <div className="panel">
+            <h3>书架加载失败</h3>
+            <p>没能从服务器取到故事列表,<br/>可能是网络抖动或服务暂时不可用。</p>
+            <span className="newbtn" onClick={() => P.onRetry && P.onRetry()}>点击重试</span>
+          </div>
+        </div>
       ) : (
         <div className="empty">
           <div className="panel">

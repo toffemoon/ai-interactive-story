@@ -17,7 +17,8 @@ services:
     # 先装 CPU 版 torch(~200MB),避免 sentence-transformers 默认拉 CUDA 版(~2GB+)撑爆构建。
     buildCommand: pip install torch --index-url https://download.pytorch.org/whl/cpu && pip install -r requirements.txt
     startCommand: uvicorn src.api:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /
+    # /api/health 在 DB 不可达时返回 503;静态页 "/" 永远 200 探不出后端真死活
+    healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.7"
@@ -34,8 +35,10 @@ services:
       - key: DATABASE_URL
         sync: false            # Supabase session pooler 连接串,Render 控制台填
       # ── 账户系统(账户系统路线图 Phase 1)──
-      # 稳定配置写死在这;3 个"激活项"标 sync:false → Render 控制台填(其余自动)。
-      # ⚠️ 顺序:先在控制台填 AUTH_TOKEN_PEPPER + SMTP_PASS,再把 AUTH_ENABLED 设 1。
+      # ⚠️ 整块不可删:这些键是 blueprint 托管,从 yaml 移除会在下次同步时从服务上删除——
+      #   AUTH_ENABLED 没了登录墙消失、SUPERADMIN_EMAIL 没了超管失效(DB role 列是 user)、
+      #   PEPPER 没了全员 token 失效。真密钥本就 sync:false,值只在控制台,不进 repo。
+      # 顺序:先在控制台填 AUTH_TOKEN_PEPPER + SMTP_PASS,再把 AUTH_ENABLED 设 1。
       #   (AUTH_ENABLED=1 但 SMTP 未配 → 发码端点 503 fail-closed,注册发不出码。)
       - key: SUPERADMIN_EMAIL
         value: gengyue081@gmail.com   # 这个邮箱的账号永远是 superadmin(只一个)
@@ -50,6 +53,14 @@ services:
       - key: AUTH_ENABLED
         sync: false            # 控制台设 "1" 开启账户系统(先填好下面两个密钥再开)
       - key: AUTH_TOKEN_PEPPER
-        sync: false            # 随机长串(用之前生成的那个),控制台填;改了会让已发 token/验证码失效
+        sync: false            # 随机长串(沿用现值,改了会让已发 token/验证码全部失效)
       - key: SMTP_PASS
         sync: false            # Gmail 应用专用密码,控制台填
+      # ── 成本熔断(phase0,prod 三表已建;设 1 才真正咬合) ──
+      - key: COST_GUARD_ENABLED
+        value: "1"
+      # ── 运行参数(显式化,便于核算调参) ──
+      - key: DB_POOL_MAX
+        value: "10"            # 与实例数 × Supabase pooler 限额核算后调
+      - key: LOG_LEVEL
+        value: INFO
