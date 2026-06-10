@@ -3252,6 +3252,28 @@ function App() {
   useEffect(() => {
     if (auth.ready && auth.user) setView((v) => (v === "landing" ? "home" : v));
   }, [auth.ready, auth.user]);
+
+  // 登录后拉服务器侧「我的会话」(跨设备/运营分发的故事局),与本机存档合并给「我的·最近游玩」。
+  const [serverSaves, setServerSaves] = useState([]);
+  useEffect(() => {
+    if (!auth.user) { setServerSaves([]); return undefined; }
+    let alive = true;
+    fetch("/api/my/sessions")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows) => { if (alive) setServerSaves(Array.isArray(rows) ? rows : []); })
+      .catch(() => { if (alive) setServerSaves([]); });
+    return () => { alive = false; };
+  }, [auth.user, view]);   // 切视图时顺带刷新,玩完一局回「我的」立即可见
+  const mineSaves = useMemo(() => {
+    const server = (serverSaves || []).map((s) => ({
+      id: s.id, name: s.story || (s.player ? s.player + " 的一局" : "未命名故事"),
+      turns: s.turns || 0,
+      updated: s.updated_at ? String(s.updated_at).replace("T", " ").slice(0, 16) : "",
+    }));
+    const ids = new Set(server.map((s) => s.id));
+    const localOnly = (saves || []).filter((s) => s && s.id && !ids.has(s.id));
+    return [...localOnly, ...server];
+  }, [saves, serverSaves]);
   // 先 POST 吊销(此时 token 还在,fetch 钩子会带上),再清本地 → 服务端 token 立即失效,不留 60 天活口。
   async function onLogout() { try { await fetch("/api/auth/logout", { method: "POST" }); } catch (e) {} setToken(""); location.reload(); }
 
@@ -3482,7 +3504,7 @@ function App() {
 
       {view === "mine" && (
         <ReconShell designW={1536} designH={1024}>
-          <window.ReconProfile user={auth.user} presets={presets} saves={saves}
+          <window.ReconProfile user={auth.user} presets={presets} saves={mineSaves}
             onNav={navTo} onResume={resumeSave} onNew={onNew} />
         </ReconShell>
       )}
