@@ -196,17 +196,19 @@ def list_library(kind: str, user_id: str | None = None, legacy_all: bool = False
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         if legacy_all:
-            cur.execute("select name, data, user_id from cards where kind = %s order by updated_at desc", (kind,))
+            cur.execute("select name, data, user_id, updated_at from cards where kind = %s order by updated_at desc", (kind,))
         elif user_id is None:
-            cur.execute("select name, data, user_id from cards where kind = %s and user_id is null order by updated_at desc", (kind,))
+            cur.execute("select name, data, user_id, updated_at from cards where kind = %s and user_id is null order by updated_at desc", (kind,))
         else:
             cur.execute(
-                "select name, data, user_id from cards where kind = %s and (user_id is null or user_id = %s::uuid) "
+                "select name, data, user_id, updated_at from cards where kind = %s and (user_id is null or user_id = %s::uuid) "
                 "order by (user_id is null), updated_at desc",
                 (kind, user_id),
             )
+        # updated_at 只读透出(探索页「按时间」排序用),不改写入逻辑。
         return [{"name": r["name"], "path": None, "data": r["data"],
-                 "official": r["user_id"] is None} for r in cur.fetchall()]
+                 "official": r["user_id"] is None,
+                 "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None} for r in cur.fetchall()]
 
 
 def delete_library(kind: str, name: str, user_id: str | None = None,
@@ -273,16 +275,18 @@ def list_presets(user_id: str | None = None, legacy_all: bool = False) -> list[d
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         if legacy_all:
-            cur.execute("select name, data, user_id from presets order by updated_at desc")
+            cur.execute("select name, data, user_id, updated_at from presets order by updated_at desc")
         elif user_id is None:
-            cur.execute("select name, data, user_id from presets where user_id is null order by updated_at desc")
+            cur.execute("select name, data, user_id, updated_at from presets where user_id is null order by updated_at desc")
         else:
             cur.execute(
-                "select name, data, user_id from presets where user_id is null or user_id = %s::uuid "
+                "select name, data, user_id, updated_at from presets where user_id is null or user_id = %s::uuid "
                 "order by (user_id is null), updated_at desc",
                 (user_id,),
             )
-        return [{"name": r["name"], "data": r["data"], "official": r["user_id"] is None}
+        # updated_at 只读透出(探索页「按时间」排序用),不改写入逻辑。
+        return [{"name": r["name"], "data": r["data"], "official": r["user_id"] is None,
+                 "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None}
                 for r in cur.fetchall()]
 
 
