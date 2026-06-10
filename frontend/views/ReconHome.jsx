@@ -125,8 +125,25 @@ function ReconHome(props) {
 
   
   .cv-home .nav {position:absolute; left:0; right:0; top:0; height:88px; z-index:20;}
-  .cv-home .nav::after {content:""; position:absolute; left:40px; right:40px; bottom:0; height:1px;
+  .cv-home .nav::after {content:""; position:absolute; left:392px; right:40px; bottom:0; height:1px;
     background:linear-gradient(90deg,transparent,var(--line2) 8%,var(--line2) 92%,transparent);}
+
+  /* ── 阴阳文(正负形互锁,参考明日方舟官网):
+     阴文 A2 = 双层巨字,色块外显墨蓝、色块内被 clip 成纸色 → 跨边界颜色反转(刻进色块);
+     阳文 YoRHa引擎 = 色块内实心字(凸起)。坐标都在 .yy(640×360)内,px 写死与画布对齐。 */
+  .cv-home .yy {position:absolute; left:0; top:0; width:640px; height:360px; z-index:21; pointer-events:none;}
+  .cv-home .yy .blk {position:absolute; left:0; top:0; width:360px; height:170px; background:var(--navy);}
+  .cv-home .yy .lay {position:absolute; inset:0;}
+  .cv-home .yy .lay .a2 {position:absolute; left:212px; top:-6px; margin:0;
+    font-family:"Arial Black","Segoe UI Black",Impact,sans-serif; font-weight:900; font-size:188px; line-height:1.1;
+    letter-spacing:-.02em; user-select:none;}
+  .cv-home .yy .lay.out .a2 {color:var(--navy);}
+  .cv-home .yy .lay.in {clip-path:inset(0 280px 190px 0);}  /* 裁成色块矩形(360×170):层框=yy(640×360) */
+  .cv-home .yy .lay.in .a2 {color:var(--bg);}
+  .cv-home .yy .mark {position:absolute; left:30px; top:22px; color:#f3ead6;}
+  .cv-home .yy .mark .en {font-family:var(--serifen); font-size:9px; letter-spacing:.34em; color:var(--gold2);}
+  .cv-home .yy .mark h1 {margin:6px 0 0; font-family:var(--serif); font-size:30px; font-weight:900; letter-spacing:.08em; color:#f3ead6; white-space:nowrap;}
+  .cv-home .yy .mark .sub {font-family:var(--kai); font-size:11px; letter-spacing:.3em; color:rgba(243,234,214,.62); margin-top:9px;}
   .cv-home .brand {position:absolute; left:40px; top:21px; display:flex; align-items:center; gap:13px;}
   .cv-home .brand .em {width:46px; height:46px; object-fit:contain;}
   .cv-home .brand h1 {margin:0; font-family:var(--serifen); font-weight:600; font-size:25px; letter-spacing:.04em; color:var(--navy);}
@@ -152,19 +169,19 @@ function ReconHome(props) {
   
   .cv-home .hero-art {position:absolute; right:0; top:86px; width:1020px; height:474px; z-index:1;
     background:center/cover no-repeat url(assets/recon/home-hero-art.png);}
-  .cv-home .idx {position:absolute; left:36px; top:168px; text-align:center; z-index:3;}
+  .cv-home .idx {position:absolute; left:32px; top:238px; text-align:center; z-index:3;}
   .cv-home .idx b {font-family:var(--serifen); font-size:21px; color:var(--navy); font-weight:600;}
   .cv-home .idx i {display:block; width:1px; height:40px; background:var(--line2); margin:7px auto;}
   .cv-home .idx s {font-family:var(--serifen); font-size:14px; color:var(--faint); text-decoration:none;}
-  .cv-home .hero-tx {position:absolute; left:92px; top:150px; z-index:3; width:560px;}
+  .cv-home .hero-tx {position:absolute; left:92px; top:254px; z-index:3; width:560px;}
   .cv-home .kick {display:flex; align-items:center; gap:13px; margin-bottom:18px;}
   .cv-home .kick span {font-family:var(--serifen); font-size:9.5px; letter-spacing:.36em; color:var(--gold); text-transform:uppercase;}
   .cv-home .kick i {width:56px; height:1px; background:var(--gold);}
   .cv-home .title {font-family:var(--serif); font-weight:700; font-size:62px; line-height:1.26; letter-spacing:.04em; color:var(--ink); margin:0;}
   .cv-home .title em {font-style:normal; color:var(--hl); position:relative;}
   .cv-home .title em::after {content:""; position:absolute; left:-2px; right:-2px; bottom:7px; height:11px; background:rgba(29,64,99,.12); z-index:-1;}
-  .cv-home .lead {font-family:var(--kai); font-size:16px; line-height:2.05; color:var(--soft); margin:22px 0 0; max-width:430px;}
-  .cv-home .btns {display:flex; align-items:center; gap:20px; margin-top:34px;}
+  .cv-home .lead {font-family:var(--kai); font-size:15px; line-height:1.9; color:var(--soft); margin:14px 0 0; max-width:430px;}
+  .cv-home .btns {display:flex; align-items:center; gap:20px; margin-top:18px;}
   .cv-home .b1 {position:relative; display:inline-flex; align-items:center; gap:10px; height:54px; padding:0 32px;
     background:var(--navy); border:1px solid var(--navy-deep); color:#f3ead6;
     font-family:var(--serif); font-size:16px; letter-spacing:.18em; cursor:pointer;}
@@ -242,15 +259,20 @@ function ReconHome(props) {
 
       <div className="edge"></div>
 
+      {/* 阴阳文店招:阴文 A2(跨色块边界反色)+ 阳文 YoRHa引擎(块内实心) */}
+      <div className="yy">
+        <div className="blk"></div>
+        <div className="lay out"><div className="a2">A2</div></div>
+        <div className="lay in"><div className="a2">A2</div></div>
+        <div className="mark">
+          <div className="en">YORHA-A2 ENGINE</div>
+          <h1>YoRHa引擎</h1>
+          <div className="sub">每个选择 · 都在书写</div>
+        </div>
+      </div>
+
       {/* 顶栏 */}
       <div className="nav">
-        <div className="brand">
-          <img className="em" src={brand.emblem} alt="" />
-          <div>
-            <h1>{brand.title}</h1>
-            <div className="sub">{brand.sub}</div>
-          </div>
-        </div>
         <div className="menu">
           {menu.map((m, i) => (
             <a key={i} className={m.on ? "on" : undefined} onClick={() => onNav(m.view)}><div className="zh">{m.zh}</div><div className="en">{m.en}</div></a>
