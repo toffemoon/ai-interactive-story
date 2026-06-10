@@ -260,13 +260,7 @@ function ReconChat(props) {
 
       {/* 左侧引擎竖栏(全站统一 ReconRail;近期聊天/新建对话作为底部插槽) */}
       <window.ReconRail active="chat" onNav={onNav}>
-        {P.onMode && (
-          <div className="modetabs">
-            <a className={P.mode === "oc" ? "on" : undefined} onClick={() => P.onMode("oc")}>OC{P.ocCount != null ? <span className="n">{P.ocCount}</span> : null}</a>
-            <a className={P.mode === "chars" ? "on" : undefined} onClick={() => P.onMode("chars")}>角色{P.charCount != null ? <span className="n">{P.charCount}</span> : null}</a>
-          </div>
-        )}
-        <div className="recenth"><b>{P.mode === "oc" ? "我的 OC" : "近期聊天"}</b><span className="en">{P.mode === "oc" ? "MY OC" : "RECENT CHATS"}</span><i></i></div>
+        <div className="recenth"><b>近期聊天</b><span className="en">RECENT CHATS</span><i></i></div>
         <div className="rlist">
           {characters.map((c, i) => (
             <div className={"rc" + (active && c.name === active.name ? " on" : "")} key={i} style={{ cursor: "pointer" }} onClick={() => onPick(c.name)}>
