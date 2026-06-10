@@ -236,6 +236,9 @@ function ReconProfile(props) {
           <div className="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 6l9 7 9-7"/></svg></div>
           <div className="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg></div>
           <img className="av" src="assets/recon/profile-headavatar.png" alt="" />
+          {user && P.onLogout ? (
+            <span onClick={P.onLogout} style={{ cursor: "pointer", fontFamily: "var(--serif)", fontSize: 12.5, letterSpacing: ".1em", color: "var(--soft)", border: "1px solid var(--line2)", padding: "7px 14px" }}>退出登录</span>
+          ) : null}
         </div>
       </div>
 

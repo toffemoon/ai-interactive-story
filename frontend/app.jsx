@@ -3505,7 +3505,7 @@ function App() {
       {view === "mine" && (
         <ReconShell designW={1536} designH={1024}>
           <window.ReconProfile user={auth.user} presets={presets} saves={mineSaves}
-            onNav={navTo} onResume={resumeSave} onNew={onNew} />
+            onNav={navTo} onResume={resumeSave} onNew={onNew} onLogout={onLogout} />
         </ReconShell>
       )}
 
