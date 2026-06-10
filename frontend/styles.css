@@ -1394,3 +1394,10 @@ main.single-view { display: block; }
 .peek-line { margin: 0; font-size: 13px; line-height: 1.6; color: var(--ink); }
 .peek-line.dim { color: var(--muted); font-size: 12px; }
 .peek-k { color: var(--muted); margin-right: 8px; font-size: 12px; }
+
+/* 分类标签栏:单行横向滚动(下滑栏模式,2026-06-10) */
+.explore-toolbar .tb-row.chips { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.explore-toolbar .tb-row.chips .bo-chip { flex: 0 0 auto; white-space: nowrap; }
+.explore-toolbar .tb-row.chips::-webkit-scrollbar { height: 6px; }
+.explore-toolbar .tb-row.chips::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+.explore-toolbar .tb-row.chips::-webkit-scrollbar-track { background: transparent; }

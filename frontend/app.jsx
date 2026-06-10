@@ -1449,7 +1449,11 @@ function SavesMenu({ sessionId }) {
 }
 
 async function saveToVault(kind, data) {
-  try { await postJSON("/api/library/save", { kind, data }); return true; }
+  try {
+    const res = await postJSON("/api/library/save", { kind, data });
+    if (res && res.name) addToMyLib("cards", kind + "/" + res.name);   // 本机建的卡记进「我的库」
+    return true;
+  }
   catch (e) { return false; }
 }
 
@@ -1799,8 +1803,9 @@ function BuildView({ buildSeed, clearSeed, addCharacter, addWorld, setStory, set
   );
 }
 
-function VaultView({ addCharacter, addWorld, setStory, setPlayer, completeCard, goGame, presets, onLaunchPreset, onDeletePreset, hideMyStories, embedded }) {
+function VaultView({ addCharacter, addWorld, setStory, setPlayer, completeCard, goGame, presets, onLaunchPreset, onDeletePreset, hideMyStories, embedded, mineOnly, loggedIn }) {
   // hideMyStories:嵌进「我的」页时,「我的故事(预设)」由外层单独成区,这里不重复;embedded:省掉自己的大标题。
+  // mineOnly(2026-06-10):只显示属于我的 —— 登录态=后端私库(official:false);无账号=本地「我的库」注册表。新用户默认全空。
   const KINDS = [["characters", "角色卡"], ["players", "演出卡"], ["worlds", "世界书 / 设定卡"], ["stories", "故事书"], ["events", "事件卡"]].concat(hideMyStories ? [] : [["mystories", "我的故事"]]);
   const [kind, setKind] = useState("characters");
   const [items, setItems] = useState([]);
@@ -1808,21 +1813,28 @@ function VaultView({ addCharacter, addWorld, setStory, setPlayer, completeCard, 
   const [editing, setEditing] = useState(null); // {origName, data} | null
   const [page, setPage] = useState(1);          // 当前页(每页 12 张)
 
+  function mineFilter(k, xs) {
+    if (!mineOnly) return xs;
+    if (loggedIn) return xs.filter((x) => x.official === false);
+    const reg = loadMyLib().cards;
+    return xs.filter((x) => reg.includes(k + "/" + x.name));
+  }
+
   async function load(k) {
     if (k === "mystories") { setItems((presets || []).map((p) => ({ name: p.name, data: p.data || {}, _preset: true }))); return; }
     setLoading(true);
     try {
       if (k === "events") {
-        // 事件卡随故事书:从故事库的故事里聚合出来(只读)。
+        // 事件卡随故事书:从(我的)故事里聚合出来(只读)。
         const r = await fetch(`/api/library/stories`);
-        const stories = r.ok ? await r.json() : [];
+        const stories = mineFilter("stories", r.ok ? await r.json() : []);
         const evs = [];
         stories.forEach((s) => (s.data.events || []).forEach((e) =>
           evs.push({ name: e.title || e.event_id || "事件", data: e, _event: true, _story: s.data.title || s.name })));
         setItems(evs);
       } else {
         const r = await fetch(`/api/library/${k}`);
-        setItems(r.ok ? await r.json() : []);
+        setItems(mineFilter(k, r.ok ? await r.json() : []));
       }
     } catch (e) { setItems([]); }
     finally { setLoading(false); }
@@ -1852,6 +1864,13 @@ function VaultView({ addCharacter, addWorld, setStory, setPlayer, completeCard, 
     goGame();
   }
   async function del(item) {
+    // mineOnly + 无账号:只从本地「我的库」移除,不动公共库原卡(无账号没有"我的私有行",删 API 会删掉全局共享的那张)。
+    if (mineOnly && !loggedIn) {
+      if (!confirm("从我的库移除这张卡?(不会删除市集里的原卡)")) return;
+      removeFromMyLib("cards", kind + "/" + item.name);
+      load(kind);
+      return;
+    }
     if (!confirm("从故事库删除这张卡?不可恢复。")) return;
     try { await fetch(`/api/library/${kind}/${encodeURIComponent(item.name)}`, { method: "DELETE" }); } catch (e) {}
     load(kind);
@@ -1864,8 +1883,10 @@ function VaultView({ addCharacter, addWorld, setStory, setPlayer, completeCard, 
     if (!editing) return;
     try {
       const res = await postJSON("/api/library/save", { kind, data: editing.data });
+      if (res && res.name) addToMyLib("cards", kind + "/" + res.name);   // 编辑过的卡也算「我的」
       // 改了名字 → 新文件名变了,删掉旧文件免得故事库里留俩
       if (res && res.name && res.name !== editing.origName) {
+        removeFromMyLib("cards", kind + "/" + editing.origName);
         try { await fetch(`/api/library/${kind}/${encodeURIComponent(editing.origName)}`, { method: "DELETE" }); } catch (e) {}
       }
     } catch (e) {}
@@ -1929,7 +1950,7 @@ function VaultView({ addCharacter, addWorld, setStory, setPlayer, completeCard, 
           <p className="empty">{
             kind === "mystories" ? "还没有你的故事。在「新建故事」最后『存成预设故事书』,或导入你自己的原创故事。"
             : kind === "events" ? "还没有事件卡。在「新建故事 → 事件卡」给故事书加隐藏事件。"
-            : "这一类还是空的。去「创作」建一张。"
+            : "这一类还是空的。去「探索 → 卡片」把喜欢的卡加入我的库,或去「创作」建一张。"
           }</p>
         )}
         {!loading && pageItems.map((item, i) => (
@@ -2199,21 +2220,29 @@ function StoryModal({ entry, setTab, onClose, onStart }) {
 // ── 探索页(商城式,2026-06-10 yufei 拍板):二级切换「故事书 | 卡」;两边都有 搜索 + 排序(综合/按时间)+ 标签分类;
 // 卡页再按卡种分(全部/角色卡/演出卡/世界书·设定卡/故事书/事件卡)。「热度」排序需开局计数(引擎域,提案见
 // decisions/2026-06-10-开局计数与热度排序-提案.md),v1 不上。「收进我的库」仅登录态显示(AUTH 关时公共库本就全员可见)。
-const GENRE_ORDER = ["言情", "科幻", "奇幻", "悬疑", "都市", "同人", "原创", "教学"];
+// 分类标签栏:少而准(yufei 2026-06-10),只留白名单里的 + 全部;有内容才显示对应 chip。
+const GENRE_WHITELIST = ["原创", "教学", "崩铁"];
 
 function buildGenreChips(tagLists) {
-  const count = new Map();
-  let untagged = false;
-  tagLists.forEach((tags) => {
-    if (!tags || !tags.length) { untagged = true; return; }
-    tags.forEach((t) => t && count.set(t, (count.get(t) || 0) + 1));
-  });
-  const ordered = [
-    ...GENRE_ORDER.filter((g) => count.has(g)),
-    ...[...count.keys()].filter((t) => !GENRE_ORDER.includes(t)).sort((a, b) => count.get(b) - count.get(a)),
-  ].slice(0, 12);
-  return ["全部", ...ordered, ...(untagged ? ["未分类"] : [])];
+  const present = new Set();
+  tagLists.forEach((tags) => (tags || []).forEach((t) => t && present.add(t)));
+  return ["全部", ...GENRE_WHITELIST.filter((g) => present.has(g))];
 }
+
+// 「我的库」本地注册表:无账号时的归属层 —— 市集「加入我的库」/ 本机建的卡都记到这,
+// 「我的」页只显示注册表里的(新用户默认全空)。AUTH 开 + 登录后归属走后端私库(official:false),注册表只兜底。
+const MYLIB_KEY = "ais_my_lib";
+function loadMyLib() {
+  try { const m = JSON.parse(localStorage.getItem(MYLIB_KEY)) || {}; return { cards: m.cards || [], presets: m.presets || [] }; }
+  catch (e) { return { cards: [], presets: [] }; }
+}
+function addToMyLib(type, key) {
+  try { const m = loadMyLib(); if (!m[type].includes(key)) { m[type].push(key); localStorage.setItem(MYLIB_KEY, JSON.stringify(m)); } } catch (e) {}
+}
+function removeFromMyLib(type, key) {
+  try { const m = loadMyLib(); m[type] = m[type].filter((k) => k !== key); localStorage.setItem(MYLIB_KEY, JSON.stringify(m)); } catch (e) {}
+}
+function inMyLib(type, key) { return loadMyLib()[type].includes(key); }
 
 function hitGenre(tags, genre) {
   if (genre === "全部") return true;
@@ -2238,8 +2267,8 @@ function ExploreToolbar({ q, setQ, sort, setSort, chips, genre, setGenre, placeh
           ))}
         </div>
       </div>
-      {chips.length > 2 && (
-        <div className="tb-row">
+      {chips.length > 1 && (
+        <div className="tb-row chips">
           {chips.map((c) => (
             <button key={c} className={"bo-chip" + (genre === c ? " on" : "")} onClick={() => setGenre(c)}>{c}</button>
           ))}
@@ -2249,11 +2278,20 @@ function ExploreToolbar({ q, setQ, sort, setSort, chips, genre, setGenre, placeh
   );
 }
 
-function ExploreStories({ presets, onLaunchPreset }) {
+function ExploreStories({ presets, onLaunchPreset, loggedIn }) {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("default");
   const [genre, setGenre] = useState("全部");
+  const [added, setAdded] = useState({});   // name -> true(加库反馈;初始态查注册表)
   const chips = useMemo(() => buildGenreChips(presets.map((p) => (p.data || {}).tags)), [presets]);
+
+  async function collect(p) {
+    addToMyLib("presets", p.name);
+    if (loggedIn) {   // 登录态:再存一份私有副本(后端按 user_id 隔离);AUTH 关只记本地归属,不写库免得全局重复
+      try { await postJSON("/api/presets", p.data || {}); } catch (e) {}
+    }
+    setAdded((m) => ({ ...m, [p.name]: true }));
+  }
   const shown = useMemo(() => {
     let xs = presets.filter((p) => {
       const d = p.data || {};
@@ -2274,7 +2312,12 @@ function ExploreStories({ presets, onLaunchPreset }) {
           <StoryTile key={p.name || i} d={p.data || {}} fallbackName={p.name}
             coach={isTutorialPreset(p) ? "tutorial-tile" : undefined}
             onOpen={() => onLaunchPreset(p)}
-            actions={<button className="primary" onClick={() => onLaunchPreset(p)}>开始</button>} />
+            actions={<>
+              <button className="primary" onClick={() => onLaunchPreset(p)}>开始</button>
+              {(added[p.name] || inMyLib("presets", p.name))
+                ? <span className="vc-note">已在我的库</span>
+                : <button onClick={() => collect(p)}>加入我的库</button>}
+            </>} />
         ))}
       </div>
     </div>
@@ -2364,9 +2407,10 @@ function ExploreCards({ loggedIn }) {
     )).then((lists) => {
       if (!alive) return;
       const flat = lists.flat();
-      const evs = [];   // 事件卡随故事书:从故事聚合(只读,同 VaultView)
-      flat.filter((x) => x.kind === "stories").forEach((s) => ((s.data || {}).events || []).forEach((e) =>
-        evs.push({ kind: "events", name: e.title || e.event_id || "事件", data: e, _story: (s.data || {}).title || s.name, official: s.official, updated_at: s.updated_at })));
+      const evs = [];   // 事件卡:只收隐藏事件(yufei 2026-06-10);故事书解析出的普通时间线事件不进市集
+      flat.filter((x) => x.kind === "stories").forEach((s) => ((s.data || {}).events || []).forEach((e) => {
+        if (e.hidden) evs.push({ kind: "events", name: e.title || e.event_id || "事件", data: e, _story: (s.data || {}).title || s.name, official: s.official, updated_at: s.updated_at });
+      }));
       setAll([...flat, ...evs]);
     });
     return () => { alive = false; };
@@ -2393,10 +2437,11 @@ function ExploreCards({ loggedIn }) {
 
   async function collect(it) {
     const key = it.kind + "/" + it.name;
-    try {
-      await postJSON("/api/library/save", { kind: it.kind, data: it.data });
-      setAdded((m) => ({ ...m, [key]: true }));
-    } catch (err) { alert("收录失败:" + err.message); }
+    addToMyLib("cards", key);
+    if (loggedIn) {   // 登录态:再存一份私有副本;AUTH 关只记本地归属,不写库免得全局重复
+      try { await postJSON("/api/library/save", { kind: it.kind, data: it.data }); } catch (err) {}
+    }
+    setAdded((m) => ({ ...m, [key]: true }));
   }
 
   return (
@@ -2429,9 +2474,9 @@ function ExploreCards({ loggedIn }) {
               {it.kind !== "events" && (
                 <div className="mc-actions" onClick={(e) => e.stopPropagation()}>
                   <button onClick={() => setPeek(it)}>详情</button>
-                  {loggedIn && (added[key]
-                    ? <span className="vc-note">已收进我的卡库</span>
-                    : <button className="primary" onClick={() => collect(it)}>收进我的库</button>)}
+                  {(added[key] || inMyLib("cards", key))
+                    ? <span className="vc-note">已在我的库</span>
+                    : <button className="primary" onClick={() => collect(it)}>加入我的库</button>}
                 </div>
               )}
             </div>
@@ -2461,12 +2506,12 @@ function StoriesHome({ onNew, presets, onLaunchPreset, onDeletePreset, loggedIn 
         <button className="primary big" data-coach="new-story" onClick={onNew}>+ 新建故事</button>
       </div>
       <div className="explore-tabs">
-        {[["stories", "故事书"], ["cards", "卡"]].map(([k, label]) => (
+        {[["stories", "故事书"], ["cards", "卡片"]].map(([k, label]) => (
           <button key={k} className={tab === k ? "active" : ""} onClick={() => setTab(k)}>{label}</button>
         ))}
       </div>
       {tab === "stories"
-        ? <ExploreStories presets={presets} onLaunchPreset={onLaunchPreset} />
+        ? <ExploreStories presets={presets} onLaunchPreset={onLaunchPreset} loggedIn={loggedIn} />
         : <ExploreCards loggedIn={loggedIn} />}
     </section>
   );
@@ -2510,14 +2555,29 @@ function MineView({ saves, presets, activeId, authEnabled, user, onResume, onDel
   // 只展示真正玩过/有内容的存档(过滤掉启动时登记的空占位 session)。
   const realSaves = source.filter((s) => s.turns > 0 || (s.name && s.name.trim()) || (s.summary && s.summary.trim()));
 
+  // 「我的」只算属于我的(2026-06-10 yufei:新用户默认全空):登录=后端私库(official:false);无账号=本地「我的库」注册表。
+  const [libSeq, setLibSeq] = useState(0);   // 注册表变更后强刷
+  const myReg = useMemo(() => loadMyLib(), [libSeq, loggedIn]);
+  const myPresets = (presets || []).filter((p) => (loggedIn ? p.official === false : myReg.presets.includes(p.name)));
+  // 无账号:「删除」= 只移出我的库,不动公共库原版(登录态才走真删,后端只删自己的私有行)。
+  function removePreset(p) {
+    if (loggedIn) { onDeletePreset(p); return; }
+    if (!confirm("从我的库移除这个故事?(不会删除探索市集里的原版)")) return;
+    removeFromMyLib("presets", p.name);
+    setLibSeq((s) => s + 1);
+  }
+
   // 头部统计 chip 的卡库总数(角色 + 玩家 + 世界 + 故事;事件随故事书不单算)。
   useEffect(() => {
     let alive = true;
+    const reg = loadMyLib().cards;
     Promise.all(["characters", "players", "worlds", "stories"].map((k) =>
-      fetch(`/api/library/${k}`).then((r) => (r.ok ? r.json() : [])).catch(() => [])
+      fetch(`/api/library/${k}`).then((r) => (r.ok ? r.json() : []))
+        .then((xs) => xs.filter((x) => (loggedIn ? x.official === false : reg.includes(k + "/" + x.name))))
+        .catch(() => [])
     )).then((lists) => { if (alive) setCardCount(lists.reduce((n, l) => n + (l ? l.length : 0), 0)); });
     return () => { alive = false; };
-  }, []);
+  }, [loggedIn]);
 
   return (
     <section className="mine-view">
@@ -2525,7 +2585,7 @@ function MineView({ saves, presets, activeId, authEnabled, user, onResume, onDel
         <div><h2>我的</h2><p>{loggedIn ? `已登录:${user.display_name || user.username} · 存档已绑定账号(跨设备可见)` : "本地保存(未登录)。"}</p></div>
         <div className="mine-stats">
           <span className="mine-stat"><b>{realSaves.length}</b>个存档</span>
-          <span className="mine-stat"><b>{(presets || []).length}</b>个我建的故事</span>
+          <span className="mine-stat"><b>{myPresets.length}</b>个我的故事</span>
           <span className="mine-stat"><b>{cardCount == null ? "…" : cardCount}</b>张卡</span>
         </div>
       </div>
@@ -2561,12 +2621,12 @@ function MineView({ saves, presets, activeId, authEnabled, user, onResume, onDel
           <div className="chat-saves-ph">聊天存档 —— 聊天功能上线后在这显示</div>
         </section>
 
-        {/* 我建的预设 */}
+        {/* 我的故事(我建的 + 从市集加库的) */}
         <section className="mine-panel" data-coach="mine-presets">
-          <div className="panel-head"><h3>我建的预设</h3></div>
-          {(presets || []).length ? (
+          <div className="panel-head"><h3>我的故事</h3></div>
+          {myPresets.length ? (
             <div className="preset-list">
-              {presets.map((p, i) => {
+              {myPresets.map((p, i) => {
                 const d = p.data || {};
                 const name = d.name || p.name || "未命名故事";
                 return (
@@ -2582,14 +2642,14 @@ function MineView({ saves, presets, activeId, authEnabled, user, onResume, onDel
                     </div>
                     <div className="preset-actions">
                       <button className="primary" onClick={() => onOpenStory(p)}>开始</button>
-                      <button className="del" onClick={() => onDeletePreset(p)}>删除</button>
+                      <button className="del" onClick={() => removePreset(p)}>{loggedIn ? "删除" : "移出"}</button>
                     </div>
                   </div>
                 );
               })}
             </div>
           ) : (
-            <div className="empty-guide"><p>还没有你建的故事。去「创作 / 新建故事」做一个,存成预设后会出现在这。</p></div>
+            <div className="empty-guide"><p>还没有你的故事。去「探索」把喜欢的故事加入我的库,或「新建故事」做一个存成预设。</p></div>
           )}
         </section>
       </div>
@@ -2597,10 +2657,10 @@ function MineView({ saves, presets, activeId, authEnabled, user, onResume, onDel
       {/* 我的卡库(整宽) */}
       <section className="mine-panel library-panel" data-coach="mine-library">
         <div className="panel-head"><h3>我的卡库</h3></div>
-        <VaultView embedded hideMyStories
+        <VaultView embedded hideMyStories mineOnly loggedIn={!!loggedIn}
           addCharacter={addCharacter} addWorld={addWorld} setStory={setStory} setPlayer={setPlayer}
           completeCard={completeCard} goGame={goGame}
-          presets={presets} onLaunchPreset={onOpenStory} onDeletePreset={onDeletePreset} />
+          presets={myPresets} onLaunchPreset={onOpenStory} onDeletePreset={onDeletePreset} />
       </section>
     </section>
   );
@@ -3040,7 +3100,8 @@ function App() {
     const tagSet = new Set([...((bStory && bStory.tags) || []), ...bChars.flatMap((c) => (c.data.tags || []))]);
     const tags = [...tagSet].filter(Boolean).slice(0, 5);
     try {
-      await postJSON("/api/presets", { name: name.trim(), characters: bChars, world: mergeWorldBooks(bWorlds), story: bStory, player: bPlayer, mode, synopsis, author, cover, tags });
+      const res = await postJSON("/api/presets", { name: name.trim(), characters: bChars, world: mergeWorldBooks(bWorlds), story: bStory, player: bPlayer, mode, synopsis, author, cover, tags });
+      if (res && res.name) addToMyLib("presets", res.name);   // 自己建的故事记进「我的库」
       refreshHome();
       alert("已保存为故事预设。");
     } catch (e) { alert("保存失败:" + e.message); }
@@ -3125,8 +3186,9 @@ function App() {
     try {
       // playables = 选人页(CharacterSelect)的数据源;不传则自建预设进去选人页全空、"换主角"失效。
       // 至少把当前玩家卡塞进去(有 player 才有得选);无 player 留空,前端回退"自定义"。
-      await postJSON("/api/presets", { name: name.trim(), characters, world, story, player,
+      const res = await postJSON("/api/presets", { name: name.trim(), characters, world, story, player,
         playables: player ? [player] : [], mode, synopsis, author, cover, tags });
+      if (res && res.name) addToMyLib("presets", res.name);   // 自己建的故事记进「我的库」
       refreshHome();
       alert("已保存为故事预设。");
     } catch (e) { alert("保存失败:" + e.message); }
