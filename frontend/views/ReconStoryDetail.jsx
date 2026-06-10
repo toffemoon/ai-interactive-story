@@ -109,8 +109,13 @@ const RECON_STORY_DETAIL_CSS = `
   .cv-story .pickh, .cv-story .cards { animation: rcs-in .4s cubic-bezier(.22,1,.36,1) .26s both; }
   .cv-story .ritual { animation: rcs-in .44s cubic-bezier(.22,1,.36,1) .32s both; }
   @media (prefers-reduced-motion: reduce){ .cv-story .book, .cv-story .booktab, .cv-story .stitle, .cv-story .intro, .cv-story .bg, .cv-story .chars, .cv-story .pickh, .cv-story .cards, .cv-story .ritual { animation-duration:1ms; animation-delay:0ms; } }
-  .cv-story .book {position:absolute; left:248px; top:106px; width:318px; height:300px; z-index:4;
-    background:center/contain no-repeat url(assets/recon/story-detail-book.png);}
+  /* 书封:只用库里真实 cover(.book img);没有 cover = 中性书封(纸底+竖排书名),不放假书图 */
+  .cv-story .book {position:absolute; left:248px; top:118px; width:236px; height:300px; z-index:4;
+    border:1px solid var(--line2); background:linear-gradient(165deg,#efe6d2,#ddd0b2);
+    box-shadow:6px 8px 0 rgba(43,38,32,.10), inset 0 0 0 6px rgba(250,244,234,.6); overflow:hidden;}
+  .cv-story .book img {width:100%; height:100%; object-fit:cover; display:block;}
+  .cv-story .book .bt {position:absolute; inset:0; display:grid; place-items:center;}
+  .cv-story .book .bt b {writing-mode:vertical-rl; font-family:var(--serif); font-size:26px; letter-spacing:.3em; color:var(--gold); font-weight:700;}
   .cv-story .booktab {position:absolute; left:196px; top:128px; width:84px; height:36px; z-index:5;
     background:linear-gradient(180deg,#3a4d42,#2d3e35); border:1px solid rgba(193,168,111,.5);
     display:flex; flex-direction:column; align-items:center; justify-content:center;}
@@ -190,8 +195,12 @@ const RECON_STORY_DETAIL_CSS = `
   .cv-story .rh b {font-family:var(--serif); font-size:17px; font-weight:700; letter-spacing:.14em; color:var(--ink);}
   .cv-story .rh .sep {color:var(--line2); font-family:var(--serifen); font-size:14px; margin:0 1px;}
   .cv-story .rh .en {font-family:var(--serifen); font-size:10px; letter-spacing:.3em; color:var(--faint);}
+  .cv-story .card .avn {display:grid; place-items:center; background:linear-gradient(170deg,#efe6d2,#ded1b4); border-bottom:1px solid var(--line);}
+  .cv-story .card .avn b {font-family:var(--serif); font-size:44px; color:var(--gold); font-weight:700;}
+  /* 入戏仪式立绘:角色无真立绘 → 中性大首字块(不放固定假立绘) */
   .cv-story .rart {position:absolute; left:14px; right:0; top:42px; height:270px;
-    background:left top/cover no-repeat url(assets/recon/story-detail-hero.png);}
+    background:linear-gradient(170deg,#efe6d2,#dccfb1); display:grid; place-items:center;}
+  .cv-story .rart::after {content:attr(data-ini); font-family:var(--serif); font-size:96px; color:var(--gold); font-weight:700;}
   .cv-story .rname {position:absolute; left:0; right:0; top:322px; text-align:center;}
   .cv-story .rname h3 {margin:0; font-family:var(--serif); font-size:25px; font-weight:700; letter-spacing:.06em; color:var(--ink);}
   .cv-story .rname .role {font-family:var(--kai); font-size:13px; color:var(--soft); letter-spacing:.08em; margin-top:7px;}
@@ -311,7 +320,11 @@ function ReconStoryDetail(props) {
 
       {/* ===== 中左:书(点击=放回书架/返回) ===== */}
       <div className="booktab" onClick={() => onClose()} style={{ cursor: "pointer" }}><div className="zh">放回书架</div><div className="en">CLOSE</div></div>
-      <div className="book" onClick={() => onClose()} style={{ cursor: "pointer" }}></div>
+      <div className="book" onClick={() => onClose()} style={{ cursor: "pointer" }}>
+        {pdata.cover
+          ? <img src={pdata.cover} alt="" />
+          : <span className="bt"><b>{(pdata.name || preset.name || "未命名").slice(0, 6)}</b></span>}
+      </div>
 
       {/* 标题区 */}
       <div className="stitle">
@@ -357,12 +370,13 @@ function ReconStoryDetail(props) {
       <div className="cards">
         {cards.map((c, i) => {
           const sel = i === selIdx;
-          const avatars = ["story-detail-avatar1.png", "story-detail-avatar2.png", "story-detail-avatar3.png", "story-detail-avatar4.png"];
-          const av = c.spectator ? "assets/recon/story-detail-emblem.png" : ("assets/recon/" + avatars[i % avatars.length]);
           return (
             <div className={"card" + (sel ? " sel" : "")} key={i} onClick={() => setSelIdx(i)} style={{ cursor: "pointer" }}>
               {sel && <span className="badge">已选择</span>}
-              <img className="av" src={av} alt="" />
+              {/* 库里角色没有立绘字段 → 首字中性块,不放与角色无关的假人像;旁观者用罗盘徽 */}
+              {c.spectator
+                ? <img className="av" src="assets/recon/story-detail-emblem.png" alt="" style={{ objectFit: "contain", padding: 28, boxSizing: "border-box" }} />
+                : <span className="av avn"><b>{(c.name || "?").trim().charAt(0)}</b></span>}
               <div className="nm">{c.name}</div>
               <div className="role">{c.persona || (c.spectator ? "旁观者" : "可扮演")}</div>
               {c.description ? <div className="quote">{c.description}</div> : null}
@@ -375,7 +389,7 @@ function ReconStoryDetail(props) {
       {/* ===== 右:入戏仪式(跟随选中角色) ===== */}
       <div className="ritual">
         <div className="rh"><span className="star"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z" /></svg></span><b>入戏仪式</b><span className="sep">/</span><span className="en">ENTRY RITUAL</span></div>
-        <div className="rart"></div>
+        <div className="rart" data-ini={selected && !selected.spectator ? (selected.name || "?").trim().charAt(0) : "✦"}></div>
         <div className="rname">
           <h3>{selected ? selected.name : ""}</h3>
           <div className="role">{selected ? (selected.persona || (selected.spectator ? "旁观者" : "可扮演")) : ""}</div>

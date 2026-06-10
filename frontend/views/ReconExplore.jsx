@@ -9,7 +9,6 @@ function ReconExplore(props) {
   const onNav = P.onNav || (() => {});
   const _name = (x) => (x && x.data && x.data.name) || (x && x.name) || "未命名故事";
   const _f = (x, k) => x && x.data && x.data[k];
-  const FALLBACK_COVERS = ["assets/recon/home-feat-1.png", "assets/recon/home-feat-2.png", "assets/recon/home-feat-3.png", "assets/recon/home-feat-4.png", "assets/recon/home-feat-5.png"];
   return (
     <div className="cv-explore">
       <style>{`
@@ -51,6 +50,8 @@ function ReconExplore(props) {
   .cv-explore .gcard:hover {transform:translateY(-5px); box-shadow:0 14px 28px -16px rgba(43,38,32,.4);}
   .cv-explore .gcard::after {content:""; position:absolute; inset:5px; border:1px solid rgba(196,179,132,.35); pointer-events:none;}
   .cv-explore .gcard .cv {height:148px; background:center/cover no-repeat; border-bottom:1px solid var(--line); position:relative;}
+  .cv-explore .gcard .cv.noart {background:linear-gradient(160deg,#efe6d2,#ddd0b2); display:grid; place-items:center;}
+  .cv-explore .gcard .cv.noart b {font-family:var(--serif); font-size:22px; letter-spacing:.22em; color:var(--gold); font-weight:700;}
   .cv-explore .gcard .cv .no {position:absolute; left:10px; top:8px; font-family:var(--serifen); font-size:12px; font-weight:700; color:rgba(248,242,228,.92); text-shadow:0 1px 2px rgba(0,0,0,.5);}
   .cv-explore .gcard .bd {padding:13px 16px 14px;}
   .cv-explore .gcard b {display:block; font-family:var(--serif); font-size:16px; font-weight:700; letter-spacing:.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
@@ -85,13 +86,15 @@ function ReconExplore(props) {
       {presets.length ? (
         <div className="grid">
           {presets.map((p, i) => {
-            const cover = _f(p, "cover") || FALLBACK_COVERS[i % FALLBACK_COVERS.length];
+            const cover = _f(p, "cover") || "";  // 只用库里真实封面;没有就中性书封,不放假图
             const tags = (_f(p, "tags") || []).slice(0, 3).join(" · ") || "互动叙事";
             const syn = _f(p, "synopsis") || (_f(p, "story") && _f(p, "story").premise) || "一个等你走进的故事。";
             const nch = (_f(p, "characters") || []).length;
             return (
               <div className="gcard" key={i} style={{ animationDelay: (Math.min(i, 8) * 50) + "ms" }} onClick={() => onOpenStory(p)}>
-                <div className="cv" style={{ backgroundImage: "url(" + cover + ")" }}><span className="no">{String(i + 1).padStart(2, "0")}</span></div>
+                <div className={"cv" + (cover ? "" : " noart")} style={cover ? { backgroundImage: "url(" + cover + ")" } : undefined}>
+                  {!cover && <b>{_name(p).slice(0, 4)}</b>}
+                  <span className="no">{String(i + 1).padStart(2, "0")}</span></div>
                 <div className="bd">
                   <b>{_name(p)}</b>
                   <div className="tg">{tags}</div>

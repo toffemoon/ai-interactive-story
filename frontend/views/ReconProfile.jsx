@@ -50,18 +50,19 @@ function ReconProfile(props) {
   ];
 
   // ---- 派生：最近游玩（saves.slice(0,4)）----
-  const RECENT_COVERS = [
-    "assets/recon/profile-recent-1.png",
-    "assets/recon/profile-recent-2.png",
-    "assets/recon/profile-recent-3.png",
-    "assets/recon/profile-recent-4.png",
-  ];
-  const recent = saves.slice(0, 4).map((s, i) => ({
-    id: s.id,
-    img: RECENT_COVERS[i % RECENT_COVERS.length],
-    nm: s.name || s.summary || "未命名存档",
-    rd: "第 " + (s.turns || 0) + " 回合",
-  }));
+  // 封面只用库里真实 cover:按故事名匹配预设的 data.cover;匹配不到 = 中性书封(不放假图)。
+  const _coverOf = (nm) => {
+    if (!nm) return "";
+    const hit = presets.find((p) => {
+      const d = (p && p.data) || {};
+      return d.name === nm || (d.story && d.story.title === nm) || p.name === nm;
+    });
+    return (hit && hit.data && hit.data.cover) || "";
+  };
+  const recent = saves.slice(0, 4).map((s) => {
+    const nm = s.name || s.summary || "未命名存档";
+    return { id: s.id, cover: _coverOf(nm), nm, rd: "第 " + (s.turns || 0) + " 回合" };
+  });
 
   // ---- 派生：我的资产（由 presets 派生的真实计数）----
   const assets = [
@@ -182,6 +183,8 @@ function ReconProfile(props) {
   .cv-profile .recent {display:flex; gap:14px;}
   .cv-profile .rcard {flex:1; background:var(--paper); border:1px solid var(--line); padding:7px;}
   .cv-profile .rcard .th {width:100%; height:100px; object-fit:cover; border:1px solid rgba(169,138,99,.3); display:block;}
+  .cv-profile .rcard .thn {background:linear-gradient(160deg,#efe6d2,#e0d3b6); display:grid; place-items:center;}
+  .cv-profile .rcard .thn b {font-family:var(--serif); font-size:18px; letter-spacing:.18em; color:var(--gold); font-weight:700;}
   .cv-profile .rcard .nm {font-family:var(--serif); font-size:13px; font-weight:700; color:var(--ink); margin-top:8px; letter-spacing:.03em;}
   .cv-profile .rcard .rd {font-family:var(--kai); font-size:9.5px; letter-spacing:.06em; color:var(--faint); margin-top:4px;}
   .cv-profile .rcard .pl {display:flex; justify-content:space-between; align-items:center; font-family:var(--kai); font-size:9.5px; color:var(--soft); margin-top:8px;}
@@ -222,10 +225,8 @@ function ReconProfile(props) {
 `}</style>
 
       {/* ============ 左竖栏 ============ */}
-      {/* 左侧引擎竖栏(全站统一 ReconRail;Q版立绘作底部插槽) */}
-      <window.ReconRail active="mine" onNav={onNav}>
-        <div className="qchar"></div>
-      </window.ReconRail>
+      {/* 左侧引擎竖栏(全站统一 ReconRail) */}
+      <window.ReconRail active="mine" onNav={onNav} />
 
       {/* ============ 顶栏 ============ */}
       <div className="top">
@@ -283,7 +284,10 @@ function ReconProfile(props) {
                 </div>
               )}
               {recent.map((r, i) => (
-                <div className="rcard" key={i} style={{ cursor: "pointer" }} onClick={() => onResume(r.id)}><img className="th" src={r.img} />
+                <div className="rcard" key={i} style={{ cursor: "pointer" }} onClick={() => onResume(r.id)}>
+                  {r.cover
+                    ? <img className="th" src={r.cover} alt="" />
+                    : <div className="th thn"><b>{(r.nm || "书").slice(0, 4)}</b></div>}
                   <div className="nm">{r.nm}</div><div className="rd">{r.rd}</div></div>
               ))}
             </div>

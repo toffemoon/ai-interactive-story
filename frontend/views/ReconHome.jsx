@@ -49,7 +49,7 @@ function ReconHome(props) {
   const _isTut = (x) => { const d = (x && x.data) || {}; return ((d.tags || []).includes("教学")) || (((x && x.name) || "").includes("新人入店")) || ((d.name || "").includes("新人入店")); };
   const _name = (x) => (x && x.data && x.data.name) || (x && x.name) || "未命名故事";
   const _f = (x, k) => x && x.data && x.data[k];
-  const FALLBACK_COVERS = ["assets/recon/home-feat-1.png", "assets/recon/home-feat-2.png", "assets/recon/home-feat-3.png", "assets/recon/home-feat-4.png", "assets/recon/home-feat-5.png"];
+  // 封面只用库里真实 cover;没有就中性书封(不放与故事无关的假图)。
   const brand = SAMPLE.brand;
   const pillars = SAMPLE.pillars;
   const hero = Object.assign({}, SAMPLE.hero, { idx: { cur: "01", total: String(Math.max(presets.length, 1)).padStart(2, "0") } });
@@ -58,7 +58,7 @@ function ReconHome(props) {
   const scrollRow = (dx) => { const el = rowRef.current; if (el) el.scrollBy({ left: dx, behavior: "smooth" }); };
   const cards = presets.map((x, i) => ({
     preset: x, no: String(i + 1).padStart(2, "0"),
-    cover: _f(x, "cover") || FALLBACK_COVERS[i % FALLBACK_COVERS.length],
+    cover: _f(x, "cover") || "",
     title: _name(x),
     tags: ((_f(x, "tags") || []).slice(0, 2).join(" · ")) || "互动叙事",
     syn: _f(x, "synopsis") || (_f(x, "story") && _f(x, "story").premise) || "一个等你走进的故事。",
@@ -201,6 +201,8 @@ function ReconHome(props) {
   .cv-home .cards::-webkit-scrollbar {height:6px;} .cv-home .cards::-webkit-scrollbar-thumb {background:var(--line2);}
   .cv-home .card {flex:none; width:240px; height:158px; background:var(--paper); border:1px solid var(--line); display:flex; padding:9px; gap:11px; position:relative;}
   .cv-home .card .th {width:92px; height:140px; flex:none; object-fit:cover; border:1px solid rgba(169,138,99,.3);}
+  .cv-home .card .thn {background:linear-gradient(165deg,#efe6d2,#ddd0b2); display:grid; place-items:center;}
+  .cv-home .card .thn b {writing-mode:vertical-rl; font-family:var(--serif); font-size:17px; letter-spacing:.22em; color:var(--gold); font-weight:700;}
   .cv-home .card .no {position:absolute; left:13px; top:13px; font-family:var(--serifen); font-size:13px; font-weight:700; color:#f3ead6; letter-spacing:.06em; text-shadow:0 1px 2px rgba(0,0,0,.5);}
   .cv-home .card .new {position:absolute; left:64px; top:11px; background:#b5402e; color:#f5ede2; font-family:var(--serif); font-size:9px; letter-spacing:.1em; padding:2px 5px;}
   .cv-home .card .bd {flex:1; min-width:0; padding-top:2px;}
@@ -217,7 +219,7 @@ function ReconHome(props) {
   .cv-home .pick .ph b {font-family:var(--serif); font-size:14px; font-weight:700; letter-spacing:.16em; color:var(--ink);}
   .cv-home .pick .ph .en {font-family:var(--serifen); font-size:8.5px; letter-spacing:.3em; color:var(--gold);}
   .cv-home .pick .row {display:flex; gap:12px; margin-top:12px;}
-  .cv-home .pick .row .cover {width:74px; height:104px; flex:none; background:center/cover no-repeat url(assets/recon/home-feat-4.png); border:1px solid rgba(169,138,99,.3);}
+  .cv-home .pick .row .cover {width:74px; height:104px; flex:none; background:linear-gradient(165deg,#efe6d2,#ddd0b2) center/cover no-repeat; border:1px solid rgba(169,138,99,.3);}
   .cv-home .pick .row .info b {font-family:var(--serif); font-size:15px; color:var(--ink); font-weight:700;}
   .cv-home .pick .row .info p {font-family:var(--kai); font-size:11px; line-height:1.7; color:var(--soft); margin:6px 0 0;}
   .cv-home .pick .gobtn {position:absolute; right:16px; bottom:14px; font-family:var(--serif); font-size:12.5px; letter-spacing:.1em; color:var(--navy); border:1px solid var(--navy-line); padding:6px 14px; cursor:pointer;}
@@ -290,7 +292,10 @@ function ReconHome(props) {
         )}
         {cards.map((c, i) => (
           <div className="card" key={i} style={{ cursor: "pointer", animationDelay: (180 + Math.min(i, 6) * 60) + "ms" }} onClick={() => onOpenStory(c.preset)}>
-            <img className="th" src={c.cover} alt="" /><span className="no">{c.no}</span>{c.isNew ? <span className="new">教学</span> : null}
+            {c.cover
+              ? <img className="th" src={c.cover} alt="" />
+              : <div className="th thn"><b>{c.title.slice(0, 3)}</b></div>}
+            <span className="no">{c.no}</span>{c.isNew ? <span className="new">教学</span> : null}
             <div className="bd"><b>{c.title}</b><div className="tags">{c.tags}</div><div className="syn">{c.syn}</div>
               <div className="mt"><span className="star">✦</span><span>{c.chars || "—"} 角色</span><span>·</span><span>{c.author}</span></div></div>
           </div>
