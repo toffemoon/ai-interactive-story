@@ -1845,6 +1845,13 @@ function VaultView({ addCharacter, addWorld, setStory, setPlayer, completeCard, 
   const [editing, setEditing] = useState(null); // {origName, data} | null
   const [page, setPage] = useState(1);          // 当前页(每页 12 张)
 
+  // 故事书标题 → 预设封面(故事书/事件卡翻面的回退图,同市集)。
+  const vaultCoverMap = useMemo(() => {
+    const m = {};
+    (presets || []).forEach((p) => { const d = p.data || {}; const t = (d.story || {}).title; if (t && d.cover) m[t] = d.cover; });
+    return m;
+  }, [presets]);
+
   function mineFilter(k, xs) {
     if (!mineOnly) return xs;
     if (loggedIn) return xs.filter((x) => x.official === false);
@@ -1976,40 +1983,43 @@ function VaultView({ addCharacter, addWorld, setStory, setPlayer, completeCard, 
           <button key={k} className={kind === k ? "active" : ""} onClick={() => switchKind(k)}>{label}</button>
         ))}
       </div>
-      <div className="vault-list">
-        {loading && <p className="empty">读取中…</p>}
-        {!loading && !items.length && (
-          <p className="empty">{
-            kind === "mystories" ? "还没有你的故事。在「新建故事」最后『存成预设故事书』,或导入你自己的原创故事。"
-            : kind === "events" ? "还没有事件卡。在「新建故事 → 事件卡」给故事书加隐藏事件。"
-            : "这一类还是空的。去「探索 → 卡片」把喜欢的卡加入我的库,或去「创作」建一张。"
-          }</p>
-        )}
-        {!loading && pageItems.map((item, i) => (
-          <div className="vault-card" key={i}>
-            <div className="vc-main">
-              <b>{cardName(item) || item.name}</b>
-              <span>{(cardDesc(item) || "").slice(0, 70)}</span>
-            </div>
-            <div className="vc-actions">
-              {kind === "events" ? (
+      {loading && <p className="empty">读取中…</p>}
+      {!loading && !items.length && (
+        <p className="empty">{
+          kind === "mystories" ? "还没有你的故事。在「新建故事」最后『存成预设故事书』,或导入你自己的原创故事。"
+          : kind === "events" ? "还没有事件卡。在「新建故事 → 事件卡」给故事书加隐藏事件。"
+          : "这一类还是空的。去「探索 → 卡片」把喜欢的卡加入我的库,或去「创作」建一张。"
+        }</p>
+      )}
+      {/* 卡库列表 = 市集同款翻转卡(2026-06-10 yufei:大小/翻面出图对齐卡片界面) */}
+      <div className="market-grid">
+        {!loading && pageItems.map((item, i) => {
+          const mk = kind === "mystories" ? "stories" : kind;
+          const mit = { ...item, kind: mk };
+          const isMyStory = kind === "mystories";
+          const img = (isMyStory ? ((item.data || {}).cover || "") : marketImage(mit))
+            || (kind === "stories" ? vaultCoverMap[(item.data || {}).title] : (kind === "events" ? vaultCoverMap[item._story] : ""))
+            || "";
+          const label = (KINDS.find(([k]) => k === kind) || [null, ""])[1];
+          return (
+            <FlipTile key={i} badge={label} name={cardName(item) || item.name} desc={cardDesc(item)}
+              tags={isMyStory ? ((item.data || {}).tags || []) : marketTags(mit)} img={img}
+              onOpen={kind === "events" ? undefined
+                : isMyStory ? () => onLaunchPreset && onLaunchPreset({ name: item.name, data: item.data })
+                : () => openEdit(item)}
+              actions={kind === "events" ? (
                 <span className="vc-note">事件随故事书,去「故事书」编辑</span>
-              ) : kind === "mystories" ? (
-                <>
-                  <button className="primary" onClick={() => onLaunchPreset && onLaunchPreset({ name: item.name, data: item.data })}>开始</button>
-                  <button className="del" onClick={() => onDeletePreset && onDeletePreset({ name: item.name })}>删除</button>
-                </>
-              ) : (
-                <>
-                  <button className="primary" onClick={() => useInGame(item)}>用到游戏</button>
-                  <button onClick={() => openEdit(item)}>详情/修改</button>
-                  {kind === "characters" && <button onClick={() => completeCard(item.data)}>对话完善</button>}
-                  <button className="del" onClick={() => del(item)}>删除</button>
-                </>
-              )}
-            </div>
-          </div>
-        ))}
+              ) : isMyStory ? (<>
+                <button className="primary" onClick={() => onLaunchPreset && onLaunchPreset({ name: item.name, data: item.data })}>开始</button>
+                <button className="del" onClick={() => onDeletePreset && onDeletePreset({ name: item.name })}>删除</button>
+              </>) : (<>
+                <button className="primary" onClick={() => useInGame(item)}>用到游戏</button>
+                <button onClick={() => openEdit(item)}>详情/修改</button>
+                {kind === "characters" && <button onClick={() => completeCard(item.data)}>对话完善</button>}
+                <button className="del" onClick={() => del(item)}>{mineOnly && !loggedIn ? "移出" : "删除"}</button>
+              </>)} />
+          );
+        })}
       </div>
       {!loading && totalPages > 1 && (
         <div className="vault-pager">
@@ -2383,40 +2393,48 @@ function marketImage(it) {
   return d.image || d.cover || "";
 }
 
-// 市集卡片 = 翻转卡(同 StoryModal 角色卡):正面信息,背面图片(角色立绘 / 封面),右下角 ↻ 翻面。
-// 卡数据现普遍无 image 字段(内容侧待补);故事书/事件卡回退用所属预设的封面(fallbackImg)。
-function MarketCard({ it, added, loggedIn, fallbackImg, onPeek, onCollect }) {
+// 通用翻转卡片(市集 / 我的卡库 共用,2026-06-10):正面 徽章+名+描述+标签+操作,背面 图片;右下角 ↻/↺ 翻面。
+function FlipTile({ badge, name, desc, tags, mine, img, onOpen, actions }) {
   const [flipped, setFlipped] = useState(false);
-  const img = marketImage(it) || fallbackImg || "";
   return (
     <div className={"market-card flipcard" + (flipped ? " flipped" : "")}>
       <div className="flip-inner">
-        <div className="flip-face flip-front" onClick={() => it.kind !== "events" && onPeek(it)}>
+        <div className="flip-face flip-front" onClick={onOpen || undefined}>
           <div className="mc-top">
-            <span className="kind-badge">{MARKET_KIND_LABEL[it.kind]}</span>
-            <b className="mc-name">{marketName(it)}</b>
+            {badge ? <span className="kind-badge">{badge}</span> : null}
+            <b className="mc-name">{name}</b>
           </div>
-          <p className="mc-desc">{(marketDesc(it) || "").slice(0, 120)}</p>
+          <p className="mc-desc">{(desc || "").slice(0, 120)}</p>
           <div className="mc-tags">
-            {marketTags(it).slice(0, 4).map((t, j) => <span className="tag" key={j}>{t}</span>)}
-            {it.official === false && <span className="tag muted">我的</span>}
+            {(tags || []).slice(0, 4).map((t, j) => <span className="tag" key={j}>{t}</span>)}
+            {mine ? <span className="tag muted">我的</span> : null}
           </div>
-          {it.kind !== "events" && (
-            <div className="mc-actions" onClick={(e) => e.stopPropagation()}>
-              <button onClick={() => onPeek(it)}>详情</button>
-              {added
-                ? <span className="vc-note">已在我的库</span>
-                : <button className="primary" onClick={() => onCollect(it)}>加入我的库</button>}
-            </div>
-          )}
+          {actions ? <div className="mc-actions" onClick={(e) => e.stopPropagation()}>{actions}</div> : null}
           <button className="flip-btn" onClick={(e) => { e.stopPropagation(); setFlipped(true); }} aria-label="翻到背面看图" title="看图">↻</button>
         </div>
         <div className="flip-face flip-back" onClick={() => setFlipped(false)}>
-          {img ? <img src={img} alt={marketName(it)} loading="lazy" /> : <div className="flip-img-placeholder">暂无图片</div>}
+          {img ? <img src={img} alt={name} loading="lazy" /> : <div className="flip-img-placeholder">暂无图片</div>}
           <button className="flip-btn" onClick={(e) => { e.stopPropagation(); setFlipped(false); }} aria-label="翻回正面" title="返回">↺</button>
         </div>
       </div>
     </div>
+  );
+}
+
+// 市集卡片:FlipTile + 市集专属操作(详情 / 加入我的库)。卡数据现普遍无 image 字段(内容侧待补);
+// 故事书/事件卡回退用所属预设的封面(fallbackImg)。
+function MarketCard({ it, added, fallbackImg, onPeek, onCollect }) {
+  const img = marketImage(it) || fallbackImg || "";
+  return (
+    <FlipTile badge={MARKET_KIND_LABEL[it.kind]} name={marketName(it)} desc={marketDesc(it)}
+      tags={marketTags(it)} mine={it.official === false} img={img}
+      onOpen={it.kind !== "events" ? () => onPeek(it) : undefined}
+      actions={it.kind !== "events" ? (<>
+        <button onClick={() => onPeek(it)}>详情</button>
+        {added
+          ? <span className="vc-note">已在我的库</span>
+          : <button className="primary" onClick={() => onCollect(it)}>加入我的库</button>}
+      </>) : null} />
   );
 }
 

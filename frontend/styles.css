@@ -1452,3 +1452,8 @@ main.single-view { display: block; }
 .img-input { display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; }
 .img-input .img-url { flex: 1 1 120px; min-width: 0; padding: 6px 10px; font-size: 12px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--ink); }
 .img-thumb { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 6px; border: 1px solid var(--line); background-size: cover; background-position: center; }
+
+/* 卡库翻转卡:操作钮多(最多4个),收小并允许换行 */
+.mc-actions { flex-wrap: wrap; }
+.mc-actions button { font-size: 12px; padding: 4px 10px; }
+.mc-actions .vc-note { font-size: 11px; }
