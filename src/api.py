@@ -7,13 +7,14 @@
 
 import asyncio
 import json
+import logging
 import os
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -27,6 +28,7 @@ from .identify import (
     identify_worldbook,
 )
 from .chat import reply
+from .llm import collect_usage
 from .models import CharacterCard, PlayerCard, RuntimeState, StoryBook, WorldBook
 from .parsers import parse_character
 from .story import story_turn
@@ -38,6 +40,13 @@ from . import auth
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
 OC_DIR = ROOT / "oc"  # OC 集:用户 OC 的设定/世界观/立绘/地图(operator 控制台「OC集」用)
+
+# prod 排障基建:此前全仓无 logging 配置,story_turn 异常被保底回合吞掉后无任何痕迹。
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+log = logging.getLogger("api")
 
 
 @asynccontextmanager
@@ -158,9 +167,22 @@ class SetRoleReq(BaseModel):
     role: str         # admin | user
 
 
+# 认证侧限流阈值(env 可调;测试套件放宽,生产用默认):
+_RL_LOGIN_IP = int(os.getenv("RL_LOGIN_PER_IP_15MIN", "30"))
+_RL_LOGIN_ID = int(os.getenv("RL_LOGIN_PER_ID_15MIN", "10"))
+_RL_CODE_IP = int(os.getenv("RL_SENDCODE_PER_IP_HOUR", "10"))
+_RL_CODE_EM = int(os.getenv("RL_SENDCODE_PER_EMAIL_DAY", "10"))
+
+
 @app.post("/api/auth/email/send_code")
-def api_send_code(req: SendCodeReq):
-    """给邮箱发注册验证码。SMTP 未配置(本地)时返回里带 dev_code 方便测试。"""
+def api_send_code(req: SendCodeReq, request: Request):
+    """给邮箱发注册验证码。SMTP 未配置(本地)时返回里带 dev_code 方便测试。
+    带限流(P2-11):原有的「单邮箱 60s」之外,补按 IP 窗口与单邮箱日上限,防换邮箱轰炸/耗 SMTP 配额。"""
+    ip = costguard.client_ip(request)
+    em = (req.email or "").strip().lower()
+    if not costguard.hit_rate(f"sendcode:ip:{ip}", 3600, _RL_CODE_IP) or \
+       not costguard.hit_rate(f"sendcode:em:{em}", 86400, _RL_CODE_EM):
+        raise HTTPException(429, "发送过于频繁,请稍后再试")
     return auth.send_email_code(req.email, purpose="register")
 
 
@@ -175,8 +197,14 @@ def api_register(req: RegisterReq):
 
 
 @app.post("/api/auth/login")
-def api_login(req: LoginReq):
-    """登录(邮箱/用户名 + 密码),返回 token + user。"""
+def api_login(req: LoginReq, request: Request):
+    """登录(邮箱/用户名 + 密码),返回 token + user。
+    带限流(P1-4):按 IP 与按 identifier 双闸,阈值远宽于正常用户,挡的是高速撞库。"""
+    ip = costguard.client_ip(request)
+    ident = (req.identifier or "").strip().lower()
+    if not costguard.hit_rate(f"login:ip:{ip}", 900, _RL_LOGIN_IP) or \
+       not costguard.hit_rate(f"login:id:{ident}", 900, _RL_LOGIN_ID):
+        raise HTTPException(429, "尝试过于频繁,请 15 分钟后再试")
     user = auth.authenticate(req.identifier, req.password)
     if not user:
         raise HTTPException(401, "邮箱/用户名或密码错误")
@@ -339,93 +367,127 @@ def api_health():
         emb_loaded = _memory.is_ready()
     except Exception:
         emb_loaded = False
-    return {"status": "ok", "db": db_ok, "frontend": FRONTEND.is_dir(),
+    body = {"status": "ok" if db_ok else "degraded", "db": db_ok, "frontend": FRONTEND.is_dir(),
             "embeddings_installed": emb_installed, "embeddings_loaded": emb_loaded,
             "deep_capable": emb_installed,  # True = 完整 Phase 3(向量在场过滤)可用
             "mode": "frontend+api" if FRONTEND.is_dir() else "api-only"}
+    # DB 不可达 = 实例不健康:返回 503 让探针/监控能发现(此前无论死活都 200,故障实例不被摘流)。
+    return body if db_ok else JSONResponse(body, status_code=503)
+
+
+async def _guarded_llm(request: Request, fn, *, fail_msg: str):
+    """烧 LLM 端点的统一闸(P0-2):costguard preflight(熔断/限流/预扣)→ 线程池跑同步 fn
+    (内部 LLM 调用 usage 由 collect_usage 收集)→ record 对账。
+    此前 identify*/build_card/chat 整类绕过 costguard,匿名可无上限烧 key。
+    fn 同步执行且走 to_thread:LLM 等待不再占死事件循环(P1-1)。"""
+    res = await asyncio.to_thread(costguard.preflight, costguard.client_ip(request))
+
+    def _run():
+        with collect_usage() as acc:
+            out = fn()
+        return out, acc.as_dict()
+
+    try:
+        out, usage = await asyncio.to_thread(_run)
+    except HTTPException:
+        await asyncio.to_thread(costguard.record, res, {})   # 失败退预扣
+        raise
+    except Exception:
+        await asyncio.to_thread(costguard.record, res, {})
+        log.exception("%s (path=%s)", fail_msg, request.url.path)
+        raise HTTPException(500, fail_msg + ",请稍后再试")   # 对外中性文案,细节进日志(P2-9)
+    await asyncio.to_thread(costguard.record, res, usage)
+    return out
+
+
+def _require_login_when_auth(user: dict | None) -> None:
+    """AUTH 开时烧钱端点拒匿名(AUTH 关 = 本地开发,不拦)。"""
+    if auth.enabled() and user is None:
+        raise HTTPException(401, "请先登录")
 
 
 @app.post("/api/identify")
-def api_identify(req: TextReq, user: dict | None = Depends(current_user_dep)):
+async def api_identify(req: TextReq, request: Request, user: dict | None = Depends(current_user_dep)):
     """散文设定 → 角色 Card V2。"""
     if not req.text.strip():
         raise HTTPException(400, "设定文字不能为空")
+    _require_login_when_auth(user)
     owner = _write_owner(user)
+    card = await _guarded_llm(request, lambda: identify(req.text), fail_msg="识别失败")
     try:
-        card = identify(req.text)
         storage.save_library("characters", card.data.name, card.model_dump(), user_id=owner)
-        return card.model_dump()
-    except Exception as e:
-        raise HTTPException(500, f"识别失败:{e}")
+    except Exception:
+        log.exception("identify 入库失败")
+    return card.model_dump()
 
 
 @app.post("/api/identify_world")
-def api_identify_world(req: TextReq, user: dict | None = Depends(current_user_dep)):
+async def api_identify_world(req: TextReq, request: Request, user: dict | None = Depends(current_user_dep)):
     """世界观文字 → 多条带关键词的世界书条目。"""
     if not req.text.strip():
         raise HTTPException(400, "世界观文字不能为空")
+    _require_login_when_auth(user)
     owner = _write_owner(user)
+    world = await _guarded_llm(request, lambda: identify_worldbook(req.text), fail_msg="识别失败")
     try:
-        world = identify_worldbook(req.text)
         storage.save_library("worlds", world.name, world.model_dump(), user_id=owner)
-        return world.model_dump()
-    except Exception as e:
-        raise HTTPException(500, f"识别失败:{e}")
+    except Exception:
+        log.exception("identify_world 入库失败")
+    return world.model_dump()
 
 
 @app.post("/api/identify_story")
-def api_identify_story(req: TextReq, user: dict | None = Depends(current_user_dep)):
+async def api_identify_story(req: TextReq, request: Request, user: dict | None = Depends(current_user_dep)):
     """故事书文字 → 时间线 / 主线 / 可触发事件节点。"""
     if not req.text.strip():
         raise HTTPException(400, "故事书文字不能为空")
+    _require_login_when_auth(user)
     owner = _write_owner(user)
+    story = await _guarded_llm(request, lambda: identify_storybook(req.text), fail_msg="识别失败")
     try:
-        story = identify_storybook(req.text)
         storage.save_library("stories", story.title, story.model_dump(), user_id=owner)
-        return story.model_dump()
-    except Exception as e:
-        raise HTTPException(500, f"识别失败:{e}")
+    except Exception:
+        log.exception("identify_story 入库失败")
+    return story.model_dump()
 
 
 @app.post("/api/identify_player")
-def api_identify_player(req: TextReq, user: dict | None = Depends(current_user_dep)):
+async def api_identify_player(req: TextReq, request: Request, user: dict | None = Depends(current_user_dep)):
     """玩家设定 → PlayerCard。"""
     if not req.text.strip():
         raise HTTPException(400, "玩家设定不能为空")
+    _require_login_when_auth(user)
     owner = _write_owner(user)
+    player = await _guarded_llm(request, lambda: identify_player(req.text), fail_msg="识别失败")
     try:
-        player = identify_player(req.text)
         storage.save_library("players", player.name, player.model_dump(), user_id=owner)
-        return player.model_dump()
-    except Exception as e:
-        raise HTTPException(500, f"识别失败:{e}")
+    except Exception:
+        log.exception("identify_player 入库失败")
+    return player.model_dump()
 
 
 @app.post("/api/build_card")
-def api_build_card(req: BuildCardReq):
+async def api_build_card(req: BuildCardReq, request: Request, user: dict | None = Depends(current_user_dep)):
     """对话式建卡一轮:返回 {reply, draft(Card V2 data), next_question, done, filled}。
 
     无状态——前端维护对话与草稿,每轮回传。完成后前端把 draft 包成 CharacterCard 进 CharacterEditor。
-    """
-    try:
-        return build_card(req.kind, req.messages, req.draft, req.seed)
-    except Exception as e:
-        raise HTTPException(500, f"建卡失败:{e}")
+    此前该端点连鉴权都没有(P0-2):现 AUTH 开时需登录,且过 costguard。"""
+    _require_login_when_auth(user)
+    return await _guarded_llm(request, lambda: build_card(req.kind, req.messages, req.draft, req.seed),
+                              fail_msg="建卡失败")
 
 
 @app.post("/api/identify_auto")
-def api_identify_auto(req: AutoReq, user: dict | None = Depends(current_user_dep)):
+async def api_identify_auto(req: AutoReq, request: Request, user: dict | None = Depends(current_user_dep)):
     """统一上传入口:AI 判类型(角色/世界/故事/玩家)→ 路由到对应解析 → 存进对应库。
 
     返回 {kind, confidence, reason, data}。前端据 kind 放进对应卡槽;判错时可带 kind 重调改判。
     """
     if not req.text.strip():
         raise HTTPException(400, "上传内容不能为空")
+    _require_login_when_auth(user)
     owner = _write_owner(user)
-    try:
-        out = identify_auto(req.text, kind=req.kind)
-    except Exception as e:
-        raise HTTPException(500, f"识别失败:{e}")
+    out = await _guarded_llm(request, lambda: identify_auto(req.text, kind=req.kind), fail_msg="识别失败")
     kind, data = out["kind"], out["data"]
     try:
         if kind == "character":
@@ -437,33 +499,42 @@ def api_identify_auto(req: AutoReq, user: dict | None = Depends(current_user_dep
         elif kind == "player":
             storage.save_library("players", data.get("name") or "玩家", data, user_id=owner)
     except Exception:
-        pass  # 入库失败不影响返回识别结果
+        log.exception("identify_auto 入库失败")  # 入库失败不影响返回识别结果
     return out
+
+
+_UPLOAD_MAX_BYTES = int(os.getenv("UPLOAD_MAX_BYTES", "2000000"))  # 2MB:正常 txt/md/docx 远小于此
 
 
 @app.post("/api/upload")
 async def api_upload(request: Request, filename: str = "upload.txt"):
-    """上传 .txt/.md/.docx,返回纯文本(前端再填进设定框走识别)。"""
+    """上传 .txt/.md/.docx,返回纯文本(前端再填进设定框走识别)。带体积上限防内存型 DoS(P2-8)。"""
+    cl = request.headers.get("content-length")
+    if cl and cl.isdigit() and int(cl) > _UPLOAD_MAX_BYTES:
+        raise HTTPException(413, "文件过大(上限 2MB)")
     raw = await request.body()
     if not raw:
         raise HTTPException(400, "空文件")
+    if len(raw) > _UPLOAD_MAX_BYTES:
+        raise HTTPException(413, "文件过大(上限 2MB)")
     try:
         text = extract_text_from_file(filename, raw)
-    except Exception as e:
-        raise HTTPException(500, f"读取失败:{e}")
+    except Exception:
+        log.exception("upload 解析失败 (filename=%s)", filename)
+        raise HTTPException(500, "读取失败,请确认文件格式")
     return {"text": text}
 
 
 @app.post("/api/chat")
-def api_chat(req: ChatReq, user: dict | None = Depends(current_user_dep)):
-    """与角色对话。历史由后端按 session_id 维护,前端只传当轮输入。"""
+async def api_chat(req: ChatReq, request: Request, user: dict | None = Depends(current_user_dep)):
+    """与角色对话。历史由后端按 session_id 维护,前端只传当轮输入。
+    AUTH 开时拒匿名 + 过 costguard(P0-2:此前匿名可无上限烧 key)。"""
     if not req.user.strip():
         raise HTTPException(400, "消息不能为空")
+    _require_login_when_auth(user)
     auth.authorize_session(req.session_id, user)  # 归属闸(AUTH 关时 no-op):防跨用户污染会话/记忆
-    try:
-        text = reply(req.card, req.session_id, req.user, req.world)
-    except Exception as e:
-        raise HTTPException(500, f"对话失败:{e}")
+    text = await _guarded_llm(request, lambda: reply(req.card, req.session_id, req.user, req.world),
+                              fail_msg="对话失败")
     return {"reply": text}
 
 
@@ -516,6 +587,7 @@ async def api_story_turn(req: StoryTurnReq, request: Request,
             mode=req.mode,
         )
     except Exception as e:
+        log.exception("story_turn failed (session=%s)", req.session_id)  # 此前异常被保底回合静默吞掉
         await asyncio.to_thread(costguard.record, res, {})  # 保底回合≈零成本,退回预扣
         return _fallback_turn_dict(req, e)
     await asyncio.to_thread(costguard.record, res, out.usage)
@@ -561,6 +633,7 @@ async def api_story_turn_stream(req: StoryTurnReq, request: Request,
                 usage_for_record = out.usage
                 await q.put({"type": "done", "turn": out.model_dump()})
             except Exception as e:
+                log.exception("story_turn(stream) failed (session=%s)", req.session_id)
                 await q.put({"type": "error", "turn": _fallback_turn_dict(req, e)})
             finally:
                 await asyncio.to_thread(costguard.record, res, usage_for_record)  # 出错时 {}→退预扣
@@ -602,8 +675,9 @@ async def api_reroll(req: ReRollReq, request: Request,
         world = WorldBook(**art["world"]) if art.get("world") else None
         story = StoryBook(**art["story"]) if art.get("story") else None
         player = PlayerCard(**art["player"]) if art.get("player") else None
-    except Exception as e:
-        raise HTTPException(500, f"卡组快照解析失败:{e}")
+    except Exception:
+        log.exception("reroll 卡组快照解析失败 (session=%s)", req.session_id)
+        raise HTTPException(500, "卡组快照解析失败,请稍后再试")
     mode = reroll.get("mode") or art.get("mode") or "standard"
     # Phase 0 成本闸:重跑也烧 LLM,过闸(在回滚之前;COST_GUARD_ENABLED=0 时 no-op)。
     res = await asyncio.to_thread(costguard.preflight, costguard.client_ip(request))
@@ -620,9 +694,10 @@ async def api_reroll(req: ReRollReq, request: Request,
             player=player,
             mode=mode,
         )
-    except Exception as e:
+    except Exception:
+        log.exception("reroll story_turn failed (session=%s)", req.session_id)
         await asyncio.to_thread(costguard.record, res, {})
-        raise HTTPException(500, f"重新生成失败:{e}")
+        raise HTTPException(500, "重新生成失败,请稍后再试")
     await asyncio.to_thread(costguard.record, res, out.usage)
     return out.model_dump()
 
@@ -697,8 +772,9 @@ def api_library_save(req: LibSaveReq, user: dict | None = Depends(current_user_d
         name = d.get("name") or "玩家"
     try:
         storage.save_library(req.kind, name, d, user_id=owner)
-    except Exception as e:
-        raise HTTPException(500, f"入库失败:{e}")
+    except Exception:
+        log.exception("library/save 入库失败 (kind=%s name=%s)", req.kind, name)
+        raise HTTPException(500, "入库失败,请稍后再试")
     return {"saved": True, "name": storage.slug(name)}
 
 
@@ -777,8 +853,9 @@ async def _operator_advance(session_id: str, user: str = "（场景继续）") -
         world = WorldBook(**art["world"]) if art.get("world") else None
         story = StoryBook(**art["story"]) if art.get("story") else None
         player = PlayerCard(**art["player"]) if art.get("player") else None
-    except Exception as e:
-        raise HTTPException(500, f"卡组快照解析失败:{e}")
+    except Exception:
+        log.exception("operator advance 卡组快照解析失败 (session=%s)", session_id)
+        raise HTTPException(500, "卡组快照解析失败")
     out = await story_turn(session_id=session_id, characters=characters, user=user,
                            world=world, story=story, player=player, mode=art.get("mode") or "standard")
     return out.model_dump()
@@ -1057,8 +1134,23 @@ def operator_console():
 # 前端目录存在 → 同时服务前端 + /api/* 接口(给人玩);目录不存在 → 退化为纯后端
 # (只剩 /api/* + /docs + /openapi.json,给 AI / 调用方按 schema 直接调),且不会启动崩溃。
 # 这样"既保留前端、又能纯后端被 AI 直接调用"在同一份代码里共存。
-if OC_DIR.is_dir():  # OC 集图片(立绘/地图)走静态;须在 "/" catch-all 之前挂
-    app.mount("/oc-assets", StaticFiles(directory=str(OC_DIR)), name="oc-assets")
+# OC 集媒体走白名单路由而非整目录静态挂载(P0-4):此前 index.json(含用户邮箱 PII)
+# 与私有 card.md/profile.md/world.md 都能被直接拉取。现只放图片/视频,其余一律 404。
+_OC_MEDIA_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp4", ".webm"}
+
+
+@app.get("/oc-assets/{rel_path:path}")
+def api_oc_asset(rel_path: str):
+    base = OC_DIR.resolve()
+    try:
+        p = (OC_DIR / rel_path).resolve()
+    except Exception:
+        raise HTTPException(404, "not found")
+    if not p.is_relative_to(base):           # 目录穿越防护
+        raise HTTPException(404, "not found")
+    if p.suffix.lower() not in _OC_MEDIA_EXT or not p.is_file():
+        raise HTTPException(404, "not found")
+    return FileResponse(p)
 
 if FRONTEND.is_dir():
     app.mount("/", StaticFiles(directory=str(FRONTEND), html=True), name="frontend")

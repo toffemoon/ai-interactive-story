@@ -4,6 +4,8 @@ function ReconPlay(props) {
   const onChoice = p.onChoice || (() => {});
   const onSubmit = p.onSubmit || (() => {});
   const onChange = p.onChange;
+  const onReroll = p.onReroll || null;
+  const canReroll = !!p.canReroll;
   const busy = !!p.busy;
   const story = p.story || "未命名故事";
   const worldTime = p.worldTime || "—";
@@ -96,6 +98,11 @@ function ReconPlay(props) {
   .cv-play .topr {position:absolute; right:22px; top:0; height:60px; display:flex; align-items:center; gap:22px;}
   
   .cv-play .titem {display:flex; align-items:center; gap:7px; color:var(--soft); cursor:pointer;}
+  .cv-play .titem.dis {opacity:.45; cursor:default;}
+  /* 回合等待:叙事区顶部带闪烁光标的推演指示(首 token 前玩家也知道点上了) */
+  .cv-play .gen {margin-left:12px; font-family:var(--kai); font-size:11.5px; color:#8a6f49;}
+  .cv-play .gen i {display:inline-block; font-style:normal; animation:rcp-blink 1s steps(2) infinite;}
+  @keyframes rcp-blink {50% {opacity:0;}}
   .cv-play .titem .ic {width:18px; height:18px; display:grid; place-items:center; flex:none;}
   .cv-play .titem .tt {display:flex; flex-direction:column; line-height:1;}
   .cv-play .titem .zh {font-family:var(--serif); font-size:12px; letter-spacing:.04em;}
@@ -265,18 +272,20 @@ function ReconPlay(props) {
           <span className="ti">《{story}》</span>
           <span className="ed">✎</span>
         </div>
+        {/* 顶栏只留真实可用的:重生成(接 /api/reroll)+ 自动存档状态指示 + 回合进度。
+            存档按钮(本就自动存,点了无事发生)/回溯本轮/SUPERVISOR/齿轮 = 未实现 → 隐藏,不用选中态假装可用。 */}
         <div className="topr">
-          <div className="titem"><span className="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M5 4h12l2 2v14H5z"/><path d="M8 4v6h7V4"/></svg></span><span className="tt"><span className="zh">存档</span><span className="en">SAVE</span></span></div>
-          <div className="titem"><span className="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 9a8 8 0 1 1 1 5"/><path d="M4 4v5h5"/></svg></span><span className="tt"><span className="zh">回溯本轮</span><span className="en">REWIND</span></span></div>
-          <div className="titem"><span className="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20 11a8 8 0 1 0-1 5"/><path d="M20 4v5h-5"/></svg></span><span className="tt"><span className="zh">重生成</span><span className="en">REGENERATE</span></span></div>
-          <div className="tdiv"></div>
-          <div className="ttime">
-            <div className="lb">故事内时间 · IN-WORLD TIME</div>
-            <div className="vl">{worldTime}</div>
+          <div className={"titem" + (busy || !canReroll || !onReroll ? " dis" : "")}
+            title="对上一回合不满意?丢弃它并用相同输入重新生成"
+            onClick={() => { if (!busy && canReroll && onReroll) onReroll(); }}>
+            <span className="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20 11a8 8 0 1 0-1 5"/><path d="M20 4v5h-5"/></svg></span>
+            <span className="tt"><span className="zh">{busy ? "生成中…" : "重生成上一轮"}</span><span className="en">REGENERATE</span></span>
           </div>
           <div className="tdiv"></div>
-          <div className="tsuper"><span className="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M12 3v3M12 18v3M4 12H1M23 12h-3M6 6l-2-2M20 20l-2-2M18 6l2-2M4 20l2-2"/><circle cx="12" cy="12" r="4"/></svg></span><span className="zh">雨夜</span><span className="en">SUPERVISOR</span></div>
-          <div className="tgear"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></div>
+          <div className="ttime">
+            <div className="lb">已自动存档 · 可随时离开</div>
+            <div className="vl">{worldTime}</div>
+          </div>
         </div>
       </div>
 
@@ -286,7 +295,7 @@ function ReconPlay(props) {
         <div className="scene">
           <div className="art" style={sceneArt ? { backgroundImage: "url(" + sceneArt + ")" } : undefined}></div>
           <div className="veil"></div>
-          <div className="round"><span>当前回合</span><i></i><b>{round}</b></div>
+          <div className="round"><span>当前回合</span><i></i><b>{round}</b>{busy && <span className="gen">叙事推演中<i>▋</i></span>}</div>
           <h2>{sceneTitle}</h2>
           <div className="sub">{sceneSub}</div>
           <p className="prose" key={round}>{narration}</p>
@@ -310,7 +319,7 @@ function ReconPlay(props) {
               <div className="ccard" key={round + "-" + i} onClick={() => !busy && onChoice(c)} style={{ cursor: busy ? "default" : "pointer", animationDelay: (120 + i * 70) + "ms" }}>
                 <div className="ch"><span className="ic">{choiceIcon(i)}</span><b>{c.label || c.title || ("选项 " + (i + 1))}</b></div>
                 <p>{c.description || c.desc || ""}</p>
-                <div className="cf"><span className="cat"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.2-6.3-4.6L5.7 21 8 14.8 2 10.4h7.6z"/></svg>{c.intent || "行动"}</span><span className="cost"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 3l7 5-7 13-7-13z"/></svg>0</span></div>
+                <div className="cf"><span className="cat"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.2-6.3-4.6L5.7 21 8 14.8 2 10.4h7.6z"/></svg>{c.intent || "行动"}</span></div>
               </div>
             )) : (
               <div className="ccard" style={{ flex: 1, alignItems: "center", justifyContent: "center", textAlign: "center" }}>
@@ -326,7 +335,7 @@ function ReconPlay(props) {
             <div className="fh"><b>自由行动</b><span className="en"></span></div>
             <input className="freein" value={value} disabled={busy}
               onChange={onChange ? (e) => onChange(e.target.value) : undefined}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !busy) { e.preventDefault(); onSubmit(); } }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !busy && !(e.nativeEvent || e).isComposing) { e.preventDefault(); onSubmit(); } }}
               placeholder="输入你的行动或台词，回车提交，故事据此推进……"
               style={{ width: "100%", marginTop: 9, background: "transparent", border: "none", borderBottom: "1px solid var(--line2)", outline: "none", fontFamily: "var(--kai)", fontSize: 13.5, color: "var(--ink)", padding: "6px 2px" }} />
           </div>
@@ -369,10 +378,7 @@ function ReconPlay(props) {
           )}
         </div>
 
-        <div className="rtabs">
-          <div className="rtab"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="4" y="4" width="16" height="16"/><path d="M4 9h16"/></svg><span className="zh">事实边界</span><span className="en">BOUNDARY</span></div>
-          <div className="rtab on"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M5 4h11l3 3v13H5z"/><path d="M9 9h6M9 13h5"/></svg><span className="zh">记忆档案</span><span className="en">MEMORY</span></div>
-        </div>
+        {/* 「事实边界/记忆档案」两个 tab 功能未接通 → 隐藏,不带选中态假装可用;接通后恢复 */}
 
         <div className="tips">
           <div className="th"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2 8 8 2-8 2-2 8-2-8-8-2 8-2z"/></svg><b>提示</b><span className="en">/ TIPS</span></div>

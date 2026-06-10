@@ -195,8 +195,25 @@
 
   // 共享壳:顶栏 + 滚动体 + (可选)底部固定操作条 + 五格 tab
   function MShell({ title, en, active, onNav, onBack, topAct, children, footer }) {
+    const rootRef = React.useRef(null);
+    // 软键盘适配:iOS Safari / Chrome 108+ 键盘弹起默认盖住 fixed 布局的底部输入条。
+    // viewport meta 已加 interactive-widget=resizes-content(Chrome);这里用 visualViewport
+    // 把整壳压到可视高度兜底 iOS——输入条/执行按钮始终可见。
+    React.useEffect(() => {
+      const vv = window.visualViewport;
+      const el = rootRef.current;
+      if (!vv || !el) return undefined;
+      const fit = () => {
+        const kb = window.innerHeight - vv.height - vv.offsetTop;
+        if (kb > 60) { el.style.height = vv.height + "px"; el.style.top = vv.offsetTop + "px"; el.style.bottom = "auto"; }
+        else { el.style.height = ""; el.style.top = ""; el.style.bottom = ""; }
+      };
+      vv.addEventListener("resize", fit);
+      vv.addEventListener("scroll", fit);
+      return () => { vv.removeEventListener("resize", fit); vv.removeEventListener("scroll", fit); };
+    }, []);
     return (
-      <div className="cv-m">
+      <div className="cv-m" ref={rootRef}>
         <style>{CSS}</style>
         <div className="m-top">
           {onBack ? <span className="bk" onClick={onBack}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M15 5l-7 7 7 7"/></svg></span> : null}
@@ -354,7 +371,7 @@
           <div className="p-inrow">
             <input value={p.value != null ? p.value : ""} disabled={busy}
               onChange={p.onChange ? (e) => p.onChange(e.target.value) : undefined}
-              onKeyDown={(e) => { if (e.key === "Enter" && !busy) { e.preventDefault(); onSubmit(); } }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !busy && !(e.nativeEvent || e).isComposing) { e.preventDefault(); onSubmit(); } }}
               placeholder="输入你的行动或台词……" />
             <span className="go" onClick={() => !busy && onSubmit()} style={{ opacity: busy ? 0.6 : 1 }}>{busy ? "…" : "执行"}</span>
           </div>
@@ -394,15 +411,24 @@
     const P = props || {};
     const characters = P.characters || [];
     const messages = P.messages || [];
+    const busy = !!P.busy;
+    const canChat = P.canChat !== false;
     const active = characters.find((c) => c.name === P.activeName) || characters[0] || null;
+    // 新消息渲染在视口下方会像"发送没反应"→ 消息变化滚到底。
+    const endRef = React.useRef(null);
+    React.useEffect(() => {
+      const el = endRef.current;
+      if (el && el.scrollIntoView) el.scrollIntoView({ block: "end" });
+    }, [messages.length, busy]);
     return (
       <MShell title="角色聊天" en="Chat" active="chat" onNav={P.onNav}
         footer={
           <div className="p-inrow">
-            <input value={P.value != null ? P.value : ""} placeholder="输入你想说的话…"
+            <input value={P.value != null ? P.value : ""} disabled={!canChat}
+              placeholder={!canChat ? "这位角色还没有角色卡,暂不能对话" : (busy ? "TA 正在回复,稍候…" : "输入你想说的话…")}
               onChange={(e) => P.onChange && P.onChange(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); P.onSend && P.onSend(); } }} />
-            <span className="go" onClick={() => P.onSend && P.onSend()}>发送</span>
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !busy && !(e.nativeEvent || e).isComposing) { e.preventDefault(); P.onSend && P.onSend(); } }} />
+            <span className="go" style={{ opacity: busy || !canChat ? 0.6 : 1 }} onClick={() => !busy && canChat && P.onSend && P.onSend()}>{busy ? "…" : "发送"}</span>
           </div>
         }>
         {characters.length ? (
@@ -429,11 +455,17 @@
                 <span className="bub">{m.text}</span>
               </div>
             ))}
+            {busy && messages.length > 0 && messages[messages.length - 1].who === "me" && (
+              <div className="c-msg">
+                <Avi name={active ? active.name : "?"} size={30} fs={13} />
+                <span className="bub" style={{ color: "var(--faint)", fontStyle: "italic" }}>TA 正在落笔…</span>
+              </div>
+            )}
           </>
         ) : (
           <div className="m-empty"><div className="pan"><h3>还没有可聊的角色</h3><p>去「创作」造一个角色,<br />或在故事里与角色相遇。</p><span className="gbtn" onClick={() => P.onNav && P.onNav("build")}>去创作</span></div></div>
         )}
-        <div style={{ height: 6 }}></div>
+        <div style={{ height: 6 }} ref={endRef}></div>
       </MShell>
     );
   }
@@ -443,15 +475,16 @@
     const P = props || {};
     const kinds = P.kinds || [];
     const messages = P.messages || [];
+    const busy = !!P.busy;
     const d = P.draft || { name: "未命名", kind: "", fields: [] };
     return (
       <MShell title="创作桌" en="Atelier" active="build" onNav={P.onNav}
         footer={
           <div className="p-inrow">
-            <input value={P.value != null ? P.value : ""} placeholder="用一句话告诉我下一步……"
+            <input value={P.value != null ? P.value : ""} placeholder={busy ? "执笔人推演中,稍候…" : "用一句话告诉我下一步……"}
               onChange={(e) => P.onChange && P.onChange(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); P.onSend && P.onSend(); } }} />
-            <span className="go" onClick={() => P.onSend && P.onSend()}>执笔</span>
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !busy && !(e.nativeEvent || e).isComposing) { e.preventDefault(); P.onSend && P.onSend(); } }} />
+            <span className="go" style={{ opacity: busy ? 0.6 : 1 }} onClick={() => !busy && P.onSend && P.onSend()}>{busy ? "…" : "执笔"}</span>
           </div>
         }>
         <div className="k-tabs">
@@ -467,8 +500,8 @@
             </div>
           ))}
           {!(d.fields || []).length && <div style={{ fontSize: 12, color: "var(--faint)", paddingTop: 6 }}>聊着聊着,卡就长出来了。</div>}
+          {/* 「存草稿」未实现(此前只弹 alert)→ 移除;入库是唯一真实出口 */}
           <div className="w-actions">
-            <span className="obtn" style={{ flex: 1, height: 38 }} onClick={() => P.onSaveDraft && P.onSaveDraft()}>存草稿</span>
             <span className="gbtn" style={{ flex: 1, height: 38 }} onClick={() => P.onSaveCard && P.onSaveCard()}>收入卡库</span>
           </div>
         </div>
@@ -479,6 +512,12 @@
             <p>{m.text}</p>
           </div>
         ))}
+        {busy && (
+          <div className="w-msg">
+            <div className="who">执笔 · 坊</div>
+            <p style={{ color: "var(--faint)", fontStyle: "italic" }}>执笔人推演中…</p>
+          </div>
+        )}
         <div style={{ height: 6 }}></div>
       </MShell>
     );

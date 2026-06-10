@@ -73,10 +73,15 @@ def _usage_to_usd(usage: dict | None) -> tuple[float, int]:
 
 
 def client_ip(request) -> str:
-    """取真实客户端 IP:Render/Vercel 反代后真 IP 在 X-Forwarded-For 首段。"""
+    """取真实客户端 IP。XFF 首段由客户端自报、可伪造(P1-3:伪造首段即绕过全部 per-IP 限流);
+    可信的是最近一跳可信代理**追加**的那段 → 从右往左数第 TRUSTED_PROXY_HOPS 段。
+    Render 单层反代 = 默认 1(取末段);本地直连无 XFF 时用 socket 对端。"""
     xff = request.headers.get("x-forwarded-for") if request is not None else None
     if xff:
-        return xff.split(",")[0].strip()
+        parts = [p.strip() for p in xff.split(",") if p.strip()]
+        hops = max(1, int(_f("TRUSTED_PROXY_HOPS", 1)))
+        if parts:
+            return parts[-hops] if hops <= len(parts) else parts[0]
     try:
         return request.client.host or "unknown"
     except Exception:
@@ -162,6 +167,30 @@ def preflight(ip: str) -> Reservation:
     except Exception as e:  # guard 自身出错 → fail-open(放行)
         log.warning("costguard preflight fail-open: %s", e)
         return Reservation(subject=subject, reserved_usd=0.0, active=False)
+
+
+def hit_rate(key: str, window_s: int, max_hits: int) -> bool:
+    """通用窗口限流(login 撞库 / send_code 轰炸等非回合端点用,P1-4/P2-11)。True=放行。
+    复用 rate_limits 表的原子 upsert;与 COST_GUARD_ENABLED 无关、常开;
+    表缺失/DB 异常 fail-open(限流坏了不该把正常用户挡在门外)。"""
+    try:
+        pool = get_pool()
+        with pool.connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                """insert into rate_limits (key, count, window_start)
+                   values (%s, 1, now())
+                   on conflict (key) do update set
+                     count = case when rate_limits.window_start < now() - %s * interval '1 second'
+                                  then 1 else rate_limits.count + 1 end,
+                     window_start = case when rate_limits.window_start < now() - %s * interval '1 second'
+                                  then now() else rate_limits.window_start end
+                   returning count""",
+                (key, window_s, window_s),
+            )
+            return int(cur.fetchone()["count"]) <= max_hits
+    except Exception as e:
+        log.warning("hit_rate fail-open (%s): %s", key, e)
+        return True
 
 
 def record(res: Reservation, usage: dict | None) -> None:

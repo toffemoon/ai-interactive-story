@@ -24,9 +24,16 @@ function ReconCreate(props) {
   const onKind = P.onKind || (() => {});
   const onChange = P.onChange || (() => {});
   const onSend = P.onSend || (() => {});
-  const onSaveDraft = P.onSaveDraft || (() => {});
   const onSaveCard = P.onSaveCard || (() => {});
   const onNav = P.onNav || (() => {});
+  const busy = !!P.busy;
+
+  // 新消息/推演中自动滚到底,等待反馈别藏在视口外。
+  const scrollRef = React.useRef(null);
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [(P.messages || []).length, busy]);
 
   // 顶部卡分类签：kinds 数组，选中 = cardKind 索引
   const KINDS = (P.kinds && P.kinds.length ? P.kinds : SAMPLE_KINDS);
@@ -158,7 +165,12 @@ function ReconCreate(props) {
   .cv-create .composer {flex:none; border-top:1px solid var(--line); padding:14px 22px 16px; background:var(--paper2);}
   .cv-create .composer .box {position:relative; height:62px; background:var(--paper); border:1px solid var(--line2); display:flex; align-items:center; padding:0 18px;}
   .cv-create .composer .box::before {content:""; position:absolute; inset:4px; border:1px solid rgba(169,138,99,.22); pointer-events:none;}
-  .cv-create .composer .box .ph {flex:1; font-family:var(--kai); font-size:13.5px; color:var(--faint); position:relative;}
+  .cv-create .composer .box .phin {flex:1; min-width:0; border:none; outline:none; background:transparent; box-shadow:none; border-radius:0; padding:0;
+    font-family:var(--kai); font-size:13.5px; color:var(--ink);}
+  .cv-create .composer .box .phin::placeholder {color:var(--faint);}
+  .cv-create .composer .box .phin:focus {border:none; box-shadow:none;}
+  .cv-create .blink {display:inline-block; font-style:normal; animation:rcr-blink 1s steps(2) infinite;}
+  @keyframes rcr-blink {50% {opacity:0;}}
   .cv-create .composer .box .send {flex:none; width:104px; height:48px; margin-left:14px; background:var(--green); position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; cursor:pointer;}
   .cv-create .composer .box .send::before {content:""; position:absolute; inset:3px; border:1px solid rgba(193,168,111,.45);}
   .cv-create .composer .box .send .zh {font-family:var(--serif); font-size:13px; letter-spacing:.18em; color:#f3ead6; position:relative; display:flex; align-items:center; gap:6px;}
@@ -239,13 +251,7 @@ function ReconCreate(props) {
           <span className="ti">创作桌</span>
           <span className="en">The Atelier</span>
         </div>
-        <div className="topr">
-          <div className="titem"><span className="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M5 4h12l2 2v14H5z" /><path d="M8 4v6h7V4" /></svg></span><span className="tt"><span className="zh">存草稿</span><span className="en">SAVE DRAFT</span></span></div>
-          <div className="titem"><span className="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 9a8 8 0 1 1 1 5" /><path d="M4 4v5h5" /></svg></span><span className="tt"><span className="zh">撤销</span><span className="en">UNDO</span></span></div>
-          <div className="titem"><span className="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20 11a8 8 0 1 0-1 5" /><path d="M20 4v5h-5" /></svg></span><span className="tt"><span className="zh">重做</span><span className="en">REDO</span></span></div>
-          <div className="tdiv"></div>
-          <div className="tgear"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></svg></div>
-        </div>
+        {/* 存草稿/撤销/重做/齿轮均未实现 → 隐藏,不摆死按钮;实现后再恢复 */}
       </div>
 
       {/* 卡分类索引签 */}
@@ -267,7 +273,7 @@ function ReconCreate(props) {
             <b>与执笔人对谈</b><span className="en">CO-WRITING</span>
             <span className="hint">你说人话，执笔人替你落笔</span>
           </div>
-          <div className="scroll">
+          <div className="scroll" ref={scrollRef}>
             <div className="syscue"><span>立卡 · {dKind}草拟中</span></div>
             {MESSAGES.map((m, i) => {
               const mine = m.who === "你";
@@ -283,24 +289,28 @@ function ReconCreate(props) {
                 </div>
               );
             })}
+            {/* 等待反馈:LLM 推演 5-30s,给一行动效占位 */}
+            {busy && (
+              <div className="line ai">
+                <div className="lh"><span className="dot"></span><span className="who">执笔 · 坊</span><span className="en">THE PEN</span><span className="ln"></span></div>
+                <div className="bd" style={{ color: "var(--faint)", fontStyle: "italic" }}>执笔人推演中<i className="blink">▋</i></div>
+              </div>
+            )}
           </div>
+          {/* 输入框换真 input:此前的 contentEditable 提示语是真实 DOM 文本,会和用户输入混在一起发给 AI */}
           <div className="composer">
             <div className="box">
-              <span
-                className="ph"
-                contentEditable
-                suppressContentEditableWarning
-                onInput={(e) => onChange(e.currentTarget.textContent)}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSend(); } }}
-              >{value || "用一句话告诉我下一步——你想往这张卡里加点什么？"}</span>
-              <div className="send" onClick={() => onSend()}>
-                <span className="zh"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2z" /></svg>执笔</span>
+              <input
+                className="phin"
+                value={value}
+                placeholder={busy ? "执笔人推演中,稍候片刻…" : "用一句话告诉我下一步——你想往这张卡里加点什么?"}
+                onChange={(e) => onChange(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !busy && !(e.nativeEvent || e).isComposing) { e.preventDefault(); onSend(); } }}
+              />
+              <div className="send" onClick={() => !busy && onSend()} style={{ opacity: busy ? 0.55 : 1, cursor: busy ? "default" : "pointer" }}>
+                <span className="zh"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2z" /></svg>{busy ? "推演中" : "执笔"}</span>
                 <span className="en">ENTER</span>
               </div>
-            </div>
-            <div className="up">
-              <span className="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" /></svg></span>
-              <span className="tx"><b>上传</b> .txt / .md / .docx —— 直接把现成设定丢进来，自动拆成字段</span>
             </div>
           </div>
         </div>
@@ -339,8 +349,8 @@ function ReconCreate(props) {
                 </div>
               ))}
             </div>
+            {/* 「存草稿」未实现(此前只弹 alert 假装存了)→ 移除;入库是唯一真实出口 */}
             <div className="cardfoot">
-              <div className="b ghost" onClick={() => onSaveDraft()}><span className="zh">存草稿</span><span className="en">SAVE DRAFT</span></div>
               <div className="b solid" onClick={() => onSaveCard()}><span className="zh">收入卡库</span><span className="en">ADD TO LIBRARY</span></div>
             </div>
           </div>

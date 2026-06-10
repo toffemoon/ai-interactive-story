@@ -15,6 +15,11 @@ os.environ.setdefault("AUTH_TOKEN_PEPPER", "acctest-pepper")
 os.environ["SMTP_USER"] = ""
 os.environ["SMTP_PASS"] = ""
 os.environ.setdefault("OPERATOR_TOKEN", "")  # 不用后门,纯角色测
+# 放宽认证限流(P1-4/P2-11):套件反复跑会撞默认阈值(固定邮箱+同 IP),这里只测功能不测限流
+os.environ.setdefault("RL_LOGIN_PER_IP_15MIN", "100000")
+os.environ.setdefault("RL_LOGIN_PER_ID_15MIN", "100000")
+os.environ.setdefault("RL_SENDCODE_PER_IP_HOUR", "100000")
+os.environ.setdefault("RL_SENDCODE_PER_EMAIL_DAY", "100000")
 
 import sys
 from fastapi.testclient import TestClient
