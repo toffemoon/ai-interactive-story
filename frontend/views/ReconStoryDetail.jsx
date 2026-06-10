@@ -410,6 +410,10 @@ function ReconStoryDetail(props) {
             <div className="attr"><div className="lab">简述</div><div className="v">{selected.description}</div></div>
           ) : null}
           <div className="attr"><div className="lab">视角</div><div className="v">{enterRole ? "以「" + enterRole.name + "」的身份进入" : "以旁观者视角进入"}</div></div>
+          {/* 选角后果说清:扮演=该角色由你发言、AI 不再出演 TA;旁观者同样靠输入推进 */}
+          <div className="attr"><div className="lab">说明</div><div className="v" style={{ color: "#8a6f49" }}>
+            {enterRole ? "你扮演的角色将由你来发言,不再由 AI 出演" : "旁观者同样通过输入行动推进故事"}
+          </div></div>
         </div>
 
         <div className="enter" onClick={() => onEnter(enterRole)}>

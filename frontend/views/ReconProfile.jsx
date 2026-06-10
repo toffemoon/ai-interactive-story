@@ -68,14 +68,16 @@ function ReconProfile(props) {
   const worldCount = A ? A.worlds : fallbackWorld;
   const tagCount = A ? A.tags : fallbackTags;
 
-  // ---- 派生：统计条 6 格（全部真实可得值）----
+  // ---- 派生：统计条 6 格（全部真实可得值;不再有同值重复格与对玩家无意义的「标签」）----
+  const playerCount = A ? (A.players || 0) : 0;
+  const totalCards = charCount + storyCount + worldCount + playerCount;
   const stats = [
-    { label: "创作故事", num: String(storyCount), small: null, tot: "本" },
     { label: "进行中", num: String(saves.length), small: null, tot: "局" },
     { label: "角色卡", num: String(charCount), small: null, tot: "张" },
+    { label: "演出卡", num: String(playerCount), small: null, tot: "张" },
     { label: "故事书", num: String(storyCount), small: null, tot: "本" },
     { label: "世界设定", num: String(worldCount), small: null, tot: "个" },
-    { label: "标签", num: String(tagCount), small: null, tot: "类" },
+    { label: "卡库合计", num: String(totalCards), small: null, tot: "张" },
   ];
 
   // ---- 派生：最近游玩（saves.slice(0,4)）----

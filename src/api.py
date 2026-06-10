@@ -739,6 +739,32 @@ async def api_reroll(req: ReRollReq, request: Request,
     return out.model_dump()
 
 
+@app.post("/api/undo_last")
+async def api_undo_last(req: ReRollReq, user: dict | None = Depends(current_user_dep)):
+    """撤回上一轮:把会话恢复到上一轮之前的镜像(_reroll.snapshot,与 reroll 同一套快照机制),
+    但不重新生成——玩家拿回输入权,可以换一种说法。零 LLM 调用。
+
+    快照只有一层(镜像里不含 _reroll 防嵌套膨胀),所以只能撤最近一轮;撤回后要等新回合
+    产生才再次可撤。被撤回的玩家输入随响应返回,前端回填输入框。
+    向量侧:被撤回合的 turn 向量按 (session,scope,ext_id) upsert,重玩同序号时整条覆盖,无残留。"""
+    await asyncio.to_thread(auth.authorize_session, req.session_id, user)  # 归属闸(AUTH 关时 no-op)
+    data = await asyncio.to_thread(storage.load_session, req.session_id)
+    reroll = data.get("_reroll")
+    if not isinstance(reroll, dict) or not isinstance(reroll.get("snapshot"), dict):
+        raise HTTPException(400, "当前没有可撤回的回合")
+    snap = reroll["snapshot"]
+    await asyncio.to_thread(storage.save_session, req.session_id, snap)
+    turns = snap.get("turns") or []
+    last = turns[-1] if turns else None
+    return {
+        "ok": True,
+        "turn_count": len(turns),
+        "undone_input": reroll.get("user") or reroll.get("choice") or "",
+        "last_turn": last,
+        "state": snap.get("state"),
+    }
+
+
 @app.get("/api/session/{session_id}")
 def api_session(session_id: str, user: dict | None = Depends(current_user_dep)):
     """查看持久化会话:调试/状态面板/续玩还原用。剔除内部重 roll 快照,避免把 ~2x 体量的镜像发给前端。"""

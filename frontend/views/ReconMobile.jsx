@@ -345,6 +345,9 @@
               {chars.length > 5 && <li style={{ color: "var(--faint)" }}>……等共 {chars.length} 位角色</li>}</ul></div>
         )}
         <div className="sec-h"><b>选择你扮演谁</b><span className="en">ROLE</span><i></i></div>
+        <div style={{ fontSize: 11, color: "#8a6f49", margin: "0 2px 8px" }}>
+          {pick && !pick.spectator ? "你扮演的角色将由你来发言,不再由 AI 出演" : "旁观者同样通过输入行动推进故事"}
+        </div>
         <div className="roles">
           {roles.map((r, i) => (
             <div key={i} className={"role" + (i === sel ? " sel" : "")} onClick={() => setSel(i)}>
@@ -367,16 +370,32 @@
     const busy = !!p.busy;
     const dialogues = (p.dialogues && p.dialogues.length) ? p.dialogues : null;
     const choices = (p.choices && p.choices.length) ? p.choices : null;
+    const history = p.history || [];
+    const [logOpen, setLogOpen] = React.useState(false);
+    const logRef = React.useRef(null);
+    React.useEffect(() => {
+      if (logOpen && logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+    }, [logOpen]);
     return (
       <MShell title={p.story || "当前故事"} en={p.round || ""} active="game" onNav={p.onNav}
+        topAct={history.length ? <span className="act" onClick={() => setLogOpen(true)}>记录</span> : null}
         footer={
-          <div className="p-inrow">
-            <input value={p.value != null ? p.value : ""} disabled={busy}
-              onChange={p.onChange ? (e) => p.onChange(e.target.value) : undefined}
-              onKeyDown={(e) => { if (e.key === "Enter" && !busy && !(e.nativeEvent || e).isComposing) { e.preventDefault(); onSubmit(); } }}
-              placeholder="输入你的行动或台词……" />
-            <span className="go" onClick={() => !busy && onSubmit()} style={{ opacity: busy ? 0.6 : 1 }}>{busy ? "…" : "执行"}</span>
-          </div>
+          <>
+            {/* 撤回上一轮:恢复 pre-turn 快照,输入回填(只能撤最近一轮) */}
+            {p.canUndo && !busy ? (
+              <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                <span style={{ fontFamily: "var(--serif)", fontSize: 11, color: "var(--soft)", border: "1px solid var(--line2)", background: "var(--paper2)", padding: "4px 10px", cursor: "pointer" }}
+                  onClick={() => p.onUndo && p.onUndo()}>↩ 撤回上一轮</span>
+              </div>
+            ) : null}
+            <div className="p-inrow">
+              <input value={p.value != null ? p.value : ""} disabled={busy}
+                onChange={p.onChange ? (e) => p.onChange(e.target.value) : undefined}
+                onKeyDown={(e) => { if (e.key === "Enter" && !busy && !(e.nativeEvent || e).isComposing) { e.preventDefault(); onSubmit(); } }}
+                placeholder="输入你的行动或台词……" />
+              <span className="go" onClick={() => !busy && onSubmit()} style={{ opacity: busy ? 0.6 : 1 }}>{busy ? "…" : "执行"}</span>
+            </div>
+          </>
         }>
         <div className="p-scene">
           {p.sceneArt ? <div className="p-art" style={{ backgroundImage: "url(" + p.sceneArt + ")" }}></div> : null}
@@ -404,6 +423,41 @@
           </button>
         )) : <div style={{ fontSize: 12, color: "var(--faint)", padding: "4px 2px" }}>{busy ? "推荐选项生成中……" : "输入你的行动开始第一回合,推荐选项会在每回合后出现。"}</div>}
         <div style={{ height: 8 }}></div>
+        {/* 故事记录:全屏覆盖回看全部回合 */}
+        {logOpen && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 70, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+            <div className="m-top" style={{ flex: "none" }}>
+              <span className="bk" onClick={() => setLogOpen(false)}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M15 5l-7 7 7 7"/></svg></span>
+              <h1>故事记录</h1><span className="en">/ {history.filter((t) => t.kind === "story").length} 回合</span>
+            </div>
+            <div ref={logRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px 24px" }}>
+              {(() => {
+                let n = 0;
+                return history.map((t, i) => {
+                  if (t.kind === "player") return (
+                    <div key={i} style={{ margin: "12px 0 8px", padding: "8px 12px", background: "rgba(52,70,61,.07)", borderLeft: "2px solid var(--green)", fontSize: 12.5 }}>
+                      <b style={{ fontFamily: "var(--serif)", fontSize: 10.5, color: "var(--green)", marginRight: 8 }}>你</b>{t.text}
+                    </div>
+                  );
+                  n++;
+                  const d = t.data || {};
+                  return (
+                    <div key={i} style={{ padding: "4px 0 10px", borderBottom: "1px solid var(--line)" }}>
+                      <div style={{ fontFamily: "var(--serifen)", fontSize: 9, letterSpacing: ".18em", color: "var(--gold)", margin: "8px 0 5px" }}>ROUND {String(n).padStart(2, "0")}</div>
+                      {d.narration ? <p style={{ fontSize: 12.5, lineHeight: 1.9, color: "#5b5346", margin: "0 0 6px", whiteSpace: "pre-wrap" }}>{d.narration}</p> : null}
+                      {(d.messages || []).map((m, j) => (
+                        <div key={j} style={{ display: "flex", gap: 8, margin: "4px 0", fontSize: 12.5 }}>
+                          <b style={{ flex: "none", fontFamily: "var(--serif)" }}>{m.name || m.character_id || "?"}</b>
+                          <span style={{ color: "var(--soft)", lineHeight: 1.75 }}>{m.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        )}
       </MShell>
     );
   }
@@ -451,6 +505,11 @@
             {active && (active.persona || active.description) ? (
               <div className="d-blk" style={{ marginBottom: 12 }}><b style={{ fontFamily: "var(--serif)", fontSize: 14 }}>{active.name}</b><p>{(active.description || active.persona || "").slice(0, 80)}</p></div>
             ) : null}
+            {messages.length > 0 && (
+              <div style={{ textAlign: "center", fontSize: 10.5, color: "var(--faint)", margin: "2px 0 10px" }}>
+                {P.restored ? "已接上上次的对话" : "✦ 新的相遇已开始"}
+              </div>
+            )}
             {messages.map((m, i) => (
               <div key={i} className={"c-msg" + (m.who === "me" ? " me" : "")}>
                 {m.who !== "me" ? <Avi name={m.who} size={30} fs={13} /> : null}

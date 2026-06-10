@@ -1028,6 +1028,7 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
           setTurns(structured.length ? restoreTurns(structured) : messagesToTurns(msgs));
           setChoices(structured.length ? (structured[structured.length - 1].choices || []) : []);
           setState((data && data.state) || null);
+          setCanUndo(true);   // 续玩局:最后一轮的快照持久在服务端,可撤
         }
         setHydrated(true);   // 后端也空(全新局没玩过)→ 保持空,但补水已完成
       })
@@ -1075,6 +1076,7 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
       setTurns((xs) => [...xs, { kind: "story", data: finalTurn }]);
       setChoices(finalTurn.choices || []);
       setState(finalTurn.state || null);
+      setCanUndo(true);   // 新回合落地 → 服务端已写好它的 pre-turn 快照
       if (onTurn) onTurn();
     } catch (e) {
       setStreaming(null);
@@ -1106,6 +1108,40 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
     requestAnimationFrame(() => inputRef.current?.focus());
   }
 
+  // 撤回上一轮:恢复服务端 pre-turn 快照(与 reroll 同一套镜像,零 LLM 调用),
+  // 本地同步裁掉最后一条剧情和它的玩家气泡,被撤回的输入回填输入框供修改。
+  // 快照只有一层(镜像不含 _reroll 防嵌套)→ 撤完要等新回合产生才能再撤(canUndo 管这件事)。
+  const [canUndo, setCanUndo] = useState(() => !!(initialTurns && initialTurns.length));
+  async function undoLast() {
+    if (loading || !canUndo) return;
+    setLoading(true);
+    setError("");
+    try {
+      const out = await postJSON("/api/undo_last", { session_id: sessionId });
+      setTurns((xs) => {
+        const ys = [...xs];
+        for (let i = ys.length - 1; i >= 0; i--) {
+          if (ys[i].kind === "story") {
+            ys.splice(i, 1);
+            if (i > 0 && ys[i - 1] && ys[i - 1].kind === "player") ys.splice(i - 1, 1);
+            break;
+          }
+        }
+        return ys;
+      });
+      setChoices((out.last_turn && out.last_turn.choices) || []);
+      setState(out.state || null);
+      setStreaming(null);
+      setInput(out.undone_input || "");
+      setCanUndo(false);
+      if (onTurn) onTurn();
+    } catch (e) {
+      setError("撤回失败: " + e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // 对上一回合不满意:回滚副作用 + 用相同输入重新生成,只替换最后一条剧情(玩家行动保持不变)。
   async function rerollLast() {
     if (loading) return;
@@ -1122,6 +1158,7 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
       setTurns((xs) => xs.map((t, i) => (i === idx ? { kind: "story", data: out } : t)));
       setChoices(out.choices || []);
       setState(out.state || null);
+      setCanUndo(true);   // 重生成 = 新回合落盘,快照随之更新
       if (onTurn) onTurn();
     } catch (e) {
       setError("重新生成失败: " + e.message);
@@ -1163,6 +1200,9 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
         onChoice={(c) => runTurn({ choice: c.label || c.title })}
         onReroll={rerollLast}
         canReroll={storyTurns.length > 0}
+        onUndo={undoLast}
+        canUndo={canUndo}
+        history={turns}
         busy={loading}
         playerName={pname}
       />
@@ -2175,7 +2215,7 @@ function ReconShell({ designW, designH, bg, onNav, onPrimary, children }) {
 
 // 角色聊天控制器:OC 就是角色——/api/my/oc 的 OC 与预设角色合成同一份「角色」列表
 // (OC 排前、带真立绘,按名去重)。统一卡主导一对一,共用 /api/chat,历史按角色名维护。
-function ReconChatLive({ presets, onNav, mobile }) {
+function ReconChatLive({ presets, onNav, mobile, uid }) {
   const presetCards = React.useMemo(() => {
     const out = []; const seen = new Set();
     (presets || []).forEach((p) => ((p.data && p.data.characters) || []).forEach((c) => {
@@ -2186,9 +2226,33 @@ function ReconChatLive({ presets, onNav, mobile }) {
   const [ocs, setOcs] = React.useState([]);
   const [myCards, setMyCards] = React.useState([]); // 用户自己建的角色卡(创作桌入库的)也能聊——闭环建卡→使用
   const [activeKey, setActiveKey] = React.useState("");
-  const [byKey, setByKey] = React.useState({});
+  // 会话持久化:对话与会话 id 落 localStorage(按账号隔离),切走/刷新回来接着聊,
+  // 「近期聊天」终于名实相符;「新建对话」才重开。每角色只留最近 60 条防爆容量。
+  const CHAT_KEY = "ais_chat_hist_v1" + (uid ? "_u_" + uid : "");
+  const restoredRef = React.useRef({});  // 哪些角色是从本机恢复的(给「已接上上次对话」提示)
+  const [byKey, setByKey] = React.useState(() => {
+    try {
+      const d = JSON.parse(localStorage.getItem(CHAT_KEY)) || {};
+      const out = {};
+      Object.keys(d).forEach((k) => {
+        if (d[k] && Array.isArray(d[k].msgs) && d[k].msgs.length) { out[k] = d[k].msgs; restoredRef.current[k] = true; }
+      });
+      return out;
+    } catch (e) { return {}; }
+  });
   const [input, setInput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  React.useEffect(() => {
+    try {
+      const out = {};
+      Object.keys(byKey).forEach((k) => {
+        // 滤掉纯「……」占位(开场进行中被打断的残留),避免恢复出一条死占位
+        const msgs = (byKey[k] || []).filter((m) => !(m && m.who !== "me" && m.text === "……")).slice(-60);
+        if (msgs.length) out[k] = { sid: sidsRef.current[k] || "", msgs };
+      });
+      localStorage.setItem(CHAT_KEY, JSON.stringify(out));
+    } catch (e) {}
+  }, [byKey]);
   React.useEffect(() => {
     let alive = true;
     fetch("/api/my/oc").then((r) => (r.ok ? r.json() : { ocs: [] }))
@@ -2219,10 +2283,22 @@ function ReconChatLive({ presets, onNav, mobile }) {
   const activeName = activeKey || (list[0] && list[0].name) || "";
   const activeItem = list.find((x) => x.name === activeName) || null;
   const messages = byKey[activeName] || [];
-  // 每次进入与某角色的对话 = 开一个全新故事:会话 id 带随机串,不复用旧局;
-  // 旧会话(历史 id)服务端原样保留,不受影响。
-  const sidsRef = React.useRef({});
-  const openedRef = React.useRef({});
+  // 会话 id:有本机记录就续用上次的 sid(服务端按 sid 保留完整历史,续聊有上下文);
+  // 没有才开新串。「新建对话」显式换新 sid,旧会话服务端原样保留。
+  const sidsRef = React.useRef(null);
+  const openedRef = React.useRef(null);
+  if (sidsRef.current === null) {
+    const sids = {}, opened = {};
+    try {
+      const d = JSON.parse(localStorage.getItem(CHAT_KEY)) || {};
+      Object.keys(d).forEach((k) => {
+        if (d[k] && d[k].sid) sids[k] = d[k].sid;
+        if (d[k] && Array.isArray(d[k].msgs) && d[k].msgs.length) opened[k] = true; // 已有对话 → 不再自动开场
+      });
+    } catch (e) {}
+    sidsRef.current = sids;
+    openedRef.current = opened;
+  }
   const [chatNonce, setChatNonce] = React.useState(0); // 「新建对话」重开会话的触发器
   const sidFor = (nm) => {
     if (!sidsRef.current[nm]) sidsRef.current[nm] = "chat-" + nm + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -2257,6 +2333,7 @@ function ReconChatLive({ presets, onNav, mobile }) {
     if (!nm || busy) return;
     delete sidsRef.current[nm];
     openedRef.current[nm] = false;
+    delete restoredRef.current[nm];
     setByKey((m) => { const n = { ...m }; delete n[nm]; return n; });
     setChatNonce((x) => x + 1);
   }
@@ -2284,6 +2361,7 @@ function ReconChatLive({ presets, onNav, mobile }) {
       activeName={activeName} messages={messages} value={input}
       onChange={setInput} onSend={send} onNav={onNav}
       busy={busy} canChat={!!(activeItem && activeItem.card)} onNewChat={newChat}
+      restored={!!(restoredRef.current[activeName] && messages.length)}
       onPick={(nm) => setActiveKey(nm)} />
   );
 }
@@ -2851,10 +2929,10 @@ function App() {
       ))}
 
       {view === "chat" && (isMobile ? (
-        <ReconChatLive presets={presets} onNav={navTo} mobile />
+        <ReconChatLive presets={presets} onNav={navTo} uid={auth.user ? auth.user.id : ""} mobile />
       ) : (
         <ReconShell designW={1536} designH={1024}>
-          <ReconChatLive presets={presets} onNav={navTo} />
+          <ReconChatLive presets={presets} onNav={navTo} uid={auth.user ? auth.user.id : ""} />
         </ReconShell>
       ))}
 
