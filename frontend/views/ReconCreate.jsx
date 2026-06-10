@@ -222,22 +222,8 @@ function ReconCreate(props) {
       `}</style>
 
       {/* 左 引擎竖栏 */}
-      <div className="lbar">
-        <div className="logo">
-          <span className="emb">
-            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4">
-              <path d="M4 5h11l4 4v10H4z" /><path d="M15 5v4h4M8 13h7M8 16h7" />
-            </svg>
-          </span>
-          <div className="lt"><b>NARRATIVE<br />ENGINE</b><span>叙事引擎</span></div>
-        </div>
-        <div className="nav">
-          <a onClick={() => onNav("home")}><span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5l-2 5-5 2 2-5z" /></svg></span><span className="tx"><span className="zh">探索</span><span className="en">EXPLORE</span></span></a>
-          <a onClick={() => onNav("game")}><span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M6 3h9l4 4v14H6z" /><path d="M15 3v4h4M9 12h6M9 16h6" /></svg></span><span className="tx"><span className="zh">当前故事</span><span className="en">CURRENT FILE</span></span></a>
-          <a className="on" onClick={() => onNav("build")}><span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 20l1-4L16 5l3 3L8 19z" /><path d="M14 7l3 3" /></svg></span><span className="tx"><span className="zh">创作</span><span className="en">CREATE</span></span></a>
-          <a onClick={() => onNav("chat")}><span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 5h16v11H9l-4 4z" /></svg></span><span className="tx"><span className="zh">聊天</span><span className="en">CHAT</span></span></a>
-          <a onClick={() => onNav("mine")}><span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M5 4h11l3 3v13H5z" /><path d="M9 9h6M9 13h6" /></svg></span><span className="tx"><span className="zh">我的</span><span className="en">ARCHIVE</span></span></a>
-        </div>
+      {/* 左侧引擎竖栏(全站统一 ReconRail;本次创作摘要作底部插槽) */}
+      <window.ReconRail active="build" onNav={onNav}>
         <div className="pcard">
           <div className="ttl">本次创作<span>DRAFT</span></div>
           <div className="draft">
@@ -245,7 +231,7 @@ function ReconCreate(props) {
             <div className="dn">{dFields.length} 个字段</div>
           </div>
         </div>
-      </div>
+      </window.ReconRail>
 
       {/* 顶 标题栏 */}
       <div className="top">

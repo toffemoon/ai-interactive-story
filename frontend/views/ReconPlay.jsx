@@ -243,30 +243,15 @@ function ReconPlay(props) {
   .cv-play .tips .chibi {position:absolute; right:-4px; bottom:-18px; width:95px; height:auto;}
 `}</style>
 
-      {/* 左 引擎竖栏 */}
-      <div className="lbar">
-        <div className="logo">
-          <img src="assets/recon/play-emblem.png" alt="" />
-          <div className="lt"><b>NARRATIVE<br/>ENGINE</b><span>叙事引擎</span></div>
-        </div>
-        <div className="nav">
-          <a className="on"><span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg></span><span className="tx"><span className="zh">探索</span><span className="en">EXPLORE</span></span></a>
-          <a><span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h6M9 16h6"/></svg></span><span className="tx"><span className="zh">当前故事</span><span className="en">CURRENT FILE</span></span></a>
-          <a><span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/></svg></span><span className="tx"><span className="zh">创作</span><span className="en">CREATE</span></span></a>
-          <a><span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 5h16v11H9l-4 4z"/></svg></span><span className="tx"><span className="zh">聊天</span><span className="en">CHAT</span></span></a>
-          <a><span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M5 4h11l3 3v13H5z"/><path d="M9 9h6M9 13h6"/></svg></span><span className="tx"><span className="zh">我的</span><span className="en">ARCHIVE</span></span></a>
-        </div>
+      {/* 左 引擎竖栏(全站统一 ReconRail;点击由外层 ReconShell 委托导航) */}
+      <window.ReconRail active="game">
         <div className="pcard">
           <div className="ttl">玩家身份<span>PLAYER</span></div>
           <img className="por" src="assets/recon/play-player.png" alt="" />
           <div className="nm">{playerName}</div>
           <div className="lv">玩家</div>
-          <div className="insp">
-            <div className="lb">灵感点<i>INSPIRATION</i></div>
-            <div className="vl"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2 8 8 2-8 2-2 8-2-8-8-2 8-2z"/></svg>1260</div>
-          </div>
         </div>
-      </div>
+      </window.ReconRail>
 
       {/* 顶 面包屑 */}
       <div className="top">

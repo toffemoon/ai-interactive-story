@@ -1572,7 +1572,7 @@ function TopNav({ view, setView, sessionId, authEnabled, user, onLogout }) {
 
 // 登录 / 注册页(AUTH_ENABLED 时未登录则全屏拦在此)。纯 JSX,无构建工具。
 // 注册:邮箱 + 发送验证码 + 验证码 + 密码(可选用户名)。登录:邮箱/用户名 + 密码。
-function LoginView({ onAuthed }) {
+function LoginView({ onAuthed, onBack }) {
   const [tab, setTab] = useState("login");           // login | register
   const [identifier, setIdentifier] = useState("");   // 登录:邮箱或用户名
   const [email, setEmail] = useState("");             // 注册:邮箱(主身份)
@@ -1619,38 +1619,73 @@ function LoginView({ onAuthed }) {
   }
 
   return (
-    <div className="login-wrap">
-      <div className="login-card">
-        <h1 className="login-title">AI 互动故事</h1>
-        <p className="login-sub">登录后你的存档与卡片只属于你。</p>
-        <div className="login-tabs">
-          <button className={tab === "login" ? "on" : ""} onClick={() => { setTab("login"); setErr(""); }}>登录</button>
-          <button className={tab === "register" ? "on" : ""} onClick={() => { setTab("register"); setErr(""); }}>注册</button>
+    <div className="cv-login">
+      <style>{`
+        .cv-login {position:fixed; inset:0; z-index:60; display:grid; place-items:center;
+          background:center/cover no-repeat url(assets/recon/title-bg.png), linear-gradient(160deg,#27324a,#161c28 60%,#0e1118);
+          font-family:"Kaiti SC","STKaiti","KaiTi",serif;}
+        .cv-login::before {content:""; position:absolute; inset:0; background:rgba(10,13,20,.45);}
+        .cv-login .card {position:relative; width:430px; background:linear-gradient(180deg,#f6efdd,#efe6cf);
+          border:1px solid rgba(203,176,121,.7); padding:38px 42px 34px; box-shadow:0 24px 60px -20px rgba(0,0,0,.6);}
+        .cv-login .card::before {content:""; position:absolute; inset:5px; border:1px solid rgba(43,38,32,.14); pointer-events:none;}
+        .cv-login h1 {margin:0; font-family:"Songti SC","STSong","SimSun",serif; font-size:24px; letter-spacing:.18em; font-weight:700; color:#2b2620; text-align:center;}
+        .cv-login .sub {font-family:Georgia,serif; font-size:10px; letter-spacing:.3em; color:#a98a63; text-align:center; margin-top:7px;}
+        .cv-login .tabs {display:flex; margin:24px 0 18px; border-bottom:1px solid #c4b388;}
+        .cv-login .tabs button {flex:1; appearance:none; background:none; border:none; min-height:0; border-radius:0; padding:9px 0; cursor:pointer;
+          font-family:"Songti SC","SimSun",serif; font-size:15px; letter-spacing:.22em; color:#9a907a; position:relative;}
+        .cv-login .tabs button:hover:not(:disabled) {background:none; color:#2b2620;}
+        .cv-login .tabs button.on {color:#2b2620; font-weight:700;}
+        .cv-login .tabs button.on::after {content:""; position:absolute; left:24%; right:24%; bottom:-1px; height:2px; background:#34463d;}
+        .cv-login input {width:100%; background:rgba(255,255,255,.5); border:1px solid #c4b388; border-radius:0; box-shadow:none;
+          font-family:inherit; font-size:14px; color:#2b2620; padding:11px 13px; outline:none; margin-bottom:12px;}
+        .cv-login input:focus {border-color:#34463d; box-shadow:none;}
+        .cv-login .coderow {display:flex; gap:10px;}
+        .cv-login .coderow input {flex:1;}
+        .cv-login .coderow button {appearance:none; flex:none; min-height:0; border-radius:0; background:#163b57; color:#f3ead6; border:1px solid #0d2f49;
+          font-family:"Songti SC","SimSun",serif; font-size:13px; letter-spacing:.08em; padding:0 16px; height:44px; cursor:pointer;}
+        .cv-login .coderow button:hover:not(:disabled) {background:#0d2f49; color:#f3ead6;}
+        .cv-login .coderow button:disabled {opacity:.5; cursor:default;}
+        .cv-login .hint {font-size:12px; color:#34463d; margin:-4px 0 10px;}
+        .cv-login .err {font-size:12.5px; color:#9a4a3a; margin:2px 0 10px;}
+        .cv-login .go {width:100%; appearance:none; min-height:0; border-radius:0; height:50px; background:#34463d; color:#f3ead6; border:1px solid #283831;
+          font-family:"Songti SC","SimSun",serif; font-size:16px; letter-spacing:.3em; cursor:pointer; position:relative; margin-top:6px;}
+        .cv-login .go::before {content:""; position:absolute; inset:3px; border:1px solid rgba(193,168,111,.5); pointer-events:none;}
+        .cv-login .go:hover:not(:disabled) {background:#2c3a32; color:#f3ead6;}
+        .cv-login .go:disabled {opacity:.6;}
+        .cv-login .back {position:absolute; left:42px; top:-34px; font-family:Georgia,serif; font-size:12px; letter-spacing:.2em; color:rgba(240,234,222,.75); cursor:pointer;}
+      `}</style>
+      <div className="card">
+        {onBack && <span className="back" onClick={onBack}>‹ BACK</span>}
+        <h1>叙事引擎</h1>
+        <div className="sub">NARRATIVE ENGINE · SIGN IN</div>
+        <div className="tabs">
+          <button className={tab === "login" ? "on" : ""} onClick={() => { setTab("login"); setErr(""); }}>回到故事</button>
+          <button className={tab === "register" ? "on" : ""} onClick={() => { setTab("register"); setErr(""); }}>初次到来</button>
         </div>
         {tab === "login" ? (
-          <input className="login-input" placeholder="邮箱或用户名" value={identifier}
+          <input placeholder="邮箱或用户名" value={identifier}
                  onChange={(e) => setIdentifier(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
         ) : (
           <>
-            <input className="login-input" type="email" placeholder="邮箱" value={email}
+            <input type="email" placeholder="邮箱(用来收验证码)" value={email}
                    onChange={(e) => setEmail(e.target.value)} />
-            <div className="login-code-row">
-              <input className="login-input" placeholder="邮箱验证码" value={code}
+            <div className="coderow">
+              <input placeholder="邮箱验证码" value={code}
                      onChange={(e) => setCode(e.target.value)} />
-              <button className="login-code-btn" disabled={sending || cooldown > 0} onClick={sendCode}>
+              <button disabled={sending || cooldown > 0} onClick={sendCode}>
                 {cooldown > 0 ? `${cooldown}s` : (sending ? "…" : "发送验证码")}
               </button>
             </div>
-            {sentHint && <div className="login-hint">{sentHint}</div>}
-            <input className="login-input" placeholder="用户名(可选,用于登录)" value={username}
+            {sentHint && <div className="hint">{sentHint}</div>}
+            <input placeholder="用户名(可选,用于登录)" value={username}
                    onChange={(e) => setUsername(e.target.value)} />
           </>
         )}
-        <input className="login-input" type="password" placeholder="密码" value={password}
+        <input type="password" placeholder="密码" value={password}
                onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
-        {err && <div className="login-err">{err}</div>}
-        <button className="login-submit" disabled={busy} onClick={submit}>
-          {busy ? "…" : (tab === "login" ? "登录" : "注册并进入")}
+        {err && <div className="err">{err}</div>}
+        <button className="go" disabled={busy} onClick={submit}>
+          {busy ? "…" : (tab === "login" ? "进入故事" : "注册并进入")}
         </button>
       </div>
     </div>
@@ -3375,9 +3410,6 @@ function App() {
 
   return (
     <div className="app">
-      <TopNav view={view} setView={navTo} sessionId={sessionId}
-              authEnabled={auth.enabled} user={auth.user} onLogout={onLogout} />
-
       {view === "home" && (
         <ReconShell designW={1672} designH={941}>
           <window.ReconHome presets={presets} user={auth.user}
@@ -3410,37 +3442,41 @@ function App() {
         </ReconShell>
       )}
 
-      {view === "game" && !(started && characters.length > 0) && assembling && (
-        <main>
-          <SetupPanel
-            characters={characters}
-            setCharacters={setCharacters}
-            worldBooks={worldBooks}
-            setWorldBooks={setWorldBooks}
-            story={story}
-            setStory={setStory}
-            player={player}
-            setPlayer={setPlayer}
-            mode={mode}
-            setMode={setMode}
-            onStart={() => setStarted(true)}
-            onSavePreset={saveAsPreset}
-            onBack={() => { refreshHome(); setAssembling(false); setView("home"); }}
-          />
-          <section className="story-shell standby">
-            <h2>组好卡组,开始故事</h2>
-            <p>左边挑/上传卡:至少一个角色,建议配上主角(玩家)卡、世界书、故事书。组好点左下「启动」。也可「保存为故事预设」下次复用。</p>
-          </section>
-        </main>
-      )}
-
-      {view === "game" && !(started && characters.length > 0) && !assembling && !selecting && (
-        <main className="single-view">
-          <section className="story-shell standby">
-            <h2>还没有进行中的故事</h2>
-            <p>去「首页」挑一个故事开局或续玩,或<button className="back-link" onClick={onNew}>新建一个故事</button>。</p>
-          </section>
-        </main>
+      {/* 当前故事·空态(recon 风格,带统一竖栏)。旧 SetupPanel 装配分支已无触发点,移除。 */}
+      {view === "game" && !(started && characters.length > 0) && (
+        <ReconShell designW={1536} designH={1024}>
+          <div className="cv-gempty">
+            <style>{`
+              .cv-gempty {position:relative; width:1536px; height:1024px; overflow:hidden;
+                background:repeating-linear-gradient(90deg, rgba(169,138,99,.028) 0 1px, transparent 1px 46px), #f3ece0;
+                color:#2c2820; font-family:"Kaiti SC","STKaiti","KaiTi",serif;}
+              .cv-gempty .mid {position:absolute; left:188px; right:0; top:0; bottom:0; display:grid; place-items:center;}
+              .cv-gempty .panel {width:520px; text-align:center; background:#faf4ea; border:1px solid #ddd0b4; padding:54px 48px; position:relative;}
+              .cv-gempty .panel::before {content:""; position:absolute; inset:6px; border:1px solid rgba(196,179,132,.4); pointer-events:none;}
+              .cv-gempty .panel .ic {color:#a98a63; margin-bottom:18px;}
+              .cv-gempty h2 {margin:0; font-family:"Songti SC","STSong","SimSun",serif; font-size:26px; letter-spacing:.12em; font-weight:700;}
+              .cv-gempty .en {font-family:Georgia,serif; font-style:italic; font-size:13px; letter-spacing:.1em; color:#a98a63; margin-top:8px;}
+              .cv-gempty p {font-size:14px; line-height:2; color:#6f6757; margin:18px 0 26px;}
+              .cv-gempty .btns {display:flex; gap:16px; justify-content:center;}
+              .cv-gempty .bm {height:50px; padding:0 30px; display:inline-flex; align-items:center; background:#34463d; color:#f3ead6; border:1px solid #283831; position:relative; cursor:pointer; font-family:"Songti SC","SimSun",serif; font-size:15px; letter-spacing:.16em;}
+              .cv-gempty .bm::before {content:""; position:absolute; inset:3px; border:1px solid rgba(193,168,111,.5);}
+              .cv-gempty .bo {height:50px; padding:0 28px; display:inline-flex; align-items:center; background:transparent; color:#163b57; border:1px solid #c4b388; cursor:pointer; font-family:"Songti SC","SimSun",serif; font-size:15px; letter-spacing:.16em;}
+            `}</style>
+            <window.ReconRail active="game" onNav={navTo} />
+            <div className="mid">
+              <div className="panel">
+                <div className="ic"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h6M9 16h6"/></svg></div>
+                <h2>还没有进行中的故事</h2>
+                <div className="en">No Story In Progress</div>
+                <p>去「探索」取下一本书开局或续玩，<br/>或到「创作」从一张角色卡开始写你自己的故事。</p>
+                <div className="btns">
+                  <span className="bm" onClick={() => navTo("home")}>去探索</span>
+                  <span className="bo" onClick={onNew}>去创作</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ReconShell>
       )}
 
       {view === "build" && (
@@ -3458,18 +3494,7 @@ function App() {
         </ReconShell>
       )}
 
-      <CoachHelpButton onClick={replayCoach} />
-      {coachRun && (
-        <CoachMarks
-          key={coachRun.screen + (coachRun.manual ? "-m" : "")}
-          steps={COACH[coachRun.screen] || COACH.home}
-          manual={coachRun.manual}
-          onDone={() => { if (coachRun.screen === "modal") setStoryModal((m) => (m ? { ...m, tab: "intro" } : m)); setCoachRun(null); }}
-          onSkip={() => { if (coachRun.screen === "modal") setStoryModal((m) => (m ? { ...m, tab: "intro" } : m)); setCoachDone(); setCoachRun(null); }}
-          onAction={(id) => { if (id === "tutorial") startTutorial(); else if (id === "dismiss") setCoachRun(null); else if (id === "explore") { setView("home"); setCoachRun(null); } }}
-          onStep={(s) => { if (s && s.tab) setStoryModal((m) => (m ? { ...m, tab: s.tab } : m)); }}
-        />
-      )}
+      {/* 旧 coach 引导系统的锚点(data-coach)在 recon 视图里已不存在,浮窗与「?」按钮一并移除;代码保留待重接。 */}
     </div>
   );
 }

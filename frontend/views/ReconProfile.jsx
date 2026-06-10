@@ -116,11 +116,11 @@ function ReconProfile(props) {
   .cv-profile .nav a.on .tx .zh {color:#f1ebdd; font-weight:700;}
   .cv-profile .nav a.on .tx .en {color:rgba(241,235,221,.65);}
 
-  .cv-profile .rail .qchar {position:absolute; left:11px; right:11px; bottom:0; height:424px;
+  .cv-profile .qchar {position:absolute; left:11px; right:11px; bottom:0; height:424px;
     background:bottom/cover no-repeat url(assets/recon/profile-qchar.png);}
 
   
-  .cv-profile .top {position:absolute; left:262px; right:0; top:0; height:108px; z-index:8;}
+  .cv-profile .top {position:absolute; left:188px; right:0; top:0; height:108px; z-index:8;}
   .cv-profile .top::after {content:""; position:absolute; left:34px; right:40px; bottom:0; height:1px;
     background:linear-gradient(90deg,transparent,var(--line2) 4%,var(--line2) 96%,transparent);}
   .cv-profile .top .ttl {position:absolute; left:34px; top:30px; display:flex; align-items:baseline; gap:16px;}
@@ -138,7 +138,7 @@ function ReconProfile(props) {
   .cv-profile .top .av {width:38px; height:38px; border-radius:50%; object-fit:cover; border:1px solid var(--line2);}
 
   
-  .cv-profile .main {position:absolute; left:286px; right:32px; top:120px; bottom:18px;}
+  .cv-profile .main {position:absolute; left:212px; right:32px; top:120px; bottom:18px;}
 
   
   .cv-profile .profile {position:relative; height:152px; background:var(--paper); border:1px solid var(--line);}
@@ -222,38 +222,10 @@ function ReconProfile(props) {
 `}</style>
 
       {/* ============ 左竖栏 ============ */}
-      <div className="rail">
-        <div className="brand">
-          <img className="em" src="assets/recon/home-emblem.png" alt="" />
-          <div>
-            <h1>NARRATIVE ENGINE</h1>
-            <div className="sub">叙事引擎</div>
-          </div>
-        </div>
-        <div className="nav">
-          <a onClick={() => onNav("home")}>
-            <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span>
-            <span className="tx"><div className="zh">探索</div><div className="en">EXPLORE</div></span>
-          </a>
-          <a onClick={() => onNav("game")}>
-            <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M9 9h7M9 13h7M9 17h4"/></svg></span>
-            <span className="tx"><div className="zh">当前故事</div><div className="en">CURRENT FILE</div></span>
-          </a>
-          <a onClick={() => onNav("build")}>
-            <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20l4-1L19 8a2 2 0 0 0-3-3L5 16z"/><path d="M14 6l3 3"/></svg></span>
-            <span className="tx"><div className="zh">创作</div><div className="en">CREATE</div></span>
-          </a>
-          <a onClick={() => onNav("chat")}>
-            <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h16v11H9l-4 3z"/></svg></span>
-            <span className="tx"><div className="zh">聊天</div><div className="en">CHAT</div></span>
-          </a>
-          <a className="on" onClick={() => onNav("mine")}>
-            <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M5 20c0-4 3.2-6 7-6s7 2 7 6"/></svg></span>
-            <span className="tx"><div className="zh">我的</div><div className="en">PROFILE</div></span>
-          </a>
-        </div>
+      {/* 左侧引擎竖栏(全站统一 ReconRail;Q版立绘作底部插槽) */}
+      <window.ReconRail active="mine" onNav={onNav}>
         <div className="qchar"></div>
-      </div>
+      </window.ReconRail>
 
       {/* ============ 顶栏 ============ */}
       <div className="top">

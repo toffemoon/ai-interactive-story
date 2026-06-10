@@ -104,9 +104,9 @@ function ReconChat(props) {
   .cv-chat .navlist .it.on .tx .en {color:rgba(243,234,214,.66);}
   .cv-chat .navlist .it.on::before {content:""; position:absolute; left:0; top:8px; bottom:8px; width:3px; background:var(--gold2);}
 
-  .cv-chat .recenth {display:flex; align-items:center; gap:9px; padding:14px 24px 8px;}
-  .cv-chat .recenth b {font-family:var(--serif); font-size:11px; letter-spacing:.12em; color:var(--soft);}
-  .cv-chat .recenth .en {font-family:var(--serifen); font-size:7px; letter-spacing:.24em; color:var(--faint);}
+  .cv-chat .recenth {display:flex; align-items:center; gap:8px; padding:14px 16px 8px;}
+  .cv-chat .recenth b {font-family:var(--serif); font-size:11px; letter-spacing:.12em; color:var(--soft); white-space:nowrap;}
+  .cv-chat .recenth .en {font-family:var(--serifen); font-size:7px; letter-spacing:.18em; color:var(--faint); white-space:nowrap;}
   .cv-chat .recenth i {flex:1; height:1px; background:var(--line);}
   .cv-chat .rlist {overflow-y:auto; max-height:400px;}
   .cv-chat .rlist::-webkit-scrollbar {width:5px;} .cv-chat .rlist::-webkit-scrollbar-thumb {background:var(--line2);}
@@ -148,7 +148,7 @@ function ReconChat(props) {
   .cv-chat .topr .me .nm {font-family:var(--serif); font-size:12px; color:var(--ink);}
 
   
-  .cv-chat .pagehd {position:absolute; left:288px; top:54px; z-index:5;}
+  .cv-chat .pagehd {position:absolute; left:236px; top:54px; z-index:5;}
   .cv-chat .pagehd h2 {margin:0; display:flex; align-items:baseline; gap:14px;}
   .cv-chat .pagehd h2 .zh {font-family:var(--serif); font-weight:700; font-size:28px; letter-spacing:.06em; color:var(--ink);}
   .cv-chat .pagehd h2 .en {font-family:var(--serifen); font-style:italic; font-size:18px; color:var(--gold); letter-spacing:.02em;}
@@ -156,7 +156,7 @@ function ReconChat(props) {
   .cv-chat .pagehd p {margin:9px 0 0; font-family:var(--kai); font-size:13px; color:var(--soft); letter-spacing:.04em;}
 
   
-  .cv-chat .charbar {position:absolute; left:288px; top:122px; right:368px; height:62px; border-bottom:1px solid var(--line);
+  .cv-chat .charbar {position:absolute; left:236px; top:122px; right:368px; height:62px; border-bottom:1px solid var(--line);
     display:flex; align-items:center; gap:13px; z-index:5;}
   .cv-chat .charbar .av {width:46px; height:46px; border-radius:50%; object-fit:cover; border:1px solid var(--line2);}
   .cv-chat .charbar .stk {display:flex; flex-direction:column; gap:5px;}
@@ -168,7 +168,7 @@ function ReconChat(props) {
   .cv-chat .charbar .actions .b {display:flex; align-items:center; gap:6px; height:30px; padding:0 16px; border:1px solid var(--line2); color:var(--soft); font-family:var(--serif); font-size:12.5px; letter-spacing:.06em; cursor:pointer; background:var(--paper);}
 
   
-  .cv-chat .chat {position:absolute; left:288px; top:200px; right:368px; bottom:128px; overflow-y:auto; z-index:4;}
+  .cv-chat .chat {position:absolute; left:236px; top:200px; right:368px; bottom:128px; overflow-y:auto; z-index:4;}
   .cv-chat .chat::-webkit-scrollbar {width:5px;} .cv-chat .chat::-webkit-scrollbar-thumb {background:var(--line2);}
   .cv-chat .syscue {text-align:center; font-family:var(--kai); font-size:11px; color:var(--faint); letter-spacing:.06em; margin-bottom:22px;}
   .cv-chat .syscue span {display:inline-block; padding:0 12px; position:relative;}
@@ -193,7 +193,7 @@ function ReconChat(props) {
   .cv-chat .msg.me .time {text-align:right;}
 
   
-  .cv-chat .inputbar {position:absolute; left:288px; right:368px; bottom:26px; height:96px; z-index:6;
+  .cv-chat .inputbar {position:absolute; left:236px; right:368px; bottom:26px; height:96px; z-index:6;
     display:flex; align-items:center; gap:14px; padding:13px 16px;
     background:var(--paper2); border:1px solid var(--line2);}
   .cv-chat .inputbar::before {content:""; position:absolute; inset:5px; border:1px solid rgba(169,138,99,.28); pointer-events:none;}
@@ -249,23 +249,8 @@ function ReconChat(props) {
   .cv-chat .rcard .gift .ic {color:var(--gold);}
 `}</style>
 
-      {/* 左侧引擎竖栏 */}
-      <div className="side">
-        <div className="logo">
-          <img src="assets/recon/home-emblem.png" alt="" />
-          <div>
-            <h1>NARRATIVE ENGINE</h1>
-            <div className="sub">叙事引擎</div>
-          </div>
-        </div>
-        <div className="navlist">
-          {nav.map((n, i) => (
-            <div className={"it" + (n.on ? " on" : "")} key={i} style={{ cursor: "pointer" }} onClick={() => onNav(n.view)}>
-              <span className="ic">{n.icon}</span>
-              <div className="tx"><div className="zh">{n.zh}</div><div className="en">{n.en}</div></div>
-            </div>
-          ))}
-        </div>
+      {/* 左侧引擎竖栏(全站统一 ReconRail;近期聊天/新建对话作为底部插槽) */}
+      <window.ReconRail active="chat" onNav={onNav}>
         <div className="recenth"><b>近期聊天</b><span className="en">RECENT CHATS</span><i></i></div>
         <div className="rlist">
           {characters.map((c, i) => (
@@ -276,7 +261,7 @@ function ReconChat(props) {
           ))}
         </div>
         <div className="newchat" style={{ cursor: "pointer" }} onClick={() => onNav("build")}><span className="star"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l1.6 6.4L20 11l-6.4 1.6L12 19l-1.6-6.4L4 11l6.4-1.6z" /></svg></span><span className="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4l4 4-11 11H5v-4z" /></svg></span><div className="tx"><div className="zh">新建对话</div><div className="en">NEW CHAT</div></div></div>
-      </div>
+      </window.ReconRail>
 
       {/* 顶栏右侧（功能入口，无写死世界时间/用户；记忆/档案走 onNav） */}
       <div className="topr">

@@ -47,7 +47,7 @@ const RECON_STORY_DETAIL_CSS = `
 
   
   .cv-story .nav {position:absolute; left:0; right:0; top:0; height:88px; z-index:30;}
-  .cv-story .nav::after {content:""; position:absolute; left:130px; right:30px; bottom:0; height:1px;
+  .cv-story .nav::after {content:""; position:absolute; left:212px; right:30px; bottom:0; height:1px;
     background:linear-gradient(90deg,transparent,var(--line2) 6%,var(--line2) 94%,transparent);}
   .cv-story .brand {position:absolute; left:18px; top:16px; display:flex; align-items:center; gap:12px;}
   .cv-story .brand .em {width:46px; height:46px; object-fit:contain;}
@@ -102,7 +102,7 @@ const RECON_STORY_DETAIL_CSS = `
   
   .cv-story .book {position:absolute; left:248px; top:106px; width:318px; height:300px; z-index:4;
     background:center/contain no-repeat url(assets/recon/story-detail-book.png);}
-  .cv-story .booktab {position:absolute; left:148px; top:128px; width:84px; height:36px; z-index:5;
+  .cv-story .booktab {position:absolute; left:196px; top:128px; width:84px; height:36px; z-index:5;
     background:linear-gradient(180deg,#3a4d42,#2d3e35); border:1px solid rgba(193,168,111,.5);
     display:flex; flex-direction:column; align-items:center; justify-content:center;}
   .cv-story .booktab .zh {font-family:var(--serif); font-size:11px; color:#e9dcbf; letter-spacing:.08em;}
@@ -279,14 +279,6 @@ function ReconStoryDetail(props) {
 
       {/* ===== 顶栏 ===== */}
       <div className="nav">
-        <div className="brand" onClick={() => onNav("home")} style={{ cursor: "pointer" }}>
-          <img className="em" src="assets/recon/story-detail-emblem.png" alt="" />
-          <div>
-            <h1>NARRATIVE ENGINE</h1>
-            <div className="sub">叙事引擎</div>
-          </div>
-        </div>
-        <div className="navsep"></div>
         <div className="ptitle">
           <div className="h"><span className="zh">故事详情</span><span className="en">STORY DETAIL</span></div>
           <div className="sub">阅读故事，理解世界，选择你的身份</div>
@@ -299,39 +291,14 @@ function ReconStoryDetail(props) {
         </div>
       </div>
 
-      {/* ===== 左竖向导航 ===== */}
-      <div className="lnav">
-        <div className="compassbg"></div>
-        <a className="litem" style={{ top: "6px" }} onClick={() => onNav("home")}>
-          <span className="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3"><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5l-2 5-5 2 2-5z" fill="currentColor" stroke="none" /></svg></span>
-          <span className="zh">探索</span><span className="en">EXPLORE</span>
-        </a>
-        <a className="litem on" style={{ top: "70px" }}>
-          <span className="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3"><circle cx="12" cy="12" r="9" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M12 12l4-7-1 8-7 1z" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" /></svg></span>
-          <span className="zh">当前故事</span><span className="en">CURRENT</span>
-        </a>
-        <a className="litem" style={{ top: "142px" }} onClick={() => onNav("build")}>
-          <span className="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20l1-4L16 5l3 3L8 19z" /><path d="M14 7l3 3" /></svg></span>
-          <span className="zh">创作</span><span className="en">CREATE</span>
-        </a>
-        <a className="litem" style={{ top: "214px" }} onClick={() => onNav("mine")}>
-          <span className="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"><rect x="5" y="3" width="14" height="18" rx="1" /><path d="M9 3v4h6V3M9 11h6M9 15h4" /></svg></span>
-          <span className="zh">档案</span><span className="en">ARCHIVE</span>
-        </a>
-        <a className="litem" style={{ top: "286px" }} onClick={() => onNav("chat")}>
-          <span className="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"><path d="M4 5h16v11H9l-4 4z" /></svg></span>
-          <span className="zh">聊天</span><span className="en">CHAT</span>
-        </a>
-        <a className="litem" style={{ top: "358px" }} onClick={() => onNav("mine")}>
-          <span className="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4" /><path d="M5 20c0-4 3.4-6 7-6s7 2 7 6" /></svg></span>
-          <span className="zh">我的</span><span className="en">PROFILE</span>
-        </a>
+      {/* ===== 左侧引擎竖栏(全站统一 ReconRail;花饰与铭言作底部插槽) ===== */}
+      <window.ReconRail active="home" onNav={onNav}>
         <div className="botanical"></div>
         <div className="navtag">
           <p>“每一个选择，<br />都在塑造你与世界的故事。”</p>
           <div className="en">NARRATIVE ENGINE</div>
         </div>
-      </div>
+      </window.ReconRail>
 
       {/* ===== 中左:书(点击=放回书架/返回) ===== */}
       <div className="booktab" onClick={() => onClose()} style={{ cursor: "pointer" }}><div className="zh">放回书架</div><div className="en">CLOSE</div></div>

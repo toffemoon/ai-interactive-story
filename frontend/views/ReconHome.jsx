@@ -64,12 +64,13 @@ function ReconHome(props) {
     syn: _f(x, "synopsis") || (_f(x, "story") && _f(x, "story").premise) || "一个等你走进的故事。",
     chars: (_f(x, "characters") || []).length, author: _f(x, "author") || "店内收录", isNew: _isTut(x),
   }));
+  // 与全站 ReconRail 同一套词汇/顺序(首页≈探索落地层)。
   const menu = [
     { zh: "首页", en: "HOME", view: "home", on: true },
-    { zh: "故事库", en: "STORY", view: "home" },
-    { zh: "角色", en: "CHARACTER", view: "chat" },
+    { zh: "当前故事", en: "CURRENT STORY", view: "game" },
     { zh: "创作", en: "CREATE", view: "build" },
-    { zh: "我的", en: "ARCHIVE", view: "mine" },
+    { zh: "聊天", en: "CHAT", view: "chat" },
+    { zh: "我的", en: "PROFILE", view: "mine" },
   ];
   const startFeatured = () => (featured ? onOpenStory(featured) : onNew());
 
