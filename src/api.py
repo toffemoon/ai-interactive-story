@@ -123,14 +123,10 @@ def _write_scope(user: dict | None) -> tuple[str | None, bool]:
 
 def require_role(min_role: str):
     """角色门:返回一个 FastAPI 依赖,要求调用者 role >= min_role。
-    认证 = 登录 token 的角色;OPERATOR_TOKEN 作 superadmin 应急后门(AUTH 关时仍可用,沿用旧控制台)。"""
+    认证 = 登录 token 的角色。OPERATOR_TOKEN 后门已废(2026-06-10 主理人定):
+    运营台只认 admin/superadmin 账号登录,不再有密钥旁路。"""
     async def dep(authorization: str | None = Header(None),
-                  x_auth_token: str | None = Header(None),
-                  x_operator_token: str | None = Header(None)) -> dict:
-        op = os.getenv("OPERATOR_TOKEN", "")
-        if op and x_operator_token == op:           # 应急后门 = superadmin
-            return {"id": None, "username": "(operator)", "email": None,
-                    "role": "superadmin", "is_admin": True}
+                  x_auth_token: str | None = Header(None)) -> dict:
         user = await asyncio.to_thread(auth.current_user, authorization, x_auth_token)
         if user is None:
             raise HTTPException(401, "请先登录")
@@ -757,16 +753,7 @@ def api_delete_preset(name: str, user: dict | None = Depends(current_user_dep)):
 
 # ── 后台注入(运营者/作者)──────────────────────────────────────────
 # 让运营者把内容"发进"某局,引擎下一回合就放进 AI 的上下文(AI 会看到)。
-# 没有账号系统 → 用单一运营者密钥 OPERATOR_TOKEN 当闸:env 没设=整组端点关闭(默认安全);
-# 设了但请求头 X-Operator-Token 不对=403。玩家拿不到 token、前端也不暴露入口,故只有开发者能发。
-def _require_operator(token: str | None) -> None:
-    expected = os.getenv("OPERATOR_TOKEN", "")
-    if not expected:
-        raise HTTPException(503, "后台注入未启用:服务端未设置 OPERATOR_TOKEN")
-    if token != expected:
-        raise HTTPException(403, "operator token 不对")
-
-
+# 闸 = require_role(admin/superadmin 账号登录);OPERATOR_TOKEN 密钥旁路已废。
 class OperatorInjectReq(BaseModel):
     session_id: str
     content: str
@@ -1050,8 +1037,8 @@ async def api_operator_assign_oc(req: AssignOcReq, _actor: dict = Depends(requir
     return {"ok": True, "session_id": session_id, "character": e.get("character", ""), "user_id": uid}
 
 
-# 私人后台控制台:不从玩家前端链接过去;真正的闸是 token(页面只是表单,无 token 调不动接口)。
-# OPERATOR_TOKEN 没设则 404(功能关闭)。token 存浏览器 localStorage,同源 fetch 免 CORS。
+# 私人后台控制台:不从玩家前端链接过去。页面本身只是表单,真正的闸是
+# 各 /api/operator/* 端点的 require_role(admin/superadmin 账号登录)。
 def _load_console_html() -> str:
     p = ROOT / "operator_console.html"
     return p.read_text(encoding="utf-8") if p.is_file() else "<h1>控制台文件缺失</h1>"
@@ -1060,8 +1047,8 @@ def _load_console_html() -> str:
 @app.get("/operator", response_class=HTMLResponse)
 def operator_console():
     """后台控制台(admin/superadmin)。页面不做鉴权,真正的闸是各 /api/operator/* 端点按角色校验。
-    可达条件:设了 OPERATOR_TOKEN(后门)或开了账户系统(AUTH_ENABLED)——后者下由登录用户的角色决定能做什么。"""
-    if not (os.getenv("OPERATOR_TOKEN") or auth.enabled()):
+    可达条件:开了账户系统(AUTH_ENABLED),由登录用户的角色决定能做什么;OPERATOR_TOKEN 后门已废。"""
+    if not auth.enabled():
         raise HTTPException(404, "未启用")
     return HTMLResponse(_load_console_html())
 
