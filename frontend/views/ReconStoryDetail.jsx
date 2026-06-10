@@ -112,11 +112,13 @@ const RECON_STORY_DETAIL_CSS = `
   /* 书封:只用库里真实 cover(.book img);没有 cover = 中性书封(纸底+竖排书名),不放假书图 */
   .cv-story .book {position:absolute; left:248px; top:118px; width:236px; height:300px; z-index:4;
     border:1px solid var(--line2); background:linear-gradient(165deg,#efe6d2,#ddd0b2);
-    box-shadow:6px 8px 0 rgba(43,38,32,.10), inset 0 0 0 6px rgba(250,244,234,.6); overflow:hidden;}
+    box-shadow:6px 8px 0 rgba(43,38,32,.10); overflow:hidden;}
+  .cv-story .book::after {content:""; position:absolute; inset:8px; border:1px solid rgba(169,138,99,.38); pointer-events:none;}
   .cv-story .book img {width:100%; height:100%; object-fit:cover; display:block;}
   .cv-story .book .bt {position:absolute; inset:0; display:grid; place-items:center;}
-  .cv-story .book .bt b {writing-mode:vertical-rl; font-family:var(--serif); font-size:26px; letter-spacing:.3em; color:var(--gold); font-weight:700;}
-  .cv-story .booktab {position:absolute; left:196px; top:128px; width:84px; height:36px; z-index:5;
+  .cv-story .book .bt b {writing-mode:vertical-rl; font-family:var(--serif); letter-spacing:.24em; color:var(--gold); font-weight:700;
+    max-height:240px; line-height:1.7;}
+  .cv-story .booktab {position:absolute; left:206px; top:138px; width:84px; height:36px; z-index:5;
     background:linear-gradient(180deg,#3a4d42,#2d3e35); border:1px solid rgba(193,168,111,.5);
     display:flex; flex-direction:column; align-items:center; justify-content:center;}
   .cv-story .booktab .zh {font-family:var(--serif); font-size:11px; color:#e9dcbf; letter-spacing:.08em;}
@@ -325,7 +327,10 @@ function ReconStoryDetail(props) {
       <div className="book" onClick={() => onClose()} style={{ cursor: "pointer" }}>
         {pdata.cover
           ? <img src={pdata.cover} alt="" />
-          : <span className="bt"><b>{(pdata.name || preset.name || "未命名").replace(/[\s·•．.,，:：;；!！?？-]+/g, "").slice(0, 6)}</b></span>}
+          : (() => {
+              const t = (pdata.name || preset.name || "未命名").replace(/[\s·•．.,，:：;；!！?？\-—~～]+/g, "").slice(0, 12);
+              return <span className="bt"><b style={{ fontSize: t.length > 6 ? 21 : 26 }}>{t}</b></span>;
+            })()}
       </div>
 
       {/* 标题区 */}
