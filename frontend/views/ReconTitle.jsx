@@ -37,23 +37,11 @@ function ReconTitle(props) {
   .cv-title .ripple { right:430px; top:62px; text-align:right; font-family:var(--serifen); letter-spacing:.32em; line-height:2.5; color:var(--cream-dim); font-size:13px; }
   .cv-title .ripple b { color:var(--cream); font-weight:600; }
   .cv-title .astra { right:42px; top:150px; text-align:right; font-family:var(--serifen); letter-spacing:.3em; line-height:2.1; color:var(--cream-faint); font-size:12px; }
-  /* ── 阴阳文(正负形互锁,参考明日方舟官网):奶白色块自左出血;
-     阴文 A2 = 双层巨字,块外奶白、块内被 clip 成暗夜色(跨边界反色);
-     阳文 YoRHa引擎 = 块内实心墨字。坐标在 .yy(820×520)内,与开屏绝对定位对齐。 */
-  .cv-title .yy { left:0; top:0; width:820px; height:520px; pointer-events:none; }
-  .cv-title .yy .blk { position:absolute; left:0; top:120px; width:560px; height:240px; background:var(--cream);
-    box-shadow:0 18px 50px -18px rgba(0,0,0,.55); }
-  .cv-title .yy .lay { position:absolute; inset:0; }
-  .cv-title .yy .lay .a2 { position:absolute; left:330px; top:80px; margin:0;
-    font-family:"Arial Black","Segoe UI Black",Impact,sans-serif; font-weight:900; font-size:280px; line-height:1.04;
-    letter-spacing:-.02em; user-select:none; }
-  .cv-title .yy .lay.out .a2 { color:var(--cream); text-shadow:0 4px 24px rgba(0,0,0,.35); }
-  .cv-title .yy .lay.in { clip-path:inset(120px 260px 160px 0); }  /* 色块矩形(0,120,560,240),层框=yy(820×520) */
-  .cv-title .yy .lay.in .a2 { color:#141a26; text-shadow:none; }
-  .cv-title .yy .mark { position:absolute; left:56px; top:150px; }
-  .cv-title .yy .mark .en { font-family:var(--serifen); font-size:11px; letter-spacing:.4em; color:#8a6f3a; }
-  .cv-title .yy .mark h1 { margin:10px 0 0; font-family:var(--serif); font-size:46px; font-weight:900; letter-spacing:.1em; color:#1c2433; white-space:nowrap; }
-  .cv-title .yy .mark .sub { font-family:var(--kai); font-size:13px; letter-spacing:.3em; color:#6b6354; margin-top:12px; }
+  .cv-title .emblem { left:176px; top:182px; color:var(--gold2); opacity:.96; filter:drop-shadow(0 2px 8px rgba(0,0,0,.5)); }
+  .cv-title .title { left:64px; top:244px; margin:0; font-family:var(--serif); font-weight:900; font-size:76px; letter-spacing:.08em; color:#f6f1e6; text-shadow:0 3px 18px rgba(0,0,0,.55); white-space:nowrap; }
+  .cv-title .titen { left:70px; top:352px; display:flex; align-items:center; gap:16px; }
+  .cv-title .titen i { width:34px; height:1px; background:var(--gold2); opacity:.8; }
+  .cv-title .titen span { font-family:var(--serifen); font-size:22px; letter-spacing:.5em; color:var(--cream); font-weight:600; }
   .cv-title .tagline { left:70px; top:400px; font-family:var(--serif); font-size:22px; line-height:1.95; color:#efe9dc; text-shadow:0 2px 10px rgba(0,0,0,.5); }
   .cv-title .taglineen { left:70px; top:474px; font-family:var(--serifen); font-size:12px; letter-spacing:.22em; line-height:1.9; color:var(--cream-dim); }
   .cv-title .btns { left:64px; top:582px; display:flex; flex-direction:column; gap:14px; }
@@ -76,7 +64,7 @@ function ReconTitle(props) {
       <div className="scrim"></div>
       <div className="brand">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.3"><circle cx="12" cy="12" r="9" /><path d="M12 4l1.6 6.4L20 12l-6.4 1.6L12 20l-1.6-6.4L4 12l6.4-1.6z" /></svg>
-        <span>YORHA-A2 ENGINE</span>
+        <span>NARRATIVE ENGINE</span>
       </div>
       <div className="lang">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></svg>
@@ -85,17 +73,13 @@ function ReconTitle(props) {
       </div>
       <div className="ripple">EVERY <b>CHOICE</b><br />LEAVES A <b>RIPPLE</b><br />IN THE <b>STORY.</b></div>
       <div className="astra">AD ASTRA<br />PER ASPERA</div>
-      {/* 阴阳文店招:阴文 A2(跨色块边界反色)+ 阳文 YoRHa引擎(块内实心) */}
-      <div className="yy">
-        <div className="blk"></div>
-        <div className="lay out"><div className="a2">A2</div></div>
-        <div className="lay in"><div className="a2">A2</div></div>
-        <div className="mark">
-          <div className="en">YORHA-A2 ENGINE</div>
-          <h1>YoRHa引擎</h1>
-          <div className="sub">每个选择 · 都在书写</div>
-        </div>
-      </div>
+      <svg className="emblem" width="150" height="150" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="0.7">
+        <circle cx="12" cy="12" r="11" /><circle cx="12" cy="12" r="8.4" />
+        <path d="M12 1.2l1.7 8.9L22 12l-8.3 1.9L12 22.8l-1.7-8.9L2 12l8.3-1.9z" fill="currentColor" fillOpacity="0.9" stroke="none" />
+        <path d="M12 4.5l.8 6.7 6.7.8-6.7.8-.8 6.7-.8-6.7L4.5 12l6.7-.8z" fill="#fff7e4" stroke="none" />
+      </svg>
+      <h1 className="title">YoRHa-A2 引擎</h1>
+      <div className="titen"><i></i><span>YORHA-A2 ENGINE</span></div>
       <div className="tagline">你的一次选择，将改写无数故事的命运。<br />欢迎来到，属于你的世界。</div>
       <div className="taglineen">YOUR CHOICES. COUNTLESS POSSIBILITIES.<br />THIS IS YOUR STORY.</div>
       <div className="btns">
@@ -118,7 +102,7 @@ function ReconTitle(props) {
         <a><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="9" /><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1 .9-1 1.7M12 17h.01" /></svg>帮助中心</a>
         <a><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 3l4 4-4 4-4-4z" /><path d="M5 12l3 3-3 3-3-3zM19 12l3 3-3 3-3-3z" /></svg>社区</a>
       </div>
-      <div className="foot-c">© 2026 YoRHa-A2 Engine. All Rights Reserved.</div>
+      <div className="foot-c">© 2026 Narrative Engine. All Rights Reserved.</div>
       <div className="foot-r">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 3l10 18H2z" /><path d="M12 10v5M12 18h.01" /></svg>
         本游戏包含自动生成内容，请理性体验。
