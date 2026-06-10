@@ -993,7 +993,7 @@ function SpeechText({ text }) {
   );
 }
 
-function StoryPanel({ characters, world, story, player, mode, sessionId, initialTurns, initialState, initialChoices, goHome, onTurn, skin, coverArt }) {
+function StoryPanel({ characters, world, story, player, mode, sessionId, initialTurns, initialState, initialChoices, goHome, onTurn, skin, coverArt, mobile, onNav }) {
   const [turns, setTurns] = useState(initialTurns || []);
   const [input, setInput] = useState("");
   const [choices, setChoices] = useState(initialChoices || []);
@@ -1179,8 +1179,10 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
     const sc = (state && state.scene) || {};
     const lastSolid = storyTurns.length ? storyTurns[storyTurns.length - 1].data : null;
     const evs = lastSolid && lastSolid.triggered_events && lastSolid.triggered_events.length ? lastSolid.triggered_events : null;
+    const PlayC = (mobile && window.MPlay) ? window.MPlay : window.ReconPlay;
     return (
-      <window.ReconPlay
+      <PlayC
+        onNav={onNav}
         story={(story && story.title) || "未命名故事"}
         worldTime={"第 " + storyTurns.length + " 回合"}
         round={"ROUND " + String(storyTurns.length + (loading ? 1 : 0)).padStart(2, "0")}
@@ -1626,7 +1628,7 @@ function LoginView({ onAuthed, onBack }) {
           font-family:"Kaiti SC","STKaiti","KaiTi",serif;}
         .cv-login::before {content:""; position:absolute; inset:0; background:rgba(10,13,20,.45);}
         @keyframes rc-login-in { from { opacity:0; transform:translateY(18px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
-        .cv-login .card {position:relative; width:430px; background:linear-gradient(180deg,#f6efdd,#efe6cf);
+        .cv-login .card {position:relative; width:min(430px, 92vw); background:linear-gradient(180deg,#f6efdd,#efe6cf);
           border:1px solid rgba(203,176,121,.7); padding:38px 42px 34px; box-shadow:0 24px 60px -20px rgba(0,0,0,.6);
           animation: rc-login-in .38s cubic-bezier(.22,1,.36,1) both;}
         @media (prefers-reduced-motion: reduce){ .cv-login .card{animation-duration:1ms;} }
@@ -3065,7 +3067,7 @@ function ReconShell({ designW, designH, bg, onNav, onPrimary, children }) {
 
 // 角色聊天控制器:OC 就是角色——/api/my/oc 的 OC 与预设角色合成同一份「角色」列表
 // (OC 排前、带真立绘,按名去重)。统一卡主导一对一,共用 /api/chat,历史按角色名维护。
-function ReconChatLive({ presets, onNav }) {
+function ReconChatLive({ presets, onNav, mobile }) {
   const presetCards = React.useMemo(() => {
     const out = []; const seen = new Set();
     (presets || []).forEach((p) => ((p.data && p.data.characters) || []).forEach((c) => {
@@ -3116,8 +3118,9 @@ function ReconChatLive({ presets, onNav }) {
       setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: "（连接出错：" + e.message + "）" }] }));
     } finally { setBusy(false); }
   }
+  const ChatC = (mobile && window.MChat) ? window.MChat : window.ReconChat;
   return (
-    <window.ReconChat
+    <ChatC
       characters={list}
       activeName={activeName} messages={messages} value={input}
       onChange={setInput} onSend={send} onNav={onNav}
@@ -3126,7 +3129,7 @@ function ReconChatLive({ presets, onNav }) {
 }
 
 // 创作桌控制器:对话式建卡(/api/build_card,前端维护对话+草稿),入库走 /api/library/save。
-function ReconCreateLive({ onNav, refreshHome }) {
+function ReconCreateLive({ onNav, refreshHome, mobile }) {
   const KINDS = [
     { zh: "角色卡", en: "CHARACTER", k: "characters" },
     { zh: "演出卡", en: "STAGING", k: "players" },
@@ -3172,8 +3175,9 @@ function ReconCreateLive({ onNav, refreshHome }) {
     const v = d[k];
     return { k: LABELS[k] || k, v: typeof v === "string" ? v : (Array.isArray(v) ? v.join("、") : JSON.stringify(v)), fresh: (filled || []).includes(k), hidden: /secret|隐藏|真相/i.test(k) };
   });
+  const CreateC = (mobile && window.MCreate) ? window.MCreate : window.ReconCreate;
   return (
-    <window.ReconCreate
+    <CreateC
       cardKind={ki} kinds={KINDS} onKind={setKi}
       messages={messages} value={input} onChange={setInput} onSend={send}
       draft={{ name: dname, kind: KINDS[ki].zh, fields }}
@@ -3203,7 +3207,7 @@ function NicknameGate({ onDone }) {
       <style>{`
         .cv-nick {position:fixed; inset:0; z-index:70; display:grid; place-items:center; background:rgba(14,17,24,.62); backdrop-filter:blur(3px); font-family:"Kaiti SC","STKaiti","KaiTi",serif;}
         @keyframes rcn-in { from { opacity:0; transform:translateY(16px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
-        .cv-nick .card {width:400px; background:linear-gradient(180deg,#f6efdd,#efe6cf); border:1px solid rgba(203,176,121,.7);
+        .cv-nick .card {width:min(400px, 92vw); background:linear-gradient(180deg,#f6efdd,#efe6cf); border:1px solid rgba(203,176,121,.7);
           padding:34px 38px 30px; position:relative; box-shadow:0 24px 60px -20px rgba(0,0,0,.6); animation:rcn-in .36s cubic-bezier(.22,1,.36,1) both;}
         .cv-nick .card::before {content:""; position:absolute; inset:5px; border:1px solid rgba(43,38,32,.14); pointer-events:none;}
         .cv-nick h2 {margin:0; font-family:"Songti SC","SimSun",serif; font-size:21px; letter-spacing:.16em; color:#2b2620; text-align:center;}
@@ -3257,6 +3261,14 @@ function App() {
   const [restoredTurns, setRestoredTurns] = useState(null);
   const [restoredState, setRestoredState] = useState(null);
   const [restoredChoices, setRestoredChoices] = useState([]);
+  // 手机端(≤720px):同数据同引擎,换 ReconMobile 流式版式(底部 tab,单列)。
+  const [isMobile, setIsMobile] = useState(() => (typeof matchMedia !== "undefined" ? matchMedia("(max-width: 720px)").matches : false));
+  useEffect(() => {
+    const mq = matchMedia("(max-width: 720px)");
+    const fn = () => setIsMobile(mq.matches);
+    mq.addEventListener ? mq.addEventListener("change", fn) : mq.addListener(fn);
+    return () => { mq.removeEventListener ? mq.removeEventListener("change", fn) : mq.removeListener(fn); };
+  }, []);
   const [view, setView] = useState(() => parseHash().view || "landing"); // 初始视图按 URL hash(分页直达)
   const [pendingStory, setPendingStory] = useState(() => parseHash().story); // #/story/<名> 直链,等 presets 到位再开
   const [loginShown, setLoginShown] = useState(false); // 标题开屏 → 点按钮才展开邮箱+验证码登录表单
@@ -3586,54 +3598,71 @@ function App() {
       )}
 
       {/* 营销门面(主页拆分出去:未登录/初次进入的 landing;登录后默认进功能页) */}
-      {view === "landing" && (
+      {view === "landing" && (isMobile ? (
+        <window.MLanding presets={presets} onNav={navTo} onOpenStory={openStoryModal} onNew={onNew} />
+      ) : (
         <ReconShell designW={1672} designH={941}>
           <window.ReconHome presets={presets} user={auth.user}
             onNav={navTo} onOpenStory={openStoryModal} onNew={onNew}
             onLogin={() => setView("mine")} />
         </ReconShell>
-      )}
+      ))}
 
       {/* 功能版探索/故事库(登录后的主页) */}
-      {view === "home" && (
+      {view === "home" && (isMobile ? (
+        <window.MExplore presets={presets} onOpenStory={openStoryModal} onNew={onNew} onNav={navTo} />
+      ) : (
         <ReconShell designW={1536} designH={1024}>
           <window.ReconExplore presets={presets} user={auth.user}
             onOpenStory={openStoryModal} onNew={onNew} onNav={navTo} />
         </ReconShell>
-      )}
+      ))}
 
-      {view === "chat" && (
+      {view === "chat" && (isMobile ? (
+        <ReconChatLive presets={presets} onNav={navTo} mobile />
+      ) : (
         <ReconShell designW={1536} designH={1024}>
           <ReconChatLive presets={presets} onNav={navTo} />
         </ReconShell>
-      )}
+      ))}
 
-      {view === "mine" && (
-        <ReconShell designW={1536} designH={1024}>
-          <window.ReconProfile user={auth.user} presets={presets} saves={mineSaves}
-            onNav={navTo} onResume={resumeSave} onNew={onNew} onLogout={onLogout}
-            onAvatar={async (dataUri) => {
-              try {
-                const r = await postJSON("/api/my/avatar", { avatar: dataUri });
-                setAuth((a) => ({ ...a, user: a.user ? { ...a.user, avatar: (r && r.avatar) || dataUri } : a.user }));
-              } catch (e) { alert("头像上传失败:" + e.message); }
-            }} />
-        </ReconShell>
-      )}
+      {view === "mine" && (() => {
+        const onAvatarUp = async (dataUri) => {
+          try {
+            const r = await postJSON("/api/my/avatar", { avatar: dataUri });
+            setAuth((a) => ({ ...a, user: a.user ? { ...a.user, avatar: (r && r.avatar) || dataUri } : a.user }));
+          } catch (e) { alert("头像上传失败:" + e.message); }
+        };
+        return isMobile ? (
+          <window.MMine user={auth.user} presets={presets} saves={mineSaves}
+            onNav={navTo} onResume={resumeSave} onNew={onNew} onLogout={onLogout} onAvatar={onAvatarUp} />
+        ) : (
+          <ReconShell designW={1536} designH={1024}>
+            <window.ReconProfile user={auth.user} presets={presets} saves={mineSaves}
+              onNav={navTo} onResume={resumeSave} onNew={onNew} onLogout={onLogout} onAvatar={onAvatarUp} />
+          </ReconShell>
+        );
+      })()}
 
       {/* 游玩:recon 皮 + 实时引擎(StoryPanel skin=recon,引擎逻辑零改动)。只在 game 视图挂载;切走卸载,回来按 session 重拉。 */}
-      {view === "game" && started && characters.length > 0 && (
-        <ReconShell designW={1536} designH={1024} onNav={navTo}>
-          <StoryPanel key={sessionId} skin="recon" coverArt={(pendingPreset && pendingPreset.cover) || ""}
+      {view === "game" && started && characters.length > 0 && (() => {
+        const panel = (
+          <StoryPanel key={sessionId} skin="recon" mobile={isMobile} onNav={navTo}
+            coverArt={(pendingPreset && pendingPreset.cover) || ""}
             characters={characters} world={world} story={story} player={player} mode={mode}
             sessionId={sessionId} initialTurns={restoredTurns} initialState={restoredState} initialChoices={restoredChoices}
             goHome={() => { refreshHome(); setStarted(false); setAssembling(false); setView("home"); }}
             onTurn={() => { setTurnSeq((s) => s + 1); setSaves(loadSaves()); }} />
-        </ReconShell>
-      )}
+        );
+        return isMobile ? panel : (
+          <ReconShell designW={1536} designH={1024} onNav={navTo}>{panel}</ReconShell>
+        );
+      })()}
 
       {/* 当前故事·空态(recon 风格,带统一竖栏)。旧 SetupPanel 装配分支已无触发点,移除。 */}
-      {view === "game" && !(started && characters.length > 0) && (
+      {view === "game" && !(started && characters.length > 0) && (isMobile ? (
+        <window.MEmpty onNav={navTo} onNew={onNew} />
+      ) : (
         <ReconShell designW={1536} designH={1024}>
           <div className="cv-gempty">
             <style>{`
@@ -3667,22 +3696,29 @@ function App() {
             </div>
           </div>
         </ReconShell>
-      )}
+      ))}
 
-      {view === "build" && (
+      {view === "build" && (isMobile ? (
+        <ReconCreateLive onNav={navTo} refreshHome={refreshHome} mobile />
+      ) : (
         <ReconShell designW={1536} designH={1024}>
           <ReconCreateLive onNav={navTo} refreshHome={refreshHome} />
         </ReconShell>
-      )}
+      ))}
 
-      {storyModal && (
+      {storyModal && (isMobile ? (
+        <window.MStoryDetail preset={storyModal.preset}
+          onNav={(v) => { setStoryModal(null); navTo(v); }}
+          onEnter={(role) => startFromModal(role)}
+          onClose={() => setStoryModal(null)} />
+      ) : (
         <ReconShell designW={1672} designH={941}>
           <window.ReconStoryDetail preset={storyModal.preset}
             onNav={(v) => { setStoryModal(null); navTo(v); }}
             onEnter={(role) => startFromModal(role)}
             onClose={() => setStoryModal(null)} />
         </ReconShell>
-      )}
+      ))}
 
       {/* 旧 coach 引导系统的锚点(data-coach)在 recon 视图里已不存在,浮窗与「?」按钮一并移除;代码保留待重接。 */}
     </div>

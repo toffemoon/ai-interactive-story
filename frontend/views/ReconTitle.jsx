@@ -59,6 +59,21 @@ function ReconTitle(props) {
   .cv-title .foot-c { left:0; right:0; bottom:30px; text-align:center; font-family:var(--serifen); font-size:12px; letter-spacing:.08em; color:var(--cream-faint); }
   .cv-title .foot-r { right:40px; bottom:30px; display:flex; align-items:center; gap:8px; font-family:var(--kai); font-size:12.5px; color:var(--cream-dim); }
   .cv-title .foot-r svg { color:#d8b46a; }
+  /* 手机适配:单列堆叠,隐去角落装饰,按钮满宽 */
+  @media (max-width: 720px) {
+    .cv-title .ripple, .cv-title .astra, .cv-title .lang, .cv-title .foot-l, .cv-title .foot-r { display:none; }
+    .cv-title .emblem { left:50%; transform:translateX(-50%); top:90px; width:100px; height:100px; }
+    .cv-title .title { left:0; right:0; top:208px; text-align:center; font-size:38px; letter-spacing:.06em; }
+    .cv-title .titen { left:0; right:0; top:268px; justify-content:center; }
+    .cv-title .titen span { font-size:13px; letter-spacing:.3em; }
+    .cv-title .tagline { left:24px; right:24px; top:312px; text-align:center; font-size:15px; }
+    .cv-title .taglineen { display:none; }
+    .cv-title .btns { left:24px; right:24px; top:auto; bottom:120px; }
+    .cv-title .btn { width:100%; height:54px; }
+    .cv-title .btn .tx .zh { font-size:17px; }
+    .cv-title .resume { left:0; right:0; bottom:78px; top:auto; text-align:center; }
+    .cv-title .foot-c { bottom:20px; font-size:10px; }
+  }
 `}</style>
       <div className="bg"></div>
       <div className="scrim"></div>
