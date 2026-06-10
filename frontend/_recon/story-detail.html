@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<title>recon · 故事详情</title>
+<style>
+  :root{
+    --bg:#f3ece0; --paper:#faf4ea; --paper2:#f6efe2;
+    --ink:#2c2820; --soft:#6f6757; --faint:#9a907a;
+    --line:#ddd0b4; --line2:#c4b388;
+    --gold:#a98a63; --gold2:#c1a86f;
+    --navy:#163b57; --navy-deep:#0d2f49; --navy-line:#b99a59;
+    --green:#34463d;
+    --serif:"Songti SC","STSong","SimSun",serif;
+    --serifen:Georgia,"Times New Roman",serif;
+    --kai:"Kaiti SC","STKaiti","KaiTi",serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  .cv{
+    position:relative; width:1672px; height:941px; overflow:hidden;
+    background:
+      repeating-linear-gradient(90deg, rgba(169,138,99,.026) 0 1px, transparent 1px 46px),
+      var(--bg);
+    color:var(--ink); font-family:var(--kai);
+  }
+
+  /* ===== 顶栏 ===== */
+  .nav{position:absolute; left:0; right:0; top:0; height:88px; z-index:30;}
+  .nav::after{content:""; position:absolute; left:130px; right:30px; bottom:0; height:1px;
+    background:linear-gradient(90deg,transparent,var(--line2) 6%,var(--line2) 94%,transparent);}
+  .brand{position:absolute; left:18px; top:16px; display:flex; align-items:center; gap:12px;}
+  .brand .em{width:46px; height:46px; object-fit:contain;}
+  .brand h1{margin:0; font-family:var(--serifen); font-weight:600; font-size:16px; letter-spacing:.05em; color:#4a4636; font-variant:small-caps; white-space:nowrap;}
+  .brand .sub{font-family:var(--kai); font-size:10px; letter-spacing:.34em; color:var(--faint); margin-top:4px;}
+
+  /* 店招与标题之间的竖分隔线 */
+  .navsep{position:absolute; left:258px; top:24px; width:1px; height:40px;
+    background:linear-gradient(180deg,transparent,var(--line2),transparent); z-index:31;}
+
+  /* 页标题 */
+  .ptitle{position:absolute; left:290px; top:22px;}
+  .ptitle .h{display:flex; align-items:baseline; gap:13px;}
+  .ptitle .zh{font-family:var(--serif); font-size:26px; font-weight:700; letter-spacing:.06em; color:var(--ink);}
+  .ptitle .en{font-family:var(--serifen); font-size:13px; letter-spacing:.34em; color:var(--faint);}
+  .ptitle .sub{font-family:var(--kai); font-size:13px; letter-spacing:.16em; color:var(--soft); margin-top:7px;}
+
+  /* 顶栏右 */
+  .nr{position:absolute; right:30px; top:14px; display:flex; align-items:center; gap:24px;}
+  .nr .wt{text-align:right;}
+  .nr .wt .lab{font-size:9px; letter-spacing:.18em; color:var(--faint);}
+  .nr .wt .lab .zh{font-family:var(--kai);}
+  .nr .wt .lab .en{font-family:var(--serifen); letter-spacing:.24em; margin-left:5px;}
+  .nr .wt .val{font-family:var(--serifen); font-size:17px; font-weight:600; color:var(--ink); margin-top:2px; letter-spacing:.05em;}
+  .nr .wx{display:flex; align-items:center; gap:9px;}
+  .nr .wx .wtxt .zh{font-family:var(--serif); font-size:14px; color:var(--soft); letter-spacing:.06em;}
+  .nr .wx .wtxt .en{font-family:var(--serifen); font-size:8px; letter-spacing:.28em; color:var(--faint); margin-top:2px;}
+  .nr .ic{color:var(--soft);}
+  .nr .av{width:42px; height:42px; border-radius:50%; object-fit:cover; border:1px solid var(--line2);}
+
+  /* ===== 左竖向导航 ===== */
+  .lnav{position:absolute; left:0; top:88px; bottom:0; width:130px; z-index:20;
+    border-right:1px solid var(--line2);
+    background:linear-gradient(180deg, rgba(250,244,234,.5), rgba(243,236,224,.2));}
+  .lnav .compassbg{position:absolute; left:30px; top:300px; width:120px; height:120px; opacity:.10;
+    background:center/contain no-repeat url(../assets/recon/story-detail-emblem.png);}
+  .litem{position:absolute; left:0; right:0; height:62px; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:5px; text-decoration:none; cursor:pointer;}
+  .litem .ic{color:var(--gold); height:24px; display:grid; place-items:center;}
+  .litem .zh{font-family:var(--serif); font-size:13px; letter-spacing:.1em; color:var(--soft);}
+  .litem .en{font-family:var(--serifen); font-size:7px; letter-spacing:.2em; color:var(--faint);}
+  .litem.on{background:linear-gradient(180deg,#3a4d42,#2d3e35); box-shadow:inset 0 0 0 1px rgba(193,168,111,.4);}
+  .litem.on .ic{color:#d8c79a;}
+  .litem.on .zh{color:#f0e8d4; font-weight:700;}
+  .litem.on .en{color:rgba(216,199,154,.8);}
+  .botanical{position:absolute; left:0; top:560px; width:118px; height:170px; z-index:21;
+    background:center/contain no-repeat url(../assets/recon/story-detail-botanical.png);}
+  .navtag{position:absolute; left:10px; right:10px; bottom:26px; text-align:center; z-index:22;}
+  .navtag p{margin:0; font-family:var(--kai); font-size:10px; line-height:1.7; color:var(--soft);}
+  .navtag .en{font-family:var(--serifen); font-size:8px; letter-spacing:.18em; color:var(--gold); margin-top:8px;}
+
+  /* ===== 中左:书 ===== */
+  .book{position:absolute; left:248px; top:106px; width:318px; height:300px; z-index:4;
+    background:center/contain no-repeat url(../assets/recon/story-detail-book.png);}
+  .booktab{position:absolute; left:148px; top:128px; width:84px; height:36px; z-index:5;
+    background:linear-gradient(180deg,#3a4d42,#2d3e35); border:1px solid rgba(193,168,111,.5);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;}
+  .booktab .zh{font-family:var(--serif); font-size:11px; color:#e9dcbf; letter-spacing:.08em;}
+  .booktab .en{font-family:var(--serifen); font-size:6.5px; letter-spacing:.16em; color:rgba(216,199,154,.75); margin-top:1px;}
+
+  /* 简介 */
+  .intro{position:absolute; left:478px; top:300px; width:360px; z-index:4;}
+  .blkh{display:flex; align-items:baseline; gap:9px;}
+  .blkh b{font-family:var(--serif); font-size:16px; font-weight:700; letter-spacing:.1em; color:var(--ink);}
+  .blkh .en{font-family:var(--serifen); font-size:9px; letter-spacing:.26em; color:var(--gold);}
+  .intro p{font-family:var(--kai); font-size:13px; line-height:1.95; color:var(--soft); margin:12px 0 0;}
+
+  /* 标题区 */
+  .stitle{position:absolute; left:640px; top:120px; z-index:4;}
+  .stitle h2{margin:0; font-family:var(--serif); font-size:34px; font-weight:700; letter-spacing:.05em; color:var(--ink);}
+  .stitle .en{font-family:var(--serifen); font-size:16px; letter-spacing:.32em; color:var(--faint); margin-top:7px;}
+  .stitle .tags{display:flex; gap:24px; margin-top:16px; font-family:var(--kai); font-size:13px; color:var(--soft); letter-spacing:.06em;}
+  .stitle .tags span{position:relative;}
+  .stitle .tags span:not(:last-child)::after{content:"·"; position:absolute; right:-15px; color:var(--line2);}
+  .stitle .meta{display:flex; gap:26px; margin-top:14px; font-family:var(--kai); font-size:12px; color:var(--faint); letter-spacing:.04em;}
+  .stitle .meta span{position:relative;}
+  .stitle .meta span:not(:last-child)::after{content:"·"; position:absolute; right:-16px; color:var(--line2);}
+  .stitle .meta b{color:var(--soft); font-weight:400;}
+
+  /* 背景/角色 两栏 */
+  .bg{position:absolute; left:478px; top:415px; width:360px; z-index:4;}
+  .chars{position:absolute; left:872px; top:415px; width:380px; z-index:4;}
+  .bg ul,.chars ul{list-style:none; margin:14px 0 0; padding:0;}
+  .bg li,.chars li{font-family:var(--kai); font-size:13px; line-height:1.5; color:var(--soft); margin-bottom:13px; padding-left:16px; position:relative;}
+  .bg li::before,.chars li::before{content:""; position:absolute; left:0; top:8px; width:5px; height:5px; border-radius:50%; background:var(--gold);}
+  .chars p{font-family:var(--kai); font-size:13px; line-height:1.95; color:var(--soft); margin:14px 0 0;}
+  .watch{position:absolute; left:1150px; top:482px; width:70px; height:70px; z-index:4;
+    background:center/contain no-repeat url(../assets/recon/story-detail-watch.png);}
+
+  /* ===== 选择你的角色 ===== */
+  .pickh{position:absolute; left:250px; top:566px; display:flex; align-items:center; gap:12px; z-index:4;}
+  .pickh .star{color:var(--gold); display:grid; place-items:center;}
+  .pickh b{font-family:var(--serif); font-size:17px; font-weight:700; letter-spacing:.12em; color:var(--ink);}
+  .pickh .en{font-family:var(--serifen); font-size:10px; letter-spacing:.3em; color:var(--gold);}
+  .pickh .dash{width:90px; height:1px; background:repeating-linear-gradient(90deg,var(--line2) 0 6px,transparent 6px 12px);}
+
+  .cards{position:absolute; left:250px; top:600px; z-index:4; display:flex; gap:12px;}
+  .card{width:224px; height:248px; background:var(--paper); border:1px solid var(--line); position:relative; overflow:hidden;}
+  .card.sel{border:1px solid var(--gold2); box-shadow:inset 0 0 0 1px rgba(193,168,111,.45), 0 2px 10px rgba(169,138,99,.12);}
+  .card .badge{position:absolute; left:0; top:0; background:linear-gradient(180deg,#3a4d42,#2d3e35); color:#e9dcbf;
+    font-family:var(--serif); font-size:10px; letter-spacing:.1em; padding:3px 10px; z-index:3; border-bottom-right-radius:2px;}
+  .card .av{position:absolute; left:50%; transform:translateX(-50%); top:0; width:174px; height:150px; object-fit:cover; object-position:top center;
+    -webkit-mask-image:linear-gradient(180deg,#000 80%,transparent); mask-image:linear-gradient(180deg,#000 80%,transparent);}
+  .card .nm{position:absolute; left:0; right:0; top:150px; text-align:center; font-family:var(--serif); font-size:16px; font-weight:700; color:var(--ink); letter-spacing:.04em; z-index:2;}
+  .card .role{position:absolute; left:0; right:0; top:175px; text-align:center; font-family:var(--kai); font-size:11px; color:var(--gold); letter-spacing:.04em; z-index:2;}
+  .card .quote{position:absolute; left:14px; right:14px; top:195px; font-family:var(--kai); font-size:10.5px; line-height:1.55; color:var(--soft); text-align:center; z-index:2;}
+  .card .act{position:absolute; left:0; right:0; bottom:8px; display:flex; align-items:center; justify-content:center; gap:5px; z-index:2;
+    font-family:var(--serif); font-size:11px; letter-spacing:.14em; color:var(--green);}
+  .card.sel .act{color:var(--gold);}
+  .card .act svg{color:var(--green);}
+  .card.sel .act svg{color:var(--gold);}
+
+  /* 开局预览 */
+  .opscene{position:absolute; left:250px; top:855px; width:660px; z-index:4;}
+  .opscene .oh{display:flex; align-items:center; gap:11px;}
+  .opscene .oh .star{color:var(--gold); display:grid; place-items:center;}
+  .opscene .oh b{font-family:var(--serif); font-size:15px; font-weight:700; letter-spacing:.1em; color:var(--ink);}
+  .opscene .oh .en{font-family:var(--serifen); font-size:9px; letter-spacing:.28em; color:var(--gold);}
+  .opscene .body{display:flex; gap:16px; margin-top:11px;}
+  .opscene .thumb{flex:none; width:104px; height:62px; object-fit:cover; border:1px solid var(--line2);}
+  .opscene .txt p{margin:0 0 5px; font-family:var(--kai); font-size:12px; line-height:1.7; color:var(--soft); letter-spacing:.02em;}
+
+  /* ===== 右:入戏仪式 ===== */
+  .ritual{position:absolute; right:0; top:88px; bottom:0; width:382px; z-index:10;
+    border-left:1px solid var(--line2);
+    background:linear-gradient(180deg, rgba(250,244,234,.55), rgba(246,239,226,.3));}
+  .rh{position:absolute; left:30px; top:24px; display:flex; align-items:center; gap:9px;}
+  .rh .star{color:var(--gold); display:grid; place-items:center;}
+  .rh b{font-family:var(--serif); font-size:17px; font-weight:700; letter-spacing:.14em; color:var(--ink);}
+  .rh .sep{color:var(--line2); font-family:var(--serifen); font-size:14px; margin:0 1px;}
+  .rh .en{font-family:var(--serifen); font-size:10px; letter-spacing:.3em; color:var(--faint);}
+  .rart{position:absolute; left:14px; right:0; top:42px; height:270px;
+    background:left top/cover no-repeat url(../assets/recon/story-detail-hero.png);}
+  .rname{position:absolute; left:0; right:0; top:322px; text-align:center;}
+  .rname h3{margin:0; font-family:var(--serif); font-size:25px; font-weight:700; letter-spacing:.06em; color:var(--ink);}
+  .rname .role{font-family:var(--kai); font-size:13px; color:var(--soft); letter-spacing:.08em; margin-top:7px;}
+
+  .attrs{position:absolute; left:30px; right:30px; top:386px;}
+  .attr{display:flex; align-items:flex-start; gap:14px; padding:9px 0; border-top:1px solid var(--line);}
+  .attr:first-child{border-top:none;}
+  .attr .lab{flex:none; width:58px; font-family:var(--serif); font-size:12px; color:var(--gold); letter-spacing:.1em; margin-top:2px;}
+  .attr .v{flex:1; font-family:var(--kai); font-size:13px; line-height:1.5; color:var(--ink); letter-spacing:.02em;}
+  .attr.mono .v{font-style:italic; color:var(--soft);}
+  .wave{display:inline-flex; align-items:center; gap:14px; margin-top:7px;}
+  .wave svg{color:var(--line2);}
+  .wave .spk{color:var(--gold);}
+
+  /* 进入按钮 */
+  .enter{position:absolute; left:30px; right:30px; top:689px; height:94px;
+    background:linear-gradient(180deg,#3c4f44,#2c3c33); border:1px solid var(--navy-line);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer;}
+  .enter::before{content:""; position:absolute; inset:5px; border:1px solid rgba(193,168,111,.5);}
+  .enter .cn{position:absolute; width:7px; height:7px; border:1px solid var(--gold2);}
+  .enter .cn.tl{left:9px; top:9px; border-right:none; border-bottom:none;}
+  .enter .cn.tr{right:9px; top:9px; border-left:none; border-bottom:none;}
+  .enter .cn.bl{left:9px; bottom:9px; border-right:none; border-top:none;}
+  .enter .cn.br{right:9px; bottom:9px; border-left:none; border-top:none;}
+  .enter .zh{font-family:var(--serif); font-size:23px; font-weight:700; letter-spacing:.22em; color:#f0e8d4; position:relative;}
+  .enter .en{font-family:var(--serifen); font-size:10px; letter-spacing:.34em; color:rgba(216,199,154,.85); margin-top:6px; position:relative;}
+  .enter .sub{font-family:var(--serifen); font-size:8px; letter-spacing:.28em; color:rgba(216,199,154,.55); margin-top:5px; position:relative;}
+</style>
+</head>
+<body>
+<div class="cv">
+
+  <!-- ===== 顶栏 ===== -->
+  <header class="nav">
+    <div class="brand">
+      <img class="em" src="../assets/recon/story-detail-emblem.png" alt="" />
+      <div>
+        <h1>NARRATIVE ENGINE</h1>
+        <div class="sub">叙事引擎</div>
+      </div>
+    </div>
+    <div class="navsep"></div>
+    <div class="ptitle">
+      <div class="h"><span class="zh">故事详情</span><span class="en">STORY DETAIL</span></div>
+      <div class="sub">阅读故事，理解世界，选择你的身份</div>
+    </div>
+    <div class="nr">
+      <div class="wt"><div class="lab"><span class="zh">世界时间</span><span class="en">WORLD TIME</span></div><div class="val">10/21　21:47</div></div>
+      <div class="wx">
+        <span class="ic"><svg width="30" height="22" viewBox="0 0 30 22" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M8 14a4 4 0 0 1 .4-8 5.5 5.5 0 0 1 10.6 1A3.5 3.5 0 0 1 22 14z"/><path d="M10 17l-1.5 3M14 17l-1.5 3M18 17l-1.5 3"/></svg></span>
+        <div class="wtxt"><div class="zh">雨夜</div><div class="en">DOWNPOUR</div></div>
+      </div>
+      <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M18 9a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7"/><path d="M10.5 20a1.8 1.8 0 0 0 3 0"/></svg></span>
+      <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 6l9 7 9-7"/></svg></span>
+      <img class="av" src="../assets/recon/story-detail-userav.png" alt="" />
+    </div>
+  </header>
+
+  <!-- ===== 左竖向导航 ===== -->
+  <aside class="lnav">
+    <div class="compassbg"></div>
+    <a class="litem" style="top:6px">
+      <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z" fill="currentColor" stroke="none"/></svg></span>
+      <span class="zh">探索</span><span class="en">EXPLORE</span>
+    </a>
+    <a class="litem on" style="top:70px">
+      <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="12" cy="12" r="9"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M12 12l4-7-1 8-7 1z" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg></span>
+      <span class="zh">当前故事</span><span class="en">CURRENT</span>
+    </a>
+    <a class="litem" style="top:142px">
+      <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/></svg></span>
+      <span class="zh">创作</span><span class="en">CREATE</span>
+    </a>
+    <a class="litem" style="top:214px">
+      <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="1"/><path d="M9 3v4h6V3M9 11h6M9 15h4"/></svg></span>
+      <span class="zh">档案</span><span class="en">ARCHIVE</span>
+    </a>
+    <a class="litem" style="top:286px">
+      <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M4 5h16v11H9l-4 4z"/></svg></span>
+      <span class="zh">聊天</span><span class="en">CHAT</span>
+    </a>
+    <a class="litem" style="top:358px">
+      <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M5 20c0-4 3.4-6 7-6s7 2 7 6"/></svg></span>
+      <span class="zh">我的</span><span class="en">PROFILE</span>
+    </a>
+    <div class="botanical"></div>
+    <div class="navtag">
+      <p>“每一个选择，<br>都在塑造你与世界的故事。”</p>
+      <div class="en">NARRATIVE ENGINE</div>
+    </div>
+  </aside>
+
+  <!-- ===== 中左:书 ===== -->
+  <div class="booktab"><div class="zh">当前档案</div><div class="en">CURRENT FILE</div></div>
+  <div class="book"></div>
+
+  <!-- 标题区 -->
+  <div class="stitle">
+    <h2>雨夜档案：第七站台</h2>
+    <div class="en">THE SEVENTH PLATFORM</div>
+    <div class="tags"><span>都市奇谭</span><span>悬疑</span><span>情感</span><span>轻奇幻</span></div>
+    <div class="meta"><span><b>更新于</b>　10/21</span><span><b>字数</b>　约 18.7 万</span><span><b>章节</b>　9</span><span><b>适合时长</b>　6–8 小时</span></div>
+  </div>
+
+  <!-- 简介 -->
+  <div class="intro">
+    <div class="blkh"><b>简介</b><span class="en">INTRO</span></div>
+    <p>雨水拍打着月台，发出空洞的回响。<br>这座停驻的站台，连接无数错位的未来，<br>也是每个迷路者，寻找自己的最后一站。</p>
+  </div>
+
+  <!-- 背景 -->
+  <div class="bg">
+    <div class="blkh"><b>背景</b><span class="en">BACKSTORY</span></div>
+    <ul>
+      <li>异界与现实交错的停滞站台</li>
+      <li>站台守则：时间以雨为刻度</li>
+      <li>七列未完成的列车，七段未完的命运</li>
+    </ul>
+  </div>
+
+  <!-- 角色 -->
+  <div class="chars">
+    <div class="blkh"><b>角色</b><span class="en">CHARACTERS</span></div>
+    <p>四位旅人，各自背负秘密而来。<br>选择你的身份，以 ta 的视角<br>揭开第七站台的真相。</p>
+  </div>
+  <div class="watch"></div>
+
+  <!-- ===== 选择你的角色 ===== -->
+  <div class="pickh"><span class="star"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/></svg></span><b>选择你扮演谁</b><span class="en">CHOOSE YOUR ROLE</span><span class="dash"></span></div>
+  <div class="cards">
+    <div class="card sel">
+      <span class="badge">已选择</span>
+      <img class="av" src="../assets/recon/story-detail-avatar1.png" alt="" />
+      <div class="nm">林间旅人</div>
+      <div class="role">流浪旅人与记录者</div>
+      <div class="quote">“我想找到回去的路，<br>记录下这里的一切。”</div>
+      <div class="act"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/></svg>已选择</div>
+    </div>
+    <div class="card">
+      <img class="av" src="../assets/recon/story-detail-avatar2.png" alt="" />
+      <div class="nm">艾琳</div>
+      <div class="role">站台管理员</div>
+      <div class="quote">“规则是为旅人立的，<br>但我从不为自己立。”</div>
+      <div class="act"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/></svg>可扮演</div>
+    </div>
+    <div class="card">
+      <img class="av" src="../assets/recon/story-detail-avatar3.png" alt="" />
+      <div class="nm">陆衡</div>
+      <div class="role">调查员</div>
+      <div class="quote">“我来找的人还在，<br>但这一夜没有答案。”</div>
+      <div class="act"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/></svg>可扮演</div>
+    </div>
+    <div class="card">
+      <img class="av" src="../assets/recon/story-detail-avatar4.png" alt="" />
+      <div class="nm">神秘少女</div>
+      <div class="role">未知旅人</div>
+      <div class="quote">“列车会带走一切，<br>也会带来崭新的我。”</div>
+      <div class="act"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/></svg>可扮演</div>
+    </div>
+  </div>
+
+  <!-- 开局预览 -->
+  <div class="opscene">
+    <div class="oh"><span class="star"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/></svg></span><b>开局预览</b><span class="en">OPENING SCENE</span></div>
+    <div class="body">
+      <img class="thumb" src="../assets/recon/story-detail-opscene.png" alt="" />
+      <div class="txt">
+        <p>雨滴敲打着破碎的玻璃屋顶，水洼里倒映着昏黄的时钟。</p>
+        <p>广播里传来模糊的女声：“第七列车即将到站，请勿靠近站台边缘。”</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 右:入戏仪式 ===== -->
+  <aside class="ritual">
+    <div class="rh"><span class="star"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z"/></svg></span><b>入戏仪式</b><span class="sep">/</span><span class="en">ENTRY RITUAL</span></div>
+    <div class="rart"></div>
+    <div class="rname">
+      <h3>林间旅人</h3>
+      <div class="role">流浪旅人与记录者</div>
+    </div>
+
+    <div class="attrs">
+      <div class="attr"><div class="lab">身份</div><div class="v">迷失的旅人，寻找归途的记录者</div></div>
+      <div class="attr"><div class="lab">目标</div><div class="v">寻找离开的方法，揭开站台的真相</div></div>
+      <div class="attr"><div class="lab">特质</div><div class="v">观察敏锐 · 共情细腻 · 善于记录</div></div>
+      <div class="attr"><div class="lab">开局认知</div><div class="v">对站台规则一无所知</div></div>
+      <div class="attr"><div class="lab">初始物品</div><div class="v">旧笔记本 · 折叠伞 · 车票存根</div></div>
+      <div class="attr mono"><div class="lab">开场独白</div>
+        <div class="v">“如果能记住这一切，也许就不会真的消失。”
+          <div class="wave">
+            <svg width="120" height="14" viewBox="0 0 120 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 7h3M9 4v6M14 2v10M19 5v4M24 3v8M29 6v2M34 4v6M39 1v12M44 5v4M49 3v8M54 6v2M59 4v6M64 2v10M69 5v4M74 3v8M79 6v2M84 4v6M89 7h3M96 5v4M101 6v2"/></svg>
+            <span class="spk"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 8a4 4 0 0 1 0 8" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="enter">
+      <span class="cn tl"></span><span class="cn tr"></span><span class="cn bl"></span><span class="cn br"></span>
+      <span class="zh">涟漪入局</span>
+      <span class="en">ENTER THE STORY</span>
+      <span class="sub">BEGIN AS THIS ROLE</span>
+    </div>
+  </aside>
+
+</div>
+</body>
+</html>

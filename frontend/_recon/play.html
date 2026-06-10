@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<title>recon · 游玩页面</title>
+<style>
+  :root{
+    --bg:#f3ece0; --paper:#faf4ea; --paper2:#f6efe2; --paper3:#f8f3e9;
+    --ink:#2c2820; --soft:#6f6757; --faint:#9a907a;
+    --line:#ddd0b4; --line2:#c4b388;
+    --gold:#a98a63; --gold2:#c1a86f;
+    --navy:#163b57; --navy-deep:#0d2f49;
+    --green:#34463d;
+    --serif:"Songti SC","STSong","SimSun",serif;
+    --serifen:Georgia,"Times New Roman",serif;
+    --kai:"Kaiti SC","STKaiti","KaiTi",serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  .cv{
+    position:relative; width:1536px; height:1024px; overflow:hidden;
+    background:
+      repeating-linear-gradient(90deg, rgba(169,138,99,.028) 0 1px, transparent 1px 46px),
+      var(--bg);
+    color:var(--ink); font-family:var(--kai);
+  }
+
+  /* ===== 左 引擎竖栏 ===== */
+  .lbar{position:absolute; left:0; top:0; bottom:0; width:188px; z-index:30;
+    background:linear-gradient(180deg,#f1e7d8,#efe4d4);
+    border-right:1px solid var(--line2);}
+  .lbar .logo{display:flex; align-items:center; gap:9px; padding:20px 0 16px 18px; position:relative;}
+  .lbar .logo img{width:34px; height:34px; object-fit:contain; opacity:.95; flex:none;}
+  .lbar .logo .lt b{display:block; font-family:var(--serifen); font-size:12.5px; letter-spacing:.02em; color:#8a6f49; font-weight:600; line-height:1.15;}
+  .lbar .logo .lt span{display:block; font-family:var(--kai); font-size:9.5px; letter-spacing:.22em; color:var(--gold); margin-top:3px;}
+  .lbar .logo::after{content:""; position:absolute; left:18px; right:18px; bottom:0; height:1px;
+    background:linear-gradient(90deg,transparent,var(--line2),transparent);}
+
+  .nav{margin-top:10px; display:flex; flex-direction:column;}
+  .nav a{display:flex; align-items:center; gap:12px; height:54px; padding:0 0 0 24px; cursor:pointer; position:relative; color:var(--soft);}
+  .nav a .ic{width:21px; height:21px; flex:none; display:grid; place-items:center;}
+  .nav a .tx{display:flex; flex-direction:column;}
+  .nav a .tx .zh{font-family:var(--serif); font-size:15px; letter-spacing:.12em;}
+  .nav a .tx .en{font-family:var(--serifen); font-size:8px; letter-spacing:.24em; color:var(--faint); margin-top:2px;}
+  .nav a.on{background:linear-gradient(90deg,#3c4d43,#34463d); color:#eef0e2; border-color:#2c3a32;}
+  .nav a.on .en{color:rgba(238,240,226,.6);}
+  .nav a.on::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--gold2);}
+
+  /* 左下玩家立绘卡 */
+  .pcard{position:absolute; left:0; right:0; bottom:0; padding:14px 18px 18px; border-top:1px solid var(--line);}
+  .pcard .ttl{font-family:var(--serif); font-size:12px; letter-spacing:.12em; color:var(--soft);}
+  .pcard .ttl span{font-family:var(--serifen); font-size:8px; letter-spacing:.26em; color:var(--faint); margin-left:6px;}
+  .pcard .por{width:140px; height:138px; margin:8px auto 0; object-fit:cover; display:block;}
+  .pcard .nm{font-family:var(--serif); font-size:17px; font-weight:700; color:var(--ink); text-align:center; margin-top:7px; letter-spacing:.04em;}
+  .pcard .lv{font-family:var(--serifen); font-size:11px; color:var(--soft); text-align:center; margin-top:2px;}
+  .pcard .insp{display:flex; align-items:center; justify-content:space-between; margin-top:13px; padding-top:11px; border-top:1px solid var(--line);}
+  .pcard .insp .lb{font-family:var(--serif); font-size:11px; color:var(--soft);}
+  .pcard .insp .lb i{display:block; font-family:var(--serifen); font-size:7.5px; letter-spacing:.2em; color:var(--faint);}
+  .pcard .insp .vl{display:flex; align-items:center; gap:6px; font-family:var(--serifen); font-size:16px; font-weight:700; color:var(--navy);}
+  .pcard .insp .vl svg{color:var(--gold2);}
+
+  /* ===== 顶 面包屑 ===== */
+  .top{position:absolute; left:188px; right:0; top:0; height:60px; z-index:20; display:flex; align-items:center;}
+  .top::after{content:""; position:absolute; left:24px; right:24px; bottom:0; height:1px; background:linear-gradient(90deg,transparent,var(--line2) 6%,var(--line2) 94%,transparent);}
+  .crumb{display:flex; align-items:baseline; gap:11px; margin-left:32px;}
+  .crumb .lb{font-family:var(--kai); font-size:10px; letter-spacing:.22em; color:var(--faint);}
+  .crumb .ti{font-family:var(--serif); font-size:18px; font-weight:700; letter-spacing:.05em; color:var(--ink);}
+  .crumb .ed{color:var(--gold); font-size:13px; transform:translateY(1px);}
+  .topr{position:absolute; right:22px; top:0; height:60px; display:flex; align-items:center; gap:22px;}
+  /* 动作项：图标在左、中文在右、英文在中文下 (横排) */
+  .titem{display:flex; align-items:center; gap:7px; color:var(--soft); cursor:pointer;}
+  .titem .ic{width:18px; height:18px; display:grid; place-items:center; flex:none;}
+  .titem .tt{display:flex; flex-direction:column; line-height:1;}
+  .titem .zh{font-family:var(--serif); font-size:12px; letter-spacing:.04em;}
+  .titem .en{font-family:var(--serifen); font-size:6.5px; letter-spacing:.18em; color:var(--faint); margin-top:3px;}
+  .tdiv{width:1px; height:30px; background:var(--line2); opacity:.7;}
+  .ttime{display:flex; flex-direction:column; align-items:flex-start; gap:3px;}
+  .ttime .lb{font-family:var(--serifen); font-size:8px; letter-spacing:.16em; color:var(--faint);}
+  .ttime .vl{font-family:var(--serifen); font-size:16px; color:var(--soft); letter-spacing:.04em;}
+  /* 监理（雨夜）天气项 + 设置齿轮 */
+  .tsuper{display:flex; flex-direction:column; align-items:center; gap:5px; color:var(--soft); cursor:pointer;}
+  .tsuper .ic{width:20px; height:20px; display:grid; place-items:center;}
+  .tsuper .zh{font-family:var(--serif); font-size:11px; letter-spacing:.06em;}
+  .tsuper .en{font-family:var(--serifen); font-size:7px; letter-spacing:.2em; color:var(--faint);}
+  .tgear{color:var(--faint); cursor:pointer; display:grid; place-items:center; width:22px; height:22px;}
+  /* 顶栏右上角纸张堆叠装饰（纸角 + 回纹细线） */
+  .topdeco{position:absolute; right:0; top:0; width:156px; height:56px; z-index:1; pointer-events:none; opacity:.85; mix-blend-mode:multiply;
+    background:no-repeat right top/contain url(../assets/recon/play-topdeco.png);}
+
+  /* ===== 中部主区 ===== */
+  .main{position:absolute; left:212px; top:78px; width:954px; bottom:24px;}
+  .photopin{position:absolute; right:8px; top:262px; width:290px; height:auto; z-index:6; pointer-events:none; mix-blend-mode:multiply;}
+
+  /* 场景插画 */
+  .scene{position:relative; width:100%; height:306px; border:1px solid var(--line); overflow:hidden; background:var(--paper2);}
+  .scene .art{position:absolute; right:0; top:0; bottom:0; width:82%;
+    background:center/cover no-repeat url(../assets/recon/play-scene.png); filter:brightness(.93) contrast(1.06) saturate(1.04);}
+  /* 左侧向纸底淡出，但保留约 25% 的插画残影（原图文字压在淡插画上，非纯纸底） */
+  .scene .art::before{content:""; position:absolute; inset:0; background:linear-gradient(90deg,var(--paper2) 0%,rgba(246,239,226,.80) 13%,rgba(246,239,226,.34) 28%,transparent 48%);}
+  .scene .veil{position:absolute; inset:0; background:linear-gradient(90deg,var(--paper2) 4%,rgba(246,239,226,.0) 40%);}
+  .scene .round{position:absolute; left:24px; top:18px; display:flex; align-items:center; gap:9px;}
+  .scene .round i{width:14px; height:1px; background:var(--gold);}
+  .scene .round span{font-family:var(--serif); font-size:11px; letter-spacing:.14em; color:var(--soft);}
+  .scene .round b{font-family:var(--serifen); font-size:10px; letter-spacing:.16em; color:var(--gold); font-weight:600;}
+  .scene h2{position:absolute; left:24px; top:46px; margin:0; font-family:var(--serif); font-weight:700; font-size:34px; letter-spacing:.06em; color:var(--ink);}
+  .scene .sub{position:absolute; left:25px; top:96px; font-family:var(--kai); font-size:13px; letter-spacing:.04em; color:var(--soft);}
+  .scene .prose{position:absolute; left:25px; top:132px; width:430px; font-family:var(--kai); font-size:13.5px; line-height:2.0; color:#5b5346;}
+
+  /* 角色在场 */
+  .presence{margin-top:18px;}
+  .ph{display:flex; align-items:center; gap:10px;}
+  .ph b{font-family:var(--serif); font-size:14px; font-weight:700; letter-spacing:.12em; color:var(--ink);}
+  .ph .en{font-family:var(--serifen); font-size:8.5px; letter-spacing:.26em; color:var(--gold);}
+  .ph .ln{flex:1; height:1px; background:linear-gradient(90deg,var(--line2),transparent);}
+  .prow{display:flex; align-items:center; gap:14px; padding:12px 4px; border-bottom:1px solid var(--line);}
+  .prow img{width:42px; height:42px; border-radius:50%; flex:none; object-fit:cover; border:1px solid var(--line2);}
+  .prow .nm{width:54px; flex:none; font-family:var(--serif); font-size:14px; font-weight:700; color:var(--ink);}
+  .prow .dash{width:18px; height:1px; background:var(--line2); flex:none;}
+  .prow .ln-q{font-family:var(--kai); font-size:14px; color:var(--soft); letter-spacing:.02em;}
+
+  /* 你的行动 */
+  .choices{margin-top:20px;}
+  .cgrid{display:flex; gap:11px; margin-top:13px;}
+  .ccard{flex:1; background:var(--paper3); border:1px solid var(--line); padding:14px 15px 11px; position:relative; cursor:pointer;}
+  /* 四角装饰花纹 */
+  .ccard::before,.ccard::after{content:""; position:absolute; width:9px; height:9px; border:1px solid var(--line2); opacity:.6;}
+  .ccard::before{left:5px; top:5px; border-right:none; border-bottom:none;}
+  .ccard::after{right:5px; top:5px; border-left:none; border-bottom:none;}
+  .ccard .ch{display:flex; align-items:center; gap:11px;}
+  .ccard .ic{width:30px; height:30px; display:grid; place-items:center; color:var(--navy); flex:none;}
+  .ccard b{font-family:var(--serif); font-size:15px; font-weight:700; color:var(--ink); letter-spacing:.04em;}
+  .ccard p{font-family:var(--kai); font-size:10.5px; line-height:1.55; color:var(--soft); margin:9px 0 0;}
+  .ccard .cf{display:flex; align-items:center; justify-content:space-between; margin-top:11px; padding-top:9px; border-top:1px solid #ece2cf;}
+  .ccard .cat{display:flex; align-items:center; gap:5px; font-family:var(--serif); font-size:10.5px; color:var(--faint); letter-spacing:.04em;}
+  .ccard .cat svg{color:var(--line2);}
+  .ccard .cost{display:flex; align-items:center; gap:4px; font-family:var(--serifen); font-size:10.5px; color:var(--faint);}
+  .ccard .cost svg{color:var(--gold);}
+
+  /* 自由行动 */
+  .free{margin-top:16px; background:var(--paper3); border:1px solid var(--line); padding:14px 16px; position:relative; display:flex; align-items:center;}
+  .free .fl{flex:1;}
+  .free .fh{display:flex; align-items:baseline; gap:10px;}
+  .free .fh b{font-family:var(--serif); font-size:13px; font-weight:700; letter-spacing:.1em; color:var(--ink);}
+  .free .fh .en{font-family:var(--serifen); font-size:8px; letter-spacing:.24em; color:var(--gold);}
+  .free .fh .en::before{content:"FREE INPUT";}
+  .free .ph2{font-family:var(--kai); font-size:11.5px; color:var(--faint); margin-top:8px;}
+  .free .exec{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; width:108px; height:54px; background:var(--green); color:#eef0e2; cursor:pointer; position:relative;}
+  .free .exec::before{content:""; position:absolute; inset:3px; border:1px solid rgba(193,168,111,.5);}
+  .free .exec .zh{font-family:var(--serif); font-size:14px; letter-spacing:.16em; position:relative; display:flex; align-items:center; gap:6px;}
+  .free .exec .en{font-family:var(--serifen); font-size:7.5px; letter-spacing:.26em; color:rgba(238,240,226,.65); position:relative;}
+
+  /* ===== 右 世界状态档案 ===== */
+  .rcol{position:absolute; right:24px; top:78px; width:316px; bottom:24px;
+    background:var(--paper); border:1px solid var(--line); padding:16px 18px;}
+  .rh{display:flex; align-items:center; gap:9px; padding-bottom:11px; border-bottom:1px solid var(--line);}
+  .rh .badge{width:22px; height:22px; border:1px solid var(--line2); display:grid; place-items:center; color:var(--gold); flex:none;}
+  .rh b{font-family:var(--serif); font-size:15px; font-weight:700; letter-spacing:.1em; color:var(--ink);}
+  .rh .en{font-family:var(--serifen); font-size:8px; letter-spacing:.24em; color:var(--gold); align-self:flex-end; margin-bottom:2px;}
+  .sub-h{display:flex; align-items:center; gap:8px; margin:15px 0 0;}
+  .sub-h .dot{width:5px; height:5px; transform:rotate(45deg); background:var(--gold);}
+  .sub-h .zh{font-family:var(--serif); font-size:12px; font-weight:700; letter-spacing:.08em; color:var(--soft);}
+  .sub-h .en{font-family:var(--serifen); font-size:7.5px; letter-spacing:.2em; color:var(--faint);}
+
+  .sceneinfo{display:flex; align-items:center; justify-content:space-between; margin-top:9px;}
+  .sceneinfo p{font-family:var(--kai); font-size:12px; color:var(--ink); margin:0;}
+  .sceneinfo p.amb{font-size:10.5px; color:var(--soft); margin-top:6px;}
+  .sceneinfo img{width:50px; height:36px; object-fit:cover; border:1px solid var(--line2); flex:none;}
+
+  .minis{display:flex; align-items:center; gap:14px; margin-top:11px; padding-left:2px;}
+  .minis img{width:42px; height:42px; border-radius:50%; object-fit:cover; border:1px solid var(--line2);}
+  .minis .plus{width:30px; height:30px; border-radius:50%; border:1px dashed var(--line2); display:grid; place-items:center; color:var(--faint); font-size:16px;}
+
+  .stat{margin-top:11px;}
+  .stat .r{display:flex; align-items:center; gap:8px; margin-top:9px;}
+  .stat .r .sic{color:var(--gold); display:grid; place-items:center; flex:none;}
+  .stat .r .nm{width:34px; font-family:var(--serif); font-size:12px; color:var(--soft);}
+  .stat .r .bar{flex:1; height:5px; background:#e9ddc8; position:relative;}
+  .stat .r .bar i{position:absolute; left:0; top:0; bottom:0;}
+  .stat .r .vl{width:48px; text-align:right; font-family:var(--serifen); font-size:11px; color:var(--soft);}
+  .stat .r .vl em{font-style:normal; color:var(--faint); font-size:9px;}
+
+  .rel{margin-top:9px;}
+  .rel .r{display:flex; align-items:center; gap:9px; padding:7px 0; border-bottom:1px solid #ece2cf;}
+  .rel .r .ht{color:#b6614c; font-size:13px;}
+  .rel .r .nm{font-family:var(--serif); font-size:13px; color:var(--ink);}
+  .rel .r .ty{flex:1; font-family:var(--kai); font-size:10.5px; color:var(--faint);}
+  .rel .r .up{display:inline-flex; align-items:center; gap:1px; font-family:var(--serifen); font-size:11px; color:#5a7a55; font-weight:700;}
+  .rel .r .up svg{margin-left:0;}
+
+  .evs{margin-top:9px;}
+  .evs .r{display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid #ece2cf;}
+  .evs .r .bd{width:5px; height:5px; border-radius:50%; background:var(--gold); flex:none;}
+  .evs .r .tx{flex:1; font-family:var(--kai); font-size:11.5px; color:var(--soft);}
+  .evs .r .nw{font-family:var(--serifen); font-size:8px; letter-spacing:.1em; color:#b5402e; border:1px solid #d8a99e; padding:1px 4px;}
+
+  .rtabs{display:flex; gap:9px; margin-top:13px;}
+  .rtab{flex:1; display:flex; align-items:center; justify-content:center; gap:7px; height:38px; border:1px solid var(--line2); cursor:pointer;}
+  .rtab svg{color:var(--soft);}
+  .rtab .zh{font-family:var(--serif); font-size:12px; color:var(--soft);}
+  .rtab .en{font-family:var(--serifen); font-size:7px; letter-spacing:.16em; color:var(--faint);}
+  .rtab.on{background:#ece2d3; border-color:var(--gold);}
+  .rtab.on .zh{color:var(--navy); font-weight:700;}
+
+  .tips{position:relative; margin-top:14px; padding-top:13px; border-top:1px solid var(--line); min-height:118px;}
+  .tips .th{display:flex; align-items:center; gap:8px;}
+  .tips .th svg{color:var(--gold);}
+  .tips .th b{font-family:var(--serif); font-size:12px; font-weight:700; color:var(--soft); letter-spacing:.06em;}
+  .tips .th .en{font-family:var(--serifen); font-size:7.5px; letter-spacing:.2em; color:var(--faint);}
+  .tips p{font-family:var(--kai); font-size:11.5px; line-height:1.85; color:var(--soft); margin:9px 0 0; width:175px;}
+  .tips .chibi{position:absolute; right:-4px; bottom:-18px; width:95px; height:auto;}
+</style>
+</head>
+<body>
+<div class="cv">
+
+  <!-- 左 引擎竖栏 -->
+  <aside class="lbar">
+    <div class="logo">
+      <img src="../assets/recon/play-emblem.png" alt="" />
+      <div class="lt"><b>NARRATIVE<br>ENGINE</b><span>叙事引擎</span></div>
+    </div>
+    <nav class="nav">
+      <a class="on"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg></span><span class="tx"><span class="zh">探索</span><span class="en">EXPLORE</span></span></a>
+      <a><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h6M9 16h6"/></svg></span><span class="tx"><span class="zh">当前故事</span><span class="en">CURRENT FILE</span></span></a>
+      <a><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 20l1-4L16 5l3 3L8 19z"/><path d="M14 7l3 3"/></svg></span><span class="tx"><span class="zh">创作</span><span class="en">CREATE</span></span></a>
+      <a><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 5h16v11H9l-4 4z"/></svg></span><span class="tx"><span class="zh">聊天</span><span class="en">CHAT</span></span></a>
+      <a><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 4h11l3 3v13H5z"/><path d="M9 9h6M9 13h6"/></svg></span><span class="tx"><span class="zh">我的</span><span class="en">ARCHIVE</span></span></a>
+    </nav>
+    <div class="pcard">
+      <div class="ttl">玩家身份<span>PLAYER</span></div>
+      <img class="por" src="../assets/recon/play-player.png" alt="" />
+      <div class="nm">林间旅人</div>
+      <div class="lv">Lv. 12</div>
+      <div class="insp">
+        <div class="lb">灵感点<i>INSPIRATION</i></div>
+        <div class="vl"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2 8 8 2-8 2-2 8-2-8-8-2 8-2z"/></svg>1260</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 顶 面包屑 -->
+  <header class="top">
+    <div class="topdeco"></div>
+    <div class="crumb">
+      <span class="lb">当前故事</span>
+      <span class="ti">《雨夜档案 · 第七站台》</span>
+      <span class="ed">✎</span>
+    </div>
+    <div class="topr">
+      <div class="titem"><span class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 4h12l2 2v14H5z"/><path d="M8 4v6h7V4"/></svg></span><span class="tt"><span class="zh">存档</span><span class="en">SAVE</span></span></div>
+      <div class="titem"><span class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 9a8 8 0 1 1 1 5"/><path d="M4 4v5h5"/></svg></span><span class="tt"><span class="zh">回溯本轮</span><span class="en">REWIND</span></span></div>
+      <div class="titem"><span class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 11a8 8 0 1 0-1 5"/><path d="M20 4v5h-5"/></svg></span><span class="tt"><span class="zh">重生成</span><span class="en">REGENERATE</span></span></div>
+      <div class="tdiv"></div>
+      <div class="ttime">
+        <div class="lb">故事内时间 · IN-WORLD TIME</div>
+        <div class="vl">10 / 21 · 21:47</div>
+      </div>
+      <div class="tdiv"></div>
+      <div class="tsuper"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M12 3v3M12 18v3M4 12H1M23 12h-3M6 6l-2-2M20 20l-2-2M18 6l2-2M4 20l2-2"/><circle cx="12" cy="12" r="4"/></svg></span><span class="zh">雨夜</span><span class="en">SUPERVISOR</span></div>
+      <div class="tgear"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></div>
+    </div>
+  </header>
+
+  <!-- 中部主区 -->
+  <main class="main">
+    <img class="photopin" src="../assets/recon/play-photo.png" alt="" />
+    <!-- 场景 -->
+    <section class="scene">
+      <div class="art"></div>
+      <div class="veil"></div>
+      <div class="round"><span>当前回合</span><i></i><b>ROUND 07</b></div>
+      <h2>雨夜的回响</h2>
+      <div class="sub">第七站台，旧城地铁站台</div>
+      <p class="prose">雨水从破碎的天窗滴落，打在锈蚀的铁轨上，发出空洞的回响。远处的信号灯忽明忽暗，像是某种沉默的呼吸。你握紧了手中的旧怀表，指针仍在缓慢转动，仿佛在提醒你——时间在这里，从未真正停下。</p>
+    </section>
+
+    <!-- 角色发言 -->
+    <section class="presence">
+      <div class="ph"><b>角色发言</b><span class="en">DIALOGUE</span><span class="ln"></span></div>
+      <div class="prow"><img src="../assets/recon/play-av-elin.png"><span class="nm">艾琳</span><span class="dash"></span><span class="ln-q">“这里的雨…和外面的不一样。”</span></div>
+      <div class="prow"><img src="../assets/recon/play-av-lulin.png"><span class="nm">陆临</span><span class="dash"></span><span class="ln-q">“信号灯的频率不对，像是被人为干预过。”</span></div>
+      <div class="prow"><img src="../assets/recon/play-av-mystery.png"><span class="nm" style="width:72px">神秘少女</span><span class="dash"></span><span class="ln-q">“你们相信时间吗？…在第七站台，时间是会迷路的。”</span></div>
+    </section>
+
+    <!-- 你的行动 -->
+    <section class="choices">
+      <div class="ph"><b>你的行动</b><span class="en">CHOICES</span><span class="ln"></span></div>
+      <div class="cgrid">
+        <div class="ccard">
+          <div class="ch"><span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span><b>观察环境</b></div>
+          <p>仔细留意站台的细节，寻找被忽略的线索。</p>
+          <div class="cf"><span class="cat"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.2-6.3-4.6L5.7 21 8 14.8 2 10.4h7.6z"/></svg>探查</span><span class="cost"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l7 5-7 13-7-13z"/></svg>0</span></div>
+        </div>
+        <div class="ccard">
+          <div class="ch"><span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 5h16v10H9l-4 4z"/></svg></span><b>询问艾琳</b></div>
+          <p>问问她对这场雨的看法，或许她知道更多。</p>
+          <div class="cf"><span class="cat"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.2-6.3-4.6L5.7 21 8 14.8 2 10.4h7.6z"/></svg>对话</span><span class="cost"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l7 5-7 13-7-13z"/></svg>0</span></div>
+        </div>
+        <div class="ccard">
+          <div class="ch"><span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="3" width="6" height="18" rx="3"/><circle cx="12" cy="8" r="1.4" fill="currentColor"/></svg></span><b>检查信号灯</b></div>
+          <p>走近那盏信号灯，检查它异常的频率。</p>
+          <div class="cf"><span class="cat"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.2-6.3-4.6L5.7 21 8 14.8 2 10.4h7.6z"/></svg>调查</span><span class="cost"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l7 5-7 13-7-13z"/></svg>0</span></div>
+        </div>
+        <div class="ccard">
+          <div class="ch"><span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 3h6v6M20 3l-8 8M10 5H4v15h15v-6"/></svg></span><b>前往出口</b></div>
+          <p>离开此地，前往其他站区域探查。</p>
+          <div class="cf"><span class="cat"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.2-6.3-4.6L5.7 21 8 14.8 2 10.4h7.6z"/></svg>移动</span><span class="cost"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3l7 5-7 13-7-13z"/></svg>0</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 自由行动 -->
+    <section class="free">
+      <div class="fl">
+        <div class="fh"><b>自由行动</b><span class="en"></span></div>
+        <div class="ph2">输入你的行动想法，AI 将根据你的描述推动故事发展。</div>
+      </div>
+      <div class="exec"><span class="zh"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>执行</span><span class="en">ENTER</span></div>
+    </section>
+  </main>
+
+  <!-- 右 世界状态档案 -->
+  <aside class="rcol">
+    <div class="rh"><span class="badge"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 10l9-6 9 6"/><path d="M5 9v11h14V9"/><path d="M10 20v-6h4v6"/></svg></span><b>世界状态档案</b><span class="en">WORLD STATE</span></div>
+
+    <div class="sub-h"><span class="dot"></span><span class="zh">场景信息</span><span class="en">SCENE</span></div>
+    <div class="sceneinfo"><div><p>第七站台（地铁站台）</p><p class="amb">氛围：雨夜 / 潮湿 / 陈旧</p></div><img src="../assets/recon/play-thumb.png" style="filter:brightness(1.22) contrast(.96)"></div>
+
+    <div class="sub-h"><span class="dot"></span><span class="zh">在场角色</span><span class="en">CHARACTERS</span></div>
+    <div class="minis">
+      <img src="../assets/recon/play-mini-1.png">
+      <img src="../assets/recon/play-mini-2.png">
+      <img src="../assets/recon/play-mini-3.png">
+      <span class="plus">+</span>
+    </div>
+
+    <div class="sub-h"><span class="dot"></span><span class="zh">玩家状态</span><span class="en">PLAYER STATUS</span></div>
+    <div class="stat">
+      <div class="r"><span class="sic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-1 5 3 3 0 0 0 2 4 3 3 0 0 0 5 1V4a3 3 0 0 0-3 0zM15 4a3 3 0 0 1 3 3 3 3 0 0 1 1 5 3 3 0 0 1-2 4 3 3 0 0 1-5 1"/></svg></span><span class="nm">理智</span><span class="bar"><i style="width:72%;background:#7d8d6a"></i></span><span class="vl">72<em>/100</em></span></div>
+      <div class="r"><span class="sic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M12 20s-7-4.4-7-9.5A3.5 3.5 0 0 1 12 7a3.5 3.5 0 0 1 7 3.5C19 15.6 12 20 12 20z"/></svg></span><span class="nm">体力</span><span class="bar"><i style="width:58%;background:#b5905a"></i></span><span class="vl">58<em>/100</em></span></div>
+      <div class="r"><span class="sic"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2 8 8 2-8 2-2 8-2-8-8-2 8-2z"/></svg></span><span class="nm">灵感</span><span class="bar"><i style="width:100%;background:#c1a86f"></i></span><span class="vl">1260</span></div>
+    </div>
+
+    <div class="sub-h"><span class="dot"></span><span class="zh">关系变化</span><span class="en">RELATIONSHIP</span></div>
+    <div class="rel">
+      <div class="r"><span class="ht">♥</span><span class="nm">艾琳</span><span class="ty">好感度</span><span class="up">+1<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V6M6 11l6-6 6 6"/></svg></span></div>
+      <div class="r"><span class="ht">♥</span><span class="nm">陆临</span><span class="ty">信任度</span><span class="up">+1<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V6M6 11l6-6 6 6"/></svg></span></div>
+    </div>
+
+    <div class="sub-h"><span class="dot"></span><span class="zh">最新事件</span><span class="en">EVENTS</span></div>
+    <div class="evs">
+      <div class="r"><span class="bd"></span><span class="tx">发现异常的信号灯</span><span class="nw">新</span></div>
+      <div class="r"><span class="bd"></span><span class="tx">神秘少女的出现</span><span class="nw">新</span></div>
+      <div class="r"><span class="bd"></span><span class="tx">怀念旧时的雨夜</span></div>
+    </div>
+
+    <div class="rtabs">
+      <div class="rtab"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16"/><path d="M4 9h16"/></svg><span class="zh">事实边界</span><span class="en">BOUNDARY</span></div>
+      <div class="rtab on"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 4h11l3 3v13H5z"/><path d="M9 9h6M9 13h5"/></svg><span class="zh">记忆档案</span><span class="en">MEMORY</span></div>
+    </div>
+
+    <div class="tips">
+      <div class="th"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2 8 8 2-8 2-2 8-2-8-8-2 8-2z"/></svg><b>提示</b><span class="en">/ TIPS</span></div>
+      <p>你可以选择推荐行动，或自由输入任何你想法，故事会因你而改变。</p>
+      <img class="chibi" src="../assets/recon/play-chibi-br.png" alt="" />
+    </div>
+  </aside>
+
+</div>
+</body>
+</html>

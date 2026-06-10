@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<title>recon · 运营控制台</title>
+<style>
+  :root{
+    --bg:#0b0f14; --bg2:#0e1318;
+    --panel:#12171d; --panel2:#151b22; --panel3:#171d25;
+    --line:#222a33; --line2:#2a323c; --warm:rgba(184,154,89,.18);
+    --ink:#cdd4dc; --ink2:#aeb6c0; --soft:#8893a0; --faint:#6b7682; --dim:#566069;
+    --gold:#b89a59; --gold2:#cdb074; --gold-br:#e1c477;
+    --green:#66a156; --red:#b5564a;
+    --serifen:Georgia,"Times New Roman",serif;
+    --sans:"PingFang SC","Microsoft YaHei","Heiti SC",sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  .cv{
+    position:relative; width:1536px; height:1024px; overflow:hidden;
+    background:var(--bg); color:var(--ink); font-family:var(--sans);
+    font-size:13px;
+  }
+  .mono{font-family:var(--serifen);}
+
+  /* ===================== 顶栏 ===================== */
+  .top{position:absolute; left:0; right:0; top:0; height:86px; background:#080b0f; z-index:30;}
+  .top::after{content:""; position:absolute; left:0; right:0; bottom:0; height:1px;
+    background:linear-gradient(90deg,rgba(184,154,89,.05),rgba(184,154,89,.32) 30%,rgba(184,154,89,.22) 70%,rgba(184,154,89,.04));}
+  .brand{position:absolute; left:24px; top:18px; display:flex; align-items:center; gap:15px;}
+  .brand .em{width:52px; height:52px;}
+  .brand h1{margin:0; font-family:var(--serifen); font-weight:500; font-size:20px; letter-spacing:.10em; color:#d8dde2;}
+  .brand .sub{font-size:10.5px; letter-spacing:.20em; color:var(--faint); margin-top:6px;}
+
+  .ident{position:absolute; left:345px; top:32px; display:flex; align-items:center; gap:14px;}
+  .ident .lb{font-size:12.5px; color:var(--soft); letter-spacing:.04em;}
+  .ident .badge{font-family:var(--serifen); font-size:11px; letter-spacing:.18em; color:var(--gold-br);
+    border:1px solid rgba(184,154,89,.5); padding:6px 13px; background:rgba(184,154,89,.05);}
+
+  .clock{position:absolute; right:396px; top:23px; text-align:left;}
+  .clock .lb{font-size:11px; color:var(--faint); letter-spacing:.2em;}
+  .clock .tm{font-family:var(--serifen); font-size:14px; color:var(--ink2); letter-spacing:.06em; margin-top:4px;}
+
+  .tools{position:absolute; right:206px; top:25px; display:flex; align-items:center; gap:39px; color:var(--soft);}
+  .tools .ic{position:relative; cursor:pointer;}
+  .tools .ic .dot{position:absolute; top:-8px; right:-9px; min-width:15px; height:15px; padding:0 2px;
+    background:#9a4a3a; color:#f0e2c4; border-radius:8px; font-size:9px; font-family:var(--serifen);
+    display:grid; place-items:center; line-height:1;}
+
+  .me{position:absolute; right:23px; top:16px; display:flex; align-items:center; gap:11px; cursor:pointer;}
+  .me img{width:40px; height:40px; border-radius:50%; border:1px solid var(--line2);}
+  .me .mn{font-family:var(--serifen); font-size:14px; color:#dfe3e8; letter-spacing:.02em;}
+  .me .ms{font-size:10.5px; color:var(--green); margin-top:4px; display:flex; align-items:center; gap:5px;}
+  .me .ms::before{content:""; width:6px; height:6px; border-radius:50%; background:var(--green);}
+  .me .car{color:var(--faint); margin-left:2px;}
+
+  /* ===================== 左侧引擎导航 ===================== */
+  .rail{position:absolute; left:0; top:86px; bottom:0; width:232px; background:#0a0e12; border-right:1px solid var(--line); z-index:20;}
+  .rail .rh{padding:18px 20px 16px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:12px;}
+  .rail .rh .rm{width:34px; height:34px;}
+  .rail .rh b{font-family:var(--serifen); font-size:15px; letter-spacing:.1em; color:#cfd4d9; display:block;}
+  .rail .rh span{font-size:9.5px; letter-spacing:.22em; color:var(--faint); margin-top:3px; display:block;}
+
+  .nav{padding:14px 14px;}
+  .ni{display:flex; align-items:center; gap:13px; padding:11px 14px; margin-bottom:3px; cursor:pointer; position:relative; color:var(--soft);}
+  .ni .ico{width:18px; height:18px; flex:none; color:var(--dim);}
+  .ni .tx b{font-size:13.5px; letter-spacing:.04em; color:var(--ink2); font-weight:500; display:block;}
+  .ni .tx span{font-size:8.5px; letter-spacing:.18em; color:var(--faint); margin-top:3px; display:block;}
+  .ni .car{position:absolute; right:14px; color:var(--dim); font-size:11px;}
+  .ni.on{background:linear-gradient(90deg,rgba(184,154,89,.10),rgba(184,154,89,.01));}
+  .ni.on::before{content:""; position:absolute; left:0; top:0; bottom:0; width:2px; background:var(--gold);}
+  .ni.on .ico{color:var(--gold2);} .ni.on .tx b{color:var(--gold-br);}
+
+  .sysbox{position:absolute; left:14px; right:14px; bottom:18px; background:var(--panel); border:1px solid var(--line); padding:14px 15px;}
+  .sysbox .sh{font-size:11px; letter-spacing:.18em; color:var(--faint); padding-bottom:10px; border-bottom:1px solid var(--line); margin-bottom:11px;}
+  .sysrow{display:flex; justify-content:space-between; font-size:11.5px; margin-bottom:9px;}
+  .sysrow .k{color:var(--faint);} .sysrow .v{color:var(--ink2); font-family:var(--serifen);}
+  .sysrow .v.ok{color:var(--green);}
+  .sysbtn{margin-top:12px; text-align:center; font-size:11.5px; letter-spacing:.08em; color:var(--gold2);
+    border:1px solid rgba(184,154,89,.32); padding:8px; cursor:pointer;}
+
+  /* ===================== 公共面板 ===================== */
+  .panel{position:absolute; top:96px; background:var(--panel); border:1px solid var(--line);}
+  .ph{height:54px; padding:0 18px; display:flex; align-items:center; gap:12px; border-bottom:1px solid var(--line);}
+  .ph h2{margin:0; font-size:15px; font-weight:600; letter-spacing:.08em; color:#d3d9df;}
+  .ph .en{font-family:var(--serifen); font-size:9.5px; letter-spacing:.26em; color:var(--faint);}
+
+  /* col positions */
+  .p-users{left:248px; width:312px; bottom:18px;}
+  .p-convo{left:572px; width:584px; bottom:18px;}
+  .p-detail{left:1168px; width:350px; bottom:18px;}
+
+  /* ===================== 用户列表 ===================== */
+  .search{margin:14px 16px 0; display:flex; align-items:center; gap:9px;}
+  .search .box{flex:1; height:36px; background:var(--bg2); border:1px solid var(--line2); display:flex; align-items:center; gap:8px; padding:0 11px; color:var(--faint);}
+  .search .box input{flex:1; background:none; border:none; outline:none; color:var(--ink); font-size:12px; font-family:var(--sans);}
+  .search .box input::placeholder{color:var(--faint);}
+  .search .filt{width:36px; height:36px; flex:none; border:1px solid var(--line2); display:grid; place-items:center; color:var(--soft);}
+
+  .tabs{display:flex; gap:22px; margin:14px 16px 0; padding-bottom:12px; border-bottom:1px solid var(--line); font-size:12.5px;}
+  .tabs a{color:var(--faint); cursor:pointer;}
+  .tabs a.on{color:var(--gold-br);}
+  .tabs a.on b{color:#dfe3e8; font-weight:500;}
+
+  .ulist{position:absolute; left:0; right:0; top:150px; height:616px; overflow:hidden;}
+  .ur{display:flex; align-items:center; gap:12px; padding:17px 16px; position:relative; cursor:pointer; border-bottom:1px solid rgba(34,42,51,.5);}
+  .ur img{width:42px; height:42px; border-radius:50%; flex:none; border:1px solid var(--line2);}
+  .ur .ub{flex:1; min-width:0;}
+  .ur .un{font-size:13.5px; color:var(--ink); letter-spacing:.02em;}
+  .ur .uid{font-size:11px; color:var(--faint); margin-top:5px; font-family:var(--serifen);}
+  .ur .us{position:absolute; right:16px; top:14px; font-size:11px; color:var(--faint); display:flex; align-items:center; gap:5px;}
+  .ur .us.on{color:var(--green);}
+  .ur .us.on::before{content:""; width:6px; height:6px; border-radius:50%; background:var(--green);}
+  .ur .umeta{position:absolute; right:16px; bottom:13px; font-size:11px; color:var(--dim);}
+  .ur.sel{background:linear-gradient(90deg,rgba(184,154,89,.12),rgba(184,154,89,.02));}
+  .ur.sel::before{content:""; position:absolute; left:0; top:0; bottom:0; width:2px; background:var(--gold);}
+  .ur.sel img{border-color:rgba(184,154,89,.55);}
+  .ur.sel .un{color:var(--gold-br);}
+  .ur.sel .car{position:absolute; right:16px; bottom:13px; color:var(--gold2);}
+
+  .pager{position:absolute; left:0; right:0; top:766px; height:54px; border-top:1px solid var(--line); display:flex; align-items:center; justify-content:center; gap:7px; font-size:12px; color:var(--soft);}
+  .pager .pg{min-width:26px; height:26px; padding:0 6px; border:1px solid var(--line2); display:grid; place-items:center; cursor:pointer; font-family:var(--serifen);}
+  .pager .pg.on{background:rgba(184,154,89,.14); border-color:rgba(184,154,89,.5); color:var(--gold-br);}
+  .pager .pg.nav{color:var(--faint);}
+  .pager .tot{position:absolute; right:18px; top:42px; font-size:11px; color:var(--faint);}
+
+  /* ===================== 对话记录 ===================== */
+  .cv-meta{padding:14px 18px 0;}
+  .cv-row{display:flex; align-items:center; gap:30px; font-size:12.5px; color:var(--soft);}
+  .cv-row .k{color:var(--faint);}
+  .cv-row .v{color:var(--ink2);}
+  .cv-row .vm{font-family:var(--serifen); color:var(--ink2);}
+  .cv-row .car{color:var(--faint); font-size:10px;}
+  .cv-acts{position:absolute; right:18px; top:68px; display:flex; gap:11px;}
+  .btn-gold{height:36px; padding:0 18px; background:rgba(184,154,89,.10); border:1px solid rgba(184,154,89,.55); color:var(--gold-br); font-size:12.5px; letter-spacing:.04em; cursor:pointer; display:grid; place-items:center;}
+  .btn-line{height:36px; padding:0 16px; background:transparent; border:1px solid var(--line2); color:var(--ink2); font-size:12.5px; cursor:pointer; display:grid; place-items:center;}
+  .cv-time{margin-top:14px; font-size:11.5px; color:var(--faint);}
+  .cv-time .vm{font-family:var(--serifen); color:var(--soft); margin-left:8px;}
+
+  .cv-banner{margin:14px 18px 0; padding:11px 14px; background:rgba(184,154,89,.06); border:1px solid rgba(184,154,89,.28); border-left-width:2px; font-size:12px; line-height:1.5; color:var(--gold2); letter-spacing:.02em;}
+  .cv-banner b{color:var(--gold-br); font-weight:600;}
+
+  .log{position:absolute; left:0; right:0; top:200px; bottom:160px; overflow:hidden; padding:8px 18px 0;}
+  .rnd{text-align:center; margin:10px 0 16px; display:flex; align-items:center; gap:14px;}
+  .rnd::before,.rnd::after{content:""; flex:1; height:1px; background:var(--line);}
+  .rnd span{font-family:var(--serifen); font-size:11px; letter-spacing:.22em; color:var(--faint);}
+
+  .msg{margin-bottom:15px; position:relative;}
+  .msg .mh{display:flex; align-items:center; gap:8px; margin-bottom:7px;}
+  .msg .tag{font-size:12px; letter-spacing:.04em; color:var(--soft);}
+  .msg .tag::before{content:"【";} .msg .tag::after{content:"】";}
+  .msg .tag.nar{color:var(--gold2);}
+  .msg .tag.sys{color:#7fa6c4;}
+  .msg .tag.act{color:#9d8bc4;}
+  .msg .who{font-size:12.5px; color:var(--ink2); display:flex; align-items:center; gap:8px;}
+  .msg .who img{width:24px; height:24px; border-radius:50%;}
+  .msg .ts{margin-left:auto; font-size:10.5px; color:var(--dim); font-family:var(--serifen);}
+  .msg .body{font-size:12.5px; line-height:1.85; color:var(--ink2); background:var(--panel2); border:1px solid var(--line); padding:11px 14px;}
+  .msg.is-sys .body{background:rgba(127,166,196,.04); border-color:rgba(127,166,196,.16);}
+  .msg .body .li{color:var(--soft); font-size:12px;}
+  .msg .body .li b{color:var(--green); font-family:var(--serifen);}
+
+  .composer{position:absolute; left:18px; right:18px; bottom:64px;}
+  .composer .clab{font-size:11.5px; color:var(--faint); margin-bottom:8px;}
+  .composer .cbox{display:flex; gap:12px;}
+  .composer .cin{flex:1; height:70px; background:var(--bg2); border:1px solid var(--line2); padding:11px 14px; color:var(--faint); font-size:12.5px;}
+  .composer .send{width:108px; flex:none; background:rgba(184,154,89,.10); border:1px solid rgba(184,154,89,.55); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; cursor:pointer;}
+  .composer .send b{font-size:13px; color:var(--gold-br); font-weight:600; letter-spacing:.04em;}
+  .composer .send span{font-size:9.5px; color:var(--gold); font-family:var(--serifen); letter-spacing:.08em;}
+  .cv-foot{position:absolute; right:18px; bottom:18px; display:flex; gap:11px;}
+  .cv-foot .fb{height:34px; padding:0 16px; border:1px solid var(--line2); color:var(--ink2); font-size:12px; display:flex; align-items:center; gap:7px; cursor:pointer;}
+  .cv-foot .fb .ico{color:var(--dim);}
+
+  /* ===================== 用户详情 ===================== */
+  .d-hd{padding:16px 18px; display:flex; align-items:center; gap:14px; border-bottom:1px solid var(--line);}
+  .d-hd img{width:50px; height:50px; border-radius:50%; flex:none; border:1px solid rgba(184,154,89,.4);}
+  .d-hd .dn{font-size:16px; color:#dfe3e8; letter-spacing:.02em;}
+  .d-hd .lv{font-size:9px; color:var(--gold-br); border:1px solid rgba(184,154,89,.34); padding:1px 5px 0; margin-left:9px; font-family:var(--serifen); letter-spacing:.02em; position:relative; top:-2px;}
+  .d-hd .du{font-size:11.5px; color:var(--faint); margin-top:7px; font-family:var(--serifen); display:flex; align-items:center; gap:7px;}
+  .d-hd .du .cp{color:var(--dim);}
+
+  .d-quick{padding:13px 18px 4px;}
+  .qrow{display:flex; justify-content:space-between; font-size:12px; padding:6px 0;}
+  .qrow .k{color:var(--faint);} .qrow .v{color:var(--ink2); font-family:var(--serifen);}
+  .qrow .v.ok{color:var(--green); font-family:var(--sans); display:flex; align-items:center; gap:5px;}
+  .qrow .v.ok::before{content:""; width:6px; height:6px; border-radius:50%; background:var(--green);}
+
+  .d-sec{margin:6px 18px 0; padding-top:14px; border-top:1px solid var(--line);}
+  .d-sec .st{font-size:12.5px; color:#cdd4dc; letter-spacing:.08em; margin-bottom:11px;}
+  .d-sec .st::before{content:""; display:inline-block; width:3px; height:12px; background:var(--gold); margin-right:8px; vertical-align:-1px;}
+  .irow{display:flex; justify-content:space-between; font-size:12px; padding:7px 0;}
+  .irow .k{color:var(--faint);} .irow .v{color:var(--ink2);}
+  .irow .v.mono{font-family:var(--serifen);}
+
+  .story{margin:6px 18px 0; padding-top:14px; border-top:1px solid var(--line);}
+  .story .card{display:flex; gap:13px; margin-top:11px;}
+  .story .card img{width:108px; height:78px; flex:none; object-fit:cover; border:1px solid var(--line2);}
+  .story .card .si b{font-size:13.5px; color:#dde2e7; display:block;}
+  .story .card .si .meta{font-size:11px; color:var(--faint); margin-top:8px; line-height:1.9;}
+  .story .card .si .meta .v{color:var(--ink2); font-family:var(--serifen);}
+  .story .gobtn{margin-top:13px; text-align:center; font-size:12px; color:var(--gold2); border:1px solid rgba(184,154,89,.32); padding:9px; cursor:pointer;}
+
+  .ops{margin:6px 18px 0; padding-top:14px; border-top:1px solid var(--line);}
+  .ops .grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:11px;}
+  .ops .op{display:flex; align-items:center; gap:8px; padding:9px 11px; border:1px solid var(--line2); font-size:11.5px; color:var(--ink2); cursor:pointer;}
+  .ops .op .ico{width:14px; height:14px; color:var(--soft);}
+  .ops .op.danger{color:var(--red); border-color:rgba(181,86,74,.4);}
+  .ops .op.danger .ico{color:var(--red);}
+</style>
+</head>
+<body>
+<div class="cv">
+
+  <!-- ===== 顶栏 ===== -->
+  <header class="top">
+    <div class="brand">
+      <img class="em" src="../assets/recon/operator-emblem.png" alt="" />
+      <div>
+        <h1>NARRATIVE ENGINE</h1>
+        <div class="sub">叙事引擎 · 运营控制台</div>
+      </div>
+    </div>
+    <div class="ident">
+      <span class="lb">当前身份</span>
+      <span class="badge">SUPERADMIN</span>
+    </div>
+    <div class="clock">
+      <div class="lb">世界时钟</div>
+      <div class="tm">2024/10/21  21:47:36</div>
+    </div>
+    <div class="tools">
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg><span class="dot">12</span></div>
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 7l9 6 9-6"/></svg></div>
+      <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.2 6.4l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 7.6 4h.1A1.6 1.6 0 0 0 9 1.1V1a2 2 0 1 1 4 0v.1A1.6 1.6 0 0 0 15 4.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7h.1a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1.3z"/></svg></div>
+    </div>
+    <div class="me">
+      <img src="../assets/recon/operator-topav.png" alt="" />
+      <div>
+        <div class="mn">SuperAdmin</div>
+        <div class="ms">在线</div>
+      </div>
+      <span class="car">▾</span>
+    </div>
+  </header>
+
+  <!-- ===== 左侧引擎导航 ===== -->
+  <aside class="rail">
+    <div class="rh">
+      <img class="rm" src="../assets/recon/operator-emblem.png" alt="" />
+      <div><b>控制台</b><span>OPERATOR CONSOLE</span></div>
+    </div>
+    <nav class="nav">
+      <div class="ni on"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20c0-3.6 2.9-5.5 6.5-5.5s6.5 1.9 6.5 5.5"/></svg></span>
+        <div class="tx"><b>账户中心</b><span>ACCOUNTS</span></div><span class="car">›</span></div>
+      <div class="ni"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 5h16v11H8l-4 4z"/></svg></span>
+        <div class="tx"><b>对话监控</b><span>CONVERSATIONS</span></div><span class="car">›</span></div>
+      <div class="ni"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 4h11l3 3v13H5z"/><path d="M9 9h7M9 13h7M9 17h4"/></svg></span>
+        <div class="tx"><b>故事管理</b><span>STORY MANAGEMENT</span></div><span class="car">›</span></div>
+      <div class="ni"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="5" width="12" height="15" rx="1"/><rect x="8" y="3" width="12" height="15" rx="1"/></svg></span>
+        <div class="tx"><b>卡牌库</b><span>CARD LIBRARY</span></div><span class="car">›</span></div>
+      <div class="ni"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c3 2.5 3 13.5 0 16M12 4c-3 2.5-3 13.5 0 16"/></svg></span>
+        <div class="tx"><b>世界书监控</b><span>WORLD STATE</span></div><span class="car">›</span></div>
+      <div class="ni"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg></span>
+        <div class="tx"><b>系统设置</b><span>SYSTEM SETTINGS</span></div><span class="car">›</span></div>
+      <div class="ni"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3h9l4 4v14H6z"/><path d="M10 12l2 2 3-4"/></svg></span>
+        <div class="tx"><b>操作日志</b><span>AUDIT LOGS</span></div><span class="car">›</span></div>
+    </nav>
+    <div class="sysbox">
+      <div class="sh">系统状态  SYSTEM STATUS</div>
+      <div class="sysrow"><span class="k">API 服务</span><span class="v ok">运行中</span></div>
+      <div class="sysrow"><span class="k">当前在线</span><span class="v">1,248</span></div>
+      <div class="sysrow"><span class="k">今日 Token 消耗</span><span class="v">2.35M</span></div>
+      <div class="sysrow"><span class="k">存储用量</span><span class="v">428.6 GB / 2 TB</span></div>
+      <div class="sysbtn">查看系统监控 ›</div>
+    </div>
+  </aside>
+
+  <!-- ===== 用户列表 ===== -->
+  <section class="panel p-users">
+    <div class="ph"><h2>账户列表</h2><span class="en">ACCOUNTS</span></div>
+    <div class="search">
+      <div class="box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input placeholder="搜索用户名 / 邮箱 / UID" /></div>
+      <div class="filt"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg></div>
+    </div>
+    <div class="tabs">
+      <a class="on"><b>全部</b>(1258)</a>
+      <a>在线(38)</a>
+      <a>禁用(6)</a>
+    </div>
+    <div class="ulist">
+      <div class="ur sel">
+        <img src="../assets/recon/operator-av1.png"><div class="ub"><div class="un">林间旅人</div><div class="uid">UID: user_7f8e2</div></div>
+        <div class="us on">在线</div><span class="car">›</span><div class="umeta" style="right:34px;color:var(--gold2)">角色扮演中</div></div>
+      <div class="ur">
+        <img src="../assets/recon/operator-av2.png"><div class="ub"><div class="un">星海漫游者</div><div class="uid">UID: user_3a2c1</div></div>
+        <div class="us">离线</div><div class="umeta">1小时前</div></div>
+      <div class="ur">
+        <img src="../assets/recon/operator-av3.png"><div class="ub"><div class="un">纸上行者</div><div class="uid">UID: user_9c7b4</div></div>
+        <div class="us">离线</div><div class="umeta">3小时前</div></div>
+      <div class="ur">
+        <img src="../assets/recon/operator-av4.png"><div class="ub"><div class="un">Echoes</div><div class="uid">UID: user_e1d6f</div></div>
+        <div class="us on">在线</div><div class="umeta">故事创作中</div></div>
+      <div class="ur">
+        <img src="../assets/recon/operator-av5.png"><div class="ub"><div class="un">雾都观测者</div><div class="uid">UID: user_b3a9e</div></div>
+        <div class="us">离线</div><div class="umeta">5小时前</div></div>
+      <div class="ur">
+        <img src="../assets/recon/operator-av6.png"><div class="ub"><div class="un">月下独行</div><div class="uid">UID: user_a7f1c</div></div>
+        <div class="us">离线</div><div class="umeta">12小时前</div></div>
+      <div class="ur">
+        <img src="../assets/recon/operator-av7.png"><div class="ub"><div class="un">WhiteNight</div><div class="uid">UID: user_d2e6b</div></div>
+        <div class="us on">在线</div><div class="umeta">对话中</div></div>
+      <div class="ur">
+        <img src="../assets/recon/operator-av8.png"><div class="ub"><div class="un">落日收藏家</div><div class="uid">UID: user_f8c21</div></div>
+        <div class="us">离线</div><div class="umeta">1天前</div></div>
+    </div>
+    <div class="pager">
+      <span class="pg nav">‹</span>
+      <span class="pg on">1</span><span class="pg">2</span><span class="pg">3</span>
+      <span style="color:var(--dim)">···</span><span class="pg">63</span>
+      <span class="pg nav">›</span>
+      <span class="tot">共 1258 条</span>
+    </div>
+  </section>
+
+  <!-- ===== 对话记录 ===== -->
+  <section class="panel p-convo">
+    <div class="ph"><h2>对话记录</h2><span class="en">CONVERSATION VIEWER</span></div>
+    <div class="cv-acts">
+      <button class="btn-gold">进入导演模式</button>
+      <button class="btn-line">导出记录</button>
+    </div>
+    <div class="cv-meta">
+      <div class="cv-row">
+        <span><span class="k">会话ID: </span><span class="vm">sess_8f7d2e21</span></span>
+        <span><span class="k">故事: </span><span class="v">《雨夜档案：第七站台》</span> <span class="car">▾</span></span>
+      </div>
+      <div class="cv-time">开始时间: <span class="vm">2024/10/21  20:15:33</span></div>
+    </div>
+    <div class="cv-banner"><b>导演视角:</b> 你正在以旁观者身份查看此对话，不会影响当前游戏进程。</div>
+
+    <div class="log">
+      <div class="rnd"><span>ROUND 07</span></div>
+      <div class="msg">
+        <div class="mh"><span class="tag nar">叙事</span><span class="ts">21:31:42</span></div>
+        <div class="body">雨夜的第七站台，霓虹灯在湿漉漉的地面上映出破碎的光影。远处的列车汽笛声由远及近，又在隧道中消散。</div>
+      </div>
+      <div class="msg">
+        <div class="mh"><span class="who"><img src="../assets/recon/operator-av1.png"><span style="color:var(--gold2)">【艾琳】</span></span><span class="ts">21:31:48</span></div>
+        <div class="body">（轻轻地去发鬓的雨水）你真的确定，我们现在要去那边吗？</div>
+      </div>
+      <div class="msg">
+        <div class="mh"><span class="tag act">玩家行动</span><span class="ts">21:31:53</span></div>
+        <div class="body">我环顾四周，检查有没有监控摄像头。</div>
+      </div>
+      <div class="msg">
+        <div class="mh"><span class="tag nar">叙事</span><span class="ts">21:32:01</span></div>
+        <div class="body">你扫视着站台的角落，一个老旧的摄像头挂在斑驳的线缆上，镜头似乎坏了，红灯部分已熄灭。</div>
+      </div>
+      <div class="msg is-sys">
+        <div class="mh"><span class="tag sys">系统</span><span class="who" style="color:var(--soft)">状态更新</span><span class="ts">21:31:55</span></div>
+        <div class="body">
+          <div class="li">触发事件: 发现损坏的监控</div>
+          <div class="li"><b>线索 +1</b>　信任度 <b>+1</b></div>
+          <div class="li">摄像头 已损坏（事实）</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="composer">
+      <div class="clab">导演指令 <span style="color:var(--dim)">（不会发送给玩家）</span></div>
+      <div class="cbox">
+        <div class="cin">输入导演指令，仅AI可见...</div>
+        <div class="send"><b>发送指令</b><span>Ctrl+Enter</span></div>
+      </div>
+    </div>
+    <div class="cv-foot">
+      <div class="fb"><span class="ico">↺</span>重置此轮</div>
+      <div class="fb"><span class="ico">⤺</span>回档到此轮</div>
+    </div>
+  </section>
+
+  <!-- ===== 用户详情 ===== -->
+  <section class="panel p-detail">
+    <div class="ph"><h2>账户详情</h2><span class="en">ACCOUNT DETAILS</span></div>
+    <div class="d-hd">
+      <img src="../assets/recon/operator-detail-av.png" alt="">
+      <div>
+        <div><span class="dn">林间旅人</span><span class="lv">Lv.12</span></div>
+        <div class="du">UID: user_7f8e2 <span class="cp">⧉</span></div>
+      </div>
+    </div>
+    <div class="d-quick">
+      <div class="qrow"><span class="k">注册时间</span><span class="v">2024/09/18 15:42:21</span></div>
+      <div class="qrow"><span class="k">最后登录</span><span class="v">2024/10/21 21:42:11</span></div>
+      <div class="qrow"><span class="k">当前状态</span><span class="v ok">在线</span></div>
+    </div>
+    <div class="d-sec">
+      <div class="st">权限信息</div>
+      <div class="irow"><span class="k">角色</span><span class="v">普通用户</span></div>
+      <div class="irow"><span class="k">邮箱</span><span class="v mono">lin@example.com</span></div>
+      <div class="irow"><span class="k">手机号</span><span class="v mono">138****5678</span></div>
+      <div class="irow"><span class="k">IP 地址</span><span class="v mono">123.***.45.67</span></div>
+      <div class="irow"><span class="k">设备</span><span class="v">Chrome / Windows</span></div>
+    </div>
+    <div class="story">
+      <div class="st" style="font-size:12.5px;color:#cdd4dc;letter-spacing:.08em;"><span style="display:inline-block;width:3px;height:12px;background:var(--gold);margin-right:8px;vertical-align:-1px;"></span>当前游戏状态</div>
+      <div class="card">
+        <img src="../assets/recon/operator-story-thumb.png" alt="">
+        <div class="si">
+          <b>雨夜档案：第七站台</b>
+          <div class="meta">当前章节: <span class="v">第二章 · 10 回</span><br>进度: <span class="v">ROUND 07</span><br>游戏时长: <span class="v">02:16:48</span></div>
+        </div>
+      </div>
+      <div class="gobtn">查看游戏状态 ›</div>
+    </div>
+    <div class="ops">
+      <div class="st" style="font-size:12.5px;color:#cdd4dc;letter-spacing:.08em;"><span style="display:inline-block;width:3px;height:12px;background:var(--gold);margin-right:8px;vertical-align:-1px;"></span>快捷操作</div>
+      <div class="grid">
+        <div class="op"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v11H8l-4 4z"/></svg></span>发送系统通知</div>
+        <div class="op"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v4h-4"/></svg></span>重置游戏进度</div>
+        <div class="op"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20v-6M12 10V4M4 12h6M14 12h6"/><circle cx="12" cy="12" r="2"/></svg></span>调整数据/属性</div>
+        <div class="op danger"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg></span>封禁账户</div>
+        <div class="op"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg></span>导出用户数据</div>
+        <div class="op"><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span>更多操作</div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

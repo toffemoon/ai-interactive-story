@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<title>recon · 个人中心</title>
+<style>
+  :root{
+    --bg:#f3ece0; --paper:#faf4ea; --paper2:#f6efe2;
+    --ink:#2c2820; --soft:#6f6757; --faint:#9a907a;
+    --line:#ddd0b4; --line2:#c4b388;
+    --gold:#a98a63; --gold2:#c1a86f;
+    --navy:#163b57; --navy-deep:#0d2f49; --navy-line:#b99a59;
+    --green:#34463d; --green2:#4e5a55;
+    --serif:"Songti SC","STSong","SimSun",serif;
+    --serifen:Georgia,"Times New Roman",serif;
+    --kai:"Kaiti SC","STKaiti","KaiTi",serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  .cv{
+    position:relative; width:1536px; height:1024px; overflow:hidden;
+    background:
+      repeating-linear-gradient(90deg, rgba(169,138,99,.025) 0 1px, transparent 1px 44px),
+      var(--bg);
+    color:var(--ink); font-family:var(--kai);
+  }
+
+  /* ============ 左侧引擎竖栏 ============ */
+  .rail{position:absolute; left:0; top:0; bottom:0; width:262px; z-index:10;
+    background:linear-gradient(180deg,#f3ede6,#efe8df);
+    border-right:1px solid var(--line);}
+  .rail::after{content:""; position:absolute; right:0; top:0; bottom:0; width:1px;
+    background:linear-gradient(180deg,transparent,var(--line2) 10%,var(--line2) 90%,transparent);}
+  .rail .brand{position:absolute; left:24px; top:26px; display:flex; align-items:center; gap:11px;}
+  .rail .brand .em{width:38px; height:38px; object-fit:contain;}
+  .rail .brand h1{margin:0; font-family:var(--serifen); font-weight:600; font-size:17px; letter-spacing:.06em; color:var(--navy);}
+  .rail .brand .sub{font-family:var(--kai); font-size:9.5px; letter-spacing:.34em; color:var(--faint); margin-top:3px;}
+
+  .nav{position:absolute; left:0; right:0; top:108px;}
+  .nav a{position:relative; display:flex; align-items:center; gap:14px; height:54px; padding:0 22px; text-decoration:none; cursor:pointer;}
+  .nav a .ic{width:22px; height:22px; flex:none; color:var(--soft); display:grid; place-items:center;}
+  .nav a .tx .zh{font-family:var(--serif); font-size:15px; letter-spacing:.14em; color:var(--soft);}
+  .nav a .tx .en{font-family:var(--serifen); font-size:8px; letter-spacing:.28em; color:var(--faint); margin-top:2px;}
+  .nav a.on{background:linear-gradient(90deg,var(--green) 0%, var(--green2) 100%);}
+  .nav a.on::before{content:""; position:absolute; left:0; top:8px; bottom:8px; width:3px; background:var(--gold2);}
+  .nav a.on .ic{color:#e9e2d2;}
+  .nav a.on .tx .zh{color:#f1ebdd; font-weight:700;}
+  .nav a.on .tx .en{color:rgba(241,235,221,.65);}
+
+  .rail .qchar{position:absolute; left:11px; right:11px; bottom:0; height:424px;
+    background:bottom/cover no-repeat url(../assets/recon/profile-qchar.png);}
+
+  /* ============ 顶栏 ============ */
+  .top{position:absolute; left:262px; right:0; top:0; height:108px; z-index:8;}
+  .top::after{content:""; position:absolute; left:34px; right:40px; bottom:0; height:1px;
+    background:linear-gradient(90deg,transparent,var(--line2) 4%,var(--line2) 96%,transparent);}
+  .top .ttl{position:absolute; left:34px; top:30px; display:flex; align-items:baseline; gap:16px;}
+  .top .ttl h2{margin:0; font-family:var(--serif); font-weight:700; font-size:27px; letter-spacing:.1em; color:var(--ink);}
+  .top .ttl .en{font-family:var(--serifen); font-style:italic; font-size:16px; letter-spacing:.06em; color:var(--gold);}
+  .top .sub{position:absolute; left:36px; top:70px; font-family:var(--kai); font-size:12px; letter-spacing:.06em; color:var(--faint);}
+
+  .top .tr{position:absolute; right:36px; top:30px; display:flex; align-items:center; gap:18px;}
+  .top .clock{display:flex; align-items:center; gap:9px;}
+  .top .clock .cic{width:30px; height:30px; border-radius:50%; border:1px solid var(--line2); color:var(--gold); display:grid; place-items:center;}
+  .top .clock .ct .lb{font-family:var(--kai); font-size:8.5px; letter-spacing:.18em; color:var(--faint);}
+  .top .clock .ct .vl{font-family:var(--serifen); font-size:15px; letter-spacing:.04em; color:var(--soft); margin-top:1px;}
+  .top .ic{width:34px; height:34px; border-radius:50%; border:1px solid var(--line2); color:var(--soft); display:grid; place-items:center; position:relative;}
+  .top .ic .dot{position:absolute; right:7px; top:7px; width:5px; height:5px; border-radius:50%; background:#b5402e;}
+  .top .av{width:38px; height:38px; border-radius:50%; object-fit:cover; border:1px solid var(--line2);}
+
+  /* ============ 内容主区 ============ */
+  .main{position:absolute; left:286px; right:32px; top:120px; bottom:18px;}
+
+  /* —— 档案卡 —— */
+  .profile{position:relative; height:152px; background:var(--paper); border:1px solid var(--line);}
+  .profile::before{content:""; position:absolute; inset:5px; border:1px solid rgba(196,179,132,.4); pointer-events:none;}
+  .profile .av{position:absolute; left:20px; top:11px; width:128px; height:128px; border-radius:50%; object-fit:cover; border:2px solid var(--line2);}
+  .profile .head{position:absolute; left:170px; top:18px; display:flex; align-items:center; gap:10px;}
+  .profile .head .nm{font-family:var(--serif); font-weight:700; font-size:23px; letter-spacing:.06em; color:var(--ink);}
+  .profile .head .edit{color:var(--gold); display:grid; place-items:center;}
+  .profile .lvrow{position:absolute; left:172px; top:52px; display:flex; align-items:center; gap:12px;}
+  .profile .lvrow .lv{display:inline-flex; align-items:center; height:21px; padding:0 10px; border-radius:4px; background:var(--green); color:#efe7d4; font-family:var(--serifen); font-size:11.5px; font-weight:700; letter-spacing:.06em;}
+  .profile .lvrow .xp{position:relative; width:210px; height:4px; background:var(--line); border-radius:2px;}
+  .profile .lvrow .xp i{position:absolute; left:0; top:0; bottom:0; width:68%; background:linear-gradient(90deg,var(--gold),var(--gold2)); border-radius:2px;}
+  .profile .lvrow .xpn{font-family:var(--serifen); font-size:11px; letter-spacing:.04em; color:var(--faint);}
+  .profile .sig{position:absolute; left:172px; top:84px; font-family:var(--kai); font-size:13px; color:var(--soft); letter-spacing:.04em;}
+  .profile .uid{position:absolute; left:172px; bottom:18px; font-family:var(--serifen); font-size:10.5px; letter-spacing:.08em; color:var(--faint);}
+  .profile .heroimg{position:absolute; right:0; top:0; bottom:0; width:480px; opacity:.92;
+    background:center/cover no-repeat url(../assets/recon/profile-room.png);
+    -webkit-mask-image:linear-gradient(90deg,transparent,#000 42%); mask-image:linear-gradient(90deg,transparent,#000 42%);}
+
+  /* —— 统计条 —— */
+  .stats{position:relative; height:96px; margin-top:14px; display:flex; gap:12px;}
+  .stat{flex:1; position:relative; background:var(--paper); border:1px solid var(--line); display:flex; align-items:center; gap:13px; padding:0 16px;}
+  .stat .em{width:42px; height:42px; flex:none; color:var(--gold); display:grid; place-items:center;}
+  .stat .em svg{opacity:.85;}
+  .stat .lb{font-family:var(--kai); font-size:11px; letter-spacing:.08em; color:var(--soft);}
+  .stat .num{font-family:var(--serifen); font-size:30px; font-weight:700; color:var(--ink); line-height:1.05; margin-top:2px;}
+  .stat .num small{font-size:15px; font-weight:600; color:var(--soft); margin-left:1px;}
+  .stat .tot{font-family:var(--kai); font-size:9px; letter-spacing:.12em; color:var(--faint); margin-top:1px;}
+
+  /* —— 二栏区 —— */
+  .cols{display:flex; gap:16px; margin-top:16px;}
+  .colL{width:568px; flex:none;}
+  .colR{flex:1;}
+
+  .sec-h{display:flex; align-items:center; gap:11px; margin-bottom:11px;}
+  .sec-h b{font-family:var(--serif); font-size:16px; font-weight:700; letter-spacing:.12em; color:var(--ink);}
+  .sec-h .en{font-family:var(--serifen); font-size:9px; letter-spacing:.26em; color:var(--gold);}
+  .sec-h .all{margin-left:auto; font-family:var(--kai); font-size:11px; letter-spacing:.04em; color:var(--soft);}
+
+  /* 最近游玩 */
+  .recent{display:flex; gap:14px;}
+  .rcard{flex:1; background:var(--paper); border:1px solid var(--line); padding:7px;}
+  .rcard .th{width:100%; height:100px; object-fit:cover; border:1px solid rgba(169,138,99,.3); display:block;}
+  .rcard .nm{font-family:var(--serif); font-size:13px; font-weight:700; color:var(--ink); margin-top:8px; letter-spacing:.03em;}
+  .rcard .rd{font-family:var(--kai); font-size:9.5px; letter-spacing:.06em; color:var(--faint); margin-top:4px;}
+  .rcard .pl{display:flex; justify-content:space-between; align-items:center; font-family:var(--kai); font-size:9.5px; color:var(--soft); margin-top:8px;}
+  .rcard .pl b{font-family:var(--serifen); color:var(--green); font-weight:700;}
+  .rcard .bar{height:3px; background:var(--line); margin-top:5px; position:relative;}
+  .rcard .bar i{position:absolute; left:0; top:0; bottom:0; background:var(--green2);}
+
+  /* 我的资产 */
+  .assets{display:flex; gap:12px; margin-top:24px;}
+  .acard{flex:1; background:var(--paper); border:1px solid var(--line); padding:12px 4px 11px; text-align:center;}
+  .acard .em{height:30px; color:var(--gold); display:grid; place-items:center; margin-bottom:7px;}
+  .acard .lb{font-family:var(--serif); font-size:12px; font-weight:700; letter-spacing:.04em; color:var(--ink);}
+  .acard .num{font-family:var(--serifen); font-size:21px; font-weight:700; color:var(--ink); margin-top:3px;}
+
+  /* 右栏 —— 我的成就 */
+  .panel{background:var(--paper); border:1px solid var(--line); padding:13px 16px;}
+  .ach{margin-top:0;}
+  .ach .row{display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid rgba(221,208,180,.5);}
+  .ach .row:last-child{border-bottom:none;}
+  .ach .ico{width:34px; height:34px; flex:none; border:1px solid var(--line2); border-radius:50%; display:grid; place-items:center; color:var(--gold); background:var(--paper2);}
+  .ach .ico img{width:30px; height:30px; border-radius:50%; object-fit:cover;}
+  .ach .tx{flex:1; min-width:0;}
+  .ach .tx b{display:block; font-family:var(--serif); font-size:13px; font-weight:700; color:var(--ink); letter-spacing:.03em;}
+  .ach .tx p{margin:3px 0 0; font-family:var(--kai); font-size:10px; color:var(--faint); letter-spacing:.03em;}
+  .ach .dt{font-family:var(--serifen); font-size:10px; color:var(--faint); letter-spacing:.04em;}
+
+  /* 最近获得卡牌 */
+  .cardsrow{display:flex; gap:10px; margin-top:11px;}
+  .cardsrow img{height:96px; width:auto;}
+
+  /* 个性签名 */
+  .sigbox{margin-top:16px;}
+  .sigbox .hd{display:flex; align-items:center; gap:10px;}
+  .sigbox .hd b{font-family:var(--serif); font-size:14px; font-weight:700; letter-spacing:.1em; color:var(--ink);}
+  .sigbox .hd .en{font-family:var(--serifen); font-size:8px; letter-spacing:.24em; color:var(--gold);}
+  .sigbox .hd .edit{margin-left:auto; font-family:var(--kai); font-size:10px; color:var(--soft); display:flex; align-items:center; gap:4px;}
+  .sigbox .qt{font-family:var(--kai); font-size:14px; letter-spacing:.1em; color:var(--soft); margin-top:14px; text-align:center; line-height:1.9;}
+</style>
+</head>
+<body>
+<div class="cv">
+
+  <!-- ============ 左竖栏 ============ -->
+  <aside class="rail">
+    <div class="brand">
+      <img class="em" src="../assets/recon/home-emblem.png" alt="" />
+      <div>
+        <h1>NARRATIVE ENGINE</h1>
+        <div class="sub">叙事引擎</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <a>
+        <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span>
+        <span class="tx"><div class="zh">探索</div><div class="en">EXPLORE</div></span>
+      </a>
+      <a>
+        <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M9 9h7M9 13h7M9 17h4"/></svg></span>
+        <span class="tx"><div class="zh">当前故事</div><div class="en">CURRENT FILE</div></span>
+      </a>
+      <a>
+        <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1L19 8a2 2 0 0 0-3-3L5 16z"/><path d="M14 6l3 3"/></svg></span>
+        <span class="tx"><div class="zh">创作</div><div class="en">CREATE</div></span>
+      </a>
+      <a>
+        <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-4 3z"/></svg></span>
+        <span class="tx"><div class="zh">聊天</div><div class="en">CHAT</div></span>
+      </a>
+      <a class="on">
+        <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M5 20c0-4 3.2-6 7-6s7 2 7 6"/></svg></span>
+        <span class="tx"><div class="zh">我的</div><div class="en">PROFILE</div></span>
+      </a>
+    </nav>
+    <div class="qchar"></div>
+  </aside>
+
+  <!-- ============ 顶栏 ============ -->
+  <header class="top">
+    <div class="ttl"><h2>个人中心</h2><span class="en">Personal Center</span></div>
+    <div class="sub">管理你的档案、故事与卡牌资产</div>
+    <div class="tr">
+      <div class="clock">
+        <span class="cic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+        <div class="ct"><div class="lb">世界内时间</div><div class="vl">10/21 21:47</div></div>
+      </div>
+      <div class="ic"><span class="dot"></span><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></div>
+      <div class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 6l9 7 9-7"/></svg></div>
+      <div class="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg></div>
+      <img class="av" src="../assets/recon/profile-headavatar.png" alt="" />
+    </div>
+  </header>
+
+  <!-- ============ 主区 ============ -->
+  <main class="main">
+
+    <!-- 档案卡 -->
+    <section class="profile">
+      <div class="heroimg"></div>
+      <img class="av" src="../assets/recon/profile-avatar.png" alt="" />
+      <div class="head">
+        <span class="nm">林间旅人</span>
+        <span class="edit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1L19 8a2 2 0 0 0-3-3L5 16z"/></svg></span>
+      </div>
+      <div class="lvrow">
+        <span class="lv">Lv.12</span>
+        <span class="xp"><i></i></span>
+        <span class="xpn">3260 / 4800</span>
+      </div>
+      <div class="sig">"故事如同群星，而我是记录者。"</div>
+      <div class="uid">UID 88.2024.1021.0719 · 注册于 2024 年春</div>
+    </section>
+
+    <!-- 统计条 -->
+    <section class="stats">
+      <div class="stat"><span class="em"><svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7h13l4 4v18H9z"/><path d="M13 13h9M13 18h9M13 23h6"/><path d="M22 7v4h4"/></svg></span>
+        <div><div class="lb">创作故事</div><div class="num">8</div><div class="tot">总计</div></div></div>
+      <div class="stat"><span class="em"><svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="11"/><path d="M18 11v7l5 3"/></svg></span>
+        <div><div class="lb">游玩时长</div><div class="num">48<small>h</small></div><div class="tot">总计</div></div></div>
+      <div class="stat"><span class="em"><svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6l2 9 9-1-7 5 4 8-8-6-8 6 4-8-7-5 9 1z"/></svg></span>
+        <div><div class="lb">完成结局</div><div class="num">17</div><div class="tot">总计</div></div></div>
+      <div class="stat"><span class="em"><svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 8h11l3 3v17l-4-2-4 2-4-2-2 1z"/><path d="M15 14l3-3 3 3"/></svg></span>
+        <div><div class="lb">收集卡牌</div><div class="num">126</div><div class="tot">总计</div></div></div>
+      <div class="stat"><span class="em"><svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="15" r="7"/><path d="M14 21l-2 8 6-3 6 3-2-8"/></svg></span>
+        <div><div class="lb">获得成就</div><div class="num">24</div><div class="tot">总计</div></div></div>
+      <div class="stat"><span class="em"><svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8l2.2 6.5L27 16l-5.5 2L19 25l-3-5-5-2 5.5-1.5z"/></svg></span>
+        <div><div class="lb">灵感点数</div><div class="num">1260</div><div class="tot">总计</div></div></div>
+    </section>
+
+    <!-- 二栏 -->
+    <div class="cols">
+      <!-- 左栏 -->
+      <div class="colL">
+        <div class="sec-h"><b>最近游玩</b><span class="en">RECENT PLAYED</span><span class="all">查看全部 ›</span></div>
+        <div class="recent">
+          <div class="rcard"><img class="th" src="../assets/recon/profile-recent-1.png">
+            <div class="nm">雨夜档案：第七站台</div><div class="rd">ROUND 07</div>
+            <div class="pl"><span>进度</span><b>32%</b></div><div class="bar"><i style="width:32%"></i></div></div>
+          <div class="rcard"><img class="th" src="../assets/recon/profile-recent-2.png">
+            <div class="nm">白塔之下</div><div class="rd">已完结 · 章节 05</div>
+            <div class="pl"><span>进度</span><b>58%</b></div><div class="bar"><i style="width:58%"></i></div></div>
+          <div class="rcard"><img class="th" src="../assets/recon/profile-recent-3.png">
+            <div class="nm">云海列车与诗人</div><div class="rd">已完结 · 章节 02</div>
+            <div class="pl"><span>进度</span><b>41%</b></div><div class="bar"><i style="width:41%"></i></div></div>
+          <div class="rcard"><img class="th" src="../assets/recon/profile-recent-4.png">
+            <div class="nm">复日终曲</div><div class="rd">已完结 · 结局 A</div>
+            <div class="pl"><span>进度</span><b>100%</b></div><div class="bar"><i style="width:100%"></i></div></div>
+        </div>
+
+        <div class="sec-h" style="margin-top:24px;"><b>我的资产</b><span class="en">MY ASSETS</span><span class="all">查看全部 ›</span></div>
+        <div class="assets" style="margin-top:0;">
+          <div class="acard"><div class="em"><svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="18" height="24"/><circle cx="15" cy="12" r="3.4"/><path d="M9.5 22c1-3 3.2-4.4 5.5-4.4S19.5 19 20.5 22"/></svg></div><div class="lb">角色卡</div><div class="num">45</div></div>
+          <div class="acard"><div class="em"><svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="15" cy="15" r="11"/><path d="M15 4v22M4 15h22"/><path d="M15 8l3.2 3.8L23 15l-4.8 3.2L15 22l-3.2-3.8L7 15l4.8-3.2z"/></svg></div><div class="lb">世界/设定卡</div><div class="num">23</div></div>
+          <div class="acard"><div class="em"><svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 7C13 5 9 5 6 6v18c3-1 7-1 9 1 2-2 6-2 9-1V6c-3-1-7-1-9 1z"/><path d="M15 7v19"/></svg></div><div class="lb">故事书</div><div class="num">8</div></div>
+          <div class="acard"><div class="em"><svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3v24M3 15h24"/><path d="M15 9l2 4 4 2-4 2-2 4-2-4-4-2 4-2z"/></svg></div><div class="lb">事件卡</div><div class="num">32</div></div>
+          <div class="acard"><div class="em"><svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4c2 3 6 4 9 4-1 9-4 14-9 18-5-4-8-9-9-18 3 0 7-1 9-4z"/><circle cx="15" cy="13" r="3"/></svg></div><div class="lb">记忆片段</div><div class="num">18</div></div>
+          <div class="acard"><div class="em"><svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4l11 11-11 11L4 15z"/><path d="M15 9l6 6-6 6-6-6z"/></svg></div><div class="lb">演出卡</div><div class="num">27</div></div>
+        </div>
+      </div>
+
+      <!-- 右栏 -->
+      <div class="colR">
+        <div class="sec-h"><b>我的成就</b><span class="en">ACHIEVEMENT</span><span class="all">查看全部 ›</span></div>
+        <div class="panel ach">
+          <div class="row"><span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h12v16l-6-3-6 3z"/></svg></span>
+            <div class="tx"><b>初入故事</b><p>完成你的第一个故事</p></div><span class="dt">2024/10/05</span></div>
+          <div class="row"><span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8c4-3 12-3 16 0M4 16c4 3 12 3 16 0M8 6v12M16 6v12"/></svg></span>
+            <div class="tx"><b>命运编织者</b><p>达成10个不同结局</p></div><span class="dt">2024/10/12</span></div>
+          <div class="row"><span class="ico"><img src="../assets/recon/profile-avatar.png" alt=""></span>
+            <div class="tx"><b>卡牌收藏家</b><p>收集100张卡牌</p></div><span class="dt">2024/10/18</span></div>
+          <div class="row"><span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 4v16M4 12h16"/></svg></span>
+            <div class="tx"><b>世界记录者</b><p>创建5个世界书</p></div><span class="dt">2024/10/20</span></div>
+        </div>
+
+        <div class="sec-h" style="margin-top:18px;"><b>最近获得的卡牌</b><span class="en">NEW CARDS</span><span class="all">查看全部 ›</span></div>
+        <div class="cardsrow"><img src="../assets/recon/profile-newcards.png" alt=""></div>
+
+        <div class="sigbox">
+          <div class="panel">
+            <div class="hd"><b>个性签名</b><span class="en">SIGNATURE</span><span class="edit"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1L19 8a2 2 0 0 0-3-3L5 16z"/></svg>编辑</span></div>
+            <div class="qt">愿文字长在，愿故事永流。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+</body>
+</html>

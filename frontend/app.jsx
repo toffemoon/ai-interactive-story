@@ -993,7 +993,7 @@ function SpeechText({ text }) {
   );
 }
 
-function StoryPanel({ characters, world, story, player, mode, sessionId, initialTurns, initialState, initialChoices, goHome, onTurn }) {
+function StoryPanel({ characters, world, story, player, mode, sessionId, initialTurns, initialState, initialChoices, goHome, onTurn, skin, coverArt }) {
   const [turns, setTurns] = useState(initialTurns || []);
   const [input, setInput] = useState("");
   const [choices, setChoices] = useState(initialChoices || []);
@@ -1165,6 +1165,41 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
     } finally {
       setLoading(false);
     }
+  }
+
+  // recon 皮:把同一套引擎状态喂进 ReconPlay 的 1:1 版式(引擎逻辑零改动,只换呈现)。
+  if (skin === "recon") {
+    const storyTurns = turns.filter((t) => t.kind === "story");
+    const last = (streaming && (streaming.narration || (streaming.messages && streaming.messages.length)))
+      ? streaming
+      : (storyTurns.length ? storyTurns[storyTurns.length - 1].data : null);
+    const dlg = last && last.messages && last.messages.length
+      ? last.messages.map((m) => ({ name: m.name || m.character_id || "?", text: m.text })) : null;
+    const pname = (player && (player.name || (player.data && player.data.name))) || "玩家";
+    const sc = (state && state.scene) || {};
+    const lastSolid = storyTurns.length ? storyTurns[storyTurns.length - 1].data : null;
+    const evs = lastSolid && lastSolid.triggered_events && lastSolid.triggered_events.length ? lastSolid.triggered_events : null;
+    return (
+      <window.ReconPlay
+        story={(story && story.title) || "未命名故事"}
+        worldTime={"第 " + storyTurns.length + " 回合"}
+        round={"ROUND " + String(storyTurns.length + (loading ? 1 : 0)).padStart(2, "0")}
+        sceneTitle={sc.location || (story && story.title) || "本回合"}
+        sceneSub={sc.ambience || sc.mood || ""}
+        narration={last ? (last.narration || "") : ((story && story.premise) || "故事即将开始——说出你的第一句话，或点「执行」生成开场。")}
+        dialogues={dlg}
+        choices={choices}
+        present={sc.present_characters && sc.present_characters.length ? sc.present_characters : null}
+        events={evs}
+        sceneArt={coverArt || ""}
+        value={input}
+        onChange={setInput}
+        onSubmit={() => runTurn({ text: input })}
+        onChoice={(c) => runTurn({ choice: c.label || c.title })}
+        busy={loading}
+        playerName={pname}
+      />
+    );
   }
 
   return (
@@ -1455,45 +1490,82 @@ async function saveToVault(kind, data) {
 
 // 店招(沐言书坊)—— muyan 双态:纸态店招,印章 logo + 走线选中态。
 function TopNav({ view, setView, sessionId, authEnabled, user, onLogout }) {
-  const tabs = [["home", "书库"], ["game", "当前故事"], ["build", "创作"], ["chat", "聊天"], ["mine", "我的"]];
+  // 落地层店招(原型「AI Interactive Story」)。两个 tab 暂并入 home(故事库)与 chat(角色)。
+  const tabs = [
+    { id: "home", k: "home", label: "首页" },
+    { id: "lib", k: "home", label: "故事库" },
+    { id: "char", k: "chat", label: "角色" },
+    { id: "create", k: "build", label: "创作" },
+    { id: "mine", k: "mine", label: "我的" },
+  ];
+  const activeId = { home: "home", chat: "char", build: "create", mine: "mine" }[view] || "";
   const who = authEnabled ? (user ? (user.display_name || user.username) : "访客") : "";
   return (
-    <header className="mu-top mu-paper-bg">
+    <header className="nv-top mu-paper-bg">
       <style>{`
-        .mu-top { display:flex; align-items:center; gap:38px; padding:0 40px; height:72px; flex:none; position:relative; z-index:30; }
-        .mu-top::after { content:""; position:absolute; left:40px; right:40px; bottom:0; height:2px; background:var(--mu-ink); transform-origin:left center; }
-        body.mu-anim .mu-top::after { animation: mu-draw-x .8s var(--mu-ease) .1s both; }
-        .mu-top-brand { display:flex; align-items:center; gap:14px; }
-        .mu-top-brand h1 { margin:0; font-family:var(--mu-serif); font-size:21px; font-weight:700; letter-spacing:.3em; color:var(--mu-ink); }
-        .mu-top-brand .enl { display:flex; align-items:center; gap:8px; margin-top:3px; }
-        .mu-top-nav { display:flex; gap:30px; margin-left:auto; }
-        .mu-top-nav button { font-family:var(--mu-serif); font-size:14px; letter-spacing:.14em; color:var(--mu-ink-soft); background:none; border:none; cursor:pointer; position:relative; padding:6px 0; }
-        .mu-top-nav button:hover { color:var(--mu-ink); }
-        .mu-top-nav button::after { content:""; position:absolute; left:0; right:0; bottom:0; height:2px; background:repeating-linear-gradient(90deg,var(--mu-cinnabar) 0 8px,transparent 8px 16px); background-size:24px 2px; opacity:0; transition:opacity .3s; }
-        .mu-top-nav button:hover::after, .mu-top-nav button.on::after { opacity:1; animation: mu-march 1.4s linear infinite; }
-        .mu-top-nav button.on { color:var(--mu-cinnabar); font-weight:600; }
-        .mu-top-user { display:flex; align-items:center; gap:12px; margin-left:36px; font-family:var(--mu-kai); font-size:12.5px; color:var(--mu-ink-soft); white-space:nowrap; }
-        .mu-top-user .lo { font-family:var(--mu-serif); font-size:12px; color:var(--mu-cinnabar); background:none; border:none; cursor:pointer; letter-spacing:.1em; padding:0; }
-        @media (max-width:680px){ .mu-top{ gap:14px; padding:0 16px; height:60px; } .mu-top-brand .enl{ display:none; } .mu-top-nav{ gap:16px; } .mu-top-nav button{ font-size:13px; letter-spacing:.08em; } .mu-top-user{ margin-left:10px; } }
+        /* —— 全局暖色覆盖 + 落地层新令牌(原型调色,注入式覆盖 muyan,不改 muyan.css) —— */
+        :root {
+          --mu-paper:#efe8d6; --mu-paper-deep:#e3d9be; --mu-paper-bright:#f8f2e4;
+          --mu-ink:#322c22; --mu-ink-soft:#6f6553; --mu-ink-faint:#9b9078;
+          --mu-line:#d8cbac; --mu-line-strong:#b8a677;
+          --w-navy:#2b3340; --w-navy-deep:#1d242e; --w-navy-soft:#3a4655;
+          --w-gold:#b89a55; --w-gold-soft:#cbb988; --w-azure:#6f86a8; --w-amber:#c1903f;
+        }
+        .nv-top { display:flex; align-items:center; gap:30px; padding:0 40px; height:74px; flex:none; position:relative; z-index:30; }
+        .nv-top::after { content:""; position:absolute; left:0; right:0; bottom:0; height:1.5px; background:linear-gradient(90deg,transparent,var(--mu-line-strong) 7%,var(--mu-line-strong) 93%,transparent); }
+        .nv-brand { display:flex; align-items:center; gap:13px; }
+        .nv-mark { width:38px; height:38px; display:grid; place-items:center; border:1px solid var(--w-gold); color:var(--w-navy); background:linear-gradient(150deg,var(--mu-paper-bright),var(--mu-paper-deep)); position:relative; }
+        .nv-mark::after { content:""; position:absolute; inset:3px; border:1px solid var(--w-gold-soft); opacity:.5; }
+        .nv-brand-tx h1 { margin:0; font-family:var(--mu-serif); font-size:18px; font-weight:700; letter-spacing:.1em; color:var(--mu-ink); white-space:nowrap; }
+        .nv-sub { font-family:var(--mu-kai); font-size:11px; letter-spacing:.3em; color:var(--mu-ink-faint); }
+        .nv-nav { display:flex; gap:30px; margin-left:24px; }
+        .nv-nav button { font-family:var(--mu-serif); font-size:14.5px; letter-spacing:.16em; color:var(--mu-ink-soft); background:none; border:none; cursor:pointer; position:relative; padding:8px 0; }
+        .nv-nav button:hover { color:var(--mu-ink); }
+        .nv-nav button::after { content:""; position:absolute; left:0; right:0; bottom:2px; height:2px; background:repeating-linear-gradient(90deg,var(--w-gold) 0 7px,transparent 7px 14px); background-size:21px 2px; opacity:0; transition:opacity .3s; }
+        .nv-nav button:hover::after, .nv-nav button.on::after { opacity:1; }
+        body.mu-anim .nv-nav button.on::after { animation: mu-march 1.4s linear infinite; }
+        .nv-nav button.on { color:var(--w-navy); font-weight:700; }
+        .nv-right { display:flex; align-items:center; gap:16px; margin-left:auto; }
+        .nv-icon { width:34px; height:34px; border-radius:50%; border:1px solid var(--mu-line-strong); background:none; color:var(--mu-ink-soft); display:grid; place-items:center; cursor:pointer; transition:all .2s; }
+        .nv-icon:hover { border-color:var(--w-navy); color:var(--w-navy); }
+        .nv-who { font-family:var(--mu-kai); font-size:12.5px; color:var(--mu-ink-soft); white-space:nowrap; }
+        .nv-line { font-family:var(--mu-serif); font-size:13.5px; letter-spacing:.12em; color:var(--mu-ink-soft); background:none; border:none; cursor:pointer; padding:6px 2px; }
+        .nv-line:hover { color:var(--mu-ink); }
+        .nv-cta { display:inline-flex; align-items:center; gap:8px; font-family:var(--mu-serif); font-size:14px; letter-spacing:.14em; font-weight:600; color:var(--mu-paper-bright); background:var(--w-navy); border:1px solid var(--w-navy-deep); box-shadow:inset 0 0 0 1px rgba(184,154,85,.35); padding:10px 22px; cursor:pointer; transition:all .2s var(--mu-ease); white-space:nowrap; }
+        .nv-cta:hover { background:var(--w-navy-deep); transform:translateY(-1px); }
+        .nv-cta svg { color:var(--w-gold-soft); }
+        @media (max-width:860px){ .nv-sub{ display:none; } .nv-nav{ gap:18px; margin-left:14px; } .nv-nav button{ font-size:13px; letter-spacing:.08em; } .nv-top{ gap:16px; padding:0 18px; } }
+        @media (max-width:680px){ .nv-nav .nv-hideable{ display:none; } .nv-who{ display:none; } .nv-cta{ padding:9px 14px; } }
       `}</style>
-      <div className="mu-top-brand">
-        <span className="mu-seal mu-ring">坊</span>
-        <div>
-          <h1>沐言书坊</h1>
-          <div className="enl"><span className="mu-en">Muyan Bookstore</span><span className="mu-en red">EST. 2026</span></div>
+      <div className="nv-brand">
+        <span className="nv-mark" aria-hidden="true">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 4C12 6 8 11 6 19"/><path d="M6 19c6 0 11-4 13-10"/><path d="M5 20l3-1"/></svg>
+        </span>
+        <div className="nv-brand-tx">
+          <h1>AI Interactive Story</h1>
+          <span className="nv-sub">每个选择 · 都在书写</span>
         </div>
       </div>
-      <nav className="mu-top-nav">
-        {tabs.map(([k, label]) => (
-          <button key={k} data-coach={k === "home" ? "nav-explore" : undefined} className={view === k ? "on" : ""} onClick={() => setView(k)}>{label}</button>
+      <nav className="nv-nav">
+        {tabs.map((t) => (
+          <button key={t.id} data-coach={t.id === "home" ? "nav-explore" : undefined}
+            className={(activeId === t.id ? "on " : "") + (t.id === "lib" || t.id === "char" ? "nv-hideable" : "")}
+            onClick={() => setView(t.k)}>{t.label}</button>
         ))}
       </nav>
-      {who && (
-        <div className="mu-top-user">
-          <span>{who}</span>
-          {user && <button className="lo" onClick={onLogout}>退出</button>}
-        </div>
-      )}
+      <div className="nv-right">
+        <button className="nv-icon" title="搜索" aria-label="搜索">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        </button>
+        {who && <span className="nv-who">{who}</span>}
+        {authEnabled && user
+          ? <button className="nv-line" onClick={onLogout}>退出</button>
+          : <button className="nv-line" onClick={() => setView("mine")}>登录</button>}
+        <button className="nv-cta" onClick={() => (tabs && setView("home"))}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.6 6.4L20 10l-6.4 1.6L12 18l-1.6-6.4L4 10l6.4-1.6z"/></svg>
+          开始探索
+        </button>
+      </div>
     </header>
   );
 }
@@ -2249,105 +2321,199 @@ function HmBook({ p, i, isNew, coach, onOpen }) {
   );
 }
 
+// 场景缩略占位(真插画后填):一组冷暖各异的渐变,模拟二游场景封面。
+const LH_SCENES = [
+  "radial-gradient(120% 90% at 32% 18%, #9fb6d8, transparent 60%), linear-gradient(160deg,#43577a,#27344c)",
+  "radial-gradient(120% 90% at 68% 22%, #d8c592, transparent 60%), linear-gradient(160deg,#5a4a36,#2f2719)",
+  "radial-gradient(120% 90% at 38% 18%, #88b6a0, transparent 60%), linear-gradient(160deg,#2e4b44,#163029)",
+  "radial-gradient(120% 90% at 62% 22%, #c79aa8, transparent 60%), linear-gradient(160deg,#5b3a4a,#2c1f29)",
+  "radial-gradient(120% 90% at 34% 20%, #a59cce, transparent 60%), linear-gradient(160deg,#3a3560,#211d3a)",
+];
+function LhIco({ name }) {
+  const p = {
+    char: <><circle cx="12" cy="8" r="4" /><path d="M5 21c0-4 3.4-6 7-6s7 2 7 6" /></>,
+    world: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18" /></>,
+    branch: <><circle cx="6" cy="6" r="2.4" /><circle cx="18" cy="6" r="2.4" /><circle cx="12" cy="19" r="2.4" /><path d="M6 8.4v1.6c0 3 6 3 6 6.4M18 8.4v1.6c0 3-6 3-6 6.4" /></>,
+    bolt: <path d="M13 2 4 14h7l-1 8 9-12h-7z" />,
+  }[name];
+  return <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{p}</svg>;
+}
+
 function StoriesHome({ onNew, presets, onLaunchPreset, onDeletePreset }) {
   const list = presets || [];
   const tutorial = list.find(isTutorialPreset);
   const featured = list.find((p) => !isTutorialPreset(p)) || list[0] || null;
   const fsyn = featured ? (pField(featured, "synopsis") || (pField(featured, "story") && pField(featured, "story").premise) || "") : "";
-  const ftags = featured ? (pField(featured, "tags") || []) : [];
+  const rowRef = React.useRef(null);
+  const scrollRow = (dx) => { const el = rowRef.current; if (el) el.scrollBy({ left: dx, behavior: "smooth" }); };
+  const FEATURES = [
+    { t: "角色卡", en: "CHARACTER", d: "为每个角色立心立志,AI 据此说话行事。", icon: "char" },
+    { t: "世界书", en: "WORLD", d: "设定写进世界书,叙事始终自洽。", icon: "world" },
+    { t: "多结局", en: "ENDINGS", d: "你的选择被记住,结局因你分叉。", icon: "branch" },
+    { t: "即时互动", en: "REALTIME", d: "自由输入行动与台词,故事即时回应。", icon: "bolt" },
+  ];
   return (
-    <div className="mu-paper-bg hm-root">
+    <div className="mu-paper-bg lh-root">
       <style>{`
-        .hm-root { position:relative; height:100%; min-height:0; display:flex; flex-direction:column; overflow:auto; }
-        .hm-ghost { position:absolute; right:-20px; bottom:80px; writing-mode:vertical-rl; font-family:var(--mu-serif); font-weight:900; font-size:80px; letter-spacing:.08em; color:rgba(43,38,32,.05); pointer-events:none; white-space:nowrap; z-index:0; }
-        .hm-main { flex:1; display:grid; grid-template-columns:minmax(340px,500px) 1fr; padding:28px 48px 0; min-height:0; position:relative; z-index:1; }
-        .hm-feature { padding:16px 48px 0 0; position:relative; }
-        .hm-feature::after { content:""; position:absolute; right:0; top:22px; bottom:18px; width:1px; background:linear-gradient(180deg,transparent,var(--mu-line-strong) 10%,var(--mu-line-strong) 90%,transparent); }
-        .hm-stamp { display:inline-flex; flex-direction:column; gap:2px; align-items:center; padding:8px 13px 7px; border:1.5px solid var(--mu-cinnabar); color:var(--mu-cinnabar); transform:rotate(-3deg); background:rgba(245,239,223,.6); }
-        .hm-stamp b { font-family:var(--mu-serif); font-size:13px; letter-spacing:.42em; font-weight:700; margin-right:-.42em; }
-        .hm-stamp i { font-style:normal; font-family:var(--mu-serif); font-size:8px; letter-spacing:.3em; margin-right:-.3em; }
-        .hm-feature h2 { font-family:var(--mu-serif); font-weight:900; font-size:52px; letter-spacing:.04em; line-height:1.16; margin:18px 0 0; color:var(--mu-ink); }
-        .hm-syn { font-family:var(--mu-kai); font-size:15px; line-height:1.9; color:var(--mu-ink-soft); margin:18px 0 0; }
-        .hm-ticket { margin-top:22px; border-top:2px dotted var(--mu-line-strong); border-bottom:2px dotted var(--mu-line-strong); padding:12px 2px; display:flex; }
-        .hm-ticket > div { flex:1; display:flex; flex-direction:column; gap:3px; padding:0 16px; border-right:1px solid var(--mu-line); }
-        .hm-ticket > div:first-child { padding-left:2px; } .hm-ticket > div:last-child { border-right:none; }
-        .hm-ticket b { font-family:var(--mu-serif); font-size:19px; font-weight:700; color:var(--mu-ink); }
-        .hm-cta-row { display:flex; align-items:center; gap:24px; margin-top:26px; }
-        .hm-empty { padding-top:36px; } .hm-empty h2{ font-family:var(--mu-serif); font-size:30px; margin:0 0 10px; } .hm-empty p{ color:var(--mu-ink-soft); margin:0 0 18px; }
-        .hm-wall { padding:16px 0 30px 48px; display:flex; flex-direction:column; min-height:0; }
-        .hm-wall-head { display:flex; align-items:baseline; gap:14px; }
-        .hm-wall-head h3 { margin:0; font-family:var(--mu-serif); font-size:16px; letter-spacing:.22em; font-weight:700; white-space:nowrap; color:var(--mu-ink); }
-        .hm-wall-head .mu-dash { flex:1; align-self:center; }
-        .hm-shelf { display:grid; grid-template-columns:repeat(3,1fr); gap:28px; margin-top:22px; align-items:start; }
-        .hm-book { cursor:pointer; }
-        .hm-cover { height:228px; position:relative; padding:15px 13px; box-sizing:border-box; display:flex; justify-content:flex-end; gap:9px; box-shadow:-5px 7px 0 rgba(43,38,32,.14); transform:rotate(var(--rot,0deg)); transition:transform .5s var(--mu-ease),box-shadow .5s var(--mu-ease); }
-        .hm-book:hover .hm-cover { transform:rotate(0deg) translateY(-10px); box-shadow:-8px 20px 0 rgba(43,38,32,.18); }
-        .hm-cover-rule { position:absolute; inset:8px; border:1px solid currentColor; opacity:.4; pointer-events:none; }
-        .hm-cover-title { font-family:var(--mu-serif); font-weight:700; font-size:23px; letter-spacing:.26em; }
-        .hm-cover-author { font-family:var(--mu-kai); font-size:11px; opacity:.68; letter-spacing:.3em; margin-top:auto; }
-        .hm-new { position:absolute; left:-7px; bottom:18px; background:var(--mu-cinnabar); color:#f2e8d4; font-family:var(--mu-serif); font-size:10px; letter-spacing:.26em; padding:4px 10px; box-shadow:2px 2px 0 rgba(43,38,32,.2); }
-        .hm-book-meta { display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-top:11px; border-bottom:1px solid transparent; transition:border-color .3s; padding-bottom:4px; }
-        .hm-book:hover .hm-book-meta { border-bottom-color:var(--mu-cinnabar); }
-        .hm-book-meta b { font-family:var(--mu-serif); font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--mu-ink); }
-        .hm-book-meta span { font-family:var(--mu-kai); font-size:11px; color:var(--mu-ink-faint); white-space:nowrap; }
-        .hm-foot { flex:none; min-height:54px; margin:0 48px; border-top:1px solid var(--mu-line-strong); display:flex; align-items:center; gap:24px; flex-wrap:wrap; position:relative; z-index:1; }
-        .hm-foot p { margin:0; font-family:var(--mu-kai); font-size:12.5px; color:var(--mu-ink-faint); }
-        .hm-foot .hm-foot-hl { color:var(--mu-cinnabar); font-family:var(--mu-serif); margin:0 4px; cursor:pointer; }
-        .hm-foot .sp { flex:1; }
-        @media (max-width:920px){ .hm-main{ grid-template-columns:1fr; padding:18px 20px 0; } .hm-feature{ padding:0 0 22px; } .hm-feature::after{ display:none; } .hm-feature h2{ font-size:38px; } .hm-wall{ padding:6px 0 24px; } .hm-shelf{ grid-template-columns:repeat(2,1fr); gap:20px; } .hm-foot{ margin:0 20px; } .hm-ghost{ display:none; } }
-        @media (max-width:520px){ .hm-cover{ height:170px; } .hm-cover-title{ font-size:19px; } }
+        .lh-root { position:relative; height:100%; min-height:0; overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; }
+        .lh-root::-webkit-scrollbar { width:10px; } .lh-root::-webkit-scrollbar-thumb { background:var(--mu-line-strong); }
+        /* —— HERO —— */
+        .lh-hero { position:relative; display:grid; grid-template-columns:minmax(0,1.04fr) minmax(0,1fr); gap:26px; align-items:center; padding:40px 56px 30px 84px; }
+        .lh-page { position:absolute; left:40px; top:48px; display:flex; flex-direction:column; align-items:center; gap:8px; }
+        .lh-page b { font-family:var(--mu-serif); font-size:22px; font-weight:700; color:var(--w-navy); }
+        .lh-page i { width:1px; height:40px; background:var(--mu-line-strong); display:block; }
+        .lh-page span { font-family:var(--mu-serif); font-size:12px; letter-spacing:.1em; color:var(--mu-ink-faint); }
+        .lh-kicker { display:flex; align-items:center; gap:14px; }
+        .lh-kicker .ln { width:52px; height:1px; background:var(--w-gold); }
+        .lh-title { font-family:var(--mu-serif); font-weight:900; font-size:52px; line-height:1.22; letter-spacing:.03em; color:var(--mu-ink); margin:16px 0 0; }
+        .lh-title em { font-style:normal; color:var(--w-amber); position:relative; }
+        .lh-title em::after { content:""; position:absolute; left:0; right:0; bottom:5px; height:9px; background:rgba(193,144,63,.2); z-index:-1; }
+        .lh-lead { font-family:var(--mu-kai); font-size:15.5px; line-height:2; color:var(--mu-ink-soft); max-width:444px; margin:20px 0 0; }
+        .lh-cta { display:flex; align-items:center; gap:18px; margin-top:28px; }
+        .lh-btn-main { display:inline-flex; align-items:center; gap:9px; font-family:var(--mu-serif); font-size:15px; font-weight:600; letter-spacing:.14em; color:var(--mu-paper-bright); background:var(--w-navy); border:1px solid var(--w-navy-deep); box-shadow:inset 0 0 0 1px rgba(184,154,85,.4), 3px 4px 0 rgba(43,38,32,.16); padding:13px 30px; cursor:pointer; transition:transform .2s var(--mu-ease),box-shadow .2s; }
+        .lh-btn-main:hover { transform:translateY(-2px); box-shadow:inset 0 0 0 1px rgba(184,154,85,.55), 4px 7px 0 rgba(43,38,32,.18); }
+        .lh-btn-main svg { color:var(--w-gold-soft); }
+        .lh-btn-out { font-family:var(--mu-serif); font-size:15px; font-weight:600; letter-spacing:.14em; color:var(--w-navy); background:none; border:1px solid var(--mu-line-strong); padding:13px 26px; cursor:pointer; transition:all .2s; }
+        .lh-btn-out:hover { border-color:var(--w-navy); background:var(--mu-paper-bright); }
+        /* —— HERO ART(立绘/场景占位) —— */
+        .lh-art { position:relative; height:368px; }
+        .lh-art-book { position:absolute; left:13%; right:13%; top:7%; bottom:7%; background:linear-gradient(160deg,#f4eddb,#e2d6ba); border:1px solid var(--mu-line-strong); box-shadow:0 32px 64px -36px rgba(43,38,32,.55); display:grid; place-items:center; }
+        .lh-art-book::before { content:""; position:absolute; left:50%; top:7%; bottom:7%; width:1px; background:linear-gradient(180deg,transparent,var(--mu-line-strong),transparent); }
+        .lh-art-scene { width:60%; height:54%; position:relative; box-shadow:inset 0 0 0 6px rgba(248,242,228,.85), 0 10px 24px -10px rgba(43,38,32,.5); }
+        .lh-art-scene::after { content:"场景 / 立绘 待补"; position:absolute; left:0; right:0; bottom:9px; text-align:center; font-family:var(--mu-kai); font-size:10px; letter-spacing:.24em; color:rgba(248,242,228,.72); }
+        .lh-art-tag { position:absolute; left:7%; top:13%; z-index:3; background:var(--mu-paper-bright); border:1px solid var(--w-gold); color:var(--w-navy); font-family:var(--mu-serif); font-size:11px; letter-spacing:.16em; padding:6px 12px; box-shadow:3px 3px 0 rgba(43,38,32,.12); --r:0deg; animation:lhFloat 6s ease-in-out infinite; }
+        .lh-float { position:absolute; width:92px; height:116px; z-index:2; border:1px solid var(--mu-line-strong); box-shadow:0 16px 32px -16px rgba(43,38,32,.55); }
+        .lh-float::after { content:""; position:absolute; inset:5px; border:1px solid rgba(248,242,228,.45); }
+        .lh-float.a { right:1%; top:5%; --r:5deg; animation:lhFloat 7s ease-in-out infinite; }
+        .lh-float.b { right:7%; bottom:1%; --r:-6deg; animation:lhFloat 8s ease-in-out .9s infinite; }
+        .lh-spark { position:absolute; color:var(--w-gold); animation:lhTwinkle 3.2s ease-in-out infinite; }
+        @keyframes lhFloat { 0%,100% { transform:translateY(0) rotate(var(--r,0deg)); } 50% { transform:translateY(-12px) rotate(var(--r,0deg)); } }
+        @keyframes lhTwinkle { 0%,100% { opacity:.22; transform:scale(.65); } 50% { opacity:.9; transform:scale(1); } }
+        /* —— 区段标题 —— */
+        .lh-sec { padding:8px 56px 0; }
+        .lh-sec-h { display:flex; align-items:baseline; gap:14px; }
+        .lh-sec-h h3 { margin:0; font-family:var(--mu-serif); font-size:19px; font-weight:700; letter-spacing:.2em; color:var(--mu-ink); white-space:nowrap; }
+        .lh-sec-h .mu-dash { flex:1; align-self:center; }
+        .lh-arrows { display:flex; gap:8px; }
+        .lh-arrows button { width:30px; height:30px; border:1px solid var(--mu-line-strong); background:none; color:var(--mu-ink-soft); cursor:pointer; display:grid; place-items:center; font-size:16px; line-height:1; transition:all .2s; }
+        .lh-arrows button:hover { border-color:var(--w-navy); color:var(--w-navy); }
+        /* —— 精选故事横滑 —— */
+        .lh-row { display:flex; gap:20px; margin-top:18px; overflow-x:auto; padding:4px 2px 16px; }
+        .lh-row::-webkit-scrollbar { height:7px; } .lh-row::-webkit-scrollbar-thumb { background:var(--mu-line-strong); }
+        .lh-card { flex:none; width:210px; cursor:pointer; }
+        .lh-card-cv { height:128px; position:relative; border:1px solid var(--mu-line-strong); box-shadow:0 10px 22px -14px rgba(43,38,32,.5); overflow:hidden; transition:transform .35s var(--mu-ease),box-shadow .35s; }
+        .lh-card:hover .lh-card-cv { transform:translateY(-6px); box-shadow:0 18px 32px -16px rgba(43,38,32,.55); }
+        .lh-card-cv::after { content:""; position:absolute; inset:6px; border:1px solid rgba(248,242,228,.4); pointer-events:none; }
+        .lh-card-no { position:absolute; left:9px; top:7px; font-family:var(--mu-serif); font-size:12px; font-weight:700; letter-spacing:.1em; color:rgba(248,242,228,.92); }
+        .lh-card-new { position:absolute; right:0; top:9px; background:var(--mu-cinnabar); color:#f5ede2; font-family:var(--mu-serif); font-size:10px; letter-spacing:.16em; padding:3px 9px; }
+        .lh-card b { display:block; font-family:var(--mu-serif); font-size:15px; font-weight:600; color:var(--mu-ink); margin-top:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .lh-card .tg { font-family:var(--mu-kai); font-size:11px; color:var(--mu-ink-faint); margin-top:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .lh-card .mt { display:flex; align-items:center; gap:8px; margin-top:7px; font-family:var(--mu-kai); font-size:11px; color:var(--mu-ink-soft); }
+        .lh-card .mt i { width:4px; height:4px; background:var(--w-gold); transform:rotate(45deg); font-style:normal; }
+        .lh-empty { flex:none; font-family:var(--mu-kai); font-size:13px; color:var(--mu-ink-soft); padding:24px 2px; }
+        .lh-empty button { margin-left:10px; }
+        /* —— 产品亮点 —— */
+        .lh-pillars { display:grid; grid-template-columns:repeat(4,1fr) auto; gap:18px; align-items:stretch; margin:22px 56px 30px; padding-top:22px; border-top:1px solid var(--mu-line-strong); }
+        .lh-pillar { display:flex; flex-direction:column; gap:6px; padding-right:18px; border-right:1px solid var(--mu-line); }
+        .lh-pillar .ic { width:40px; height:40px; display:grid; place-items:center; color:var(--w-navy); border:1px solid var(--w-gold); background:var(--mu-paper-bright); }
+        .lh-pillar b { font-family:var(--mu-serif); font-size:15px; font-weight:700; color:var(--mu-ink); margin-top:6px; }
+        .lh-pillar .en { font-family:var(--mu-serif); font-size:9px; letter-spacing:.3em; color:var(--mu-ink-faint); }
+        .lh-pillar p { margin:3px 0 0; font-family:var(--mu-kai); font-size:11.5px; line-height:1.7; color:var(--mu-ink-soft); }
+        .lh-stat { display:flex; flex-direction:column; justify-content:center; padding-left:8px; min-width:134px; }
+        .lh-stat b { font-family:var(--mu-serif); font-size:34px; font-weight:900; color:var(--w-navy); letter-spacing:.02em; }
+        .lh-stat span { font-family:var(--mu-kai); font-size:11px; color:var(--mu-ink-soft); }
+        .lh-stat .bar { height:4px; background:var(--mu-paper-deep); margin-top:9px; position:relative; }
+        .lh-stat .bar i { position:absolute; left:0; top:0; bottom:0; width:82.6%; background:var(--w-gold); display:block; }
+        @media (max-width:960px){
+          .lh-hero { grid-template-columns:1fr; padding:26px 24px 18px; gap:6px; } .lh-page{ display:none; }
+          .lh-art { height:240px; order:-1; } .lh-title{ font-size:38px; }
+          .lh-sec{ padding:8px 24px 0; } .lh-pillars{ grid-template-columns:repeat(2,1fr); margin:18px 24px 26px; } .lh-stat{ grid-column:1/-1; }
+        }
       `}</style>
-      <span className="hm-ghost">沐言 · MUYAN</span>
-      <div className="hm-main">
-        <section className="hm-feature">
-          {featured ? (
-            <>
-              <div className="hm-stamp mu-stamp-in" style={{ animationDelay: "360ms" }}><b>今日荐书</b><i>DAILY PICK</i></div>
-              <h2 className="mu-in" style={{ animationDelay: "420ms" }}>{pName(featured)}</h2>
-              <p className="hm-syn mu-in" style={{ animationDelay: "520ms" }}>{fsyn || "翻开它,从场景里开始你的故事——书里已经有人在等你说第一句话。"}</p>
-              <div className="hm-ticket mu-in" style={{ animationDelay: "620ms" }}>
-                <div><span className="mu-en">Characters</span><b className="mu-num">{(pField(featured, "characters") || []).length || "—"}</b></div>
-                <div><span className="mu-en">Theme</span><b style={{ fontSize: 15 }}>{ftags[0] || "故事"}</b></div>
-                <div><span className="mu-en">Curator</span><b style={{ fontSize: 15 }}>{pField(featured, "author") || "店内收录"}</b></div>
-              </div>
-              <div className="hm-cta-row mu-in" style={{ animationDelay: "720ms" }}>
-                <button className="mu-btn red" onClick={() => onLaunchPreset(featured)}>取下这本书</button>
-                <button className="mu-btn-line" onClick={() => onLaunchPreset(featured)}>先看简介</button>
-              </div>
-            </>
-          ) : (
-            <div className="hm-empty">
-              <div className="hm-stamp mu-stamp-in"><b>空架</b><i>EMPTY</i></div>
-              <h2 style={{ fontSize: 40 }}>书架空着</h2>
-              <p>还没有预设故事。去创作,写第一本。</p>
-              <button className="mu-btn red" onClick={onNew}>自己写一本</button>
-            </div>
+
+      {/* —— HERO —— */}
+      <section className="lh-hero">
+        <span className="lh-page"><b>01</b><i></i><span>05</span></span>
+        <div className="lh-hero-tx">
+          <div className="lh-kicker mu-in" style={{ animationDelay: "60ms" }}><span className="mu-en">Interactive Narrative</span><span className="ln"></span></div>
+          <h2 className="lh-title mu-in" style={{ animationDelay: "140ms" }}>进入<em>会回应</em>你的<br />故事世界</h2>
+          <p className="lh-lead mu-in" style={{ animationDelay: "260ms" }}>
+            与角色相遇,在动态叙事里开启一场属于你的旅程。每一个选择都被记住——故事因你而无可复制。
+          </p>
+          <div className="lh-cta mu-in" style={{ animationDelay: "360ms" }}>
+            <button className="lh-btn-main" onClick={() => (featured ? onLaunchPreset(featured) : onNew())}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.6 6.4L20 10l-6.4 1.6L12 18l-1.6-6.4L4 10l6.4-1.6z" /></svg>
+              开始探索
+            </button>
+            <button className="lh-btn-out" data-coach="new-story" onClick={onNew}>立即创作</button>
+          </div>
+        </div>
+        <div className="lh-art" aria-hidden="true">
+          <span className="lh-art-tag">世界观档案 · WORLD</span>
+          <div className="lh-art-book">
+            <div className="lh-art-scene" style={{ background: LH_SCENES[0] }}></div>
+          </div>
+          <div className="lh-float a" style={{ background: LH_SCENES[2] }}></div>
+          <div className="lh-float b" style={{ background: LH_SCENES[4] }}></div>
+          <span className="lh-spark" style={{ left: "6%", bottom: "16%", fontSize: 16 }}>✦</span>
+          <span className="lh-spark" style={{ right: "20%", top: "4%", fontSize: 12, animationDelay: "1s" }}>✦</span>
+          <span className="lh-spark" style={{ left: "44%", top: "0%", fontSize: 10, animationDelay: "1.8s" }}>✦</span>
+        </div>
+      </section>
+
+      {/* —— 精选故事 —— */}
+      <section className="lh-sec">
+        <div className="lh-sec-h mu-in" style={{ animationDelay: "440ms" }}>
+          <h3>精选故事</h3>
+          <span className="mu-en">Featured Stories</span>
+          <span className="mu-dash live"></span>
+          <div className="lh-arrows">
+            <button onClick={() => scrollRow(-460)} aria-label="左滑">‹</button>
+            <button onClick={() => scrollRow(460)} aria-label="右滑">›</button>
+          </div>
+        </div>
+        <div className="lh-row" data-coach="gallery" ref={rowRef}>
+          {!list.length && (
+            <p className="lh-empty">书架还空着。
+              <button className="lh-btn-out" style={{ padding: "8px 18px", fontSize: 13 }} onClick={onNew}>写第一本</button>
+            </p>
           )}
-        </section>
-        <section className="hm-wall">
-          <div className="hm-wall-head mu-in" style={{ animationDelay: "320ms" }}>
-            <h3>架上 · 全部故事</h3>
-            <span className="mu-en">On the Shelf</span>
-            <span className="mu-dash live"></span>
-            <button className="mu-btn-tick" data-coach="new-story" onClick={onNew}>自己写一本 → 创作</button>
+          {list.map((p, i) => {
+            const isNew = isTutorialPreset(p);
+            const tags = (pField(p, "tags") || []).slice(0, 2).join(" · ");
+            const nch = (pField(p, "characters") || []).length;
+            return (
+              <div className="lh-card mu-in" key={i} data-coach={isNew ? "tutorial-tile" : undefined}
+                style={{ animationDelay: (480 + i * 70) + "ms" }} onClick={() => onLaunchPreset(p)}>
+                <div className="lh-card-cv" style={{ background: LH_SCENES[i % LH_SCENES.length] }}>
+                  <span className="lh-card-no">{String(i + 1).padStart(2, "0")}</span>
+                  {isNew && <span className="lh-card-new">教学</span>}
+                </div>
+                <b>{pName(p)}</b>
+                <div className="tg">{tags || "互动叙事"}</div>
+                <div className="mt"><span>{nch ? nch + " 角色" : "群像"}</span><i></i><span>{pField(p, "author") || "店内收录"}</span></div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* —— 产品亮点 —— */}
+      <section className="lh-pillars mu-in" style={{ animationDelay: "640ms" }}>
+        {FEATURES.map((f) => (
+          <div className="lh-pillar" key={f.t}>
+            <span className="ic"><LhIco name={f.icon} /></span>
+            <b>{f.t}</b>
+            <span className="en">{f.en}</span>
+            <p>{f.d}</p>
           </div>
-          <div className="hm-shelf" data-coach="gallery">
-            {!list.length && <p className="mu-small" style={{ gridColumn: "1/-1" }}>还没有预设故事书。</p>}
-            {list.map((p, i) => (
-              <HmBook key={i} p={p} i={i} isNew={isTutorialPreset(p)}
-                coach={isTutorialPreset(p) ? "tutorial-tile" : undefined}
-                onOpen={() => onLaunchPreset(p)} />
-            ))}
-          </div>
-        </section>
-      </div>
-      <footer className="hm-foot mu-in" style={{ animationDelay: "900ms" }}>
-        {tutorial
-          ? <p>第一次来?<b className="hm-foot-hl" onClick={() => onLaunchPreset(tutorial)}>「新人入店」</b>是一局十分钟的教学故事。</p>
-          : <p>把设定文档扔进创作,AI 替你建卡。</p>}
-        <span className="sp"></span>
-        <button className="mu-btn-tick" onClick={onNew}>把设定文档扔进来,AI 替你建卡</button>
-      </footer>
+        ))}
+        <div className="lh-stat">
+          <b className="mu-num">82.6%</b>
+          <span>玩家完整走完一个结局</span>
+          <div className="bar"><i></i></div>
+        </div>
+      </section>
     </div>
   );
 }
@@ -2801,6 +2967,142 @@ function CoachHelpButton({ onClick }) {
   return <button className="coach-help-btn" data-coach="help-btn" onClick={onClick} title="重看新手引导" aria-label="重看新手引导">?</button>;
 }
 
+// recon 1:1 视图外壳:固定全屏 + scale-to-fit(把固定尺寸设计稿缩放贴合视口)+ 导航点击委托。
+function ReconShell({ designW, designH, bg, onNav, onPrimary, children }) {
+  const ref = React.useRef(null);
+  const [scale, setScale] = React.useState(1);
+  React.useEffect(() => {
+    function fit() {
+      const el = ref.current; if (!el) return;
+      setScale(Math.min(el.clientWidth / designW, el.clientHeight / designH));
+    }
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [designW, designH]);
+  function onClick(e) {
+    const navEl = e.target.closest && e.target.closest("a, .nav a, .menu a, .lbar .nav a");
+    if (navEl) {
+      const zhEl = navEl.querySelector && navEl.querySelector(".zh");
+      const zh = ((zhEl && zhEl.textContent) || navEl.textContent || "").trim();
+      const map = { "首页": "home", "探索": "home", "故事库": "home", "当前故事": "game", "创作": "build", "聊天": "chat", "角色": "chat", "我的": "mine" };
+      if (onNav && map[zh]) { e.preventDefault(); onNav(map[zh]); return; }
+    }
+    if (onPrimary && e.target.closest) {
+      const c = e.target.closest("a, button, [class*='btn'], .lh-card, .ccard, [class*='enter'], [class*='cta'], [class*='exec']");
+      const t = ((c && c.textContent) || "").replace(/\s+/g, "");
+      if (c && (e.target.closest(".lh-card, .lh-btn-main, .b1") || /进入入局|ENTERTHESTORY|取下这本书|开始探索|开始旅程/.test(t))) {
+        e.preventDefault(); onPrimary();
+      }
+    }
+  }
+  return (
+    <div ref={ref} className="recon-shell" onClick={onClick} style={bg ? { background: bg } : undefined}>
+      <style>{`
+        .recon-shell{position:fixed; inset:0; z-index:40; background:#ece4d2; overflow:hidden; display:grid; place-items:center;}
+        .recon-stage{flex:none; transform-origin:center center;}
+      `}</style>
+      <div className="recon-stage" style={{ width: designW, height: designH, transform: "scale(" + scale + ")" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// 角色聊天控制器:从预设抽取去重角色,接 /api/chat(按角色维护会话历史)。
+function ReconChatLive({ presets, onNav }) {
+  const cards = React.useMemo(() => {
+    const out = []; const seen = new Set();
+    (presets || []).forEach((p) => ((p.data && p.data.characters) || []).forEach((c) => {
+      const nm = (c.data && c.data.name) || c.name; if (!nm || seen.has(nm)) return; seen.add(nm); out.push(c);
+    }));
+    return out;
+  }, [presets]);
+  const [active, setActive] = React.useState(0);
+  const [byName, setByName] = React.useState({});
+  const [input, setInput] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const activeCard = cards[active] || null;
+  const activeName = activeCard ? ((activeCard.data && activeCard.data.name) || activeCard.name) : "";
+  const messages = byName[activeName] || [];
+  async function send() {
+    const text = input.trim();
+    if (!text || !activeCard || busy) return;
+    setBusy(true);
+    setByName((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: "me", text }] }));
+    setInput("");
+    try {
+      const r = await postJSON("/api/chat", { card: activeCard, session_id: "chat-" + activeName, user: text, world: null });
+      setByName((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: (r && r.reply) || "（无回应）" }] }));
+    } catch (e) {
+      setByName((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: "（连接出错：" + e.message + "）" }] }));
+    } finally { setBusy(false); }
+  }
+  return (
+    <window.ReconChat
+      characters={cards.map((c) => ({ name: (c.data && c.data.name) || c.name, persona: c.data && c.data.persona, description: c.data && c.data.description }))}
+      activeName={activeName} messages={messages} value={input}
+      onChange={setInput} onSend={send} onNav={onNav}
+      onPick={(nm) => { const i = cards.findIndex((c) => (((c.data && c.data.name) || c.name) === nm)); if (i >= 0) setActive(i); }} />
+  );
+}
+
+// 创作桌控制器:对话式建卡(/api/build_card,前端维护对话+草稿),入库走 /api/library/save。
+function ReconCreateLive({ onNav, refreshHome }) {
+  const KINDS = [
+    { zh: "角色卡", en: "CHARACTER", k: "characters" },
+    { zh: "演出卡", en: "STAGING", k: "players" },
+    { zh: "设定卡 · 世界书", en: "LORE", k: "worlds" },
+    { zh: "故事书", en: "STORY", k: "stories" },
+    { zh: "事件卡", en: "EVENT", k: "characters" },
+  ];
+  const [ki, setKi] = React.useState(0);
+  const [messages, setMessages] = React.useState([{ who: "坊", text: "想造哪张卡？说一个画面、一句话都行——聊着聊着，卡就长出来了。" }]);
+  const [draft, setDraft] = React.useState({});
+  const [filled, setFilled] = React.useState([]);
+  const [input, setInput] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  async function send() {
+    const text = input.trim(); if (!text || busy) return;
+    setBusy(true);
+    const apiMsgs = [...messages, { who: "你", text }].map((m) => ({ role: m.who === "你" ? "user" : "assistant", content: m.text }));
+    setMessages((m) => [...m, { who: "你", text }]); setInput("");
+    try {
+      const r = await postJSON("/api/build_card", { kind: KINDS[ki].k, messages: apiMsgs, draft, seed: "" });
+      const ask = [r.reply, r.next_question].filter(Boolean).join(" ");
+      if (ask) setMessages((m) => [...m, { who: "坊", text: ask }]);
+      if (r.draft) setDraft(r.draft);
+      setFilled(r.filled || (r.draft ? Object.keys(r.draft) : []));
+    } catch (e) {
+      setMessages((m) => [...m, { who: "坊", text: "（建卡出错：" + e.message + "）" }]);
+    } finally { setBusy(false); }
+  }
+  async function saveCard() {
+    const d = draft || {};
+    if (!Object.keys(d).length) { alert("还没有可入库的卡，先聊几句让它长出来。"); return; }
+    const k = KINDS[ki].k;
+    try {
+      await postJSON("/api/library/save", { kind: k, data: k === "characters" ? { data: d } : d });
+      if (refreshHome) refreshHome();
+      alert("已收入卡库。");
+    } catch (e) { alert("入库失败：" + e.message); }
+  }
+  const d = draft || {};
+  const dname = d.name || (d.data && d.data.name) || "未命名";
+  const LABELS = { description: "简述", personality: "性格", scenario: "情境设定", first_mes: "开场白", mes_example: "对话示例", speech_rules: "说话规则", appearance: "外貌", persona: "人设", goals: "目标", secret: "隐藏真相", background: "背景", voice: "口癖", premise: "前提", title: "标题", entries: "条目" };
+  const fields = Object.keys(d).filter((k) => !["name", "character_id", "id"].includes(k)).map((k) => {
+    const v = d[k];
+    return { k: LABELS[k] || k, v: typeof v === "string" ? v : (Array.isArray(v) ? v.join("、") : JSON.stringify(v)), fresh: (filled || []).includes(k), hidden: /secret|隐藏|真相/i.test(k) };
+  });
+  return (
+    <window.ReconCreate
+      cardKind={ki} kinds={KINDS} onKind={setKi}
+      messages={messages} value={input} onChange={setInput} onSend={send}
+      draft={{ name: dname, kind: KINDS[ki].zh, fields }}
+      onSaveDraft={() => alert("当前进度已在编辑中。")} onSaveCard={saveCard} onNav={onNav} />
+  );
+}
+
 function App() {
   const [characters, setCharacters] = useState([]);
   const [worldBooks, setWorldBooks] = useState([]);
@@ -2816,6 +3118,7 @@ function App() {
   const [restoredState, setRestoredState] = useState(null);
   const [restoredChoices, setRestoredChoices] = useState([]);
   const [view, setView] = useState("home"); // home / game / build / vault
+  const [loginShown, setLoginShown] = useState(false); // 标题开屏 → 点按钮才展开邮箱+验证码登录表单
   const [sidebarOpen, setSidebarOpen] = useState(true); // 游戏中侧边卡组栏开关
   const [isPreset, setIsPreset] = useState(false);      // 当前局是否由预设开(预设:无侧边栏 + 先选人)
   const [selecting, setSelecting] = useState(false);    // 预设进入后的选人页阶段
@@ -2838,14 +3141,8 @@ function App() {
 
   // 当前所在「引导屏」——每个界面都有 onboarding。modal 开 = 一条龙走查(简介→背景→角色→出演);
   // 否则按 view 分(探索/我的/创作/聊天/故事)。
-  const coachScreen =
-    storyModal ? "modal"
-    : view === "home" ? "home"
-    : view === "mine" ? "mine"
-    : view === "build" ? "build"
-    : view === "chat" ? "chat"
-    : view === "game" ? (started && characters.length > 0 ? "story" : "gameEmpty")
-    : null;
+  // recon 1:1 视图没有旧 data-coach 锚点 → 暂停自动新手引导(避免空浮窗压在新 UI 上);手动「?」仍可重放。
+  const coachScreen = null;
   useEffect(() => { coachRunRef.current = coachRun; }, [coachRun]);
 
   const addCharacter = (card) => setCharacters((xs) => [...xs, card]);
@@ -3066,9 +3363,14 @@ function App() {
     );
   }
 
-  // AUTH 开且未登录 → 全屏拦在登录页(数据独立的前提:每个人先有身份)。AUTH 关时此分支不触发,行为同现状。
+  // AUTH 开且未登录 → 标题开屏(ReconTitle);点任意进入按钮才展开现有邮箱+验证码登录表单。AUTH 关时不触发,行为同现状。
   if (auth.enabled && !auth.user) {
-    return <LoginView onAuthed={onAuthed} />;
+    if (loginShown) return <LoginView onAuthed={onAuthed} onBack={() => setLoginShown(false)} />;
+    return (
+      <window.ReconTitle
+        onStart={() => setLoginShown(true)} onLogin={() => setLoginShown(true)}
+        onGuest={() => setLoginShown(true)} onResume={() => setLoginShown(true)} />
+    );
   }
 
   return (
@@ -3077,65 +3379,35 @@ function App() {
               authEnabled={auth.enabled} user={auth.user} onLogout={onLogout} />
 
       {view === "home" && (
-        <main className="single-view">
-          <StoriesHome
-            onNew={onNew}
-            presets={presets}
-            onLaunchPreset={openStoryModal}
-            onDeletePreset={deletePreset}
-          />
-        </main>
+        <ReconShell designW={1672} designH={941}>
+          <window.ReconHome presets={presets} user={auth.user}
+            onNav={navTo} onOpenStory={openStoryModal} onNew={onNew}
+            onLogin={() => setView("mine")} />
+        </ReconShell>
       )}
 
       {view === "chat" && (
-        <main className="single-view">
-          <ChatView />
-        </main>
+        <ReconShell designW={1536} designH={1024}>
+          <ReconChatLive presets={presets} onNav={navTo} />
+        </ReconShell>
       )}
 
       {view === "mine" && (
-        <main className="single-view">
-          <MineView
-            saves={saves} presets={presets} activeId={sessionId}
-            authEnabled={auth.enabled} user={auth.user}
-            onResume={resumeSave} onDeleteSave={deleteSaveHandler} onGoExplore={() => setView("home")}
-            onOpenStory={openStoryModal} onDeletePreset={deletePreset}
-            addCharacter={addCharacter} addWorld={addWorld} setStory={setStory} setPlayer={setPlayer}
-            completeCard={completeCardFromVault} goGame={() => setView("game")}
-          />
-        </main>
+        <ReconShell designW={1536} designH={1024}>
+          <window.ReconProfile user={auth.user} presets={presets} saves={saves}
+            onNav={navTo} onResume={resumeSave} onNew={onNew} />
+        </ReconShell>
       )}
 
-      {/* 在玩就一直挂着,只用 CSS 藏(不卸载)→ 切 tab 回来 turns/选项/状态都在内存里,瞬时显示、零 fetch(治"切回来慢")。 */}
-      {started && characters.length > 0 && (
-        <main className={"play-layout " + ((sidebarOpen && !isPreset) ? "has-left " : "") + (railOpen ? "has-right" : "")} style={view === "game" ? undefined : { display: "none" }}>
-          {sidebarOpen && !isPreset && (
-            <SetupPanel
-              characters={characters} setCharacters={setCharacters}
-              worldBooks={worldBooks} setWorldBooks={setWorldBooks}
-              story={story} setStory={setStory}
-              player={player} setPlayer={setPlayer}
-              mode={mode} setMode={setMode}
-              onStart={() => setStarted(true)}
-              onSavePreset={saveAsPreset}
-              playing
-            />
-          )}
-          <div className="play-main">
-            <div className="play-toolbar">
-              {!isPreset && (
-                <button className="side-toggle" onClick={() => setSidebarOpen((o) => !o)} title="开/关左侧卡组栏">
-                  {sidebarOpen ? "◀ 收起卡组栏" : "▶ 卡组栏"}
-                </button>
-              )}
-              <button className="side-toggle rail-toggle" data-coach="rail-toggle" onClick={() => setRailOpen((o) => !o)} title="开/关右侧状态栏">
-                {railOpen ? "状态栏 ▶" : "◀ 状态栏"}
-              </button>
-            </div>
-            <StoryPanel key={sessionId} characters={characters} world={world} story={story} player={player} mode={mode} sessionId={sessionId} initialTurns={restoredTurns} initialState={restoredState} initialChoices={restoredChoices} goHome={() => { refreshHome(); setStarted(false); setAssembling(false); setView("home"); }} onTurn={() => { setTurnSeq((s) => s + 1); setSaves(loadSaves()); }} />
-          </div>
-          {railOpen && <StateInspector sessionId={sessionId} refreshKey={turnSeq} />}
-        </main>
+      {/* 游玩:recon 皮 + 实时引擎(StoryPanel skin=recon,引擎逻辑零改动)。只在 game 视图挂载;切走卸载,回来按 session 重拉。 */}
+      {view === "game" && started && characters.length > 0 && (
+        <ReconShell designW={1536} designH={1024} onNav={navTo}>
+          <StoryPanel key={sessionId} skin="recon" coverArt={(pendingPreset && pendingPreset.cover) || ""}
+            characters={characters} world={world} story={story} player={player} mode={mode}
+            sessionId={sessionId} initialTurns={restoredTurns} initialState={restoredState} initialChoices={restoredChoices}
+            goHome={() => { refreshHome(); setStarted(false); setAssembling(false); setView("home"); }}
+            onTurn={() => { setTurnSeq((s) => s + 1); setSaves(loadSaves()); }} />
+        </ReconShell>
       )}
 
       {view === "game" && !(started && characters.length > 0) && assembling && (
@@ -3172,37 +3444,18 @@ function App() {
       )}
 
       {view === "build" && (
-        <main className="single-view">
-          {buildFlow ? (
-            <StepBuilder
-              characters={bChars} worldBooks={bWorlds} story={bStory} player={bPlayer}
-              addCharacter={(c) => setBChars((xs) => [...xs, c])} addWorld={(w) => setBWorlds((xs) => [...xs, w])}
-              setCharacters={setBChars} setWorldBooks={setBWorlds} setStory={setBStory} setPlayer={setBPlayer}
-              onStartStory={startBuiltStory}
-              onSavePreset={saveBuildAsPreset}
-              onExit={() => { setBuildFlow(false); refreshHome(); setView("home"); }}
-            />
-          ) : (
-            <BuildView
-              buildSeed={buildSeed}
-              clearSeed={() => setBuildSeed({ seed: "", draft: null })}
-              addCharacter={addCharacter}
-              addWorld={addWorld}
-              setStory={setStory}
-              setPlayer={setPlayer}
-              goGame={() => { setBuildSeed({ seed: "", draft: null }); setView(started ? "game" : "home"); }}
-            />
-          )}
-        </main>
+        <ReconShell designW={1536} designH={1024}>
+          <ReconCreateLive onNav={navTo} refreshHome={refreshHome} />
+        </ReconShell>
       )}
 
       {storyModal && (
-        <StoryModal
-          entry={storyModal}
-          setTab={(k) => setStoryModal((m) => (m ? { ...m, tab: k } : m))}
-          onClose={() => setStoryModal(null)}
-          onStart={startFromModal}
-        />
+        <ReconShell designW={1672} designH={941}>
+          <window.ReconStoryDetail preset={storyModal.preset}
+            onNav={(v) => { setStoryModal(null); navTo(v); }}
+            onEnter={(role) => startFromModal(role)}
+            onClose={() => setStoryModal(null)} />
+        </ReconShell>
       )}
 
       <CoachHelpButton onClick={replayCoach} />
