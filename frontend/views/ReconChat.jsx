@@ -33,10 +33,20 @@ function ReconChat(props) {
   const onPick = P.onPick || (() => {});
   const onSend = P.onSend || (() => {});
   const onChange = P.onChange || (() => {});
+  const onNewChat = P.onNewChat || null;
+  const busy = !!P.busy;
+  const canChat = P.canChat !== false; // 未传视为可聊(测试页)
 
   // 当前角色（资料卡）：activeName 命中则取之，否则取第一个有角色。
   const active = characters.find((c) => c && c.name === activeName) || characters[0] || null;
   const initial = (active && active.name ? active.name.trim().charAt(0) : "") || "?";
+
+  // 新消息/等待中自动滚到底:不滚的话新气泡渲染在视口外,像"发送没反应"。
+  const chatRef = React.useRef(null);
+  React.useEffect(() => {
+    const el = chatRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages.length, busy]);
 
   // 左栏主导航 → onNav(view)。view 键对齐 app.jsx 路由（home/game/build/mine/chat）。
   const nav = [
@@ -61,7 +71,12 @@ function ReconChat(props) {
       : <span className={cls + " sv"}>{ini}</span>;
   };
 
-  const onInputKey = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSend(); } };
+  const onInputKey = (e) => {
+    if (e.key !== "Enter" || e.shiftKey) return;
+    if ((e.nativeEvent || e).isComposing) return; // 中文组词期回车 = 选字,不是发送
+    e.preventDefault();
+    if (!busy) onSend();
+  };
 
   return (
     <div className="cv-chat">
@@ -118,6 +133,14 @@ function ReconChat(props) {
   @keyframes rcc-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
   .cv-chat .msg { animation: rcc-in .26s cubic-bezier(.22,1,.36,1) both; }
   @media (prefers-reduced-motion: reduce){ .cv-chat .msg { animation-duration:1ms; } }
+  /* 等待中的角色侧动效点 */
+  .cv-chat .pend {display:inline-flex; gap:3px; margin-right:6px; vertical-align:middle;}
+  .cv-chat .pend i {width:5px; height:5px; border-radius:50%; background:var(--gold); animation:rcc-dot 1s ease-in-out infinite;}
+  @keyframes rcc-dot {0%,100%{opacity:.25;} 50%{opacity:1;}}
+  /* 空态出路按钮 */
+  .cv-chat .cta {display:inline-flex; align-items:center; height:38px; padding:0 22px; border:1px solid var(--line2); background:var(--paper);
+    font-family:var(--serif); font-size:13px; letter-spacing:.1em; color:var(--navy); cursor:pointer;}
+  .cv-chat .cta:hover {background:var(--paper2);}
   .cv-chat .rlist {overflow-y:auto; max-height:400px;}
   .cv-chat .rlist::-webkit-scrollbar {width:5px;} .cv-chat .rlist::-webkit-scrollbar-thumb {background:var(--line2);}
   .cv-chat .inputbar .box input {border:none; outline:none; background:transparent; box-shadow:none; border-radius:0; padding:0; width:100%; color:var(--ink); font-family:var(--kai); font-size:13.5px;}
@@ -264,8 +287,9 @@ function ReconChat(props) {
 `}</style>
 
       {/* 左侧引擎竖栏(全站统一 ReconRail;近期聊天/新建对话作为底部插槽) */}
+      {/* 此前叫「近期聊天」但实际是全部可聊角色列表(历史会话 UI 不回读)→ 改名说真话 */}
       <window.ReconRail active="chat" onNav={onNav}>
-        <div className="recenth"><b>近期聊天</b><span className="en">RECENT CHATS</span><i></i></div>
+        <div className="recenth"><b>角色</b><span className="en">CHARACTERS</span><i></i></div>
         <div className="rlist">
           {characters.map((c, i) => (
             <div className={"rc" + (active && c.name === active.name ? " on" : "")} key={i} style={{ cursor: "pointer" }} onClick={() => onPick(c.name)}>
@@ -274,14 +298,15 @@ function ReconChat(props) {
             </div>
           ))}
         </div>
-        <div className="newchat" style={{ cursor: "pointer" }} onClick={() => onNav("build")}><span className="star"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l1.6 6.4L20 11l-6.4 1.6L12 19l-1.6-6.4L4 11l6.4-1.6z" /></svg></span><span className="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4l4 4-11 11H5v-4z" /></svg></span><div className="tx"><div className="zh">新建对话</div><div className="en">NEW CHAT</div></div></div>
+        {/* 新建对话 = 与当前角色重开一段全新会话(此前误跳创作桌) */}
+        {onNewChat && (
+          <div className="newchat" style={{ cursor: busy ? "default" : "pointer", opacity: busy ? 0.5 : 1 }} onClick={() => !busy && onNewChat()}><span className="star"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l1.6 6.4L20 11l-6.4 1.6L12 19l-1.6-6.4L4 11l6.4-1.6z" /></svg></span><span className="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4l4 4-11 11H5v-4z" /></svg></span><div className="tx"><div className="zh">新建对话</div><div className="en">NEW CHAT</div></div></div>
+        )}
       </window.ReconRail>
 
-      {/* 顶栏右侧（功能入口，无写死世界时间/用户；记忆/档案走 onNav） */}
+      {/* 顶栏右侧:文案=实际去向(此前「记忆」跳游玩、「档案」跳个人中心,名实不符) */}
       <div className="topr">
-        <div className="ti" style={{ cursor: "pointer" }} onClick={() => onNav("game")}><span className="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 4h11l3 3v13H5z" /><path d="M9 9h6M9 13h6M9 17h4" /></svg></span><div className="lb"><div className="zh">记忆</div><div className="en">MEMORY</div></div></div>
-        <div className="sep"></div>
-        <div className="ti" style={{ cursor: "pointer" }} onClick={() => onNav("mine")}><span className="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16v13H4z" /><path d="M4 7l2-3h12l2 3" /></svg></span><div className="lb"><div className="zh">档案</div><div className="en">ARCHIVE</div></div></div>
+        <div className="ti" style={{ cursor: "pointer" }} onClick={() => onNav("game")}><span className="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 4h11l3 3v13H5z" /><path d="M9 9h6M9 13h6M9 17h4" /></svg></span><div className="lb"><div className="zh">当前故事</div><div className="en">STORY</div></div></div>
         <div className="sep"></div>
         <div className="me" style={{ cursor: "pointer" }} onClick={() => onNav("mine")}><span className="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4" /><path d="M5 20c0-4 3.4-6 7-6s7 2 7 6" /></svg></span><div className="col"><span className="nm">我的</span></div></div>
       </div>
@@ -302,9 +327,15 @@ function ReconChat(props) {
       </div>
 
       {/* 对话区（messages 映射；who==="me" → 右侧玩家泡，否则左侧角色泡带名） */}
-      <div className="chat">
+      <div className="chat" ref={chatRef}>
         {!characters.length ? (
-          <div className="syscue"><span>还没有可聊的角色，去创作 / 开局</span></div>
+          <>
+            <div className="syscue"><span>还没有可聊的角色</span></div>
+            <div style={{ display: "flex", gap: 14, justifyContent: "center", marginTop: 18 }}>
+              <span className="cta" onClick={() => onNav("build")}>去创作角色</span>
+              <span className="cta" onClick={() => onNav("home")}>去故事库逛逛</span>
+            </div>
+          </>
         ) : (
           messages.map((m, i) => {
             const isMe = m.who === "me";
@@ -327,6 +358,18 @@ function ReconChat(props) {
             );
           })
         )}
+        {/* 等待反馈:发送后角色侧出动效气泡,LLM 5-30s 的等待不再像卡死 */}
+        {busy && messages.length > 0 && messages[messages.length - 1].who === "me" && (
+          <div className="msg">
+            <Avatar c={active} cls="av" />
+            <div className="col">
+              <div className="who">{active ? active.name : ""}</div>
+              <div className="bub" style={{ color: "var(--faint)", fontStyle: "italic" }}>
+                <span className="pend"><i></i><i style={{ animationDelay: ".18s" }}></i><i style={{ animationDelay: ".36s" }}></i></span> TA 正在落笔…
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 底部输入（值=value，改→onChange，发送/回车→onSend） */}
@@ -335,13 +378,16 @@ function ReconChat(props) {
           <input
             type="text"
             value={value}
-            placeholder="输入你想说的话…"
+            disabled={!canChat}
+            placeholder={!canChat
+              ? "这位角色还没有角色卡,暂不能对话——去创作桌为 TA 补全即可开聊"
+              : (busy ? "TA 正在回复,稍候片刻…" : "输入你想说的话…")}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={onInputKey}
             style={{ width: "100%", border: "none", outline: "none", background: "transparent", font: "inherit", color: "var(--ink)" }}
           />
         </div>
-        <div className="send" style={{ cursor: "pointer" }} onClick={() => onSend()}><span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 3L3 11l7 3 3 7z" /><path d="M21 3l-11 11" /></svg></span><span className="zh">发送</span><span className="en">ENTER</span></div>
+        <div className="send" style={{ cursor: busy || !canChat ? "default" : "pointer", opacity: busy || !canChat ? 0.55 : 1 }} onClick={() => !busy && canChat && onSend()}><span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 3L3 11l7 3 3 7z" /><path d="M21 3l-11 11" /></svg></span><span className="zh">{busy ? "落笔中" : "发送"}</span><span className="en">ENTER</span></div>
       </div>
 
       {/* 右侧资料卡 */}

@@ -161,14 +161,13 @@ function ReconTitle(props) {
   .cv-title .tagline { left:70px; top:408px; font-family:var(--kai); font-size:16px; letter-spacing:.1em; color:var(--ink-dim); text-shadow:0 1px 8px rgba(246,240,228,.7); }
   .cv-title .tagline::before { content:""; display:inline-block; width:7px; height:7px; background:var(--goldink); transform:rotate(45deg); margin-right:11px; vertical-align:1px; }
   .cv-title .btns { left:64px; top:582px; display:flex; flex-direction:column; gap:14px; }
-  .cv-title .btn { display:flex; align-items:center; gap:18px; width:362px; height:62px; padding:0 24px; background:var(--btn); border:1px solid var(--btn-line); cursor:pointer; position:relative; box-shadow:0 6px 22px -10px rgba(60,48,30,.45); }
+  .cv-title .btn { display:flex; align-items:center; gap:18px; width:362px; min-height:62px; padding:11px 24px; background:var(--btn); border:1px solid var(--btn-line); cursor:pointer; position:relative; box-shadow:0 6px 22px -10px rgba(60,48,30,.45); }
   .cv-title .btn::after { content:""; position:absolute; inset:3px; border:1px solid rgba(43,38,32,.12); pointer-events:none; }
   .cv-title .btn .ic { width:26px; height:26px; flex:none; display:grid; place-items:center; color:var(--ink); }
   .cv-title .btn .tx .zh { font-family:var(--serif); font-size:21px; font-weight:700; letter-spacing:.14em; color:var(--ink); line-height:1.1; }
   .cv-title .btn .tx .en { font-family:var(--serifen); font-size:10px; letter-spacing:.26em; color:var(--soft); margin-top:3px; }
+  .cv-title .btn .tx .note { font-family:var(--kai); font-size:11.5px; letter-spacing:.04em; color:var(--soft); margin-top:5px; }
   .cv-title .btn.primary { background:linear-gradient(180deg,#f6efdd,#ece2c6); border-color:rgba(203,176,121,.7); }
-  .cv-title .resume { left:96px; top:832px; font-family:var(--serif); font-size:15px; letter-spacing:.16em; color:var(--inkk); opacity:.86; cursor:pointer; }
-  .cv-title .resume b { color:var(--goldink); font-weight:400; margin:0 4px; }
   .cv-title .foot-l { left:40px; bottom:30px; display:flex; align-items:center; gap:26px; color:var(--ink-dim); font-family:var(--kai); font-size:13px; letter-spacing:.06em; }
   .cv-title .foot-l a { display:flex; align-items:center; gap:7px; cursor:pointer; color:var(--ink-dim); }
   .cv-title .foot-l a svg { color:var(--goldink); }
@@ -184,10 +183,10 @@ function ReconTitle(props) {
     .cv-title .titen { left:0; right:0; top:268px; justify-content:center; }
     .cv-title .titen span { font-size:13px; letter-spacing:.3em; }
     .cv-title .tagline { left:24px; right:24px; top:312px; text-align:center; font-size:14px; }
-    .cv-title .btns { left:24px; right:24px; top:auto; bottom:120px; }
-    .cv-title .btn { width:100%; height:54px; }
+    .cv-title .btns { left:24px; right:24px; top:auto; bottom:100px; }
+    .cv-title .btn { width:100%; min-height:54px; padding:9px 20px; }
     .cv-title .btn .tx .zh { font-size:17px; }
-    .cv-title .resume { left:0; right:0; bottom:78px; top:auto; text-align:center; }
+    .cv-title .btn .tx .note { font-size:10.5px; }
     .cv-title .foot-c { bottom:20px; font-size:10px; }
   }
 `}</style>
@@ -213,21 +212,18 @@ function ReconTitle(props) {
       <h1 className="title"><b>YoRHa-A2</b> 引擎<span className="ver">v0.1</span></h1>
       <div className="titen"><i></i><span>YORHA-A2 ENGINE</span></div>
       <div className="tagline">测试阶段使用电脑或者平板获得更好的体验</div>
+      {/* 测试阶段需登录游玩,「游客模式/继续游戏」对未登录者都是死路 → 移除;
+          两个真实入口各带一句白话副标题,点开直落对应 tab,不再殊途同归。 */}
       <div className="btns">
         <div className="btn primary" onClick={onStart}>
           <span className="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5l-2.2 4.8-4.8 2.2 2.2-4.8z" fill="currentColor" /></svg></span>
-          <div className="tx"><div className="zh">开始旅程</div><div className="en">START JOURNEY</div></div>
+          <div className="tx"><div className="zh">开始旅程</div><div className="en">START JOURNEY</div><div className="note">初次到来——邮箱注册只需 30 秒,即刻入局</div></div>
         </div>
         <div className="btn" onClick={onLogin}>
           <span className="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" /></svg></span>
-          <div className="tx"><div className="zh">登录 / 注册</div><div className="en">LOGIN / REGISTER</div></div>
-        </div>
-        <div className="btn" onClick={onGuest}>
-          <span className="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M4 13c2-5 14-5 16 0" /><path d="M4 13c0 3 3.5 4 8 4s8-1 8-4" /><circle cx="9" cy="12" r="1.3" fill="currentColor" /><circle cx="15" cy="12" r="1.3" fill="currentColor" /></svg></span>
-          <div className="tx"><div className="zh">游客模式</div><div className="en">GUEST MODE</div></div>
+          <div className="tx"><div className="zh">登录</div><div className="en">LOGIN</div><div className="note">已有账号——回到你的故事</div></div>
         </div>
       </div>
-      <div className="resume" onClick={onResume}>《<b>继续游戏</b>》</div>
       <div className="foot-c">© 2026 Narrative Engine. All Rights Reserved.</div>
       <div className="foot-r">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 3l10 18H2z" /><path d="M12 10v5M12 18h.01" /></svg>

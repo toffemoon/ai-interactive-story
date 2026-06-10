@@ -12,15 +12,26 @@ function setToken(t) { try { t ? localStorage.setItem(TOKEN_KEY, t) : localStora
   const _f = window.fetch.bind(window);
   window.fetch = function (url, opts) {
     opts = opts || {};
+    let hadToken = false;
     try {
       const t = getToken();
       if (t && typeof url === "string" && url.indexOf("/api/") === 0) {
+        hadToken = true;
         const h = new Headers(opts.headers || {});
         if (!h.has("Authorization")) h.set("Authorization", "Bearer " + t);
         opts = Object.assign({}, opts, { headers: h });
       }
     } catch (e) {}
-    return _f(url, opts);
+    const p = _f(url, opts);
+    // 全局 401 兜底:带 token 的业务请求被拒 = token 已失效/被吊销,清掉并回登录页,
+    // 不再让每个调用各自抛一条看不懂的错。/api/auth/* 除外(登录失败本来就是 401)。
+    if (hadToken && typeof url === "string" && url.indexOf("/api/auth/") !== 0) {
+      return p.then((r) => {
+        if (r && r.status === 401 && getToken()) { setToken(""); location.reload(); }
+        return r;
+      });
+    }
+    return p;
   };
 })();
 
@@ -1005,23 +1016,36 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
   // 切走会卸载本组件、丢失内部 turns;App 的 restore effect 只在 sessionId 变时跑,
   // 「切 tab 回当前故事」和「续玩当前这一局」都不触发 → 会显示空。挂载时兜底:
   // 本地没有 turns 就按 sessionId 拉后端补水(全新局后端也空,保持空;App 已还原过则跳过不重复拉)。
+  const [hydrated, setHydrated] = useState(() => !!(initialTurns && initialTurns.length));
   useEffect(() => {
     if (initialTurns && initialTurns.length) return undefined;
     let alive = true;
     fetch(`/api/session/${sessionId}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (!alive || !data) return;
-        const structured = data.turns || [];
-        const msgs = data.messages || [];
-        if (!structured.length && !msgs.length) return;   // 后端也空(全新局没玩过)→ 保持空
-        setTurns(structured.length ? restoreTurns(structured) : messagesToTurns(msgs));
-        setChoices(structured.length ? (structured[structured.length - 1].choices || []) : []);
-        setState(data.state || null);
+        if (!alive) return;
+        const structured = (data && data.turns) || [];
+        const msgs = (data && data.messages) || [];
+        if (structured.length || msgs.length) {
+          setTurns(structured.length ? restoreTurns(structured) : messagesToTurns(msgs));
+          setChoices(structured.length ? (structured[structured.length - 1].choices || []) : []);
+          setState((data && data.state) || null);
+        }
+        setHydrated(true);   // 后端也空(全新局没玩过)→ 保持空,但补水已完成
       })
-      .catch(() => {});
+      .catch(() => { if (alive) setHydrated(true); });
     return () => { alive = false; };
   }, [sessionId]);
+
+  // 涟漪入局后自动开场:全新一局(补水完成仍无任何回合)自动生成开场——
+  // 故事先演给玩家看,新手不再对着静态简介发愣。只触发一次,续玩/已有回合不触发。
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (skin !== "recon" || !hydrated || autoOpenedRef.current) return;
+    if (turns.length || loading) return;
+    autoOpenedRef.current = true;
+    runTurn();
+  }, [hydrated, turns.length, loading]);
 
   async function runTurn({ text = "", choice = "" } = {}) {
     if (loading) return;
@@ -1139,6 +1163,8 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
         onChange={setInput}
         onSubmit={() => runTurn({ text: input })}
         onChoice={(c) => runTurn({ choice: c.label || c.title })}
+        onReroll={rerollLast}
+        canReroll={storyTurns.length > 0}
         busy={loading}
         playerName={pname}
       />
@@ -1247,8 +1273,8 @@ async function saveToVault(kind, data) {
 
 // 登录 / 注册页(AUTH_ENABLED 时未登录则全屏拦在此)。纯 JSX,无构建工具。
 // 注册:邮箱 + 发送验证码 + 验证码 + 密码(可选用户名)。登录:邮箱/用户名 + 密码。
-function LoginView({ onAuthed, onBack }) {
-  const [tab, setTab] = useState("login");           // login | register
+function LoginView({ onAuthed, onBack, initialTab }) {
+  const [tab, setTab] = useState(initialTab === "register" ? "register" : "login"); // login | register,按入口预选
   const [identifier, setIdentifier] = useState("");   // 登录:邮箱或用户名
   const [email, setEmail] = useState("");             // 注册:邮箱(主身份)
   const [username, setUsername] = useState("");       // 注册:可选登录名
@@ -1273,7 +1299,7 @@ function LoginView({ onAuthed, onBack }) {
     try {
       const data = await authApi("/api/auth/email/send_code", { email: email.trim() });
       setCooldown(60);
-      setSentHint(data.dev_code ? `验证码已发(本地测试码:${data.dev_code})` : "验证码已发到邮箱,10 分钟内有效");
+      setSentHint(data.dev_code ? `验证码已发(本地测试码:${data.dev_code})` : "验证码已发到邮箱,10 分钟内有效;没收到请翻翻垃圾邮件,60 秒后可重发");
     } catch (e) { setErr(e.message || "发送失败"); }
     finally { setSending(false); }
   }
@@ -1337,12 +1363,12 @@ function LoginView({ onAuthed, onBack }) {
         <h1>叙事引擎</h1>
         <div className="sub">NARRATIVE ENGINE · SIGN IN</div>
         <div className="tabs">
-          <button className={tab === "login" ? "on" : ""} onClick={() => { setTab("login"); setErr(""); }}>回到故事</button>
-          <button className={tab === "register" ? "on" : ""} onClick={() => { setTab("register"); setErr(""); }}>初次到来</button>
+          <button className={tab === "login" ? "on" : ""} onClick={() => { setTab("login"); setErr(""); }}>登录 · 回到故事</button>
+          <button className={tab === "register" ? "on" : ""} onClick={() => { setTab("register"); setErr(""); }}>注册 · 初次到来</button>
         </div>
         {tab === "login" ? (
           <input placeholder="邮箱或用户名" value={identifier}
-                 onChange={(e) => setIdentifier(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
+                 onChange={(e) => setIdentifier(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !(e.nativeEvent || e).isComposing && submit()} />
         ) : (
           <>
             <input type="email" placeholder="邮箱(用来收验证码)" value={email}
@@ -2157,6 +2183,7 @@ function ReconChatLive({ presets, onNav, mobile }) {
   // 旧会话(历史 id)服务端原样保留,不受影响。
   const sidsRef = React.useRef({});
   const openedRef = React.useRef({});
+  const [chatNonce, setChatNonce] = React.useState(0); // 「新建对话」重开会话的触发器
   const sidFor = (nm) => {
     if (!sidsRef.current[nm]) sidsRef.current[nm] = "chat-" + nm + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     return sidsRef.current[nm];
@@ -2183,7 +2210,16 @@ function ReconChatLive({ presets, onNav, mobile }) {
       .then((r) => setByKey((m) => ({ ...m, [nm]: [{ who: nm, text: (r && r.reply) || "（无回应）" }] })))
       .catch((e) => { openedRef.current[nm] = false; setByKey((m) => ({ ...m, [nm]: [{ who: nm, text: "（开场失败：" + e.message + "）" }] })); })
       .finally(() => setBusy(false));
-  }, [activeName, activeItem]);
+  }, [activeName, activeItem, chatNonce]);
+  // 新建对话:与当前角色重开一段全新会话(旧会话服务端原样保留),触发新的自动开场。
+  function newChat() {
+    const nm = activeName;
+    if (!nm || busy) return;
+    delete sidsRef.current[nm];
+    openedRef.current[nm] = false;
+    setByKey((m) => { const n = { ...m }; delete n[nm]; return n; });
+    setChatNonce((x) => x + 1);
+  }
   async function send() {
     const text = input.trim();
     if (!text || !activeItem || busy) return;
@@ -2207,18 +2243,20 @@ function ReconChatLive({ presets, onNav, mobile }) {
       characters={list}
       activeName={activeName} messages={messages} value={input}
       onChange={setInput} onSend={send} onNav={onNav}
+      busy={busy} canChat={!!(activeItem && activeItem.card)} onNewChat={newChat}
       onPick={(nm) => setActiveKey(nm)} />
   );
 }
 
 // 创作桌控制器:对话式建卡(/api/build_card,前端维护对话+草稿),入库走 /api/library/save。
 function ReconCreateLive({ onNav, refreshHome, mobile }) {
+  // 「事件卡」tab 暂不提供:此前误映射到 characters(AI 按角色卡引导、产物存错库),
+  // 事件应随故事书创建;待接 EventStep 表单后再恢复。
   const KINDS = [
     { zh: "角色卡", en: "CHARACTER", k: "characters" },
     { zh: "演出卡", en: "STAGING", k: "players" },
     { zh: "设定卡 · 世界书", en: "LORE", k: "worlds" },
     { zh: "故事书", en: "STORY", k: "stories" },
-    { zh: "事件卡", en: "EVENT", k: "characters" },
   ];
   const [ki, setKi] = React.useState(0);
   const [messages, setMessages] = React.useState([{ who: "坊", text: "想造哪张卡？说一个画面、一句话都行——聊着聊着，卡就长出来了。" }]);
@@ -2262,9 +2300,9 @@ function ReconCreateLive({ onNav, refreshHome, mobile }) {
   return (
     <CreateC
       cardKind={ki} kinds={KINDS} onKind={setKi}
-      messages={messages} value={input} onChange={setInput} onSend={send}
+      messages={messages} value={input} onChange={setInput} onSend={send} busy={busy}
       draft={{ name: dname, kind: KINDS[ki].zh, fields }}
-      onSaveDraft={() => alert("当前进度已在编辑中。")} onSaveCard={saveCard} onNav={onNav} />
+      onSaveCard={saveCard} onNav={onNav} />
   );
 }
 
@@ -2312,7 +2350,7 @@ function NicknameGate({ onDone }) {
         <p>故事里的人要怎么称呼你?<br />这个名字会出现在你的档案与对话中。</p>
         <input autoFocus value={name} maxLength={24} placeholder="1-24 个字"
                onChange={(e) => setName(e.target.value)}
-               onKeyDown={(e) => e.key === "Enter" && submit()} />
+               onKeyDown={(e) => e.key === "Enter" && !(e.nativeEvent || e).isComposing && submit()} />
         {err && <div className="err">{err}</div>}
         <button className="go" disabled={busy} onClick={submit}>{busy ? "…" : "就叫这个"}</button>
       </div>
@@ -2354,7 +2392,7 @@ function App() {
   }, []);
   const [view, setView] = useState(() => parseHash().view || "landing"); // 初始视图按 URL hash(分页直达)
   const [pendingStory, setPendingStory] = useState(() => parseHash().story); // #/story/<名> 直链,等 presets 到位再开
-  const [loginShown, setLoginShown] = useState(false); // 标题开屏 → 点按钮才展开邮箱+验证码登录表单
+  const [loginShown, setLoginShown] = useState(""); // ""=标题开屏;"login"/"register"=展开对应 tab 的登录表单
   const [sidebarOpen, setSidebarOpen] = useState(true); // 游戏中侧边卡组栏开关
   const [isPreset, setIsPreset] = useState(false);      // 当前局是否由预设开(预设:无侧边栏 + 先选人)
   const [selecting, setSelecting] = useState(false);    // 预设进入后的选人页阶段
@@ -2396,14 +2434,25 @@ function App() {
   useEffect(() => { refreshHome(); }, []);
 
   // 账户:开局查 /api/auth/me —— 判断 AUTH 是否开 + 是否已登录(token 失效则清掉)。
+  // 网络抖动/瞬时 5xx 重试 3 次再定论,不再一次失败就吞成「AUTH 未开」导致已登录用户被当游客。
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => {
-        if (r.status === 401) { setToken(""); return { user: null, auth_enabled: true }; }
-        return r.ok ? r.json() : { user: null, auth_enabled: false };
-      })
-      .then((d) => setAuth({ ready: true, enabled: !!d.auth_enabled, user: d.user || null }))
-      .catch(() => setAuth({ ready: true, enabled: false, user: null }));
+    let alive = true;
+    (async () => {
+      for (let i = 0; i < 3; i++) {
+        try {
+          const r = await fetch("/api/auth/me");
+          if (r.status === 401) { setToken(""); if (alive) setAuth({ ready: true, enabled: true, user: null }); return; }
+          if (r.ok) {
+            const d = await r.json();
+            if (alive) setAuth({ ready: true, enabled: !!d.auth_enabled, user: d.user || null });
+            return;
+          }
+        } catch (e) {}
+        await new Promise((res) => setTimeout(res, 600 * (i + 1)));
+      }
+      if (alive) setAuth({ ready: true, enabled: false, user: null });
+    })();
+    return () => { alive = false; };
   }, []);
   // 本地存档作用域跟随账号:登录 = 只看自己这个号在本机的存档(新号=空);游客/AUTH 关 = 旧全局 key。
   useEffect(() => {
@@ -2689,11 +2738,11 @@ function App() {
 
   // AUTH 开且未登录 → 标题开屏(ReconTitle);点任意进入按钮才展开现有邮箱+验证码登录表单。AUTH 关时不触发,行为同现状。
   if (auth.enabled && !auth.user) {
-    if (loginShown) return <LoginView onAuthed={onAuthed} onBack={() => setLoginShown(false)} />;
+    if (loginShown) return <LoginView initialTab={loginShown} onAuthed={onAuthed} onBack={() => setLoginShown("")} />;
     return (
       <window.ReconTitle
-        onStart={() => setLoginShown(true)} onLogin={() => setLoginShown(true)}
-        onGuest={() => setLoginShown(true)} onResume={() => setLoginShown(true)} />
+        onStart={() => setLoginShown("register")} onLogin={() => setLoginShown("login")}
+        onGuest={() => setLoginShown("register")} onResume={() => setLoginShown("login")} />
     );
   }
 
@@ -2832,7 +2881,26 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+// 全局渲染兜底:任何视图抛错(含 window.* 视图脚本没加载上)不再整页白屏,给出可刷新的错误卡。
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  componentDidCatch(err, info) { try { console.error("[ErrorBoundary]", err, info && info.componentStack); } catch (e) {} }
+  render() {
+    if (!this.state.err) return this.props.children;
+    return (
+      <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#f3ece0", fontFamily: '"Kaiti SC","STKaiti","KaiTi",serif', color: "#2c2820" }}>
+        <div style={{ textAlign: "center", padding: "40px 48px", background: "#faf4ea", border: "1px solid #ddd0b4", maxWidth: 420 }}>
+          <h2 style={{ margin: 0, letterSpacing: ".12em", fontFamily: '"Songti SC","SimSun",serif' }}>页面出了点问题</h2>
+          <p style={{ color: "#6f6757", fontSize: 13, lineHeight: 2, margin: "14px 0 20px" }}>这一页没能正常渲染,刷新通常可以恢复。<br />若反复出现,请截图联系运营。</p>
+          <button onClick={() => location.reload()} style={{ padding: "10px 28px", background: "#34463d", color: "#f3ead6", border: "1px solid #283831", cursor: "pointer", letterSpacing: ".2em", fontFamily: '"Songti SC","SimSun",serif' }}>刷新页面</button>
+        </div>
+      </div>
+    );
+  }
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<ErrorBoundary><App /></ErrorBoundary>);
 
 // React 已挂载(createRoot().render 同步提交),撤掉 index.html 里的首屏 loading。
 // 用 setTimeout 不用 rAF:后台标签里 rAF 会被挂起,首屏 loading 就撤不掉了。
