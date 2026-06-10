@@ -309,7 +309,8 @@ def api_my_oc(user: dict | None = Depends(current_user_dep)):
                          if ln.strip() and not ln.strip().startswith(("#", "!", "[[", "*"))]
                 persona = (lines[0] if lines else "")[:60]
         out.append({"user": e.get("user", ""), "character": e.get("character", ""),
-                    "art": _asset(e.get("art", "")), "persona": persona, "card": card})
+                    "art": _asset(e.get("art", "")), "anim": _asset(e.get("anim", "")),
+                    "persona": persona, "card": card})
     return {"ocs": out}
 
 

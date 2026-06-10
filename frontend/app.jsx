@@ -3090,7 +3090,7 @@ function ReconChatLive({ presets, onNav, mobile }) {
   const list = React.useMemo(() => {
     const out = []; const seen = new Set();
     (ocs || []).forEach((o) => {
-      if (o.character && !seen.has(o.character)) { seen.add(o.character); out.push({ name: o.character, persona: o.persona, avatar: o.art || undefined, card: o.card }); }
+      if (o.character && !seen.has(o.character)) { seen.add(o.character); out.push({ name: o.character, persona: o.persona, avatar: o.art || undefined, anim: o.anim || undefined, card: o.card }); }
     });
     presetCards.forEach((c) => {
       const nm = (c.data && c.data.name) || c.name;

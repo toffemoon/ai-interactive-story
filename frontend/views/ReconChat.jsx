@@ -1,8 +1,9 @@
 /* ReconChat — 角色聊天 window 组件（1:1 还原 frontend/_recon/chat.html）
    React/ReactDOM 已全局。资源路径相对站点根 assets/recon/。
    数据驱动：优先读真实 props；无 props（测试页）时回退极简 sample 保证不白屏。
-   契约 props: {characters:[{name,persona,avatar}], activeName, messages:[{who:"me"|角色名,text}],
-                value, onChange(text), onSend(), onPick(name), onNav(view)}。 */
+   契约 props: {characters:[{name,persona,avatar,anim?}], activeName, messages:[{who:"me"|角色名,text}],
+                value, onChange(text), onSend(), onPick(name), onNav(view)}。
+   anim = 全身待机动画(mp4 循环,白底):有则在对话区右侧播全身立绘,multiply 融纸面。 */
 
 // 极简回退 sample：仅用于无 props 的 standalone 测试页，保证版式可渲染。
 const FALLBACK = {
@@ -229,6 +230,10 @@ function ReconChat(props) {
 
   .cv-chat .rcard .portrait {height:288px; position:relative; flex:none; overflow:hidden;}
   .cv-chat .rcard .portrait img {width:100%; height:100%; object-fit:cover; object-position:center top;}
+  /* 档案位 = 全身待机动画:占位加大(330 宽按视频比例放整身),multiply 把白底融进纸面 */
+  .cv-chat .rcard .portrait.anim {height:440px; background:var(--paper);}
+  .cv-chat .rcard .portrait.anim video {width:100%; height:100%; display:block; object-fit:cover; mix-blend-mode:multiply;}
+  .cv-chat .rcard .portrait.anim .name b {color:var(--ink); text-shadow:0 1px 6px rgba(250,244,234,.9);}
   .cv-chat .rcard .portrait .name {position:absolute; left:16px; bottom:12px;}
   .cv-chat .rcard .portrait .name b {display:block; font-family:var(--serif); font-size:22px; font-weight:700; color:#fff; letter-spacing:.06em; text-shadow:0 1px 4px rgba(0,0,0,.5);}
   .cv-chat .rcard .portrait .name s {font-family:var(--serifen); font-style:italic; font-size:12px; color:rgba(255,255,255,.85); text-decoration:none; text-shadow:0 1px 3px rgba(0,0,0,.5);}
@@ -350,10 +355,12 @@ function ReconChat(props) {
           <a><span className="en">VOICE</span></a>
           <a>礼物</a>
         </div>
-        <div className="portrait">
-          {active && active.avatar
-            ? <img src={active.avatar} alt="" />
-            : <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", background: "#cdb49a", color: "#fff", fontFamily: "var(--serif)", fontSize: 64 }}>{initial}</div>}
+        <div className={"portrait" + (active && active.anim ? " anim" : "")}>
+          {active && active.anim
+            ? <video key={active.name} src={active.anim} autoPlay loop muted playsInline preload="auto" />
+            : active && active.avatar
+              ? <img src={active.avatar} alt="" />
+              : <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", background: "#cdb49a", color: "#fff", fontFamily: "var(--serif)", fontSize: 64 }}>{initial}</div>}
           <div className="name"><b>{active ? active.name : "未选择角色"}</b></div>
         </div>
         {active && active.persona ? <div className="tagline">{active.persona}</div> : null}

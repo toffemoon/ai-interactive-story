@@ -123,6 +123,9 @@
   .cv-m .c-msg .bub {max-width:76%; background:var(--paper); border:1px solid var(--line); padding:9px 12px; font-size:13px; line-height:1.75;}
   .cv-m .c-msg.me {flex-direction:row-reverse;}
   .cv-m .c-msg.me .bub {background:var(--green); border-color:#283831; color:#f2ede2;}
+  /* 全身待机动画面板(有 anim 的角色):资料区整宽大图,multiply 融纸面 */
+  .cv-m .c-anim {border:1px solid var(--line); background:var(--paper); margin-bottom:12px; overflow:hidden;}
+  .cv-m .c-anim video {width:100%; aspect-ratio:834/1112; display:block; object-fit:cover; mix-blend-mode:multiply;}
 
   /* 创作 */
   .cv-m .k-tabs {display:flex; gap:6px; overflow-x:auto; padding-bottom:8px;}
@@ -412,6 +415,11 @@
                 </div>
               ))}
             </div>
+            {active && active.anim ? (
+              <div className="c-anim" key={active.name}>
+                <video src={active.anim} autoPlay loop muted playsInline preload="auto" />
+              </div>
+            ) : null}
             {active && (active.persona || active.description) ? (
               <div className="d-blk" style={{ marginBottom: 12 }}><b style={{ fontFamily: "var(--serif)", fontSize: 14 }}>{active.name}</b><p>{(active.description || active.persona || "").slice(0, 80)}</p></div>
             ) : null}
