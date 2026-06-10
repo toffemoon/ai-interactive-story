@@ -100,6 +100,15 @@ const RECON_STORY_DETAIL_CSS = `
   .cv-story .navtag .en {font-family:var(--serifen); font-size:8px; letter-spacing:.18em; color:var(--gold); margin-top:8px;}
 
   
+  /* 翻开一本书:各块轻错峰淡入(每次打开详情都重挂载,动画自然重播) */
+  @keyframes rcs-in { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+  .cv-story .book, .cv-story .booktab { animation: rcs-in .42s cubic-bezier(.22,1,.36,1) both; }
+  .cv-story .stitle { animation: rcs-in .42s cubic-bezier(.22,1,.36,1) .06s both; }
+  .cv-story .intro { animation: rcs-in .4s cubic-bezier(.22,1,.36,1) .14s both; }
+  .cv-story .bg, .cv-story .chars { animation: rcs-in .4s cubic-bezier(.22,1,.36,1) .2s both; }
+  .cv-story .pickh, .cv-story .cards { animation: rcs-in .4s cubic-bezier(.22,1,.36,1) .26s both; }
+  .cv-story .ritual { animation: rcs-in .44s cubic-bezier(.22,1,.36,1) .32s both; }
+  @media (prefers-reduced-motion: reduce){ .cv-story .book, .cv-story .booktab, .cv-story .stitle, .cv-story .intro, .cv-story .bg, .cv-story .chars, .cv-story .pickh, .cv-story .cards, .cv-story .ritual { animation-duration:1ms; animation-delay:0ms; } }
   .cv-story .book {position:absolute; left:248px; top:106px; width:318px; height:300px; z-index:4;
     background:center/contain no-repeat url(assets/recon/story-detail-book.png);}
   .cv-story .booktab {position:absolute; left:196px; top:128px; width:84px; height:36px; z-index:5;

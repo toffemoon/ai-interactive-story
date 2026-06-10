@@ -155,11 +155,10 @@ function ReconPlay(props) {
   /* 防 styles.css 全局 input 规则泄漏 */
   .cv-play .freein {border-radius:0; box-shadow:none;}
   .cv-play .freein:focus {box-shadow:none;}
-  /* 回合内容入场:角色发言/行动卡逐条错峰浮入(行按回合 key 重挂 → 每回合重播;流式时逐条冒出) */
-  @keyframes cvIn {from {opacity:0; transform:translateY(10px);} to {opacity:1; transform:translateY(0);}}
-  .cv-play .prow {animation:cvIn .42s cubic-bezier(.22,1,.36,1) both;}
-  .cv-play .ccard {animation:cvIn .46s cubic-bezier(.22,1,.36,1) both;}
-  @media (prefers-reduced-motion: reduce){ .cv-play .prow, .cv-play .ccard {animation-duration:1ms;} }
+  /* 回合切换:叙事/对话/选项 淡入轻浮(容器按 round 重挂载触发;延迟用内联 style 错峰) */
+  @keyframes rcp-in { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+  .cv-play .scene .prose, .cv-play .prow, .cv-play .ccard { animation: rcp-in .34s cubic-bezier(.22,1,.36,1) both; }
+  @media (prefers-reduced-motion: reduce){ .cv-play .scene .prose, .cv-play .prow, .cv-play .ccard { animation-duration:1ms; } }
   
   .cv-play .ccard::before, .cv-play .ccard::after {content:""; position:absolute; width:9px; height:9px; border:1px solid var(--line2); opacity:.6;}
   .cv-play .ccard::before {left:5px; top:5px; border-right:none; border-bottom:none;}
@@ -290,14 +289,14 @@ function ReconPlay(props) {
           <div className="round"><span>当前回合</span><i></i><b>{round}</b></div>
           <h2>{sceneTitle}</h2>
           <div className="sub">{sceneSub}</div>
-          <p className="prose">{narration}</p>
+          <p className="prose" key={round}>{narration}</p>
         </div>
 
         {/* 角色发言 */}
         <div className="presence">
           <div className="ph"><b>角色发言</b><span className="en">DIALOGUE</span><span className="ln"></span></div>
           {dialogues ? dialogues.map((d, i) => (
-            <div className="prow" key={round + "-" + i} style={{ animationDelay: (i * 90) + "ms" }}><span className="avi">{ini(d.name)}</span><span className="nm" style={{ width: (d.name || "").length > 2 ? "72px" : undefined }}>{d.name}</span><span className="dash"></span><span className="ln-q">{d.text}</span></div>
+            <div className="prow" key={round + "-" + i} style={{ animationDelay: (i * 80) + "ms" }}><span className="avi">{ini(d.name)}</span><span className="nm" style={{ width: (d.name || "").length > 2 ? "72px" : undefined }}>{d.name}</span><span className="dash"></span><span className="ln-q">{d.text}</span></div>
           )) : (
             <div className="prow" style={{ borderBottom: "none" }}><span className="ln-q" style={{ color: "var(--faint)" }}>{busy ? "（角色正在回应……）" : "（本回合暂无角色发言）"}</span></div>
           )}
@@ -308,7 +307,7 @@ function ReconPlay(props) {
           <div className="ph"><b>你的行动</b><span className="en">CHOICES</span><span className="ln"></span></div>
           <div className="cgrid">
             {choices ? choices.slice(0, 4).map((c, i) => (
-              <div className="ccard" key={round + "-" + i} onClick={() => !busy && onChoice(c)} style={{ cursor: busy ? "default" : "pointer", animationDelay: (120 + i * 80) + "ms" }}>
+              <div className="ccard" key={round + "-" + i} onClick={() => !busy && onChoice(c)} style={{ cursor: busy ? "default" : "pointer", animationDelay: (120 + i * 70) + "ms" }}>
                 <div className="ch"><span className="ic">{choiceIcon(i)}</span><b>{c.label || c.title || ("选项 " + (i + 1))}</b></div>
                 <p>{c.description || c.desc || ""}</p>
                 <div className="cf"><span className="cat"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.2-6.3-4.6L5.7 21 8 14.8 2 10.4h7.6z"/></svg>{c.intent || "行动"}</span><span className="cost"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 3l7 5-7 13-7-13z"/></svg>0</span></div>

@@ -108,6 +108,10 @@ function ReconChat(props) {
   .cv-chat .recenth b {font-family:var(--serif); font-size:11px; letter-spacing:.12em; color:var(--soft); white-space:nowrap;}
   .cv-chat .recenth .en {font-family:var(--serifen); font-size:7px; letter-spacing:.18em; color:var(--faint); white-space:nowrap;}
   .cv-chat .recenth i {flex:1; height:1px; background:var(--line);}
+  /* 新消息浮现(已有消息节点 key 不变不重播,只有新挂载的动) */
+  @keyframes rcc-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+  .cv-chat .msg { animation: rcc-in .26s cubic-bezier(.22,1,.36,1) both; }
+  @media (prefers-reduced-motion: reduce){ .cv-chat .msg { animation-duration:1ms; } }
   .cv-chat .rlist {overflow-y:auto; max-height:400px;}
   .cv-chat .rlist::-webkit-scrollbar {width:5px;} .cv-chat .rlist::-webkit-scrollbar-thumb {background:var(--line2);}
   .cv-chat .inputbar .box input {border:none; outline:none; background:transparent; box-shadow:none; border-radius:0; padding:0; width:100%; color:var(--ink); font-family:var(--kai); font-size:13.5px;}

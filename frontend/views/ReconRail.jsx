@@ -32,7 +32,8 @@ function ReconRail({ active, onNav, children }) {
   .cv-rail .rnav a.on {background:linear-gradient(90deg,#3c4d43,#34463d); color:#eef0e2;}
   .cv-rail .rnav a.on .tx .en {color:rgba(238,240,226,.6);}
   .cv-rail .rnav a.on::before {content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--r-gold2);}
-  .cv-rail .rnav a:hover:not(.on) {color:#2c2820;}
+  .cv-rail .rnav a {transition: color .2s ease, background .25s ease;}
+  .cv-rail .rnav a:hover:not(.on) {color:#2c2820; background:rgba(169,138,99,.08);}
       `}</style>
       <div className="logo" onClick={() => go("home")}>
         <img src="assets/recon/play-emblem.png" alt="" />

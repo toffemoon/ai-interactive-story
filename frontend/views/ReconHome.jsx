@@ -172,6 +172,15 @@ function ReconHome(props) {
   .cv-home .b1 span {position:relative;}
   .cv-home .b2 {height:54px; padding:0 30px; background:transparent; border:1px solid var(--line2); color:var(--navy);
     font-family:var(--serif); font-size:16px; letter-spacing:.18em; cursor:pointer;}
+  /* 进店:hero 文案/精选卡/今日推荐/亮点 轻错峰淡入 */
+  @keyframes rch-in { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+  .cv-home .hero-tx { animation: rch-in .42s cubic-bezier(.22,1,.36,1) both; }
+  .cv-home .hero-art { animation: rch-in .5s cubic-bezier(.22,1,.36,1) .06s both; }
+  .cv-home .feat-h, .cv-home .more, .cv-home .arrow { animation: rch-in .4s cubic-bezier(.22,1,.36,1) .16s both; }
+  .cv-home .card { animation: rch-in .38s cubic-bezier(.22,1,.36,1) both; }
+  .cv-home .pick { animation: rch-in .4s cubic-bezier(.22,1,.36,1) .3s both; }
+  .cv-home .pillars { animation: rch-in .4s cubic-bezier(.22,1,.36,1) .36s both; }
+  @media (prefers-reduced-motion: reduce){ .cv-home .hero-tx, .cv-home .hero-art, .cv-home .feat-h, .cv-home .more, .cv-home .arrow, .cv-home .card, .cv-home .pick, .cv-home .pillars { animation-duration:1ms; animation-delay:0ms; } }
   /* 防 styles.css 全局 button 规则泄漏:圆角归零 + hover 不变深色 */
   .cv-home .b1, .cv-home .b2 {border-radius:0; min-height:0;}
   .cv-home .b1:hover:not(:disabled) {background:var(--navy); color:#f3ead6;}
@@ -279,7 +288,7 @@ function ReconHome(props) {
           </div>
         )}
         {cards.map((c, i) => (
-          <div className="card" key={i} style={{ cursor: "pointer" }} onClick={() => onOpenStory(c.preset)}>
+          <div className="card" key={i} style={{ cursor: "pointer", animationDelay: (180 + Math.min(i, 6) * 60) + "ms" }} onClick={() => onOpenStory(c.preset)}>
             <img className="th" src={c.cover} alt="" /><span className="no">{c.no}</span>{c.isNew ? <span className="new">教学</span> : null}
             <div className="bd"><b>{c.title}</b><div className="tags">{c.tags}</div><div className="syn">{c.syn}</div>
               <div className="mt"><span className="star">✦</span><span>{c.chars || "—"} 角色</span><span>·</span><span>{c.author}</span></div></div>
