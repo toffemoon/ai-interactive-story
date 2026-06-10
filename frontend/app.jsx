@@ -698,18 +698,28 @@ function DraftPreview({ kind, draft }) {
   );
 }
 
-function CardBuilder({ kind = "characters", seed, initialDraft, onComplete, onClose }) {
+function CardBuilder({ kind = "characters", seed, firstAsk, initialDraft, onComplete, onClose }) {
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState(initialDraft || null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
+  const [importing, setImporting] = useState(false);  // 本地导入解析中
+  const [impErr, setImpErr] = useState("");
+  const [libOpen, setLibOpen] = useState(false);      // 「从我的库导入」列表
+  const [libItems, setLibItems] = useState(null);     // null=读取中
   const chatRef = useRef(null);
 
   const combineAsk = (out) => [out.reply, out.next_question].filter(Boolean).join("\n");
 
   useEffect(() => {
+    // 有固定首句(类别/档位/隐藏融进对话,2026-06-10)且不是带草稿进来 → 本地注入第一句,不等 LLM;
+    // 带草稿(对话完善/导入)仍走 build_card 初始轮,让 AI 总结草稿接着引导。
+    if (firstAsk && !initialDraft) {
+      setMessages([{ role: "assistant", content: firstAsk }]);
+      return undefined;
+    }
     let alive = true;
     (async () => {
       setLoading(true);
@@ -724,6 +734,36 @@ function CardBuilder({ kind = "characters", seed, initialDraft, onComplete, onCl
     })();
     return () => { alive = false; };
   }, []);
+
+  // ── 导入(2026-06-10):本地导入 = 上传文件 → AI 按当前卡种解析 → 填进模板草稿;库里导入 = 从我的库挑一张填进来。
+  const SINGULAR = { characters: "character", worlds: "world", stories: "story", players: "player" };
+  function applyImported(data, from) {
+    const d = kind === "characters" ? ((data || {}).data || data) : data;   // 角色卡解开 Card 信封
+    setDraft(d);
+    setLibOpen(false);
+    setMessages((ms) => [...ms, { role: "assistant", content: `已${from}并填入模板草稿(见草稿区)。哪里要补、要改,直接和我说。` }]);
+  }
+  async function importLocalFile(file) {
+    if (!file || importing) return;
+    setImporting(true); setImpErr("");
+    try {
+      const text = await uploadFile(file);
+      const out = await postJSON("/api/identify_auto", { text, kind: SINGULAR[kind] || undefined });
+      applyImported(out.data, "解析本地文件");
+    } catch (e) { setImpErr(e.message || "导入失败"); }
+    finally { setImporting(false); }
+  }
+  async function toggleLib() {
+    if (libOpen) { setLibOpen(false); return; }
+    setLibOpen(true); setLibItems(null);
+    try {
+      const r = await fetch(`/api/library/${kind}`);
+      let xs = r.ok ? await r.json() : [];
+      const reg = loadMyLib().cards;
+      xs = xs.filter((x) => (getToken() ? x.official === false : reg.includes(kind + "/" + x.name)));   // 只列「我的库」
+      setLibItems(xs);
+    } catch (e) { setLibItems([]); }
+  }
 
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
@@ -766,6 +806,27 @@ function CardBuilder({ kind = "characters", seed, initialDraft, onComplete, onCl
         <DraftPreview kind={kind} draft={d} />
       </div>
       {error && <div className="error">{error}</div>}
+      <div className="builder-import-bar">
+        <span className="bib-label">已有写好的设定?</span>
+        <label className={"upbtn small" + (importing ? " disabled" : "")}>
+          {importing ? "解析中…" : "↑ 本地导入"}
+          <input type="file" accept=".txt,.md,.docx" style={{ display: "none" }} disabled={importing}
+            onChange={async (e) => { const f = e.target.files[0]; e.target.value = ""; await importLocalFile(f); }} />
+        </label>
+        <button className="upbtn small" onClick={toggleLib}>{libOpen ? "收起" : "⌂ 从我的库导入"}</button>
+        {impErr && <span className="error inline">{impErr}</span>}
+      </div>
+      {libOpen && (
+        <div className="builder-lib-list">
+          {libItems === null && <p className="empty">读取中…</p>}
+          {libItems !== null && !libItems.length && <p className="empty">我的库里还没有这一类的卡。去「探索 → 卡片」加入,或直接在这聊着建。</p>}
+          {libItems !== null && libItems.map((it, i) => (
+            <button key={i} className="bll-item" onClick={() => applyImported(it.data, `从我的库导入「${it.name}」`)}>
+              {it.name}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="builder-composer">
         <textarea rows="2" value={input} onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } }}
@@ -1566,75 +1627,45 @@ function LoginView({ onAuthed }) {
   );
 }
 
-// 创作引导:按 template 子分档给 chips。选项折进 seed(best-effort 让 AI 按 template 走;不改后端 build_card)。
-const BUILD_GUIDES = {
-  character: [
-    { key: "类别", opts: ["主要NPC", "次要NPC"] },
-    { key: "档位", opts: ["轻量", "满配"] },
-    { key: "隐藏", opts: ["无隐藏", "含隐藏真相"] },
-  ],
-  setting: [
-    { key: "子类", opts: ["组织", "地点"] },
-    { key: "档位", opts: ["轻量", "满配"] },
-  ],
-  worldsetting: [
-    { key: "类型", opts: ["世界书", "设定卡·组织", "设定卡·地点"] },
-    { key: "档位", opts: ["轻量", "满配"] },
-  ],
-};
-
-function BuildOptions({ guide, opts, setOpts, onStart, onCancel }) {
-  const groups = BUILD_GUIDES[guide] || [];
-  return (
-    <div className="build-options">
-      <p className="build-pick-q">先定个调,AI 据此引导(都可改)</p>
-      {groups.map((g) => (
-        <div className="bo-group" key={g.key}>
-          <span className="bo-label">{g.key}</span>
-          <div className="bo-chips">
-            {g.opts.map((o) => (
-              <button key={o} className={"bo-chip " + ((opts[g.key] || g.opts[0]) === o ? "on" : "")}
-                onClick={() => setOpts({ ...opts, [g.key]: o })}>{o}</button>
-            ))}
-          </div>
-        </div>
-      ))}
-      <div className="bo-actions">
-        <button className="primary" onClick={onStart}>开始对话创作</button>
-        {onCancel && <button onClick={onCancel}>返回</button>}
-      </div>
-    </div>
-  );
-}
-
-// 卡种 + 引导选项 → 给 build_card 的 seed(它会拼进系统提示;best-effort 让 AI 按 template 字段引导)。
-function buildGuideSeed(pickId, opts) {
-  const o = opts || {};
+// 卡种 → 给 build_card 的 seed(拼进系统提示)。对齐 vault/repo card-templates(2026-06-08 微调:
+// 主要NPC 默认完整不分档 / 次要NPC 取消独立卡并入设定卡 NPC 原型区 / 设定卡子类 通用·组织·地点,档位默认轻量)。
+// 类别/子类/档位/隐藏 不再前置 chips:由 AI 第一句话问、用户在对话里说(2026-06-10 yufei 拍板)。
+function buildGuideSeed(pickId) {
   if (pickId === "characters") {
-    const tier = o["档位"] || "轻量", cat = o["类别"] || "主要NPC", hid = o["隐藏"] || "无隐藏";
-    return `【创作要求 · 角色卡(${cat} · ${tier} · ${hid})】
-按角色卡模板逐项引导我填,草稿请尽量产出这些字段:anchor 一句话锚点、tension 核心矛盾、look 外貌锚点、keys 召回关键词、speech_rules(自称/称呼玩家/句长节奏/高频句式/口头禅/禁用)、description 身份、personality 性格、first_mes 开场白、known_public 公开可知、known_hidden 隐藏真相(默认不说破)${tier === "满配" ? "、versions 版本人格/状态轴(含揭穿后覆盖)" : ""}。
-${cat === "次要NPC" ? "次要NPC 从简:锚点 + speech_rules + 一句外形 + 知识边界即可,核心矛盾可省。" : ""}${hid === "含隐藏真相" ? "这个角色有隐藏真相:把真相写进 known_hidden,披露节奏挂故事书,不写进公开设定。" : ""}`;
+    return `【创作要求 · 角色卡】
+对齐角色卡模板:主要NPC 默认完整——不分轻量/满配,按全字段引导,作者没提的字段留空、不硬凑;次要NPC 不再单独建卡,一般/路人 NPC 放所在地点/组织设定卡的「NPC 原型」区,有名有姓需要展开的按主要NPC 立卡。
+你的第一个问题先问清:① 建的是主要NPC 还是路人原型(路人→建议改建设定卡,把原型写进 NPC 原型区);② 有没有隐藏真相(有→写进 known_hidden,默认不说破,披露节奏挂故事书,不进公开设定)。
+草稿尽量产出:anchor 一句话锚点、tension 核心矛盾、look 外貌锚点、keys 召回关键词、speech_rules(自称/称呼玩家/句长节奏/高频句式/口头禅/禁用)、description 身份、personality 性格、first_mes 开场白、known_public 公开可知、known_hidden 隐藏真相、versions 版本人格/状态轴(含揭穿后覆盖;没有则留空)。`;
   }
   if (pickId === "settings") {
-    const sub = o["子类"] || "组织", tier = o["档位"] || "轻量";
-    return `【创作要求 · 设定卡(${sub} · ${tier})→ 存为世界书条目】
-这是一张设定卡(${sub}的中层完整设定)。按设定卡模板引导:一句话锚点、知识分层 public/hidden、口吻/禁区、召回关键词、概览、${sub === "地点" ? "场景气质/出入口/在场势力与现状" : "宗旨与信仰/结构与权力/关键人物/与其它势力关系"}、剧情钩子。产出为世界书条目:每条 keys + 内容(standalone),切成总览条 + 各分项条;hidden 的标可见性 hidden。`;
+    return `【创作要求 · 设定卡 → 存为世界书条目】
+设定卡 = 单个对象的中层完整设定。子类三种:通用(阵营/物品体系/历法/概念等组织地点之外的中层设定)/ 组织 / 地点;档位:轻量(默认)/ 满配。
+你的第一个问题先问清:子类(通用/组织/地点)和档位(默认轻量,要完整说满配)。
+按设定卡模板引导:一句话锚点、知识分层 public/hidden、口吻/禁区、召回关键词、概览、子类专属段(地点=场景气质/出入口/在场势力与现状,并把一般/路人 NPC 写进「NPC 原型/人员生态」区;组织=宗旨与信仰/结构与权力/关键人物/与其它势力关系,典型成员写「NPC 原型」区;通用=按设定本身的自然结构分段)、剧情钩子。
+产出为世界书条目:每条 keys + 内容(standalone),切成总览条 + 各分项条;hidden 的标可见性 hidden。`;
   }
   if (pickId === "players") {
     return `【创作要求 · 演出卡】
 按演出卡模板引导,草稿请尽量产出:role 身份、background 背景、goals 目标、abilities 能力/资源、constraints 限制/禁忌、known_facts 开局已知、unknown 开局不知道(与 known_facts 配对,防上帝视角)、opening 开局场景/时间锚点。`;
   }
   if (pickId === "worldsetting") {
-    const type = o["类型"] || "世界书", tier = o["档位"] || "轻量";
-    if (type.indexOf("设定卡") === 0) {
-      return buildGuideSeed("settings", { 子类: type.indexOf("地点") >= 0 ? "地点" : "组织", 档位: tier });
-    }
-    return `【创作要求 · 世界书(${tier})】
-按世界书模板引导我把世界拆成关键词触发的条目。每条产出:keys 触发关键词(玩家真会说的词 + 标志专名)、content 内容(standalone 自足、一条一事)、可见性 public/hidden(hidden 注入但默认不说破)、来源 world/rule/location/figure/org。世界铁则设常驻、标硬canon。`;
+    return `【创作要求 · 世界 / 设定】
+你的第一个问题先问清类型:建「世界书」还是「设定卡」。
+选世界书:按世界书模板把世界拆成关键词触发的条目,每条产出 keys 触发关键词(玩家真会说的词 + 标志专名)、content 内容(standalone 自足、一条一事)、可见性 public/hidden(hidden 注入但默认不说破)、来源 world/rule/location/figure/org;世界铁则设常驻、标硬canon。
+选设定卡:再问子类(通用/组织/地点)与档位(默认轻量,可满配),按设定卡模板引导(锚点/知识分层/口吻禁区/召回关键词/概览/子类专属段含 NPC 原型区/剧情钩子),产出为世界书条目(总览条+分项条,hidden 标可见性)。`;
   }
   return "";
 }
+
+// AI 的固定第一句话(本地注入,不等 LLM):提示用户先说 类别/子类/档位/隐藏,对齐模板口径。
+const FIRST_ASK = {
+  characters: "我们来建角色卡。先告诉我三件事:① 这是【主要NPC】还是路人一类的原型?(路人不单独立卡,建议放进所在地点/组织设定卡的「NPC 原型」区)② 有没有【隐藏真相】?③ 一句话说说 TA 是谁。主要NPC 按完整模板走,你没提到的字段留空就行。",
+  settings: "我们来建设定卡。先告诉我:① 子类是【通用 / 组织 / 地点】?(通用=阵营、物品体系、历法、概念这类)② 档位【轻量】还是【满配】?(默认轻量)③ 一句话说说这是个什么设定。",
+  worlds: "我们来建世界书:把世界拆成关键词触发的碎片条目。先一句话说说这个世界,或直接丢给我一段设定(比如一条世界铁则),我来帮你切成条目。",
+  players: "我们来建演出卡——你在故事里扮演谁。先说两件事:你的身份是什么、你想要什么(目标)。",
+  stories: "我们来搭故事框架(故事书):前提、主线、结局。先一句话说说这个故事讲什么、玩家从哪里开始。",
+  worldsetting: "这一步建【世界 / 设定】。先告诉我类型:建【世界书】(关键词触发的碎片条目)还是【设定卡】(通用/组织/地点 的中层完整设定,默认轻量档,要完整说满配)?然后一句话说说内容。",
+};
 
 // 已创作一览:从故事库读各大类;事件卡从故事书聚合(只读)。建完刷新,看得到自己建了哪些。
 const BUILT_CATS = [
@@ -1694,23 +1725,23 @@ function BuiltOverview({ characters = [], worldBooks = [], story = null, player 
 function BuildView({ buildSeed, clearSeed, addCharacter, addWorld, setStory, setPlayer, goGame }) {
   const seeded = !!buildSeed.draft; // 从故事库「对话完善」进来:固定角色卡
   const PICKS = [
-    { id: "characters", label: "角色卡", desc: "NPC:可选 主要/次要、轻量/满配、含不含隐藏真相", buildKind: "characters", guide: "character" },
+    { id: "characters", label: "角色卡", desc: "NPC:主要NPC 默认完整模板;路人并入设定卡 NPC 原型;可含隐藏真相", buildKind: "characters" },
     { id: "players", label: "演出卡", desc: "你扮演谁:身份/目标/能力/限制/开局已知与不知", buildKind: "players" },
     { id: "worlds", label: "世界书", desc: "关键词触发的世界设定碎片条目", buildKind: "worlds" },
-    { id: "settings", label: "设定卡", desc: "组织 / 地点的中层完整设定(走世界书引擎)", buildKind: "worlds", guide: "setting" },
+    { id: "settings", label: "设定卡", desc: "通用 / 组织 / 地点的中层完整设定(走世界书引擎)", buildKind: "worlds" },
     { id: "stories", label: "故事卡", desc: "前提/主线/事件/结局 → 故事书(事件卡建在这里)", buildKind: "stories" },
   ];
   const [pick, setPick] = useState(seeded ? PICKS[0] : null);
-  const [opts, setOpts] = useState({});
   const [building, setBuilding] = useState(seeded);
   const [saved, setSaved] = useState(null); // {kind, data, name}
   const [nonce, setNonce] = useState(0);
   const [importing, setImporting] = useState(false); // 本地文件导入识别中
   const [importErr, setImportErr] = useState("");
+  const [importDraft, setImportDraft] = useState(null); // 本地导入解析出的草稿(填进对话建卡)
   const [overviewKey, setOverviewKey] = useState(0); // 建完 +1 刷新「已创作一览」
 
   const kind = pick ? pick.buildKind : (seeded ? "characters" : null);
-  const seed = seeded ? (buildSeed.seed || "") : (pick ? buildGuideSeed(pick.id, opts) : "");
+  const seed = seeded ? (buildSeed.seed || "") : (pick ? buildGuideSeed(pick.id) : "");
 
   const nameOf = (k, data) =>
     k === "characters" ? (data.data || {}).name : k === "stories" ? data.title : data.name;
@@ -1722,7 +1753,7 @@ function BuildView({ buildSeed, clearSeed, addCharacter, addWorld, setStory, set
     else if (k === "players") setPlayer(data);
   }
 
-  // 本地文件 → 统一识别归类(/api/identify_auto 已自动入库)→ 进「已建好」态,可一键用到游戏。
+  // 本地文件 → 统一识别归类(/api/identify_auto)→ AI 解析填入模板草稿,进对话建卡继续完善(2026-06-10 yufei)。
   async function importLocal(file) {
     if (!file) return;
     setImporting(true); setImportErr("");
@@ -1731,8 +1762,9 @@ function BuildView({ buildSeed, clearSeed, addCharacter, addWorld, setStory, set
       const out = await postJSON("/api/identify_auto", { text });
       const SING2PLU = { character: "characters", world: "worlds", story: "stories", player: "players" };
       const k = SING2PLU[out.kind] || "characters";
-      setSaved({ kind: k, data: out.data, name: nameOf(k, out.data) || "未命名" });
-      setOverviewKey((n) => n + 1);
+      const p = PICKS.find((x) => x.id === k) || PICKS[0];
+      setImportDraft(out.kind === "character" ? ((out.data || {}).data || out.data) : out.data);   // 角色卡解开信封
+      setPick(p); setBuilding(true); setNonce((n) => n + 1);
     } catch (e) { setImportErr(e.message || "导入失败"); }
     finally { setImporting(false); }
   }
@@ -1744,8 +1776,8 @@ function BuildView({ buildSeed, clearSeed, addCharacter, addWorld, setStory, set
     setOverviewKey((n) => n + 1);
   }
   function useInGame() { placeInGame(saved.kind, saved.data); goGame(); }
-  function again() { setSaved(null); clearSeed(); setPick(seeded ? PICKS[0] : null); setOpts({}); setBuilding(seeded); setNonce((n) => n + 1); }
-  function choosePick(p) { setPick(p); setOpts({}); if (!p.guide) setBuilding(true); } // 无引导:直接进对话
+  function again() { setSaved(null); clearSeed(); setImportDraft(null); setPick(seeded ? PICKS[0] : null); setBuilding(seeded); setNonce((n) => n + 1); }
+  function choosePick(p) { setPick(p); setImportDraft(null); setBuilding(true); } // 直接进对话(类别/档位 AI 第一句问)
 
   return (
     <section className="view-shell build-view">
@@ -1765,7 +1797,7 @@ function BuildView({ buildSeed, clearSeed, addCharacter, addWorld, setStory, set
           <div className="build-import">
             <span className="build-import-or">或 · 已有写好的设定?</span>
             <label className={"upbtn " + (importing ? "disabled" : "")}>
-              {importing ? "识别中…" : "↑ 上传本地文件(自动识别归类)"}
+              {importing ? "解析中…" : "↑ 本地导入(AI 解析后填入模板,可继续完善)"}
               <input type="file" accept=".txt,.md,.docx" style={{ display: "none" }} disabled={importing}
                 onChange={async (e) => { const f = e.target.files[0]; e.target.value = ""; await importLocal(f); }} />
             </label>
@@ -1774,15 +1806,11 @@ function BuildView({ buildSeed, clearSeed, addCharacter, addWorld, setStory, set
         </div>
       )}
 
-      {pick && !building && !saved && pick.guide && (
-        <BuildOptions guide={pick.guide} opts={opts} setOpts={setOpts}
-          onStart={() => setBuilding(true)} onCancel={() => setPick(null)} />
-      )}
-
       {pick && building && !saved && (
         <CardBuilder key={pick.id + nonce + (seeded ? "-edit" : "-new")} kind={kind}
-          seed={seed} initialDraft={buildSeed.draft} onComplete={onComplete}
-          onClose={() => { if (seeded) goGame(); else { setBuilding(false); setPick(null); } }} />
+          seed={seed} firstAsk={seeded ? undefined : FIRST_ASK[pick.id]}
+          initialDraft={buildSeed.draft || importDraft} onComplete={onComplete}
+          onClose={() => { if (seeded) goGame(); else { setBuilding(false); setPick(null); setImportDraft(null); } }} />
       )}
 
       {saved && (
@@ -2667,8 +2695,8 @@ function MineView({ saves, presets, activeId, authEnabled, user, onResume, onDel
 }
 
 const BUILD_STEPS = [
-  { key: "worlds", label: "世界 / 设定", optional: true, desc: "世界书 或 设定卡(组织 / 地点)的中层设定 — 先选类型" },
-  { key: "characters", label: "角色", desc: "NPC:先选 主要/次要、轻量/满配、含不含隐藏真相(至少 1 张)" },
+  { key: "worlds", label: "世界 / 设定", optional: true, desc: "世界书 或 设定卡(通用 / 组织 / 地点)的中层设定 — 类型在对话里说" },
+  { key: "characters", label: "角色", desc: "NPC:主要NPC 默认完整模板;路人并入设定卡 NPC 原型;有无隐藏真相对话里说(至少 1 张)" },
   { key: "players", label: "主角", optional: true, desc: "你扮演谁:身份 / 目标 / 能力 / 限制 / 开局已知与不知(可跳过用模板)" },
   { key: "stories", label: "故事框架", optional: true, desc: "前提 / 主线 / 结局 → 故事书" },
   { key: "events", label: "事件卡", optional: true, desc: "隐藏事件卡 → 挂到当前故事书(手动加;引擎暂无 AI 建事件)" },
@@ -2726,8 +2754,6 @@ function EventStep({ story, setStory }) {
 function StepBuilder({ characters, worldBooks, story, player, addCharacter, addWorld, setCharacters, setWorldBooks, setStory, setPlayer, onStartStory, onSavePreset, onExit }) {
   const [step, setStep] = useState(0);
   const [nonce, setNonce] = useState(0);   // 重置 CardBuilder(换步 / 角色再加一张)
-  const [opts, setOpts] = useState({});     // 当前步的引导选项
-  const [started, setStarted] = useState(false); // 引导步:是否已点「开始」进对话
   const [editing, setEditing] = useState(null);   // 正在查看/修改的卡 {kind, index}
   const [savedKeys, setSavedKeys] = useState(() => new Set()); // 已存入故事库的项 key (kind:index)
   const [saveErr, setSaveErr] = useState("");      // 入库失败提示
@@ -2735,11 +2761,11 @@ function StepBuilder({ characters, worldBooks, story, player, addCharacter, addW
   const isLast = step === BUILD_STEPS.length - 1;
   const canLeaveCharStep = characters.length > 0;
 
-  const STEP_GUIDE = { characters: "character", worlds: "worldsetting" }; // 这些步先选引导 chips 再聊
-  const guide = STEP_GUIDE[cur.key];
-  const seed = buildGuideSeed(cur.key === "worlds" ? "worldsetting" : cur.key, opts);
+  // 不再前置 chips(2026-06-10):类别/子类/档位/隐藏由 AI 第一句话问,直接进对话。
+  const guideId = cur.key === "worlds" ? "worldsetting" : cur.key;
+  const seed = buildGuideSeed(guideId);
 
-  function jump(i) { setStep(Math.max(0, Math.min(BUILD_STEPS.length - 1, i))); setNonce((n) => n + 1); setOpts({}); setStarted(false); setEditing(null); }
+  function jump(i) { setStep(Math.max(0, Math.min(BUILD_STEPS.length - 1, i))); setNonce((n) => n + 1); setEditing(null); }
 
   // CardBuilder 完成 → 把卡加进本轮卡组(立刻显示在下方列表),清空 builder 准备下一张。
   // 先不存故事库——保存由下方列表里每张卡的「保存到故事库」单独点。
@@ -2792,18 +2818,9 @@ function StepBuilder({ characters, worldBooks, story, player, addCharacter, addW
           </div>
           {cur.key === "events" ? (
             <EventStep story={story} setStory={setStory} />
-          ) : guide && !started ? (
-            <BuildOptions guide={guide} opts={opts} setOpts={setOpts} onStart={() => setStarted(true)} />
           ) : (
-            <>
-              {guide && (
-                <div className="guide-readout">
-                  创作设定:{(BUILD_GUIDES[guide] || []).map((g) => opts[g.key] || g.opts[0]).join(" · ")}
-                  <button onClick={() => setStarted(false)}>重选</button>
-                </div>
-              )}
-              <CardBuilder key={cur.key + nonce} kind={cur.key} seed={seed} onComplete={onCardComplete} onClose={() => {}} />
-            </>
+            <CardBuilder key={cur.key + nonce} kind={cur.key} seed={seed} firstAsk={FIRST_ASK[guideId]}
+              onComplete={onCardComplete} onClose={() => {}} />
           )}
           <div className="step-nav">
             <button onClick={() => jump(step - 1)} disabled={step === 0}>← 上一步</button>
@@ -2896,7 +2913,7 @@ const COACH = {
   build: [
     { sel: '[data-coach="build-steps"]', title: "一步步建故事", body: "创作分几步:世界 → 角色 → 主角 → 故事 → 汇总。点上面的步骤可以来回跳。" },
     { sel: '[data-coach="build-body"]', title: "聊着就建好", body: "每一步和 AI 对话,聊着聊着卡就出来了。" },
-    { sel: '[data-coach="build-overview"]', title: "建好的卡在这", body: "这轮建好的卡都列在这,可查看 / 修改,或单独存到故事库。点下面按钮开始建第一张。", actionId: "dismiss", actionLabel: "开始对话创作" },
+    { sel: '[data-coach="build-overview"]', title: "建好的卡在这", body: "这轮建好的卡都列在这,可查看 / 修改,或单独存到故事库。点下面按钮开始建第一张。", actionId: "dismiss", actionLabel: "开始创作" },
   ],
   chat: [
     { sel: '[data-coach="chat-ph"]', title: "聊天即将上线", body: "之后这里能和单个角色一对一聊天(微信式)。本批次先占位。" },
