@@ -25,6 +25,7 @@ from .identify import (
     identify_player,
     identify_storybook,
     identify_worldbook,
+    preset_meta,
 )
 from .chat import reply
 from .models import CharacterCard, PlayerCard, RuntimeState, StoryBook, WorldBook
@@ -314,6 +315,21 @@ def api_build_card(req: BuildCardReq):
         return build_card(req.kind, req.messages, req.draft, req.seed)
     except Exception as e:
         raise HTTPException(500, f"建卡失败:{e}")
+
+
+class PresetMetaReq(BaseModel):
+    summary: str
+
+
+@app.post("/api/preset_meta")
+def api_preset_meta(req: PresetMetaReq):
+    """卡组概要 → AI 生成一版发布信息 {synopsis, tags}(创作「封面/简介」步用,用户可改后再存)。"""
+    if not req.summary.strip():
+        raise HTTPException(400, "概要不能为空")
+    try:
+        return preset_meta(req.summary)
+    except Exception as e:
+        raise HTTPException(500, f"生成失败:{e}")
 
 
 @app.post("/api/identify_auto")

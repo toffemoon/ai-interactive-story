@@ -653,3 +653,37 @@ if __name__ == "__main__":
     sample = "阿砚,二十出头的剑修,沉默寡言,门派被灭后独自下山复仇。说话很冲,从不解释自己。"
     card = identify(sample)
     print(json.dumps(card.model_dump(), ensure_ascii=False, indent=2))
+
+
+# ── 发布信息生成(前端「封面/简介」步用,2026-06-10)────────────────────────
+# 一次性 LLM 调用:卡组概要 → {synopsis, tags}。前端先 AI 出一版、用户再改;
+# 不碰引擎核心(无状态/无记忆/无召回),与 identify_* 同级的解析工具。
+
+_META_SYSTEM = """你是互动故事的出版编辑。用户给你一套故事卡组的概要(故事名/前提/角色/世界/主角)。
+输出 JSON:{"synopsis": "...", "tags": ["...", "..."]}
+- synopsis:60~120 字的故事简介,面向玩家,有钩子;只写公开层,不剧透任何隐藏真相/结局
+- tags:3~5 个短分类标签;题材词优先(如 言情/科幻/悬疑/校园/武侠),原创世界带「原创」,同人带上 IP 名(如 崩铁)
+只输出 JSON,不要多余文字。"""
+
+
+def preset_meta(summary: str) -> dict:
+    """卡组概要 → {synopsis, tags}。JSON 容错解析,失败重试(对齐 identify 的健壮性)。"""
+    last_err: Exception | None = None
+    for _ in range(3):
+        raw = chat_messages(
+            [
+                {"role": "system", "content": _META_SYSTEM},
+                {"role": "user", "content": summary.strip()},
+            ],
+            json_mode=True,
+            max_tokens=512,
+        )
+        try:
+            obj = _loads_tolerant(raw)
+            return {
+                "synopsis": str(obj.get("synopsis") or "").strip(),
+                "tags": [str(t).strip() for t in (obj.get("tags") or []) if str(t).strip()][:5],
+            }
+        except Exception as e:
+            last_err = e
+    raise ValueError(f"发布信息生成失败(JSON 不合法,已重试):{last_err}")
