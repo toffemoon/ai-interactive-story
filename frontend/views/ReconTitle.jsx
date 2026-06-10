@@ -105,7 +105,7 @@ function ReconTitle(props) {
       <div className="foot-c">© 2026 Narrative Engine. All Rights Reserved.</div>
       <div className="foot-r">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 3l10 18H2z" /><path d="M12 10v5M12 18h.01" /></svg>
-        本游戏包含 AI 生成内容，请理性体验。
+        本游戏包含自动生成内容，请理性体验。
       </div>
     </div>
   );

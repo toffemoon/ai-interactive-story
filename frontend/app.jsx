@@ -3063,41 +3063,62 @@ function ReconShell({ designW, designH, bg, onNav, onPrimary, children }) {
   );
 }
 
-// 角色聊天控制器:从预设抽取去重角色,接 /api/chat(按角色维护会话历史)。
+// 角色聊天控制器:双栏——「OC」(/api/my/oc,专属原创角色) / 「角色」(预设角色)。
+// 都是卡主导的一对一对话,共用 /api/chat;历史按 (栏,角色名) 维护,OC 会话 id 前缀 occhat- 区分。
 function ReconChatLive({ presets, onNav }) {
-  const cards = React.useMemo(() => {
+  const presetCards = React.useMemo(() => {
     const out = []; const seen = new Set();
     (presets || []).forEach((p) => ((p.data && p.data.characters) || []).forEach((c) => {
       const nm = (c.data && c.data.name) || c.name; if (!nm || seen.has(nm)) return; seen.add(nm); out.push(c);
     }));
     return out;
   }, [presets]);
-  const [active, setActive] = React.useState(0);
-  const [byName, setByName] = React.useState({});
+  const [mode, setMode] = React.useState("oc");          // oc | chars(默认先看自己的 OC,没有则自动落到角色栏)
+  const [ocs, setOcs] = React.useState(null);            // null=加载中
+  const [activeKey, setActiveKey] = React.useState("");  // `${mode}:${name}`
+  const [byKey, setByKey] = React.useState({});
   const [input, setInput] = React.useState("");
   const [busy, setBusy] = React.useState(false);
-  const activeCard = cards[active] || null;
-  const activeName = activeCard ? ((activeCard.data && activeCard.data.name) || activeCard.name) : "";
-  const messages = byName[activeName] || [];
+  React.useEffect(() => {
+    let alive = true;
+    fetch("/api/my/oc").then((r) => (r.ok ? r.json() : { ocs: [] }))
+      .then((d) => { if (!alive) return; const list = d.ocs || []; setOcs(list); if (!list.length) setMode("chars"); })
+      .catch(() => { if (alive) { setOcs([]); setMode("chars"); } });
+    return () => { alive = false; };
+  }, []);
+  const list = mode === "oc"
+    ? (ocs || []).map((o) => ({ name: o.character, persona: o.persona, avatar: o.art || undefined, card: o.card, oc: true }))
+    : presetCards.map((c) => ({ name: (c.data && c.data.name) || c.name, persona: c.data && c.data.persona, description: c.data && c.data.description, card: c }));
+  const activeName = (activeKey.startsWith(mode + ":") ? activeKey.slice(mode.length + 1) : "") || (list[0] && list[0].name) || "";
+  const activeItem = list.find((x) => x.name === activeName) || null;
+  const msgKey = mode + ":" + activeName;
+  const messages = byKey[msgKey] || [];
   async function send() {
     const text = input.trim();
-    if (!text || !activeCard || busy) return;
+    if (!text || !activeItem || busy) return;
+    if (!activeItem.card) {
+      setByKey((m) => ({ ...m, [msgKey]: [...(m[msgKey] || []), { who: activeName, text: "（这位 OC 还没有引擎角色卡，暂时只能看资料，不能对话。）" }] }));
+      return;
+    }
     setBusy(true);
-    setByName((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: "me", text }] }));
+    setByKey((m) => ({ ...m, [msgKey]: [...(m[msgKey] || []), { who: "me", text }] }));
     setInput("");
     try {
-      const r = await postJSON("/api/chat", { card: activeCard, session_id: "chat-" + activeName, user: text, world: null });
-      setByName((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: (r && r.reply) || "（无回应）" }] }));
+      const sid = (mode === "oc" ? "occhat-" : "chat-") + activeName;
+      const r = await postJSON("/api/chat", { card: activeItem.card, session_id: sid, user: text, world: null });
+      setByKey((m) => ({ ...m, [msgKey]: [...(m[msgKey] || []), { who: activeName, text: (r && r.reply) || "（无回应）" }] }));
     } catch (e) {
-      setByName((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: "（连接出错：" + e.message + "）" }] }));
+      setByKey((m) => ({ ...m, [msgKey]: [...(m[msgKey] || []), { who: activeName, text: "（连接出错：" + e.message + "）" }] }));
     } finally { setBusy(false); }
   }
   return (
     <window.ReconChat
-      characters={cards.map((c) => ({ name: (c.data && c.data.name) || c.name, persona: c.data && c.data.persona, description: c.data && c.data.description }))}
+      characters={list}
       activeName={activeName} messages={messages} value={input}
       onChange={setInput} onSend={send} onNav={onNav}
-      onPick={(nm) => { const i = cards.findIndex((c) => (((c.data && c.data.name) || c.name) === nm)); if (i >= 0) setActive(i); }} />
+      onPick={(nm) => setActiveKey(mode + ":" + nm)}
+      mode={mode} onMode={(m) => { setMode(m); setActiveKey(""); }}
+      ocCount={(ocs || []).length} charCount={presetCards.length} />
   );
 }
 
@@ -3416,7 +3437,7 @@ function App() {
   if (restoring || !auth.ready) {
     return (
       <div className="app">
-        <header><div><h1>AI 互动故事</h1><p>读取存档中…</p></div></header>
+        <header><div><h1>叙事引擎</h1><p>读取存档中…</p></div></header>
       </div>
     );
   }

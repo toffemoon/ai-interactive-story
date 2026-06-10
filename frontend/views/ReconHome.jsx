@@ -2,7 +2,7 @@ function ReconHome(props) {
   const SAMPLE = {
     brand: {
       emblem: "assets/recon/home-emblem.png",
-      title: "AI Interactive Story",
+      title: "Narrative Engine",
       sub: "每个选择 · 都在书写",
     },
     menu: [
@@ -31,7 +31,7 @@ function ReconHome(props) {
       desc: "当星坠落之夜,你将决定两个文明的存续。书里已经有人,在等你说第一句话。",
     },
     pillars: [
-      { zh: "角色卡", en: "CHARACTER", p: "为每个角色立心立志,AI 据此说话行事。", icon: "char" },
+      { zh: "角色卡", en: "CHARACTER", p: "为每个角色立心立志,角色据此说话行事。", icon: "char" },
       { zh: "世界书", en: "WORLD", p: "设定写进世界书,叙事始终自洽。", icon: "world" },
       { zh: "多结局", en: "ENDINGS", p: "你的选择被记住,结局因你分叉。", icon: "endings" },
       { zh: "即时互动", en: "REALTIME", p: "自由输入行动与台词,故事即时回应。", icon: "realtime" },
@@ -285,7 +285,7 @@ function ReconHome(props) {
       <div className="cards" ref={rowRef}>
         {!cards.length && (
           <div className="card" style={{ width: 360, alignItems: "center", justifyContent: "center", cursor: "pointer" }} onClick={onNew}>
-            <div className="bd" style={{ textAlign: "center", padding: 0 }}><b>书架还空着</b><div className="syn" style={{ WebkitLineClamp: 3, marginTop: 8 }}>还没有故事。去「创作」写第一本——丢设定进来,AI 替你建卡成书。</div></div>
+            <div className="bd" style={{ textAlign: "center", padding: 0 }}><b>书架还空着</b><div className="syn" style={{ WebkitLineClamp: 3, marginTop: 8 }}>还没有故事。去「创作」写第一本——丢设定进来,自动建卡成书。</div></div>
           </div>
         )}
         {cards.map((c, i) => (

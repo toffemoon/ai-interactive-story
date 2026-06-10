@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AI 互动故事</title>
+  <title>叙事引擎 · 互动故事</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="muyan.css?v=20260610a" />
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -51,22 +51,22 @@
   <div id="root"></div>
   <!-- 首屏 loading 节点(占位文案,最终由 yufei 定) -->
   <div id="boot">
-    <div class="boot-title">AI 互动故事</div>
+    <div class="boot-title">叙事引擎</div>
     <div class="boot-bar"><span></span></div>
     <div class="boot-slogan">正在翻开你的故事……</div>
   </div>
   <!-- 缓存击穿:零构建下浏览器会缓存 app.jsx,改了不刷新就看不到。改前端时 bump 这个 ?v= 值,普通刷新即可生效。 -->
   <script src="mu-settle.js?v=20260610b"></script>
   <!-- recon 1:1 视图组件(各自 .cv-<key> scope,window.Recon* 挂载;app.jsx 按 view 调用) -->
-  <script type="text/babel" src="views/ReconRail.jsx?v=20260610i"></script>
-  <script type="text/babel" src="views/ReconExplore.jsx?v=20260610i"></script>
-  <script type="text/babel" src="views/ReconHome.jsx?v=20260610i"></script>
-  <script type="text/babel" src="views/ReconStoryDetail.jsx?v=20260610i"></script>
-  <script type="text/babel" src="views/ReconPlay.jsx?v=20260610i"></script>
-  <script type="text/babel" src="views/ReconChat.jsx?v=20260610i"></script>
-  <script type="text/babel" src="views/ReconProfile.jsx?v=20260610i"></script>
-  <script type="text/babel" src="views/ReconCreate.jsx?v=20260610i"></script>
-  <script type="text/babel" src="views/ReconTitle.jsx?v=20260610i"></script>
-  <script type="text/babel" src="app.jsx?v=20260610i" data-type="module"></script>
+  <script type="text/babel" src="views/ReconRail.jsx?v=20260610j"></script>
+  <script type="text/babel" src="views/ReconExplore.jsx?v=20260610j"></script>
+  <script type="text/babel" src="views/ReconHome.jsx?v=20260610j"></script>
+  <script type="text/babel" src="views/ReconStoryDetail.jsx?v=20260610j"></script>
+  <script type="text/babel" src="views/ReconPlay.jsx?v=20260610j"></script>
+  <script type="text/babel" src="views/ReconChat.jsx?v=20260610j"></script>
+  <script type="text/babel" src="views/ReconProfile.jsx?v=20260610j"></script>
+  <script type="text/babel" src="views/ReconCreate.jsx?v=20260610j"></script>
+  <script type="text/babel" src="views/ReconTitle.jsx?v=20260610j"></script>
+  <script type="text/babel" src="app.jsx?v=20260610j" data-type="module"></script>
 </body>
 </html>

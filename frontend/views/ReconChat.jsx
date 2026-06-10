@@ -108,6 +108,11 @@ function ReconChat(props) {
   .cv-chat .recenth b {font-family:var(--serif); font-size:11px; letter-spacing:.12em; color:var(--soft); white-space:nowrap;}
   .cv-chat .recenth .en {font-family:var(--serifen); font-size:7px; letter-spacing:.18em; color:var(--faint); white-space:nowrap;}
   .cv-chat .recenth i {flex:1; height:1px; background:var(--line);}
+  /* 聊天双栏切换(OC / 角色) */
+  .cv-chat .modetabs {display:flex; gap:6px; margin:12px 14px 4px; border:1px solid var(--line); background:var(--paper); padding:4px;}
+  .cv-chat .modetabs a {flex:1; text-align:center; padding:7px 0; cursor:pointer; font-family:var(--serif); font-size:12px; letter-spacing:.14em; color:var(--soft); transition:background .25s, color .2s;}
+  .cv-chat .modetabs a.on {background:var(--green); color:#f3ead6; font-weight:700;}
+  .cv-chat .modetabs a .n {font-family:var(--serifen); font-size:10px; margin-left:4px; opacity:.75;}
   /* 新消息浮现(已有消息节点 key 不变不重播,只有新挂载的动) */
   @keyframes rcc-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
   .cv-chat .msg { animation: rcc-in .26s cubic-bezier(.22,1,.36,1) both; }
@@ -255,7 +260,13 @@ function ReconChat(props) {
 
       {/* 左侧引擎竖栏(全站统一 ReconRail;近期聊天/新建对话作为底部插槽) */}
       <window.ReconRail active="chat" onNav={onNav}>
-        <div className="recenth"><b>近期聊天</b><span className="en">RECENT CHATS</span><i></i></div>
+        {P.onMode && (
+          <div className="modetabs">
+            <a className={P.mode === "oc" ? "on" : undefined} onClick={() => P.onMode("oc")}>OC{P.ocCount != null ? <span className="n">{P.ocCount}</span> : null}</a>
+            <a className={P.mode === "chars" ? "on" : undefined} onClick={() => P.onMode("chars")}>角色{P.charCount != null ? <span className="n">{P.charCount}</span> : null}</a>
+          </div>
+        )}
+        <div className="recenth"><b>{P.mode === "oc" ? "我的 OC" : "近期聊天"}</b><span className="en">{P.mode === "oc" ? "MY OC" : "RECENT CHATS"}</span><i></i></div>
         <div className="rlist">
           {characters.map((c, i) => (
             <div className={"rc" + (active && c.name === active.name ? " on" : "")} key={i} style={{ cursor: "pointer" }} onClick={() => onPick(c.name)}>

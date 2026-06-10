@@ -219,6 +219,60 @@ def api_my_sessions(user: dict | None = Depends(current_user_dep)):
     return storage.list_sessions(user_id=user["id"])
 
 
+@app.get("/api/my/oc")
+def api_my_oc(user: dict | None = Depends(current_user_dep)):
+    """当前用户可聊的 OC(聊天页「OC」栏数据源;卡主导的一对一对话走 /api/chat)。
+    AUTH 关 = 全部可见(本地开发);开 = 按 oc/index.json 的 user 字段匹配,admin/superadmin 看全部。
+    返回含引擎卡数据(card.md 解析后的 CharacterCard);没有卡的 OC 标 card=None(只读资料,不可聊)。"""
+    idx = OC_DIR / "index.json"
+    if not idx.is_file():
+        return {"ocs": []}
+    try:
+        entries = json.loads(idx.read_text(encoding="utf-8"))
+    except Exception:
+        return {"ocs": []}
+
+    def _asset(rel: str) -> str:
+        return ("/oc-assets/" + rel) if rel and (OC_DIR / rel).is_file() else ""
+
+    def _mine(e: dict) -> bool:
+        if user is None or user.get("is_admin") or user.get("role") in ("admin", "superadmin"):
+            return True
+        who = {str(user.get("username") or ""), str(user.get("email") or ""), str(user.get("display_name") or "")}
+        who.discard("")
+        return str(e.get("user", "")) in who
+
+    out = []
+    for e in entries:
+        if not _mine(e):
+            continue
+        card = None
+        card_path = (OC_DIR / e["card"]) if e.get("card") else None
+        if card_path and card_path.is_file():
+            try:
+                card = parse_character(card_path.read_text(encoding="utf-8")).model_dump()
+            except Exception:
+                card = None
+        # 简介优先用引擎卡的 description(真人设);没有卡再退 profile.md 第一行正文。
+        persona = ""
+        if card and isinstance(card.get("data"), dict):
+            persona = str(card["data"].get("description") or card["data"].get("personality") or "")[:60]
+        if not persona:
+            prof_path = (OC_DIR / e["profile"]) if e.get("profile") else None
+            if prof_path and prof_path.is_file():
+                txt = prof_path.read_text(encoding="utf-8")
+                if txt.startswith("---"):
+                    end = txt.find("\n---", 3)
+                    if end > 0:
+                        txt = txt[end + 4:]
+                lines = [ln.strip() for ln in txt.splitlines()
+                         if ln.strip() and not ln.strip().startswith(("#", "!", "[[", "*"))]
+                persona = (lines[0] if lines else "")[:60]
+        out.append({"user": e.get("user", ""), "character": e.get("character", ""),
+                    "art": _asset(e.get("art", "")), "persona": persona, "card": card})
+    return {"ocs": out}
+
+
 @app.get("/api/health")
 def api_health():
     """健康检查:确认后端在线 + DB 可达 + 是否带前端 + deep 向量召回依赖是否就绪。

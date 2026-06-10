@@ -264,8 +264,8 @@ function ReconCreate(props) {
         <div className="talk">
           <div className="th">
             <span className="badge"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 20l1-4L16 5l3 3L8 19z" /><path d="M14 7l3 3" /></svg></span>
-            <b>与 AI 对谈</b><span className="en">CO-WRITING</span>
-            <span className="hint">你说人话，AI 替你执笔</span>
+            <b>与执笔人对谈</b><span className="en">CO-WRITING</span>
+            <span className="hint">你说人话，执笔人替你落笔</span>
           </div>
           <div className="scroll">
             <div className="syscue"><span>立卡 · {dKind}草拟中</span></div>
@@ -300,7 +300,7 @@ function ReconCreate(props) {
             </div>
             <div className="up">
               <span className="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" /></svg></span>
-              <span className="tx"><b>上传</b> .txt / .md / .docx —— 直接把现成设定喂给 AID，自动拆成字段</span>
+              <span className="tx"><b>上传</b> .txt / .md / .docx —— 直接把现成设定丢进来，自动拆成字段</span>
             </div>
           </div>
         </div>

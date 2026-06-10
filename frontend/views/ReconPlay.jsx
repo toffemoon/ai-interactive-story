@@ -327,7 +327,7 @@ function ReconPlay(props) {
             <input className="freein" value={value} disabled={busy}
               onChange={onChange ? (e) => onChange(e.target.value) : undefined}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !busy) { e.preventDefault(); onSubmit(); } }}
-              placeholder="输入你的行动或台词，回车提交，AI 据此推动故事……"
+              placeholder="输入你的行动或台词，回车提交，故事据此推进……"
               style={{ width: "100%", marginTop: 9, background: "transparent", border: "none", borderBottom: "1px solid var(--line2)", outline: "none", fontFamily: "var(--kai)", fontSize: 13.5, color: "var(--ink)", padding: "6px 2px" }} />
           </div>
           <div className="exec" onClick={() => !busy && onSubmit()} style={{ cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}><span className="zh"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>{busy ? "生成" : "执行"}</span><span className="en">ENTER</span></div>
