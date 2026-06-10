@@ -115,7 +115,7 @@ function ReconPlay(props) {
     background:no-repeat right top/contain url(assets/recon/play-topdeco.png);}
 
   
-  .cv-play .main {display:block; position:absolute; left:212px; top:78px; width:954px; bottom:24px; overflow-y:auto; overflow-x:hidden; padding-right:4px;}
+  .cv-play .main {display:block; position:absolute; left:212px; top:78px; right:364px; bottom:24px; overflow-y:auto; overflow-x:hidden; padding-right:4px;}
   .cv-play .main::-webkit-scrollbar {width:7px;} .cv-play .main::-webkit-scrollbar-thumb {background:var(--line2);}
 
   

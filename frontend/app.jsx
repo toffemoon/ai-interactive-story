@@ -3005,14 +3005,22 @@ function CoachHelpButton({ onClick }) {
   return <button className="coach-help-btn" data-coach="help-btn" onClick={onClick} title="重看新手引导" aria-label="重看新手引导">?</button>;
 }
 
-// recon 1:1 视图外壳:固定全屏 + scale-to-fit(把固定尺寸设计稿缩放贴合视口)+ 导航点击委托。
+// recon 1:1 视图外壳:全屏 fill——按视口高定缩放,画布宽跟随视口(左右零留白;recon 页内部
+// 左右锚定自适应)。视口比设计稿更窄时退回 scale-to-fit(小留白,不裁内容)。导航点击委托保留。
 function ReconShell({ designW, designH, bg, onNav, onPrimary, children }) {
   const ref = React.useRef(null);
-  const [scale, setScale] = React.useState(1);
+  const [dim, setDim] = React.useState({ scale: 1, w: designW, ox: 0, oy: 0 });
   React.useEffect(() => {
     function fit() {
       const el = ref.current; if (!el) return;
-      setScale(Math.min(el.clientWidth / designW, el.clientHeight / designH));
+      const vw = el.clientWidth, vh = el.clientHeight;
+      const fillScale = vh / designH;
+      if (fillScale <= vw / designW) {
+        setDim({ scale: fillScale, w: Math.round(vw / fillScale), ox: 0, oy: 0 });
+      } else {
+        const s = Math.min(vw / designW, vh / designH);
+        setDim({ scale: s, w: designW, ox: Math.max(0, (vw - designW * s) / 2), oy: Math.max(0, (vh - designH * s) / 2) });
+      }
     }
     fit();
     window.addEventListener("resize", fit);
@@ -3037,14 +3045,18 @@ function ReconShell({ designW, designH, bg, onNav, onPrimary, children }) {
   return (
     <div ref={ref} className="recon-shell" onClick={onClick} style={bg ? { background: bg } : undefined}>
       <style>{`
-        .recon-shell{position:fixed; inset:0; z-index:40; background:#ece4d2; overflow:hidden; display:grid; place-items:center;}
-        .recon-stage{flex:none; transform-origin:center center;}
+        /* shell 挂载期间锁页面滚动 + 取消 styles.css 的 scrollbar-gutter 预留(治右侧 15px 空带) */
+        html, body { overflow:hidden !important; scrollbar-gutter:auto !important; }
+        .recon-shell{position:fixed; inset:0; z-index:40; background:#ece4d2; overflow:hidden;}
+        .recon-stage{position:absolute; transform-origin:0 0;}
         /* 页面切换:淡入 + 轻浮(挂载即播;stage 的 scale 在外层,wrapper 只动 opacity/translate 不冲突) */
         @keyframes rc-page-in { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
-        .recon-fade{animation: rc-page-in .3s cubic-bezier(.22,1,.36,1) both;}
+        .recon-fade{width:100%; height:100%; animation: rc-page-in .3s cubic-bezier(.22,1,.36,1) both;}
+        /* fill:画布根铺满 stage(覆盖各 .cv-* 的固定 width/height) */
+        .recon-fade > *{width:100% !important; height:100% !important;}
         @media (prefers-reduced-motion: reduce){ .recon-fade{animation-duration:1ms;} }
       `}</style>
-      <div className="recon-stage" style={{ width: designW, height: designH, transform: "scale(" + scale + ")" }}>
+      <div className="recon-stage" style={{ width: dim.w, height: designH, left: dim.ox, top: dim.oy, transform: "scale(" + dim.scale + ")" }}>
         <div className="recon-fade">{children}</div>
       </div>
     </div>
@@ -3159,7 +3171,7 @@ function App() {
   const [restoredTurns, setRestoredTurns] = useState(null);
   const [restoredState, setRestoredState] = useState(null);
   const [restoredChoices, setRestoredChoices] = useState([]);
-  const [view, setView] = useState("home"); // home / game / build / vault
+  const [view, setView] = useState("landing"); // landing(营销门面) / home(功能版故事库) / game / build / chat / mine
   const [loginShown, setLoginShown] = useState(false); // 标题开屏 → 点按钮才展开邮箱+验证码登录表单
   const [sidebarOpen, setSidebarOpen] = useState(true); // 游戏中侧边卡组栏开关
   const [isPreset, setIsPreset] = useState(false);      // 当前局是否由预设开(预设:无侧边栏 + 先选人)
@@ -3211,7 +3223,11 @@ function App() {
       .then((d) => setAuth({ ready: true, enabled: !!d.auth_enabled, user: d.user || null }))
       .catch(() => setAuth({ ready: true, enabled: false, user: null }));
   }, []);
-  function onAuthed(user, token) { setToken(token); setAuth((a) => ({ ...a, user })); }
+  function onAuthed(user, token) { setToken(token); setAuth((a) => ({ ...a, user })); setView("home"); }  // 登录后直接进功能页(故事库)
+  // 已登录用户刷新页面:跳过营销门面,直接落功能页。
+  useEffect(() => {
+    if (auth.ready && auth.user) setView((v) => (v === "landing" ? "home" : v));
+  }, [auth.ready, auth.user]);
   // 先 POST 吊销(此时 token 还在,fetch 钩子会带上),再清本地 → 服务端 token 立即失效,不留 60 天活口。
   async function onLogout() { try { await fetch("/api/auth/logout", { method: "POST" }); } catch (e) {} setToken(""); location.reload(); }
 
@@ -3417,11 +3433,20 @@ function App() {
 
   return (
     <div className="app">
-      {view === "home" && (
+      {/* 营销门面(主页拆分出去:未登录/初次进入的 landing;登录后默认进功能页) */}
+      {view === "landing" && (
         <ReconShell designW={1672} designH={941}>
           <window.ReconHome presets={presets} user={auth.user}
             onNav={navTo} onOpenStory={openStoryModal} onNew={onNew}
             onLogin={() => setView("mine")} />
+        </ReconShell>
+      )}
+
+      {/* 功能版探索/故事库(登录后的主页) */}
+      {view === "home" && (
+        <ReconShell designW={1536} designH={1024}>
+          <window.ReconExplore presets={presets} user={auth.user}
+            onOpenStory={openStoryModal} onNew={onNew} onNav={navTo} />
         </ReconShell>
       )}
 

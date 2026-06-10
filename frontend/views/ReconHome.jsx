@@ -64,14 +64,15 @@ function ReconHome(props) {
     syn: _f(x, "synopsis") || (_f(x, "story") && _f(x, "story").premise) || "一个等你走进的故事。",
     chars: (_f(x, "characters") || []).length, author: _f(x, "author") || "店内收录", isNew: _isTut(x),
   }));
-  // 与全站 ReconRail 同一套词汇/顺序(首页≈探索落地层)。
+  // 营销门面(landing)顶栏:首页=本页;其余直接进功能区(词汇与全站 ReconRail 一致)。
   const menu = [
-    { zh: "首页", en: "HOME", view: "home", on: true },
-    { zh: "当前故事", en: "CURRENT STORY", view: "game" },
+    { zh: "首页", en: "HOME", view: "landing", on: true },
+    { zh: "故事库", en: "LIBRARY", view: "home" },
     { zh: "创作", en: "CREATE", view: "build" },
     { zh: "聊天", en: "CHAT", view: "chat" },
     { zh: "我的", en: "PROFILE", view: "mine" },
   ];
+  const goExplore = () => onNav("home");
   const startFeatured = () => (featured ? onOpenStory(featured) : onNew());
 
   const pillarIcon = (kind) => {
@@ -256,7 +257,7 @@ function ReconHome(props) {
         <div className="nr">
           <div className="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
           <div className="login" onClick={user ? undefined : onLogin} style={{ cursor: user ? "default" : "pointer" }}><div className="zh">{user ? (user.display_name || user.username) : "登录"}</div><div className="en">{user ? "ACCOUNT" : "LOGIN"}</div></div>
-          <div className="cta" onClick={startFeatured}>
+          <div className="cta" onClick={goExplore}>
             <span className="cmp"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2 8 8 2-8 2-2 8-2-8-8-2 8-2z"/></svg></span>
             <span className="zh">开始探索</span><span className="en">EXPLORE</span>
           </div>
@@ -271,7 +272,7 @@ function ReconHome(props) {
         <h1 className="title">进入<em>会回应</em>你的<br/>故事世界</h1>
         <p className="lead">{hero.leadLine1}<br/>{hero.leadLine2}</p>
         <div className="btns">
-          <button className="b1" onClick={startFeatured}><span className="cmp"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2 8 8 2-8 2-2 8-2-8-8-2 8-2z"/></svg></span><span>开始探索</span></button>
+          <button className="b1" onClick={goExplore}><span className="cmp"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2 8 8 2-8 2-2 8-2-8-8-2 8-2z"/></svg></span><span>开始探索</span></button>
           <button className="b2" onClick={onNew}>立即创作</button>
         </div>
       </div>
