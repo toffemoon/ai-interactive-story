@@ -2373,6 +2373,48 @@ function marketDesc(it) {
   if (it.kind === "events") return (it._story ? `属:${it._story}` : "") + (d.hidden ? " · 隐藏" : "");
   return "";
 }
+function marketImage(it) {
+  const d = it.data || {};
+  if (it.kind === "characters") return (d.data || {}).image || d.image || "";
+  return d.image || d.cover || "";
+}
+
+// 市集卡片 = 翻转卡(同 StoryModal 角色卡):正面信息,背面图片(角色立绘 / 封面),右下角 ↻ 翻面。
+// 卡数据现普遍无 image 字段(内容侧待补);故事书/事件卡回退用所属预设的封面(fallbackImg)。
+function MarketCard({ it, added, loggedIn, fallbackImg, onPeek, onCollect }) {
+  const [flipped, setFlipped] = useState(false);
+  const img = marketImage(it) || fallbackImg || "";
+  return (
+    <div className={"market-card flipcard" + (flipped ? " flipped" : "")}>
+      <div className="flip-inner">
+        <div className="flip-face flip-front" onClick={() => it.kind !== "events" && onPeek(it)}>
+          <div className="mc-top">
+            <span className="kind-badge">{MARKET_KIND_LABEL[it.kind]}</span>
+            <b className="mc-name">{marketName(it)}</b>
+          </div>
+          <p className="mc-desc">{(marketDesc(it) || "").slice(0, 120)}</p>
+          <div className="mc-tags">
+            {marketTags(it).slice(0, 4).map((t, j) => <span className="tag" key={j}>{t}</span>)}
+            {it.official === false && <span className="tag muted">我的</span>}
+          </div>
+          {it.kind !== "events" && (
+            <div className="mc-actions" onClick={(e) => e.stopPropagation()}>
+              <button onClick={() => onPeek(it)}>详情</button>
+              {added
+                ? <span className="vc-note">已在我的库</span>
+                : <button className="primary" onClick={() => onCollect(it)}>加入我的库</button>}
+            </div>
+          )}
+          <button className="flip-btn" onClick={(e) => { e.stopPropagation(); setFlipped(true); }} aria-label="翻到背面看图" title="看图">↻</button>
+        </div>
+        <div className="flip-face flip-back" onClick={() => setFlipped(false)}>
+          {img ? <img src={img} alt={marketName(it)} loading="lazy" /> : <div className="flip-img-placeholder">暂无图片</div>}
+          <button className="flip-btn" onClick={(e) => { e.stopPropagation(); setFlipped(false); }} aria-label="翻回正面" title="返回">↺</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // 卡详情(只读速览):只渲染公开层 —— 角色卡 known_hidden / versions / 性格 / scenario / first_mes 一律不进
 // (剧透边界硬约束,同 StoryModal);世界书只列 public 条目;故事书只给 premise + 数量,不展开事件/结局。
@@ -2418,7 +2460,7 @@ function CardPeek({ item, onClose }) {
   );
 }
 
-function ExploreCards({ loggedIn }) {
+function ExploreCards({ loggedIn, presets }) {
   const [all, setAll] = useState(null);      // null = 读取中
   const [kind, setKind] = useState("all");
   const [q, setQ] = useState("");
@@ -2443,6 +2485,13 @@ function ExploreCards({ loggedIn }) {
     });
     return () => { alive = false; };
   }, []);
+
+  // 故事书标题 → 预设封面(故事书/事件卡翻面的回退图)。
+  const coverMap = useMemo(() => {
+    const m = {};
+    (presets || []).forEach((p) => { const d = p.data || {}; const t = (d.story || {}).title; if (t && d.cover) m[t] = d.cover; });
+    return m;
+  }, [presets]);
 
   const chips = useMemo(() => buildGenreChips((all || []).map(marketTags)), [all]);
   const shown = useMemo(() => {
@@ -2488,26 +2537,10 @@ function ExploreCards({ loggedIn }) {
         {pageItems.map((it, i) => {
           const key = it.kind + "/" + it.name;
           return (
-            <div key={key + i} className={"market-card" + (it.kind === "events" ? " static" : "")}
-                 onClick={() => it.kind !== "events" && setPeek(it)}>
-              <div className="mc-top">
-                <span className="kind-badge">{MARKET_KIND_LABEL[it.kind]}</span>
-                <b className="mc-name">{marketName(it)}</b>
-              </div>
-              <p className="mc-desc">{(marketDesc(it) || "").slice(0, 80)}</p>
-              <div className="mc-tags">
-                {marketTags(it).slice(0, 4).map((t, j) => <span className="tag" key={j}>{t}</span>)}
-                {it.official === false && <span className="tag muted">我的</span>}
-              </div>
-              {it.kind !== "events" && (
-                <div className="mc-actions" onClick={(e) => e.stopPropagation()}>
-                  <button onClick={() => setPeek(it)}>详情</button>
-                  {(added[key] || inMyLib("cards", key))
-                    ? <span className="vc-note">已在我的库</span>
-                    : <button className="primary" onClick={() => collect(it)}>加入我的库</button>}
-                </div>
-              )}
-            </div>
+            <MarketCard key={key + i} it={it} loggedIn={loggedIn}
+              added={added[key] || inMyLib("cards", key)}
+              fallbackImg={it.kind === "stories" ? coverMap[(it.data || {}).title] : (it.kind === "events" ? coverMap[it._story] : "")}
+              onPeek={setPeek} onCollect={collect} />
           );
         })}
       </div>
@@ -2540,7 +2573,7 @@ function StoriesHome({ onNew, presets, onLaunchPreset, onDeletePreset, loggedIn 
       </div>
       {tab === "stories"
         ? <ExploreStories presets={presets} onLaunchPreset={onLaunchPreset} loggedIn={loggedIn} />
-        : <ExploreCards loggedIn={loggedIn} />}
+        : <ExploreCards loggedIn={loggedIn} presets={presets} />}
     </section>
   );
 }
