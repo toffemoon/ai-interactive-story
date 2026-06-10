@@ -5,13 +5,6 @@ function ReconHome(props) {
       title: "Narrative Engine",
       sub: "每个选择 · 都在书写",
     },
-    menu: [
-      { zh: "首页", en: "HOME", on: true },
-      { zh: "故事库", en: "STORY" },
-      { zh: "角色", en: "CHARACTER" },
-      { zh: "创作", en: "CREATE" },
-      { zh: "我的", en: "ARCHIVE" },
-    ],
     hero: {
       art: "assets/recon/home-hero-art.png",
       idx: { cur: "01", total: "05" },
@@ -19,24 +12,12 @@ function ReconHome(props) {
       leadLine1: "与角色相遇,在动态叙事里开启属于你的旅程。",
       leadLine2: "每一个选择都被记住——故事因你而无可复制。",
     },
-    cards: [
-      { th: "assets/recon/home-feat-1.png", no: "01", isNew: true, title: "晨曦之雪", tags: "成长 · 冒险", syn: "在元素之歌的边境,你将唤醒沉睡千年的雪国之心。", rating: "9.8", plays: "32.1K" },
-      { th: "assets/recon/home-feat-2.png", no: "02", title: "时限回响", tags: "科幻 · 悬疑", syn: "在无限轮回的时间中,寻找让命运止步的那一秒。", rating: "9.6", plays: "18.7K" },
-      { th: "assets/recon/home-feat-3.png", no: "03", title: "善恶与信笺", tags: "书信 · 抉择", syn: "一封迟到百年的信,押上你与陌生人彼此的善恶。", rating: "9.5", plays: "12.4K" },
-      { th: "assets/recon/home-feat-4.png", no: "04", title: "星辰彼岸", tags: "科幻 · 双主角", syn: "两位旅人,一座坠落的轨道之城,一次没有归途的远征。", rating: "9.7", plays: "22.8K" },
-      { th: "assets/recon/home-feat-5.png", no: "05", title: "雪国奇旅", tags: "治愈 · 群像", syn: "雪落不止的小镇,七个不肯说出真心话的人。", rating: "9.4", plays: "9.8K" },
-    ],
-    pick: {
-      title: "星辰彼岸",
-      desc: "当星坠落之夜,你将决定两个文明的存续。书里已经有人,在等你说第一句话。",
-    },
     pillars: [
       { zh: "角色卡", en: "CHARACTER", p: "为每个角色立心立志,角色据此说话行事。", icon: "char" },
       { zh: "世界书", en: "WORLD", p: "设定写进世界书,叙事始终自洽。", icon: "world" },
       { zh: "多结局", en: "ENDINGS", p: "你的选择被记住,结局因你分叉。", icon: "endings" },
       { zh: "即时互动", en: "REALTIME", p: "自由输入行动与台词,故事即时回应。", icon: "realtime" },
     ],
-    stat: { value: "82.6%", label: "玩家完整走完一个结局", pct: "82.6%" },
   };
 
   const P = props || {};

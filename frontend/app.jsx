@@ -223,18 +223,7 @@ function loadOrCreateSessionId() {
   return id;
 }
 
-// 新建一局:生成新 id、登记、设为活动、刷新。
-function startFresh() {
-  const id = newSessionId();
-  persistSaves([{ id, name: "", updated: "", turns: 0, summary: "" }, ...loadSaves()]);
-  setActiveId(id);
-  location.reload();
-}
 
-function switchToSave(id) {
-  setActiveId(id);
-  location.reload();
-}
 
 function touchSave(id, patch) {
   const saves = loadSaves();
@@ -244,21 +233,7 @@ function touchSave(id, patch) {
   persistSaves(saves);
 }
 
-function renameSave(id, name) {
-  touchSave(id, { name });
-}
 
-// 删除一局:调后端删文件 + 移出本地注册表;删的是当前局就切到下一个 / 新建。
-async function deleteSave(id) {
-  try { await fetch(`/api/session/${encodeURIComponent(id)}`, { method: "DELETE" }); } catch (e) {}
-  const saves = loadSaves().filter((s) => s.id !== id);
-  persistSaves(saves);
-  if (getActiveId() === id) {
-    if (saves.length) setActiveId(saves[0].id);
-    else { const nid = newSessionId(); persistSaves([{ id: nid, name: "", updated: "", turns: 0, summary: "" }]); setActiveId(nid); }
-  }
-  location.reload();
-}
 
 // 结构化续玩:把后端存的 data.turns 还原成完整卡片式 turns(玩家气泡 + 叙事 + 角色台词 + 选项 + token/判定)。
 function restoreTurns(turns) {
@@ -288,37 +263,7 @@ function messagesToTurns(messages) {
     );
 }
 
-function SourceInput({ value, onChange, placeholder }) {
-  return (
-    <div className="source-input">
-      <textarea value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
-      <label className="filebtn">
-        上传 .txt / .md / .docx
-        <input
-          type="file"
-          accept=".txt,.md,.docx"
-          style={{ display: "none" }}
-          onChange={async (e) => {
-            const f = e.target.files[0];
-            if (f) onChange(await uploadFile(f));
-          }}
-        />
-      </label>
-    </div>
-  );
-}
 
-function JsonPreview({ title, value, collapsed = false }) {
-  const [open, setOpen] = useState(!collapsed);
-  if (!value) return null;
-  return (
-    <section className="json-block">
-      <button className="fold" onClick={() => setOpen(!open)}>{open ? "−" : "+"}</button>
-      <h3>{title}</h3>
-      {open && <pre>{JSON.stringify(value, null, 2)}</pre>}
-    </section>
-  );
-}
 
 function CharacterEditor({ card, index, onChange, onClose }) {
   if (!card) return null;
@@ -438,14 +383,6 @@ function listToLines(list) {
   return (list || []).join("\n");
 }
 
-// 故事内分钟 → 第N天 HH:MM
-function formatClock(minutes) {
-  const m = Math.max(0, parseInt(minutes, 10) || 0);
-  const day = Math.floor(m / 1440) + 1;
-  const hh = String(Math.floor((m % 1440) / 60)).padStart(2, "0");
-  const mm = String(m % 60).padStart(2, "0");
-  return `第${day}天 ${hh}:${mm}`;
-}
 
 function PlayerEditor({ player, onChange, onClose }) {
   if (!player) return null;
@@ -1294,283 +1231,15 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
   );
 }
 
-// 右状态栏的单个栏目:默认收起,点标题展开。
-function StatSection({ title, sub, children }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className={"stat-section " + (open ? "open" : "")}>
-      <button className="stat-head" onClick={() => setOpen(!open)}>
-        <span className="stat-caret">{open ? "−" : "+"}</span>
-        <span className="stat-title">{title}</span>
-        {sub ? <span className="stat-sub">{sub}</span> : null}
-      </button>
-      {open && <div className="stat-body">{children}</div>}
-    </div>
-  );
-}
 
-// 右侧状态栏:分栏目、默认收起、点击展开。数据自后端 session 拉(state + 记忆 + 用量 + 判定),
-// 每回合由 refreshKey 触发刷新。历史书 / 时间线 / 地图 先占位排上(设计文档列、暂无数据源)。
-function StateInspector({ sessionId, refreshKey }) {
-  const [session, setSession] = useState(null);
 
-  useEffect(() => {
-    let alive = true;
-    if (!sessionId) return undefined;
-    fetch(`/api/session/${sessionId}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => { if (alive) setSession(data); })
-      .catch(() => { if (alive) setSession(null); });
-    return () => { alive = false; };
-  }, [sessionId, refreshKey]);
 
-  const state = (session && session.state) || null;
-  const shortMemory = (session && session.short_memory) || [];
-  const longMemory = (session && session.long_memory) || [];
-  const usageTotal = (session && session.usage_total) || 0;
-  const usageLog = (session && session.usage_log) || [];
-  const reasoningLog = (session && session.reasoning_log) || [];
-  const lastReasoning = reasoningLog.length ? reasoningLog[reasoningLog.length - 1] : null;
-
-  const scene = (state && state.scene) || {};
-  const player = (state && state.player) || {};
-  const facts = (state && state.facts) || {};
-  const rels = (state && state.relationships) || [];
-  const logs = (state && state.character_logs) || [];
-  const timeline = (state && state.timeline) || [];
-
-  return (
-    <aside className="state-rail">
-      <div className="rail-head">
-        <h3>状态栏</h3>
-        <span>{state ? (scene.location || "进行中") : "故事开始后更新"}</span>
-      </div>
-
-      <StatSection title="场景" sub={scene.location || ""}>
-        <p><b>地点</b>{scene.location || "未定"}</p>
-        <p><b>故事内时钟</b>{formatClock(state && state.clock_minutes)}{state && state.main_resolved ? " · 主线已结案" : ""}</p>
-        <p><b>时间</b>{scene.time || "未定"}</p>
-        <p><b>氛围</b>{scene.atmosphere || "暂无"}</p>
-        <List label="在场角色" items={scene.present_characters} />
-        <List label="可交互对象" items={scene.objects} />
-      </StatSection>
-
-      <StatSection title="玩家">
-        <p><b>位置</b>{player.location || scene.location || "未定"}</p>
-        <p><b>状态</b>{player.status || "正常"}</p>
-        <List label="当前目标" items={player.active_goals} />
-        <List label="物品/资源" items={player.inventory} />
-        <List label="已知事实" items={player.known_facts} />
-      </StatSection>
-
-      <StatSection title="关系" sub={rels.length ? String(rels.length) : ""}>
-        {rels.length ? rels.map((r, i) => (
-          <div className="relation-line" key={i}>
-            <b>{r.character_id}</b>
-            <span>信任 {r.trust} / 紧张 {r.tension} / 好感 {r.affection}</span>
-            <List items={r.notes} />
-          </div>
-        )) : <p>暂无关系变化</p>}
-      </StatSection>
-
-      <StatSection title="人物日志">
-        {logs.length ? logs.map((log, i) => (
-          <div className="relation-line" key={i}>
-            <b>{log.character_id}</b>
-            <List label="已知" items={log.knows} />
-            <List label="印象" items={log.impressions} />
-          </div>
-        )) : <p>暂无人物日志</p>}
-      </StatSection>
-
-      <StatSection title="事件" sub={timeline.length ? String(timeline.length) : ""}>
-        {timeline.length ? timeline.slice(0, 12).map((event, i) => (
-          <p key={i}><b>{event.status}</b>{event.title || event.event_id}</p>
-        )) : <p>暂无事件</p>}
-        {(state && (state.reached_endings || []).length > 0) && (
-          <p className="ending-reached"><b>已达成结局</b>{state.reached_endings.join(", ")}</p>
-        )}
-      </StatSection>
-
-      <StatSection title="事实边界">
-        <List label="已确认" items={facts.canon} />
-        <List label="已披露" items={facts.revealed} />
-        <List label="不确定" items={facts.uncertain} />
-        <List label="禁止编造" items={facts.forbidden} />
-      </StatSection>
-
-      <StatSection title="记忆卡" sub={`长 ${longMemory.length} / 短 ${shortMemory.length}`}>
-        <List label="长期记忆" items={longMemory.slice(-8).map(memoryText)} />
-        <List label="短期记忆" items={shortMemory.slice(-8).map(memoryText)} />
-      </StatSection>
-
-      <StatSection title="token 用量" sub={usageTotal ? String(usageTotal) : ""}>
-        <p><b>本局累计</b>{usageTotal || 0}</p>
-        <List label="最近每轮合计" items={usageLog.slice(-8).map((u) =>
-          `第 ${u.turn} 轮:合计 ${u.total_tokens || 0}(输入 ${u.prompt_tokens || 0} / 输出 ${u.completion_tokens || 0}${u.calls > 1 ? ` · ${u.calls} 次调用` : ""})`
-        )} />
-      </StatSection>
-
-      <StatSection title="历史书"><p className="rail-soon">开发中 —— 已发生事件的完整记录(当前先看上面「事件」栏)。</p></StatSection>
-      <StatSection title="时间线"><p className="rail-soon">开发中 —— 故事时间线的可视化呈现。</p></StatSection>
-      <StatSection title="地图"><p className="rail-soon">开发中 —— 世界 / 场景地图(引擎暂无地图数据源)。</p></StatSection>
-
-      <StatSection title="本轮判定" sub="调试">
-        {lastReasoning ? (
-          <div>
-            <p><b>硬设定违背</b><span className={lastReasoning.hard_violation ? "flag-on" : ""}>{lastReasoning.hard_violation ? "是 · 已用世界内逻辑反制" : "否"}</span></p>
-            {lastReasoning.world_counter && <p><b>世界反制</b>{lastReasoning.world_counter}</p>}
-            {lastReasoning.ooc_risk && <p><b>OOC 风险</b>{lastReasoning.ooc_risk}</p>}
-            {lastReasoning.note && <p><b>推演</b>{lastReasoning.note}</p>}
-          </div>
-        ) : <p>暂无判定记录</p>}
-        <List label="触发过反制的轮" items={reasoningLog.filter((r) => r.hard_violation).slice(-5).map((r) => `第 ${r.turn} 轮:${r.world_counter || r.violation_detail || "硬设定违背"}`)} />
-      </StatSection>
-    </aside>
-  );
-}
-
-function memoryText(item) {
-  if (!item) return "";
-  if (typeof item === "string") return item;
-  const role = item.role ? `${item.role}: ` : "";
-  const kind = item.kind ? `[${item.kind}] ` : "";
-  return `${role}${kind}${item.text || item.content || ""}`;
-}
-
-function List({ label, items }) {
-  const list = (items || []).filter(Boolean);
-  if (!list.length) return label ? <p><b>{label}</b>暂无</p> : null;
-  return (
-    <div className="clean-list">
-      {label && <b>{label}</b>}
-      <ul>{list.slice(0, 6).map((item, i) => <li key={i}>{item}</li>)}</ul>
-    </div>
-  );
-}
-
-function SavesMenu({ sessionId }) {
-  const [open, setOpen] = useState(false);
-  const [saves, setSaves] = useState(loadSaves);
-
-  function refresh() { setSaves(loadSaves()); }
-
-  return (
-    <div className="saves-menu">
-      <button className="saves-toggle" onClick={() => { refresh(); setOpen(!open); }}>
-        存档 ({saves.length}) {open ? "▴" : "▾"}
-      </button>
-      {open && (
-        <div className="saves-dropdown">
-          {saves.length === 0 && <div className="save-empty">暂无存档</div>}
-          {saves.map((s) => (
-            <div className={"save-item " + (s.id === sessionId ? "active" : "")} key={s.id}>
-              <button className="save-load" disabled={s.id === sessionId} onClick={() => switchToSave(s.id)}>
-                <b>{s.name || s.summary || "未命名存档"}</b>
-                <small>{(s.turns || 0) + " 轮"}{s.updated ? " · " + s.updated : ""}{s.id === sessionId ? " · 当前" : ""}</small>
-              </button>
-              <button className="save-op" onClick={() => {
-                const n = prompt("重命名存档", s.name || s.summary || "");
-                if (n != null) { renameSave(s.id, n.trim()); refresh(); }
-              }}>改名</button>
-              <button className="save-op" onClick={() => {
-                if (confirm("删除这局存档?不可恢复。")) deleteSave(s.id);
-              }}>删除</button>
-            </div>
-          ))}
-          <button className="save-new" onClick={startFresh}>+ 新游戏</button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 async function saveToVault(kind, data) {
   try { await postJSON("/api/library/save", { kind, data }); return true; }
   catch (e) { return false; }
 }
 
-// 店招(沐言书坊)—— muyan 双态:纸态店招,印章 logo + 走线选中态。
-function TopNav({ view, setView, sessionId, authEnabled, user, onLogout }) {
-  // 落地层店招(原型「AI Interactive Story」)。两个 tab 暂并入 home(故事库)与 chat(角色)。
-  const tabs = [
-    { id: "home", k: "home", label: "首页" },
-    { id: "lib", k: "home", label: "故事库" },
-    { id: "char", k: "chat", label: "角色" },
-    { id: "create", k: "build", label: "创作" },
-    { id: "mine", k: "mine", label: "我的" },
-  ];
-  const activeId = { home: "home", chat: "char", build: "create", mine: "mine" }[view] || "";
-  const who = authEnabled ? (user ? (user.display_name || user.username) : "访客") : "";
-  return (
-    <header className="nv-top mu-paper-bg">
-      <style>{`
-        /* —— 全局暖色覆盖 + 落地层新令牌(原型调色,注入式覆盖 muyan,不改 muyan.css) —— */
-        :root {
-          --mu-paper:#efe8d6; --mu-paper-deep:#e3d9be; --mu-paper-bright:#f8f2e4;
-          --mu-ink:#322c22; --mu-ink-soft:#6f6553; --mu-ink-faint:#9b9078;
-          --mu-line:#d8cbac; --mu-line-strong:#b8a677;
-          --w-navy:#2b3340; --w-navy-deep:#1d242e; --w-navy-soft:#3a4655;
-          --w-gold:#b89a55; --w-gold-soft:#cbb988; --w-azure:#6f86a8; --w-amber:#c1903f;
-        }
-        .nv-top { display:flex; align-items:center; gap:30px; padding:0 40px; height:74px; flex:none; position:relative; z-index:30; }
-        .nv-top::after { content:""; position:absolute; left:0; right:0; bottom:0; height:1.5px; background:linear-gradient(90deg,transparent,var(--mu-line-strong) 7%,var(--mu-line-strong) 93%,transparent); }
-        .nv-brand { display:flex; align-items:center; gap:13px; }
-        .nv-mark { width:38px; height:38px; display:grid; place-items:center; border:1px solid var(--w-gold); color:var(--w-navy); background:linear-gradient(150deg,var(--mu-paper-bright),var(--mu-paper-deep)); position:relative; }
-        .nv-mark::after { content:""; position:absolute; inset:3px; border:1px solid var(--w-gold-soft); opacity:.5; }
-        .nv-brand-tx h1 { margin:0; font-family:var(--mu-serif); font-size:18px; font-weight:700; letter-spacing:.1em; color:var(--mu-ink); white-space:nowrap; }
-        .nv-sub { font-family:var(--mu-kai); font-size:11px; letter-spacing:.3em; color:var(--mu-ink-faint); }
-        .nv-nav { display:flex; gap:30px; margin-left:24px; }
-        .nv-nav button { font-family:var(--mu-serif); font-size:14.5px; letter-spacing:.16em; color:var(--mu-ink-soft); background:none; border:none; cursor:pointer; position:relative; padding:8px 0; }
-        .nv-nav button:hover { color:var(--mu-ink); }
-        .nv-nav button::after { content:""; position:absolute; left:0; right:0; bottom:2px; height:2px; background:repeating-linear-gradient(90deg,var(--w-gold) 0 7px,transparent 7px 14px); background-size:21px 2px; opacity:0; transition:opacity .3s; }
-        .nv-nav button:hover::after, .nv-nav button.on::after { opacity:1; }
-        body.mu-anim .nv-nav button.on::after { animation: mu-march 1.4s linear infinite; }
-        .nv-nav button.on { color:var(--w-navy); font-weight:700; }
-        .nv-right { display:flex; align-items:center; gap:16px; margin-left:auto; }
-        .nv-icon { width:34px; height:34px; border-radius:50%; border:1px solid var(--mu-line-strong); background:none; color:var(--mu-ink-soft); display:grid; place-items:center; cursor:pointer; transition:all .2s; }
-        .nv-icon:hover { border-color:var(--w-navy); color:var(--w-navy); }
-        .nv-who { font-family:var(--mu-kai); font-size:12.5px; color:var(--mu-ink-soft); white-space:nowrap; }
-        .nv-line { font-family:var(--mu-serif); font-size:13.5px; letter-spacing:.12em; color:var(--mu-ink-soft); background:none; border:none; cursor:pointer; padding:6px 2px; }
-        .nv-line:hover { color:var(--mu-ink); }
-        .nv-cta { display:inline-flex; align-items:center; gap:8px; font-family:var(--mu-serif); font-size:14px; letter-spacing:.14em; font-weight:600; color:var(--mu-paper-bright); background:var(--w-navy); border:1px solid var(--w-navy-deep); box-shadow:inset 0 0 0 1px rgba(184,154,85,.35); padding:10px 22px; cursor:pointer; transition:all .2s var(--mu-ease); white-space:nowrap; }
-        .nv-cta:hover { background:var(--w-navy-deep); transform:translateY(-1px); }
-        .nv-cta svg { color:var(--w-gold-soft); }
-        @media (max-width:860px){ .nv-sub{ display:none; } .nv-nav{ gap:18px; margin-left:14px; } .nv-nav button{ font-size:13px; letter-spacing:.08em; } .nv-top{ gap:16px; padding:0 18px; } }
-        @media (max-width:680px){ .nv-nav .nv-hideable{ display:none; } .nv-who{ display:none; } .nv-cta{ padding:9px 14px; } }
-      `}</style>
-      <div className="nv-brand">
-        <span className="nv-mark" aria-hidden="true">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 4C12 6 8 11 6 19"/><path d="M6 19c6 0 11-4 13-10"/><path d="M5 20l3-1"/></svg>
-        </span>
-        <div className="nv-brand-tx">
-          <h1>AI Interactive Story</h1>
-          <span className="nv-sub">每个选择 · 都在书写</span>
-        </div>
-      </div>
-      <nav className="nv-nav">
-        {tabs.map((t) => (
-          <button key={t.id} data-coach={t.id === "home" ? "nav-explore" : undefined}
-            className={(activeId === t.id ? "on " : "") + (t.id === "lib" || t.id === "char" ? "nv-hideable" : "")}
-            onClick={() => setView(t.k)}>{t.label}</button>
-        ))}
-      </nav>
-      <div className="nv-right">
-        <button className="nv-icon" title="搜索" aria-label="搜索">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-        </button>
-        {who && <span className="nv-who">{who}</span>}
-        {authEnabled && user
-          ? <button className="nv-line" onClick={onLogout}>退出</button>
-          : <button className="nv-line" onClick={() => setView("mine")}>登录</button>}
-        <button className="nv-cta" onClick={() => (tabs && setView("home"))}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.6 6.4L20 10l-6.4 1.6L12 18l-1.6-6.4L4 10l6.4-1.6z"/></svg>
-          开始探索
-        </button>
-      </div>
-    </header>
-  );
-}
 
 // 登录 / 注册页(AUTH_ENABLED 时未登录则全屏拦在此)。纯 JSX,无构建工具。
 // 注册:邮箱 + 发送验证码 + 验证码 + 密码(可选用户名)。登录:邮箱/用户名 + 密码。
@@ -2115,12 +1784,6 @@ function bundleSummary(d) {
   return parts.join(" · ") || "空卡组";
 }
 
-// 封面:有 cover(图片 URL 或 data-URI)就铺它,否则用渐变星空底(故事名压在上面)。
-// 配色对齐 _seed_preset.py 的 starfield_cover(深蓝→紫→近黑),比纯黑封面墙耐看。
-function coverStyle(cover) {
-  if (cover) return { backgroundImage: `url("${cover}")`, backgroundSize: "cover", backgroundPosition: "center" };
-  return { backgroundImage: "radial-gradient(120% 90% at 72% 28%, rgba(106,123,255,0.35), rgba(106,123,255,0) 60%), linear-gradient(135deg, #0b1437 0%, #27194e 55%, #070a1b 100%)" };
-}
 
 // 判断某个 preset 是不是新手教学局(给探索页那张卡打引导锚点 / startTutorial 找它都用)。
 function isTutorialPreset(p) {
@@ -2128,208 +1791,7 @@ function isTutorialPreset(p) {
   return ((d.tags || []).includes("教学")) || (((p && p.name) || "").includes("新人入店")) || ((d.name || "").includes("新人入店"));
 }
 
-function StoryTile({ d, fallbackName, sub, actions, coach, onOpen }) {
-  const name = (d && d.name) || fallbackName || "故事";
-  const cover = d && d.cover;
-  return (
-    <div className={"story-tile" + (onOpen ? " clickable" : "")} data-coach={coach || undefined} onClick={onOpen}>
-      <div className="tile-cover" style={coverStyle(cover)}>
-        {!cover && <span className="cover-title">{name.slice(0, 10)}</span>}
-      </div>
-      <div className="tile-body">
-        <div className="tile-titlerow">
-          <b>{name}</b>
-          {d && d.author ? <span className="tile-author">by {d.author}</span> : null}
-        </div>
-        <p className="tile-syn">{(d && d.synopsis) || sub || ""}</p>
-        <div className="tile-tags">
-          {((d && d.tags) || []).slice(0, 4).map((t, j) => <span className="tag" key={j}>{t}</span>)}
-          {d && bundleSummary(d) !== "空卡组" ? <span className="tag muted">{bundleSummary(d)}</span> : null}
-        </div>
-        <div className="tile-actions" onClick={(e) => e.stopPropagation()}>{actions}</div>
-      </div>
-    </div>
-  );
-}
 
-// 单卡轮播:一次一张 + 左右箭头 + 圆点(角色 / 出演用)。只有一张时不显箭头/点。
-function Carousel({ items, render }) {
-  const [i, setI] = useState(0);
-  const n = (items || []).length;
-  if (!n) return <p className="empty">(无)</p>;
-  const idx = Math.min(i, n - 1);
-  return (
-    <div className="carousel">
-      <div className="carousel-row">
-        {n > 1 && <button className="carousel-arrow" onClick={() => setI((x) => (x - 1 + n) % n)} aria-label="上一张">‹</button>}
-        <div className="carousel-stage">{render(items[idx], idx)}</div>
-        {n > 1 && <button className="carousel-arrow" onClick={() => setI((x) => (x + 1) % n)} aria-label="下一张">›</button>}
-      </div>
-      {n > 1 && (
-        <div className="carousel-dots">
-          {items.map((_, k) => <button key={k} className={"dot" + (k === idx ? " on" : "")} onClick={() => setI(k)} aria-label={`第 ${k + 1} 张`} />)}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// 故事详情 modal(§1):点故事卡弹出,4 tab(简介 / 故事背景 / 角色 / 出演)。
-// 【剧透边界·硬约束】简介 / 故事 / 角色只渲染公开层(白名单字段);known_hidden、versions、隐藏事件、
-// 主线 / 事件 / 结局 / 角色边界 等一律不进 modal。出演 tab = 选身份(取代旧整页选人页),自带 coach 锚点。
-function StoryModal({ entry, setTab, onClose, onStart }) {
-  const preset = entry.preset;
-  const tab = entry.tab;
-  const d = (preset && preset.data) || {};
-  const name = d.name || (preset && preset.name) || "故事";
-  const synopsis = d.synopsis || (d.story && d.story.premise) || "";     // §2 降级:无 synopsis 取 premise
-  const author = d.author || "";
-  const tags = d.tags || [];
-  const premise = (d.story && d.story.premise) || "";
-  const worldEntries = (((d.world && d.world.entries) || [])).filter((e) => (e.visibility || "public") === "public"); // 只公开条目
-  const chars = d.characters || [];
-  // 详情「角色」tab 与出演兜底只取有展示内容(外貌/性格)的角色;次要NPC名册卡(内容全空的空壳)过滤掉,不当空角色卡显示。
-  // 根治需引擎侧补「次要NPC名册解析」(现 parse_character 不认名册结构,内容没 parse 进来)——已记入给 Gengyue 的引擎待办。
-  const shownChars = chars.filter((c) => { const cd = (c && c.data) || c || {}; return cd.look || cd.personality; });
-  // 可扮演:有 playables 用之;否则 §2 兜底=全体角色(从 NPC 卡降级出名/一句设定)
-  const playables = (d.playables && d.playables.length)
-    ? d.playables
-    : shownChars.map((c) => ({ name: (c.data || {}).name || "角色", role: ((c.data || {}).description || "").slice(0, 40) }));
-
-  const TABS = [["intro", "简介"], ["bg", "故事背景"], ["chars", "角色"], ["cast", "出演"]];
-  const [castMode, setCastMode] = useState("list"); // list | custom
-  const [customText, setCustomText] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  async function startCustom() {
-    if (!customText.trim()) return;
-    setLoading(true);
-    try { onStart(await postJSON("/api/identify_player", { text: customText })); }
-    catch (e) { alert("识别失败:" + e.message); }
-    setLoading(false);
-  }
-
-  // 角色公开层白名单:名 / 外貌锚点 / 一句话锚点 / 标签 = 基础(默认只显示这些);
-  // 主设定 / 性格 / 公开可知收进「展开更多」(详情默认只讲基础,不铺全文)。
-  // anchor 是 §0 引擎摘要的公开一句话(不含 L4);绝不渲染 known_hidden、versions、tension、scenario、first_mes。
-  function PublicChar({ c }) {
-    const cd = (c && c.data) || c || {};
-    const [flipped, setFlipped] = useState(false);
-    return (
-      <div className={"modal-char flip" + (flipped ? " flipped" : "")}>
-        <div className="flip-inner">
-          <div className="flip-face flip-front">
-            <div className="mc-scroll">
-              <div className="mc-name">{cd.name || "角色"}</div>
-              {cd.look ? (
-                <div className="mc-block"><div className="mc-sub">外貌</div><p>{cd.look}</p></div>
-              ) : null}
-              {cd.personality ? (
-                <div className="mc-block"><div className="mc-sub">性格</div><p>{cd.personality}</p></div>
-              ) : null}
-            </div>
-            <button className="flip-btn" onClick={() => setFlipped(true)} aria-label="翻到背面看角色图" title="看角色图">↻</button>
-          </div>
-          <div className="flip-face flip-back">
-            {cd.image
-              ? <img src={cd.image} alt={cd.name || "角色"} />
-              : <div className="flip-img-placeholder">暂无角色图</div>}
-            <button className="flip-btn" onClick={() => setFlipped(false)} aria-label="翻回正面看设定" title="返回设定">↺</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="story-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-cover" style={coverStyle(d.cover)}>
-          {!d.cover && <span className="modal-cover-title">{name}</span>}
-          <button className="modal-close" onClick={onClose} aria-label="关闭">×</button>
-        </div>
-        <div className="modal-tabs" data-coach="modal-tabs">
-          {TABS.map(([k, label]) => (
-            <button key={k} data-coach={"modal-tab-" + k} className={tab === k ? "active" : ""} onClick={() => setTab(k)}>{label}</button>
-          ))}
-        </div>
-        <div className="modal-body">
-          {tab === "intro" && (
-            <div className="modal-pane">
-              <div className="pane-scroll modal-intro" data-coach="modal-intro">
-                <h3>{name}</h3>
-                <div className="modal-meta">{author ? <span>作者 {author}</span> : null}<span>{bundleSummary(d)}</span></div>
-                <p className="modal-syn">{synopsis || "(暂无简介)"}</p>
-                <div className="modal-tags">{tags.map((t, i) => <span className="tag" key={i}>{t}</span>)}</div>
-              </div>
-              <div className="pane-footer"><button className="primary modal-cta" onClick={() => setTab("cast")}>选身份 · 开始 →</button></div>
-            </div>
-          )}
-          {tab === "bg" && (
-            <div className="modal-pane">
-              <div className="pane-scroll modal-bg" data-coach="modal-bg">
-                <h4>前情</h4>
-                <p>{premise || "(这个故事还没写前情简介)"}</p>
-                {worldEntries.length > 0 && (
-                  <>
-                    <h4>世界设定</h4>
-                    {/* 只露最核心的几条公开条目(滚动看),不把世界书全抖出来。 */}
-                    {worldEntries.slice(0, 3).map((e, i) => (
-                      <div className="modal-world-entry" key={i}>
-                        <b>{e.comment || (e.keys || []).join(" / ") || "设定"}</b>
-                        <p>{e.content || ""}</p>
-                      </div>
-                    ))}
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-          {tab === "chars" && (
-            <div className="modal-pane modal-pane-chars" data-coach="modal-chars">
-              {shownChars.length
-                ? <Carousel items={shownChars} render={(c, i) => <PublicChar key={i} c={c} />} />
-                : <div className="pane-scroll"><p className="empty">(没有登场人物信息)</p></div>}
-            </div>
-          )}
-          {tab === "cast" && (castMode === "custom" ? (
-            <div className="modal-pane">
-              <div className="pane-scroll modal-cast-custom">
-                <p className="cs-sub">写下你要扮演的角色:身份、背景、目标、能力、限制、开局已知……AI 会把它识别成演出卡。</p>
-                <textarea className="cs-textarea" rows="6" value={customText} onChange={(e) => setCustomText(e.target.value)}
-                  placeholder="例:一个流落异乡的年轻铁匠,为寻失散的妹妹而来,擅长锻造与观察……" />
-                <label className="filebtn">上传 .txt / .md / .docx
-                  <input type="file" accept=".txt,.md,.docx" style={{ display: "none" }}
-                    onChange={async (e) => { const f = e.target.files[0]; if (f) setCustomText(await uploadFile(f)); }} />
-                </label>
-                <div className="cs-actions">
-                  <button className="primary" disabled={loading || !customText.trim()} onClick={startCustom}>{loading ? "识别中…" : "用这个角色开始"}</button>
-                  <button className="ghost" onClick={() => setCastMode("list")}>← 返回</button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="modal-pane">
-              <div className="cast-carousel" data-coach="select-grid">
-                <Carousel items={playables} render={(p) => (
-                  <div className="cast-card">
-                    <b>{p.name || "未命名"}</b>
-                    <span className="cast-role">{p.role || ""}</span>
-                    <button className="primary" onClick={() => onStart(p)}>以 TA 开始</button>
-                  </div>
-                )} />
-              </div>
-              <div className="pane-footer cast-extra">
-                <button className="ghost" data-coach="select-custom" onClick={() => setCastMode("custom")}>自定义角色</button>
-                <button className="ghost" onClick={() => onStart(null)}>直接开始(不指定主角)</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // —— muyan 封面墙:做旧纸·错位微倾的 CSS 色块封面(刻意少图,走线条风)——
 const HM_COVERS = [
@@ -2338,28 +1800,7 @@ const HM_COVERS = [
 ];
 const HM_ROT = [-1.2, 0.8, -0.6, 1.1, -0.9, 1.4];
 const HM_OFF = [0, 26, 8, 30, 4, 24];
-function pName(p) { return (p && p.data && p.data.name) || (p && p.name) || "故事"; }
-function pField(p, k) { return (p && p.data && p.data[k]); }
 
-function HmBook({ p, i, isNew, coach, onOpen }) {
-  const cov = isNew ? { c: "#ddd1b6", tone: "#8e3122" } : HM_COVERS[i % HM_COVERS.length];
-  const name = pName(p);
-  const author = pField(p, "author") || "店内收录";
-  const tags = pField(p, "tags") || [];
-  const tag = tags.slice(0, 2).join(" · ") || ((pField(p, "characters") || []).length + " 角色");
-  return (
-    <div className="hm-book mu-in" data-coach={coach || undefined} onClick={onOpen}
-         style={{ animationDelay: (300 + i * 80) + "ms", marginTop: HM_OFF[i % HM_OFF.length], "--rot": HM_ROT[i % HM_ROT.length] + "deg" }}>
-      <div className="hm-cover" style={{ background: cov.c, color: cov.tone }}>
-        <span className="hm-cover-rule"></span>
-        <span className="mu-vtext hm-cover-title">{name.slice(0, 8)}</span>
-        <span className="mu-vtext hm-cover-author">{author}</span>
-        {isNew && <span className="hm-new">本周新进</span>}
-      </div>
-      <div className="hm-book-meta"><b>{name}</b><span>{tag}</span></div>
-    </div>
-  );
-}
 
 // 场景缩略占位(真插画后填):一组冷暖各异的渐变,模拟二游场景封面。
 const LH_SCENES = [
@@ -2369,328 +1810,9 @@ const LH_SCENES = [
   "radial-gradient(120% 90% at 62% 22%, #c79aa8, transparent 60%), linear-gradient(160deg,#5b3a4a,#2c1f29)",
   "radial-gradient(120% 90% at 34% 20%, #a59cce, transparent 60%), linear-gradient(160deg,#3a3560,#211d3a)",
 ];
-function LhIco({ name }) {
-  const p = {
-    char: <><circle cx="12" cy="8" r="4" /><path d="M5 21c0-4 3.4-6 7-6s7 2 7 6" /></>,
-    world: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18" /></>,
-    branch: <><circle cx="6" cy="6" r="2.4" /><circle cx="18" cy="6" r="2.4" /><circle cx="12" cy="19" r="2.4" /><path d="M6 8.4v1.6c0 3 6 3 6 6.4M18 8.4v1.6c0 3-6 3-6 6.4" /></>,
-    bolt: <path d="M13 2 4 14h7l-1 8 9-12h-7z" />,
-  }[name];
-  return <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">{p}</svg>;
-}
 
-function StoriesHome({ onNew, presets, onLaunchPreset, onDeletePreset }) {
-  const list = presets || [];
-  const tutorial = list.find(isTutorialPreset);
-  const featured = list.find((p) => !isTutorialPreset(p)) || list[0] || null;
-  const fsyn = featured ? (pField(featured, "synopsis") || (pField(featured, "story") && pField(featured, "story").premise) || "") : "";
-  const rowRef = React.useRef(null);
-  const scrollRow = (dx) => { const el = rowRef.current; if (el) el.scrollBy({ left: dx, behavior: "smooth" }); };
-  const FEATURES = [
-    { t: "角色卡", en: "CHARACTER", d: "为每个角色立心立志,AI 据此说话行事。", icon: "char" },
-    { t: "世界书", en: "WORLD", d: "设定写进世界书,叙事始终自洽。", icon: "world" },
-    { t: "多结局", en: "ENDINGS", d: "你的选择被记住,结局因你分叉。", icon: "branch" },
-    { t: "即时互动", en: "REALTIME", d: "自由输入行动与台词,故事即时回应。", icon: "bolt" },
-  ];
-  return (
-    <div className="mu-paper-bg lh-root">
-      <style>{`
-        .lh-root { position:relative; height:100%; min-height:0; overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; }
-        .lh-root::-webkit-scrollbar { width:10px; } .lh-root::-webkit-scrollbar-thumb { background:var(--mu-line-strong); }
-        /* —— HERO —— */
-        .lh-hero { position:relative; display:grid; grid-template-columns:minmax(0,1.04fr) minmax(0,1fr); gap:26px; align-items:center; padding:40px 56px 30px 84px; }
-        .lh-page { position:absolute; left:40px; top:48px; display:flex; flex-direction:column; align-items:center; gap:8px; }
-        .lh-page b { font-family:var(--mu-serif); font-size:22px; font-weight:700; color:var(--w-navy); }
-        .lh-page i { width:1px; height:40px; background:var(--mu-line-strong); display:block; }
-        .lh-page span { font-family:var(--mu-serif); font-size:12px; letter-spacing:.1em; color:var(--mu-ink-faint); }
-        .lh-kicker { display:flex; align-items:center; gap:14px; }
-        .lh-kicker .ln { width:52px; height:1px; background:var(--w-gold); }
-        .lh-title { font-family:var(--mu-serif); font-weight:900; font-size:52px; line-height:1.22; letter-spacing:.03em; color:var(--mu-ink); margin:16px 0 0; }
-        .lh-title em { font-style:normal; color:var(--w-amber); position:relative; }
-        .lh-title em::after { content:""; position:absolute; left:0; right:0; bottom:5px; height:9px; background:rgba(193,144,63,.2); z-index:-1; }
-        .lh-lead { font-family:var(--mu-kai); font-size:15.5px; line-height:2; color:var(--mu-ink-soft); max-width:444px; margin:20px 0 0; }
-        .lh-cta { display:flex; align-items:center; gap:18px; margin-top:28px; }
-        .lh-btn-main { display:inline-flex; align-items:center; gap:9px; font-family:var(--mu-serif); font-size:15px; font-weight:600; letter-spacing:.14em; color:var(--mu-paper-bright); background:var(--w-navy); border:1px solid var(--w-navy-deep); box-shadow:inset 0 0 0 1px rgba(184,154,85,.4), 3px 4px 0 rgba(43,38,32,.16); padding:13px 30px; cursor:pointer; transition:transform .2s var(--mu-ease),box-shadow .2s; }
-        .lh-btn-main:hover { transform:translateY(-2px); box-shadow:inset 0 0 0 1px rgba(184,154,85,.55), 4px 7px 0 rgba(43,38,32,.18); }
-        .lh-btn-main svg { color:var(--w-gold-soft); }
-        .lh-btn-out { font-family:var(--mu-serif); font-size:15px; font-weight:600; letter-spacing:.14em; color:var(--w-navy); background:none; border:1px solid var(--mu-line-strong); padding:13px 26px; cursor:pointer; transition:all .2s; }
-        .lh-btn-out:hover { border-color:var(--w-navy); background:var(--mu-paper-bright); }
-        /* —— HERO ART(立绘/场景占位) —— */
-        .lh-art { position:relative; height:368px; }
-        .lh-art-book { position:absolute; left:13%; right:13%; top:7%; bottom:7%; background:linear-gradient(160deg,#f4eddb,#e2d6ba); border:1px solid var(--mu-line-strong); box-shadow:0 32px 64px -36px rgba(43,38,32,.55); display:grid; place-items:center; }
-        .lh-art-book::before { content:""; position:absolute; left:50%; top:7%; bottom:7%; width:1px; background:linear-gradient(180deg,transparent,var(--mu-line-strong),transparent); }
-        .lh-art-scene { width:60%; height:54%; position:relative; box-shadow:inset 0 0 0 6px rgba(248,242,228,.85), 0 10px 24px -10px rgba(43,38,32,.5); }
-        .lh-art-scene::after { content:"场景 / 立绘 待补"; position:absolute; left:0; right:0; bottom:9px; text-align:center; font-family:var(--mu-kai); font-size:10px; letter-spacing:.24em; color:rgba(248,242,228,.72); }
-        .lh-art-tag { position:absolute; left:7%; top:13%; z-index:3; background:var(--mu-paper-bright); border:1px solid var(--w-gold); color:var(--w-navy); font-family:var(--mu-serif); font-size:11px; letter-spacing:.16em; padding:6px 12px; box-shadow:3px 3px 0 rgba(43,38,32,.12); --r:0deg; animation:lhFloat 6s ease-in-out infinite; }
-        .lh-float { position:absolute; width:92px; height:116px; z-index:2; border:1px solid var(--mu-line-strong); box-shadow:0 16px 32px -16px rgba(43,38,32,.55); }
-        .lh-float::after { content:""; position:absolute; inset:5px; border:1px solid rgba(248,242,228,.45); }
-        .lh-float.a { right:1%; top:5%; --r:5deg; animation:lhFloat 7s ease-in-out infinite; }
-        .lh-float.b { right:7%; bottom:1%; --r:-6deg; animation:lhFloat 8s ease-in-out .9s infinite; }
-        .lh-spark { position:absolute; color:var(--w-gold); animation:lhTwinkle 3.2s ease-in-out infinite; }
-        @keyframes lhFloat { 0%,100% { transform:translateY(0) rotate(var(--r,0deg)); } 50% { transform:translateY(-12px) rotate(var(--r,0deg)); } }
-        @keyframes lhTwinkle { 0%,100% { opacity:.22; transform:scale(.65); } 50% { opacity:.9; transform:scale(1); } }
-        /* —— 区段标题 —— */
-        .lh-sec { padding:8px 56px 0; }
-        .lh-sec-h { display:flex; align-items:baseline; gap:14px; }
-        .lh-sec-h h3 { margin:0; font-family:var(--mu-serif); font-size:19px; font-weight:700; letter-spacing:.2em; color:var(--mu-ink); white-space:nowrap; }
-        .lh-sec-h .mu-dash { flex:1; align-self:center; }
-        .lh-arrows { display:flex; gap:8px; }
-        .lh-arrows button { width:30px; height:30px; border:1px solid var(--mu-line-strong); background:none; color:var(--mu-ink-soft); cursor:pointer; display:grid; place-items:center; font-size:16px; line-height:1; transition:all .2s; }
-        .lh-arrows button:hover { border-color:var(--w-navy); color:var(--w-navy); }
-        /* —— 精选故事横滑 —— */
-        .lh-row { display:flex; gap:20px; margin-top:18px; overflow-x:auto; padding:4px 2px 16px; }
-        .lh-row::-webkit-scrollbar { height:7px; } .lh-row::-webkit-scrollbar-thumb { background:var(--mu-line-strong); }
-        .lh-card { flex:none; width:210px; cursor:pointer; }
-        .lh-card-cv { height:128px; position:relative; border:1px solid var(--mu-line-strong); box-shadow:0 10px 22px -14px rgba(43,38,32,.5); overflow:hidden; transition:transform .35s var(--mu-ease),box-shadow .35s; }
-        .lh-card:hover .lh-card-cv { transform:translateY(-6px); box-shadow:0 18px 32px -16px rgba(43,38,32,.55); }
-        .lh-card-cv::after { content:""; position:absolute; inset:6px; border:1px solid rgba(248,242,228,.4); pointer-events:none; }
-        .lh-card-no { position:absolute; left:9px; top:7px; font-family:var(--mu-serif); font-size:12px; font-weight:700; letter-spacing:.1em; color:rgba(248,242,228,.92); }
-        .lh-card-new { position:absolute; right:0; top:9px; background:var(--mu-cinnabar); color:#f5ede2; font-family:var(--mu-serif); font-size:10px; letter-spacing:.16em; padding:3px 9px; }
-        .lh-card b { display:block; font-family:var(--mu-serif); font-size:15px; font-weight:600; color:var(--mu-ink); margin-top:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .lh-card .tg { font-family:var(--mu-kai); font-size:11px; color:var(--mu-ink-faint); margin-top:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .lh-card .mt { display:flex; align-items:center; gap:8px; margin-top:7px; font-family:var(--mu-kai); font-size:11px; color:var(--mu-ink-soft); }
-        .lh-card .mt i { width:4px; height:4px; background:var(--w-gold); transform:rotate(45deg); font-style:normal; }
-        .lh-empty { flex:none; font-family:var(--mu-kai); font-size:13px; color:var(--mu-ink-soft); padding:24px 2px; }
-        .lh-empty button { margin-left:10px; }
-        /* —— 产品亮点 —— */
-        .lh-pillars { display:grid; grid-template-columns:repeat(4,1fr) auto; gap:18px; align-items:stretch; margin:22px 56px 30px; padding-top:22px; border-top:1px solid var(--mu-line-strong); }
-        .lh-pillar { display:flex; flex-direction:column; gap:6px; padding-right:18px; border-right:1px solid var(--mu-line); }
-        .lh-pillar .ic { width:40px; height:40px; display:grid; place-items:center; color:var(--w-navy); border:1px solid var(--w-gold); background:var(--mu-paper-bright); }
-        .lh-pillar b { font-family:var(--mu-serif); font-size:15px; font-weight:700; color:var(--mu-ink); margin-top:6px; }
-        .lh-pillar .en { font-family:var(--mu-serif); font-size:9px; letter-spacing:.3em; color:var(--mu-ink-faint); }
-        .lh-pillar p { margin:3px 0 0; font-family:var(--mu-kai); font-size:11.5px; line-height:1.7; color:var(--mu-ink-soft); }
-        .lh-stat { display:flex; flex-direction:column; justify-content:center; padding-left:8px; min-width:134px; }
-        .lh-stat b { font-family:var(--mu-serif); font-size:34px; font-weight:900; color:var(--w-navy); letter-spacing:.02em; }
-        .lh-stat span { font-family:var(--mu-kai); font-size:11px; color:var(--mu-ink-soft); }
-        .lh-stat .bar { height:4px; background:var(--mu-paper-deep); margin-top:9px; position:relative; }
-        .lh-stat .bar i { position:absolute; left:0; top:0; bottom:0; width:82.6%; background:var(--w-gold); display:block; }
-        @media (max-width:960px){
-          .lh-hero { grid-template-columns:1fr; padding:26px 24px 18px; gap:6px; } .lh-page{ display:none; }
-          .lh-art { height:240px; order:-1; } .lh-title{ font-size:38px; }
-          .lh-sec{ padding:8px 24px 0; } .lh-pillars{ grid-template-columns:repeat(2,1fr); margin:18px 24px 26px; } .lh-stat{ grid-column:1/-1; }
-        }
-      `}</style>
 
-      {/* —— HERO —— */}
-      <section className="lh-hero">
-        <span className="lh-page"><b>01</b><i></i><span>05</span></span>
-        <div className="lh-hero-tx">
-          <div className="lh-kicker mu-in" style={{ animationDelay: "60ms" }}><span className="mu-en">Interactive Narrative</span><span className="ln"></span></div>
-          <h2 className="lh-title mu-in" style={{ animationDelay: "140ms" }}>进入<em>会回应</em>你的<br />故事世界</h2>
-          <p className="lh-lead mu-in" style={{ animationDelay: "260ms" }}>
-            与角色相遇,在动态叙事里开启一场属于你的旅程。每一个选择都被记住——故事因你而无可复制。
-          </p>
-          <div className="lh-cta mu-in" style={{ animationDelay: "360ms" }}>
-            <button className="lh-btn-main" onClick={() => (featured ? onLaunchPreset(featured) : onNew())}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.6 6.4L20 10l-6.4 1.6L12 18l-1.6-6.4L4 10l6.4-1.6z" /></svg>
-              开始探索
-            </button>
-            <button className="lh-btn-out" data-coach="new-story" onClick={onNew}>立即创作</button>
-          </div>
-        </div>
-        <div className="lh-art" aria-hidden="true">
-          <span className="lh-art-tag">世界观档案 · WORLD</span>
-          <div className="lh-art-book">
-            <div className="lh-art-scene" style={{ background: LH_SCENES[0] }}></div>
-          </div>
-          <div className="lh-float a" style={{ background: LH_SCENES[2] }}></div>
-          <div className="lh-float b" style={{ background: LH_SCENES[4] }}></div>
-          <span className="lh-spark" style={{ left: "6%", bottom: "16%", fontSize: 16 }}>✦</span>
-          <span className="lh-spark" style={{ right: "20%", top: "4%", fontSize: 12, animationDelay: "1s" }}>✦</span>
-          <span className="lh-spark" style={{ left: "44%", top: "0%", fontSize: 10, animationDelay: "1.8s" }}>✦</span>
-        </div>
-      </section>
 
-      {/* —— 精选故事 —— */}
-      <section className="lh-sec">
-        <div className="lh-sec-h mu-in" style={{ animationDelay: "440ms" }}>
-          <h3>精选故事</h3>
-          <span className="mu-en">Featured Stories</span>
-          <span className="mu-dash live"></span>
-          <div className="lh-arrows">
-            <button onClick={() => scrollRow(-460)} aria-label="左滑">‹</button>
-            <button onClick={() => scrollRow(460)} aria-label="右滑">›</button>
-          </div>
-        </div>
-        <div className="lh-row" data-coach="gallery" ref={rowRef}>
-          {!list.length && (
-            <p className="lh-empty">书架还空着。
-              <button className="lh-btn-out" style={{ padding: "8px 18px", fontSize: 13 }} onClick={onNew}>写第一本</button>
-            </p>
-          )}
-          {list.map((p, i) => {
-            const isNew = isTutorialPreset(p);
-            const tags = (pField(p, "tags") || []).slice(0, 2).join(" · ");
-            const nch = (pField(p, "characters") || []).length;
-            return (
-              <div className="lh-card mu-in" key={i} data-coach={isNew ? "tutorial-tile" : undefined}
-                style={{ animationDelay: (480 + i * 70) + "ms" }} onClick={() => onLaunchPreset(p)}>
-                <div className="lh-card-cv" style={{ background: LH_SCENES[i % LH_SCENES.length] }}>
-                  <span className="lh-card-no">{String(i + 1).padStart(2, "0")}</span>
-                  {isNew && <span className="lh-card-new">教学</span>}
-                </div>
-                <b>{pName(p)}</b>
-                <div className="tg">{tags || "互动叙事"}</div>
-                <div className="mt"><span>{nch ? nch + " 角色" : "群像"}</span><i></i><span>{pField(p, "author") || "店内收录"}</span></div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* —— 产品亮点 —— */}
-      <section className="lh-pillars mu-in" style={{ animationDelay: "640ms" }}>
-        {FEATURES.map((f) => (
-          <div className="lh-pillar" key={f.t}>
-            <span className="ic"><LhIco name={f.icon} /></span>
-            <b>{f.t}</b>
-            <span className="en">{f.en}</span>
-            <p>{f.d}</p>
-          </div>
-        ))}
-        <div className="lh-stat">
-          <b className="mu-num">82.6%</b>
-          <span>玩家完整走完一个结局</span>
-          <div className="bar"><i></i></div>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-// 聊天页(占位)——后续批次接轻量 /api/chat 引擎。
-function ChatView() {
-  return (
-    <section className="view-shell chat-view">
-      <div className="view-head"><h2>聊天</h2><p>和单个角色一对一聊天,像微信对话框。轻量引擎(不带状态机/事件/世界时钟),后续批次接入。</p></div>
-      <div className="placeholder-pane" data-coach="chat-ph">
-        <p className="placeholder-big">聊天功能正在搭建中</p>
-        <p className="hint-line">规划:从故事库选一个角色 → 微信式对话框 → 轻量 <code>/api/chat</code> 引擎,纯角色对话,可后期融入剧情。</p>
-      </div>
-    </section>
-  );
-}
-
-// 「我的」中心(§5/§6):把作者/个人资产从主导航收进来——存档进度 + 我建的预设 + 我的卡库。
-// 第一阶段=localStorage / 本地 API 聚合壳,无账号系统(P0 属后端域,本批次不引入登录)。
-// dashboard 三面板布局(yufei 模板):上排 存档表格 + 预设横排;下排整宽卡库。
-function MineView({ saves, presets, activeId, authEnabled, user, onResume, onDeleteSave, onGoExplore, onOpenStory, onDeletePreset,
-                    addCharacter, addWorld, setStory, setPlayer, completeCard, goGame }) {
-  const [cardCount, setCardCount] = useState(null);
-  const loggedIn = authEnabled && user;
-  // 已登录:存档源走后端「我的存档」(跨设备,绑定账号);未登录/AUTH 关:走本地浏览器存档。
-  const [serverSaves, setServerSaves] = useState(null);
-  useEffect(() => {
-    if (!loggedIn) { setServerSaves(null); return undefined; }
-    let alive = true;
-    fetch("/api/my/sessions").then((r) => (r.ok ? r.json() : [])).then((list) => {
-      if (!alive) return;
-      setServerSaves((list || []).map((s) => ({
-        id: s.id, name: s.story || "", turns: s.turns || 0,
-        summary: s.last_input || "", updated: (s.updated_at || "").replace("T", " ").slice(0, 16),
-      })));
-    }).catch(() => { if (alive) setServerSaves([]); });
-    return () => { alive = false; };
-  }, [loggedIn, activeId]);
-  const source = loggedIn && serverSaves != null ? serverSaves : (saves || []);
-  // 只展示真正玩过/有内容的存档(过滤掉启动时登记的空占位 session)。
-  const realSaves = source.filter((s) => s.turns > 0 || (s.name && s.name.trim()) || (s.summary && s.summary.trim()));
-
-  // 头部统计 chip 的卡库总数(角色 + 玩家 + 世界 + 故事;事件随故事书不单算)。
-  useEffect(() => {
-    let alive = true;
-    Promise.all(["characters", "players", "worlds", "stories"].map((k) =>
-      fetch(`/api/library/${k}`).then((r) => (r.ok ? r.json() : [])).catch(() => [])
-    )).then((lists) => { if (alive) setCardCount(lists.reduce((n, l) => n + (l ? l.length : 0), 0)); });
-    return () => { alive = false; };
-  }, []);
-
-  return (
-    <section className="mine-view">
-      <div className="mine-head">
-        <div><h2>我的</h2><p>{loggedIn ? `已登录:${user.display_name || user.username} · 存档已绑定账号(跨设备可见)` : "本地保存(未登录)。"}</p></div>
-        <div className="mine-stats">
-          <span className="mine-stat"><b>{realSaves.length}</b>个存档</span>
-          <span className="mine-stat"><b>{(presets || []).length}</b>个我建的故事</span>
-          <span className="mine-stat"><b>{cardCount == null ? "…" : cardCount}</b>张卡</span>
-        </div>
-      </div>
-
-      <div className="mine-grid">
-        {/* 存档进度 */}
-        <section className="mine-panel" data-coach="mine-saves">
-          <div className="panel-head"><h3>存档进度</h3></div>
-          {realSaves.length ? (
-            <table className="saves-table">
-              <thead><tr><th>故事名</th><th>轮数</th><th>最近游玩</th><th>当前局</th><th>操作</th></tr></thead>
-              <tbody>
-                {realSaves.map((s) => (
-                  <tr key={s.id} className={s.id === activeId ? "current" : ""}>
-                    <td>{s.name || s.summary || "未命名故事"}</td>
-                    <td>{s.turns || 0} 轮</td>
-                    <td className="save-time">{s.updated || "—"}</td>
-                    <td>{s.id === activeId ? <span className="save-now-tag">当前局</span> : "—"}</td>
-                    <td><div className="row-actions">
-                      <button className="primary" onClick={() => onResume(s.id)}>续玩</button>
-                      <button className="del" onClick={() => onDeleteSave(s.id)}>删除</button>
-                    </div></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="empty-guide">
-              <p>还没有故事存档。去探索挑一个故事开始,玩起来会自动存档。</p>
-              <button className="primary" onClick={onGoExplore}>去探索 →</button>
-            </div>
-          )}
-          <div className="chat-saves-ph">聊天存档 —— 聊天功能上线后在这显示</div>
-        </section>
-
-        {/* 我建的预设 */}
-        <section className="mine-panel" data-coach="mine-presets">
-          <div className="panel-head"><h3>我建的预设</h3></div>
-          {(presets || []).length ? (
-            <div className="preset-list">
-              {presets.map((p, i) => {
-                const d = p.data || {};
-                const name = d.name || p.name || "未命名故事";
-                return (
-                  <div className="preset-row" key={i}>
-                    <div className="preset-thumb" style={coverStyle(d.cover)}>{!d.cover && <span>{name.slice(0, 6)}</span>}</div>
-                    <div className="preset-info">
-                      <div className="preset-titlerow"><b>{name}</b>{d.author ? <span className="preset-author">by {d.author}</span> : null}</div>
-                      <p className="preset-syn">{d.synopsis || (d.story && d.story.premise) || "(无简介)"}</p>
-                      <div className="preset-tags">
-                        {(d.tags || []).slice(0, 4).map((t, j) => <span className="tag" key={j}>{t}</span>)}
-                        {bundleSummary(d) !== "空卡组" ? <span className="tag muted">{bundleSummary(d)}</span> : null}
-                      </div>
-                    </div>
-                    <div className="preset-actions">
-                      <button className="primary" onClick={() => onOpenStory(p)}>开始</button>
-                      <button className="del" onClick={() => onDeletePreset(p)}>删除</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="empty-guide"><p>还没有你建的故事。去「创作 / 新建故事」做一个,存成预设后会出现在这。</p></div>
-          )}
-        </section>
-      </div>
-
-      {/* 我的卡库(整宽) */}
-      <section className="mine-panel library-panel" data-coach="mine-library">
-        <div className="panel-head"><h3>我的卡库</h3></div>
-        <VaultView embedded hideMyStories
-          addCharacter={addCharacter} addWorld={addWorld} setStory={setStory} setPlayer={setPlayer}
-          completeCard={completeCard} goGame={goGame}
-          presets={presets} onLaunchPreset={onOpenStory} onDeletePreset={onDeletePreset} />
-      </section>
-    </section>
-  );
-}
 
 const BUILD_STEPS = [
   { key: "worlds", label: "世界 / 设定", optional: true, desc: "世界书 或 设定卡(组织 / 地点)的中层设定 — 先选类型" },
@@ -2888,7 +2010,6 @@ const COACH_DONE_KEY = "ais_onboarding_done"; // 跳过/不再显示后置 1,自
 const COACH_SEEN_KEY = "ais_coach_seen";      // 首用期间各屏是否已自动展示过 {home,select,story}
 
 function coachDone() { try { return localStorage.getItem(COACH_DONE_KEY) === "1"; } catch (e) { return true; } }
-function setCoachDone() { try { localStorage.setItem(COACH_DONE_KEY, "1"); } catch (e) {} }
 function coachSeen() { try { return JSON.parse(localStorage.getItem(COACH_SEEN_KEY)) || {}; } catch (e) { return {}; } }
 function markCoachSeen(screen) {
   try { const s = coachSeen(); s[screen] = true; localStorage.setItem(COACH_SEEN_KEY, JSON.stringify(s)); } catch (e) {}
@@ -2932,80 +2053,7 @@ const COACH = {
   ],
 };
 
-function CoachMarks({ steps, manual, onDone, onSkip, onAction, onStep }) {
-  const list = steps || [];
-  const [idx, setIdx] = useState(0);
-  const [rect, setRect] = useState(null);
-  const [pop, setPop] = useState(null);
-  const step = list[idx] || null;
 
-  // 通知外层当前步(modal 逐 tab 走查用它切到对应 tab,随后 60ms 重量锚点)。
-  useEffect(() => { if (onStep && step) onStep(step); }, [idx]);
-
-  // 量出当前步目标元素的位置(必要时先滚进视口);找不到 → rect=null,降级居中卡。
-  useEffect(() => {
-    if (!step) return undefined;
-    function measure() {
-      const el = step.sel ? document.querySelector(step.sel) : null;
-      if (!el) { setRect(null); return; }
-      let r = el.getBoundingClientRect();
-      if (r.top < 8 || r.bottom > window.innerHeight - 8) {
-        el.scrollIntoView({ block: "center", behavior: "auto" });
-        r = el.getBoundingClientRect();
-      }
-      setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
-    }
-    measure();                          // 立刻量一次
-    const t = setTimeout(measure, 60);  // 布局 / 滚动后再校正一次(setTimeout 在后台标签也会触发,不用 rAF)
-    window.addEventListener("resize", measure);
-    window.addEventListener("scroll", measure, true);
-    return () => {
-      clearTimeout(t);
-      window.removeEventListener("resize", measure);
-      window.removeEventListener("scroll", measure, true);
-    };
-  }, [idx, step && step.sel]);
-
-  // 据目标位置摆 popover:优先放下方,放不下放上方,再不行贴边。
-  useEffect(() => {
-    if (!rect) { setPop(null); return; }
-    const ph = 190, pw = Math.min(320, window.innerWidth - 24);
-    const vw = window.innerWidth, vh = window.innerHeight, gap = 14, m = 12;
-    let top;
-    if (rect.top + rect.height + gap + ph <= vh) top = rect.top + rect.height + gap;
-    else if (rect.top - gap - ph >= 0) top = rect.top - gap - ph;
-    else top = Math.max(m, Math.min(vh - ph - m, rect.top));
-    const left = Math.max(m, Math.min(vw - pw - m, rect.left + rect.width / 2 - pw / 2));
-    setPop({ top, left });
-  }, [rect]);
-
-  if (!step) return null;
-  const last = idx === list.length - 1;
-  return (
-    <div className="coach-overlay">
-      {rect
-        ? <div className="coach-spot" style={{ top: rect.top - 6, left: rect.left - 6, width: rect.width + 12, height: rect.height + 12 }} />
-        : <div className="coach-backdrop" />}
-      <div className={"coach-pop" + (rect ? "" : " center")} style={rect && pop ? { top: pop.top, left: pop.left } : undefined}>
-        <div className="coach-count">{idx + 1} / {list.length}</div>
-        <h4>{step.title}</h4>
-        <p>{step.body}</p>
-        <div className="coach-actions">
-          <button className="coach-skip" onClick={manual ? onDone : onSkip}>{manual ? "关闭" : "跳过 · 不再显示"}</button>
-          <span className="spacer" />
-          {idx > 0 && !last && <button onClick={() => setIdx(idx - 1)}>上一步</button>}
-          {step.actionId && <button className="primary" onClick={() => onAction && onAction(step.actionId)}>{step.actionLabel || "去看看"}</button>}
-          {!last && <button className={step.actionId ? "" : "primary"} onClick={() => setIdx(idx + 1)}>下一步</button>}
-          {last && !manual && !step.actionId && <button className="primary" onClick={onDone}>知道了</button>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CoachHelpButton({ onClick }) {
-  return <button className="coach-help-btn" data-coach="help-btn" onClick={onClick} title="重看新手引导" aria-label="重看新手引导">?</button>;
-}
 
 // recon 1:1 视图外壳:全屏 fill——按视口高定缩放,画布宽跟随视口(左右零留白;recon 页内部
 // 左右锚定自适应)。视口比设计稿更窄时退回 scale-to-fit(小留白,不裁内容)。导航点击委托保留。
@@ -3101,6 +2149,37 @@ function ReconChatLive({ presets, onNav, mobile }) {
   const activeName = activeKey || (list[0] && list[0].name) || "";
   const activeItem = list.find((x) => x.name === activeName) || null;
   const messages = byKey[activeName] || [];
+  // 每次进入与某角色的对话 = 开一个全新故事:会话 id 带随机串,不复用旧局;
+  // 旧会话(历史 id)服务端原样保留,不受影响。
+  const sidsRef = React.useRef({});
+  const openedRef = React.useRef({});
+  const sidFor = (nm) => {
+    if (!sidsRef.current[nm]) sidsRef.current[nm] = "chat-" + nm + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    return sidsRef.current[nm];
+  };
+  // 自动开场:选中有卡的角色且本局还没有消息时,让角色先开口。
+  // 开场引子随机抽 + 全新会话无历史 → 同一角色多次开局,开场各不相同。
+  const OPEN_HINTS = [
+    "清晨的第一缕光线", "一场刚停的雨", "人潮散去的傍晚", "深夜里还亮着的灯",
+    "街角的不期而遇", "忙完手头事的午后", "一段旅途的间隙", "窗外突变的天气",
+    "一件让你在意的小东西", "远处传来的声音",
+  ];
+  React.useEffect(() => {
+    const nm = activeName, it = activeItem;
+    if (!nm || !it || !it.card) return;
+    if ((byKey[nm] || []).length || openedRef.current[nm]) return;
+    openedRef.current[nm] = true;
+    const hint = OPEN_HINTS[Math.floor(Math.random() * OPEN_HINTS.length)];
+    setBusy(true);
+    setByKey((m) => ({ ...m, [nm]: [{ who: nm, text: "……" }] }));
+    postJSON("/api/chat", {
+      card: it.card, session_id: sidFor(nm), world: null,
+      user: "（这是一次全新的相遇，和以往任何一次开场都不同。请你以「" + hint + "」为引子主动开启对话：先一两句动作或场景描写，再说出你的第一句话，把话头交给我。不要提及或复述这条指令。）",
+    })
+      .then((r) => setByKey((m) => ({ ...m, [nm]: [{ who: nm, text: (r && r.reply) || "（无回应）" }] })))
+      .catch((e) => { openedRef.current[nm] = false; setByKey((m) => ({ ...m, [nm]: [{ who: nm, text: "（开场失败：" + e.message + "）" }] })); })
+      .finally(() => setBusy(false));
+  }, [activeName, activeItem]);
   async function send() {
     const text = input.trim();
     if (!text || !activeItem || busy) return;
@@ -3112,7 +2191,7 @@ function ReconChatLive({ presets, onNav, mobile }) {
     setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: "me", text }] }));
     setInput("");
     try {
-      const r = await postJSON("/api/chat", { card: activeItem.card, session_id: "chat-" + activeName, user: text, world: null });
+      const r = await postJSON("/api/chat", { card: activeItem.card, session_id: sidFor(activeName), user: text, world: null });
       setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: (r && r.reply) || "（无回应）" }] }));
     } catch (e) {
       setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: "（连接出错：" + e.message + "）" }] }));

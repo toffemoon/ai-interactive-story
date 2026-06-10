@@ -228,11 +228,6 @@ function ReconTitle(props) {
         </div>
       </div>
       <div className="resume" onClick={onResume}>《<b>继续游戏</b>》</div>
-      <div className="foot-l">
-        <a><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 11l20-8-8 20-3-9z" /></svg>官方网站</a>
-        <a><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="9" /><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.8.4-1 .9-1 1.7M12 17h.01" /></svg>帮助中心</a>
-        <a><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 3l4 4-4 4-4-4z" /><path d="M5 12l3 3-3 3-3-3zM19 12l3 3-3 3-3-3z" /></svg>社区</a>
-      </div>
       <div className="foot-c">© 2026 Narrative Engine. All Rights Reserved.</div>
       <div className="foot-r">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 3l10 18H2z" /><path d="M12 10v5M12 18h.01" /></svg>

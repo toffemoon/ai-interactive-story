@@ -299,9 +299,6 @@ function ReconChat(props) {
           <div className="nm">{active ? active.name : "未选择角色"}</div>
           {active && active.persona ? <div className="fav">{active.persona}</div> : null}
         </div>
-        <div className="actions">
-          <div className="b" style={{ cursor: "pointer" }} onClick={() => onNav("game")}>当前故事 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg></div>
-        </div>
       </div>
 
       {/* 对话区（messages 映射；who==="me" → 右侧玩家泡，否则左侧角色泡带名） */}
@@ -334,7 +331,6 @@ function ReconChat(props) {
 
       {/* 底部输入（值=value，改→onChange，发送/回车→onSend） */}
       <div className="inputbar">
-        <div className="ctx"><span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 109-9" /><path d="M3 4v5h5" /><path d="M9 9h7M9 13h7M9 17h4" /></svg></span><div className="tx">回顾上下文</div></div>
         <div className="box">
           <input
             type="text"
@@ -352,8 +348,6 @@ function ReconChat(props) {
       <div className="rcard">
         <div className="tabs">
           <a className="on">档案</a>
-          <a><span className="en">VOICE</span></a>
-          <a>礼物</a>
         </div>
         <div className={"portrait" + (active && active.anim ? " anim" : "")}>
           {active && active.anim

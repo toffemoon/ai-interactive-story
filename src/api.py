@@ -276,7 +276,11 @@ def api_my_oc(user: dict | None = Depends(current_user_dep)):
         return ("/oc-assets/" + rel) if rel and (OC_DIR / rel).is_file() else ""
 
     def _mine(e: dict) -> bool:
-        if user is None or user.get("is_admin") or user.get("role") in ("admin", "superadmin"):
+        if not auth.enabled():
+            return True                      # AUTH 关(本地开发):全部可见
+        if user is None:
+            return False                     # AUTH 开 + 未登录(游客):私人 OC 一律不可见
+        if user.get("is_admin") or user.get("role") in ("admin", "superadmin"):
             return True
         who = {str(user.get("username") or ""), str(user.get("email") or ""), str(user.get("display_name") or "")}
         who.discard("")
