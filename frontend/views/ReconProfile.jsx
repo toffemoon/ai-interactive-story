@@ -169,6 +169,15 @@ function ReconProfile(props) {
   .cv-profile .profile {position:relative; height:152px; background:var(--paper); border:1px solid var(--line);}
   .cv-profile .profile::before {content:""; position:absolute; inset:5px; border:1px solid rgba(196,179,132,.4); pointer-events:none;}
   .cv-profile .profile .av {position:absolute; left:20px; top:11px; width:128px; height:128px; border-radius:50%; object-fit:cover; border:2px solid var(--line2);}
+  /* 头像编辑入口:显式可见(相机角标 + 文字钮),不靠"点头像"这种隐形操作 */
+  .cv-profile .profile .avedit {position:absolute; left:112px; top:104px; width:34px; height:34px; border-radius:50%;
+    background:var(--green); border:1px solid #283831; display:grid; place-items:center; color:#f3ead6; cursor:pointer; z-index:3;
+    box-shadow:0 2px 8px rgba(43,38,32,.25);}
+  .cv-profile .profile .avedit:hover {background:#2c3a32;}
+  .cv-profile .profile .avchip {display:inline-flex; align-items:center; gap:6px; font-family:var(--serif); font-size:11.5px;
+    letter-spacing:.08em; color:var(--soft); cursor:pointer; border:1px solid var(--line2); background:var(--paper2); padding:4px 12px;}
+  .cv-profile .profile .avchip:hover {color:var(--ink); border-color:var(--gold);}
+  .cv-profile .profile .avchip svg {color:var(--gold);}
   .cv-profile .profile .head {position:absolute; left:170px; top:18px; display:flex; align-items:center; gap:10px;}
   .cv-profile .profile .head .nm {font-family:var(--serif); font-weight:700; font-size:23px; letter-spacing:.06em; color:var(--ink);}
   .cv-profile .profile .head .edit {color:var(--gold); display:grid; place-items:center;}
@@ -276,9 +285,20 @@ function ReconProfile(props) {
           <img className="av" src={avatarSrc} alt="" title={user ? "点击更换头像" : undefined}
                style={user && P.onAvatar ? { cursor: "pointer" } : undefined}
                onClick={() => { if (user && P.onAvatar && fileRef.current) fileRef.current.click(); }} />
+          {user && P.onAvatar ? (
+            <span className="avedit" title="更换头像" onClick={() => fileRef.current && fileRef.current.click()}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.4"/></svg>
+            </span>
+          ) : null}
           <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={pickAvatar} />
           <div className="head">
             <span className="nm">{profileName}</span>
+            {user && P.onAvatar ? (
+              <span className="avchip" onClick={() => fileRef.current && fileRef.current.click()}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.2"/></svg>
+                更换头像
+              </span>
+            ) : null}
           </div>
           <div className="uid">{uidLine}</div>
         </div>
