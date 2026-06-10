@@ -223,18 +223,7 @@ function loadOrCreateSessionId() {
   return id;
 }
 
-// 新建一局:生成新 id、登记、设为活动、刷新。
-function startFresh() {
-  const id = newSessionId();
-  persistSaves([{ id, name: "", updated: "", turns: 0, summary: "" }, ...loadSaves()]);
-  setActiveId(id);
-  location.reload();
-}
 
-function switchToSave(id) {
-  setActiveId(id);
-  location.reload();
-}
 
 function touchSave(id, patch) {
   const saves = loadSaves();
@@ -244,21 +233,7 @@ function touchSave(id, patch) {
   persistSaves(saves);
 }
 
-function renameSave(id, name) {
-  touchSave(id, { name });
-}
 
-// 删除一局:调后端删文件 + 移出本地注册表;删的是当前局就切到下一个 / 新建。
-async function deleteSave(id) {
-  try { await fetch(`/api/session/${encodeURIComponent(id)}`, { method: "DELETE" }); } catch (e) {}
-  const saves = loadSaves().filter((s) => s.id !== id);
-  persistSaves(saves);
-  if (getActiveId() === id) {
-    if (saves.length) setActiveId(saves[0].id);
-    else { const nid = newSessionId(); persistSaves([{ id: nid, name: "", updated: "", turns: 0, summary: "" }]); setActiveId(nid); }
-  }
-  location.reload();
-}
 
 // 结构化续玩:把后端存的 data.turns 还原成完整卡片式 turns(玩家气泡 + 叙事 + 角色台词 + 选项 + token/判定)。
 function restoreTurns(turns) {
@@ -288,37 +263,7 @@ function messagesToTurns(messages) {
     );
 }
 
-function SourceInput({ value, onChange, placeholder }) {
-  return (
-    <div className="source-input">
-      <textarea value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
-      <label className="filebtn">
-        上传 .txt / .md / .docx
-        <input
-          type="file"
-          accept=".txt,.md,.docx"
-          style={{ display: "none" }}
-          onChange={async (e) => {
-            const f = e.target.files[0];
-            if (f) onChange(await uploadFile(f));
-          }}
-        />
-      </label>
-    </div>
-  );
-}
 
-function JsonPreview({ title, value, collapsed = false }) {
-  const [open, setOpen] = useState(!collapsed);
-  if (!value) return null;
-  return (
-    <section className="json-block">
-      <button className="fold" onClick={() => setOpen(!open)}>{open ? "−" : "+"}</button>
-      <h3>{title}</h3>
-      {open && <pre>{JSON.stringify(value, null, 2)}</pre>}
-    </section>
-  );
-}
 
 function CharacterEditor({ card, index, onChange, onClose }) {
   if (!card) return null;
@@ -438,14 +383,6 @@ function listToLines(list) {
   return (list || []).join("\n");
 }
 
-// 故事内分钟 → 第N天 HH:MM
-function formatClock(minutes) {
-  const m = Math.max(0, parseInt(minutes, 10) || 0);
-  const day = Math.floor(m / 1440) + 1;
-  const hh = String(Math.floor((m % 1440) / 60)).padStart(2, "0");
-  const mm = String(m % 60).padStart(2, "0");
-  return `第${day}天 ${hh}:${mm}`;
-}
 
 function PlayerEditor({ player, onChange, onClose }) {
   if (!player) return null;
@@ -993,7 +930,7 @@ function SpeechText({ text }) {
   );
 }
 
-function StoryPanel({ characters, world, story, player, mode, sessionId, initialTurns, initialState, initialChoices, goHome, onTurn }) {
+function StoryPanel({ characters, world, story, player, mode, sessionId, initialTurns, initialState, initialChoices, goHome, onTurn, skin, coverArt, mobile, onNav }) {
   const [turns, setTurns] = useState(initialTurns || []);
   const [input, setInput] = useState("");
   const [choices, setChoices] = useState(initialChoices || []);
@@ -1167,6 +1104,43 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
     }
   }
 
+  // recon 皮:把同一套引擎状态喂进 ReconPlay 的 1:1 版式(引擎逻辑零改动,只换呈现)。
+  if (skin === "recon") {
+    const storyTurns = turns.filter((t) => t.kind === "story");
+    const last = (streaming && (streaming.narration || (streaming.messages && streaming.messages.length)))
+      ? streaming
+      : (storyTurns.length ? storyTurns[storyTurns.length - 1].data : null);
+    const dlg = last && last.messages && last.messages.length
+      ? last.messages.map((m) => ({ name: m.name || m.character_id || "?", text: m.text })) : null;
+    const pname = (player && (player.name || (player.data && player.data.name))) || "玩家";
+    const sc = (state && state.scene) || {};
+    const lastSolid = storyTurns.length ? storyTurns[storyTurns.length - 1].data : null;
+    const evs = lastSolid && lastSolid.triggered_events && lastSolid.triggered_events.length ? lastSolid.triggered_events : null;
+    const PlayC = (mobile && window.MPlay) ? window.MPlay : window.ReconPlay;
+    return (
+      <PlayC
+        onNav={onNav}
+        story={(story && story.title) || "未命名故事"}
+        worldTime={"第 " + storyTurns.length + " 回合"}
+        round={"ROUND " + String(storyTurns.length + (loading ? 1 : 0)).padStart(2, "0")}
+        sceneTitle={sc.location || (story && story.title) || "本回合"}
+        sceneSub={sc.ambience || sc.mood || ""}
+        narration={last ? (last.narration || "") : ((story && story.premise) || "故事即将开始——说出你的第一句话，或点「执行」生成开场。")}
+        dialogues={dlg}
+        choices={choices}
+        present={sc.present_characters && sc.present_characters.length ? sc.present_characters : null}
+        events={evs}
+        sceneArt={coverArt || ""}
+        value={input}
+        onChange={setInput}
+        onSubmit={() => runTurn({ text: input })}
+        onChoice={(c) => runTurn({ choice: c.label || c.title })}
+        busy={loading}
+        playerName={pname}
+      />
+    );
+  }
+
   return (
     <section className="story-shell">
       <div className="story-top">
@@ -1257,227 +1231,19 @@ function StoryPanel({ characters, world, story, player, mode, sessionId, initial
   );
 }
 
-// 右状态栏的单个栏目:默认收起,点标题展开。
-function StatSection({ title, sub, children }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className={"stat-section " + (open ? "open" : "")}>
-      <button className="stat-head" onClick={() => setOpen(!open)}>
-        <span className="stat-caret">{open ? "−" : "+"}</span>
-        <span className="stat-title">{title}</span>
-        {sub ? <span className="stat-sub">{sub}</span> : null}
-      </button>
-      {open && <div className="stat-body">{children}</div>}
-    </div>
-  );
-}
 
-// 右侧状态栏:分栏目、默认收起、点击展开。数据自后端 session 拉(state + 记忆 + 用量 + 判定),
-// 每回合由 refreshKey 触发刷新。历史书 / 时间线 / 地图 先占位排上(设计文档列、暂无数据源)。
-function StateInspector({ sessionId, refreshKey }) {
-  const [session, setSession] = useState(null);
 
-  useEffect(() => {
-    let alive = true;
-    if (!sessionId) return undefined;
-    fetch(`/api/session/${sessionId}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => { if (alive) setSession(data); })
-      .catch(() => { if (alive) setSession(null); });
-    return () => { alive = false; };
-  }, [sessionId, refreshKey]);
 
-  const state = (session && session.state) || null;
-  const shortMemory = (session && session.short_memory) || [];
-  const longMemory = (session && session.long_memory) || [];
-  const usageTotal = (session && session.usage_total) || 0;
-  const usageLog = (session && session.usage_log) || [];
-  const reasoningLog = (session && session.reasoning_log) || [];
-  const lastReasoning = reasoningLog.length ? reasoningLog[reasoningLog.length - 1] : null;
-
-  const scene = (state && state.scene) || {};
-  const player = (state && state.player) || {};
-  const facts = (state && state.facts) || {};
-  const rels = (state && state.relationships) || [];
-  const logs = (state && state.character_logs) || [];
-  const timeline = (state && state.timeline) || [];
-
-  return (
-    <aside className="state-rail">
-      <div className="rail-head">
-        <h3>状态栏</h3>
-        <span>{state ? (scene.location || "进行中") : "故事开始后更新"}</span>
-      </div>
-
-      <StatSection title="场景" sub={scene.location || ""}>
-        <p><b>地点</b>{scene.location || "未定"}</p>
-        <p><b>故事内时钟</b>{formatClock(state && state.clock_minutes)}{state && state.main_resolved ? " · 主线已结案" : ""}</p>
-        <p><b>时间</b>{scene.time || "未定"}</p>
-        <p><b>氛围</b>{scene.atmosphere || "暂无"}</p>
-        <List label="在场角色" items={scene.present_characters} />
-        <List label="可交互对象" items={scene.objects} />
-      </StatSection>
-
-      <StatSection title="玩家">
-        <p><b>位置</b>{player.location || scene.location || "未定"}</p>
-        <p><b>状态</b>{player.status || "正常"}</p>
-        <List label="当前目标" items={player.active_goals} />
-        <List label="物品/资源" items={player.inventory} />
-        <List label="已知事实" items={player.known_facts} />
-      </StatSection>
-
-      <StatSection title="关系" sub={rels.length ? String(rels.length) : ""}>
-        {rels.length ? rels.map((r, i) => (
-          <div className="relation-line" key={i}>
-            <b>{r.character_id}</b>
-            <span>信任 {r.trust} / 紧张 {r.tension} / 好感 {r.affection}</span>
-            <List items={r.notes} />
-          </div>
-        )) : <p>暂无关系变化</p>}
-      </StatSection>
-
-      <StatSection title="人物日志">
-        {logs.length ? logs.map((log, i) => (
-          <div className="relation-line" key={i}>
-            <b>{log.character_id}</b>
-            <List label="已知" items={log.knows} />
-            <List label="印象" items={log.impressions} />
-          </div>
-        )) : <p>暂无人物日志</p>}
-      </StatSection>
-
-      <StatSection title="事件" sub={timeline.length ? String(timeline.length) : ""}>
-        {timeline.length ? timeline.slice(0, 12).map((event, i) => (
-          <p key={i}><b>{event.status}</b>{event.title || event.event_id}</p>
-        )) : <p>暂无事件</p>}
-        {(state && (state.reached_endings || []).length > 0) && (
-          <p className="ending-reached"><b>已达成结局</b>{state.reached_endings.join(", ")}</p>
-        )}
-      </StatSection>
-
-      <StatSection title="事实边界">
-        <List label="已确认" items={facts.canon} />
-        <List label="已披露" items={facts.revealed} />
-        <List label="不确定" items={facts.uncertain} />
-        <List label="禁止编造" items={facts.forbidden} />
-      </StatSection>
-
-      <StatSection title="记忆卡" sub={`长 ${longMemory.length} / 短 ${shortMemory.length}`}>
-        <List label="长期记忆" items={longMemory.slice(-8).map(memoryText)} />
-        <List label="短期记忆" items={shortMemory.slice(-8).map(memoryText)} />
-      </StatSection>
-
-      <StatSection title="token 用量" sub={usageTotal ? String(usageTotal) : ""}>
-        <p><b>本局累计</b>{usageTotal || 0}</p>
-        <List label="最近每轮合计" items={usageLog.slice(-8).map((u) =>
-          `第 ${u.turn} 轮:合计 ${u.total_tokens || 0}(输入 ${u.prompt_tokens || 0} / 输出 ${u.completion_tokens || 0}${u.calls > 1 ? ` · ${u.calls} 次调用` : ""})`
-        )} />
-      </StatSection>
-
-      <StatSection title="历史书"><p className="rail-soon">开发中 —— 已发生事件的完整记录(当前先看上面「事件」栏)。</p></StatSection>
-      <StatSection title="时间线"><p className="rail-soon">开发中 —— 故事时间线的可视化呈现。</p></StatSection>
-      <StatSection title="地图"><p className="rail-soon">开发中 —— 世界 / 场景地图(引擎暂无地图数据源)。</p></StatSection>
-
-      <StatSection title="本轮判定" sub="调试">
-        {lastReasoning ? (
-          <div>
-            <p><b>硬设定违背</b><span className={lastReasoning.hard_violation ? "flag-on" : ""}>{lastReasoning.hard_violation ? "是 · 已用世界内逻辑反制" : "否"}</span></p>
-            {lastReasoning.world_counter && <p><b>世界反制</b>{lastReasoning.world_counter}</p>}
-            {lastReasoning.ooc_risk && <p><b>OOC 风险</b>{lastReasoning.ooc_risk}</p>}
-            {lastReasoning.note && <p><b>推演</b>{lastReasoning.note}</p>}
-          </div>
-        ) : <p>暂无判定记录</p>}
-        <List label="触发过反制的轮" items={reasoningLog.filter((r) => r.hard_violation).slice(-5).map((r) => `第 ${r.turn} 轮:${r.world_counter || r.violation_detail || "硬设定违背"}`)} />
-      </StatSection>
-    </aside>
-  );
-}
-
-function memoryText(item) {
-  if (!item) return "";
-  if (typeof item === "string") return item;
-  const role = item.role ? `${item.role}: ` : "";
-  const kind = item.kind ? `[${item.kind}] ` : "";
-  return `${role}${kind}${item.text || item.content || ""}`;
-}
-
-function List({ label, items }) {
-  const list = (items || []).filter(Boolean);
-  if (!list.length) return label ? <p><b>{label}</b>暂无</p> : null;
-  return (
-    <div className="clean-list">
-      {label && <b>{label}</b>}
-      <ul>{list.slice(0, 6).map((item, i) => <li key={i}>{item}</li>)}</ul>
-    </div>
-  );
-}
-
-function SavesMenu({ sessionId }) {
-  const [open, setOpen] = useState(false);
-  const [saves, setSaves] = useState(loadSaves);
-
-  function refresh() { setSaves(loadSaves()); }
-
-  return (
-    <div className="saves-menu">
-      <button className="saves-toggle" onClick={() => { refresh(); setOpen(!open); }}>
-        存档 ({saves.length}) {open ? "▴" : "▾"}
-      </button>
-      {open && (
-        <div className="saves-dropdown">
-          {saves.length === 0 && <div className="save-empty">暂无存档</div>}
-          {saves.map((s) => (
-            <div className={"save-item " + (s.id === sessionId ? "active" : "")} key={s.id}>
-              <button className="save-load" disabled={s.id === sessionId} onClick={() => switchToSave(s.id)}>
-                <b>{s.name || s.summary || "未命名存档"}</b>
-                <small>{(s.turns || 0) + " 轮"}{s.updated ? " · " + s.updated : ""}{s.id === sessionId ? " · 当前" : ""}</small>
-              </button>
-              <button className="save-op" onClick={() => {
-                const n = prompt("重命名存档", s.name || s.summary || "");
-                if (n != null) { renameSave(s.id, n.trim()); refresh(); }
-              }}>改名</button>
-              <button className="save-op" onClick={() => {
-                if (confirm("删除这局存档?不可恢复。")) deleteSave(s.id);
-              }}>删除</button>
-            </div>
-          ))}
-          <button className="save-new" onClick={startFresh}>+ 新游戏</button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 async function saveToVault(kind, data) {
   try { await postJSON("/api/library/save", { kind, data }); return true; }
   catch (e) { return false; }
 }
 
-function TopNav({ view, setView, sessionId, authEnabled, user, onLogout }) {
-  const tabs = [["home", "探索"], ["game", "当前故事"], ["build", "创作"], ["chat", "聊天"], ["mine", "我的"]];
-  return (
-    <header className="topnav">
-      <div className="brand"><h1>AI 互动故事</h1></div>
-      <nav className="nav-tabs">
-        {tabs.map(([k, label]) => (
-          <button key={k} data-coach={k === "home" ? "nav-explore" : undefined} className={view === k ? "active" : ""} onClick={() => setView(k)}>{label}</button>
-        ))}
-      </nav>
-      <div className="header-right">
-        {authEnabled && user && (
-          <span className="user-chip">👤 {user.display_name || user.username}
-            <button className="logout-btn" onClick={onLogout}>退出</button>
-          </span>
-        )}
-        <span className="session">session {sessionId.slice(0, 8)}</span>
-      </div>
-    </header>
-  );
-}
 
 // 登录 / 注册页(AUTH_ENABLED 时未登录则全屏拦在此)。纯 JSX,无构建工具。
 // 注册:邮箱 + 发送验证码 + 验证码 + 密码(可选用户名)。登录:邮箱/用户名 + 密码。
-function LoginView({ onAuthed }) {
+function LoginView({ onAuthed, onBack }) {
   const [tab, setTab] = useState("login");           // login | register
   const [identifier, setIdentifier] = useState("");   // 登录:邮箱或用户名
   const [email, setEmail] = useState("");             // 注册:邮箱(主身份)
@@ -1524,38 +1290,76 @@ function LoginView({ onAuthed }) {
   }
 
   return (
-    <div className="login-wrap">
-      <div className="login-card">
-        <h1 className="login-title">AI 互动故事</h1>
-        <p className="login-sub">登录后你的存档与卡片只属于你。</p>
-        <div className="login-tabs">
-          <button className={tab === "login" ? "on" : ""} onClick={() => { setTab("login"); setErr(""); }}>登录</button>
-          <button className={tab === "register" ? "on" : ""} onClick={() => { setTab("register"); setErr(""); }}>注册</button>
+    <div className="cv-login">
+      <style>{`
+        .cv-login {position:fixed; inset:0; z-index:60; display:grid; place-items:center;
+          background:center/cover no-repeat url(assets/recon/title-pano.jpg), linear-gradient(160deg,#27324a,#161c28 60%,#0e1118);
+          font-family:"Kaiti SC","STKaiti","KaiTi",serif;}
+        .cv-login::before {content:""; position:absolute; inset:0; background:rgba(10,13,20,.45);}
+        @keyframes rc-login-in { from { opacity:0; transform:translateY(18px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
+        .cv-login .card {position:relative; width:min(430px, 92vw); background:linear-gradient(180deg,#f6efdd,#efe6cf);
+          border:1px solid rgba(203,176,121,.7); padding:38px 42px 34px; box-shadow:0 24px 60px -20px rgba(0,0,0,.6);
+          animation: rc-login-in .38s cubic-bezier(.22,1,.36,1) both;}
+        @media (prefers-reduced-motion: reduce){ .cv-login .card{animation-duration:1ms;} }
+        .cv-login .card::before {content:""; position:absolute; inset:5px; border:1px solid rgba(43,38,32,.14); pointer-events:none;}
+        .cv-login h1 {margin:0; font-family:"Songti SC","STSong","SimSun",serif; font-size:24px; letter-spacing:.18em; font-weight:700; color:#2b2620; text-align:center;}
+        .cv-login .sub {font-family:Georgia,serif; font-size:10px; letter-spacing:.3em; color:#a98a63; text-align:center; margin-top:7px;}
+        .cv-login .tabs {display:flex; margin:24px 0 18px; border-bottom:1px solid #c4b388;}
+        .cv-login .tabs button {flex:1; appearance:none; background:none; border:none; min-height:0; border-radius:0; padding:9px 0; cursor:pointer;
+          font-family:"Songti SC","SimSun",serif; font-size:15px; letter-spacing:.22em; color:#9a907a; position:relative;}
+        .cv-login .tabs button:hover:not(:disabled) {background:none; color:#2b2620;}
+        .cv-login .tabs button.on {color:#2b2620; font-weight:700;}
+        .cv-login .tabs button.on::after {content:""; position:absolute; left:24%; right:24%; bottom:-1px; height:2px; background:#34463d;}
+        .cv-login input {width:100%; background:rgba(255,255,255,.5); border:1px solid #c4b388; border-radius:0; box-shadow:none;
+          font-family:inherit; font-size:14px; color:#2b2620; padding:11px 13px; outline:none; margin-bottom:12px;}
+        .cv-login input:focus {border-color:#34463d; box-shadow:none;}
+        .cv-login .coderow {display:flex; gap:10px;}
+        .cv-login .coderow input {flex:1;}
+        .cv-login .coderow button {appearance:none; flex:none; min-height:0; border-radius:0; background:#163b57; color:#f3ead6; border:1px solid #0d2f49;
+          font-family:"Songti SC","SimSun",serif; font-size:13px; letter-spacing:.08em; padding:0 16px; height:44px; cursor:pointer;}
+        .cv-login .coderow button:hover:not(:disabled) {background:#0d2f49; color:#f3ead6;}
+        .cv-login .coderow button:disabled {opacity:.5; cursor:default;}
+        .cv-login .hint {font-size:12px; color:#34463d; margin:-4px 0 10px;}
+        .cv-login .err {font-size:12.5px; color:#9a4a3a; margin:2px 0 10px;}
+        .cv-login .go {width:100%; appearance:none; min-height:0; border-radius:0; height:50px; background:#34463d; color:#f3ead6; border:1px solid #283831;
+          font-family:"Songti SC","SimSun",serif; font-size:16px; letter-spacing:.3em; cursor:pointer; position:relative; margin-top:6px;}
+        .cv-login .go::before {content:""; position:absolute; inset:3px; border:1px solid rgba(193,168,111,.5); pointer-events:none;}
+        .cv-login .go:hover:not(:disabled) {background:#2c3a32; color:#f3ead6;}
+        .cv-login .go:disabled {opacity:.6;}
+        .cv-login .back {position:absolute; left:42px; top:-34px; font-family:Georgia,serif; font-size:12px; letter-spacing:.2em; color:rgba(240,234,222,.75); cursor:pointer;}
+      `}</style>
+      <div className="card">
+        {onBack && <span className="back" onClick={onBack}>‹ BACK</span>}
+        <h1>叙事引擎</h1>
+        <div className="sub">NARRATIVE ENGINE · SIGN IN</div>
+        <div className="tabs">
+          <button className={tab === "login" ? "on" : ""} onClick={() => { setTab("login"); setErr(""); }}>回到故事</button>
+          <button className={tab === "register" ? "on" : ""} onClick={() => { setTab("register"); setErr(""); }}>初次到来</button>
         </div>
         {tab === "login" ? (
-          <input className="login-input" placeholder="邮箱或用户名" value={identifier}
+          <input placeholder="邮箱或用户名" value={identifier}
                  onChange={(e) => setIdentifier(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
         ) : (
           <>
-            <input className="login-input" type="email" placeholder="邮箱" value={email}
+            <input type="email" placeholder="邮箱(用来收验证码)" value={email}
                    onChange={(e) => setEmail(e.target.value)} />
-            <div className="login-code-row">
-              <input className="login-input" placeholder="邮箱验证码" value={code}
+            <div className="coderow">
+              <input placeholder="邮箱验证码" value={code}
                      onChange={(e) => setCode(e.target.value)} />
-              <button className="login-code-btn" disabled={sending || cooldown > 0} onClick={sendCode}>
+              <button disabled={sending || cooldown > 0} onClick={sendCode}>
                 {cooldown > 0 ? `${cooldown}s` : (sending ? "…" : "发送验证码")}
               </button>
             </div>
-            {sentHint && <div className="login-hint">{sentHint}</div>}
-            <input className="login-input" placeholder="用户名(可选,用于登录)" value={username}
+            {sentHint && <div className="hint">{sentHint}</div>}
+            <input placeholder="用户名(可选,用于登录)" value={username}
                    onChange={(e) => setUsername(e.target.value)} />
           </>
         )}
-        <input className="login-input" type="password" placeholder="密码" value={password}
+        <input type="password" placeholder="密码" value={password}
                onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
-        {err && <div className="login-err">{err}</div>}
-        <button className="login-submit" disabled={busy} onClick={submit}>
-          {busy ? "…" : (tab === "login" ? "登录" : "注册并进入")}
+        {err && <div className="err">{err}</div>}
+        <button className="go" disabled={busy} onClick={submit}>
+          {busy ? "…" : (tab === "login" ? "进入故事" : "注册并进入")}
         </button>
       </div>
     </div>
@@ -1980,12 +1784,6 @@ function bundleSummary(d) {
   return parts.join(" · ") || "空卡组";
 }
 
-// 封面:有 cover(图片 URL 或 data-URI)就铺它,否则用渐变星空底(故事名压在上面)。
-// 配色对齐 _seed_preset.py 的 starfield_cover(深蓝→紫→近黑),比纯黑封面墙耐看。
-function coverStyle(cover) {
-  if (cover) return { backgroundImage: `url("${cover}")`, backgroundSize: "cover", backgroundPosition: "center" };
-  return { backgroundImage: "radial-gradient(120% 90% at 72% 28%, rgba(106,123,255,0.35), rgba(106,123,255,0) 60%), linear-gradient(135deg, #0b1437 0%, #27194e 55%, #070a1b 100%)" };
-}
 
 // 判断某个 preset 是不是新手教学局(给探索页那张卡打引导锚点 / startTutorial 找它都用)。
 function isTutorialPreset(p) {
@@ -1993,366 +1791,28 @@ function isTutorialPreset(p) {
   return ((d.tags || []).includes("教学")) || (((p && p.name) || "").includes("新人入店")) || ((d.name || "").includes("新人入店"));
 }
 
-function StoryTile({ d, fallbackName, sub, actions, coach, onOpen }) {
-  const name = (d && d.name) || fallbackName || "故事";
-  const cover = d && d.cover;
-  return (
-    <div className={"story-tile" + (onOpen ? " clickable" : "")} data-coach={coach || undefined} onClick={onOpen}>
-      <div className="tile-cover" style={coverStyle(cover)}>
-        {!cover && <span className="cover-title">{name.slice(0, 10)}</span>}
-      </div>
-      <div className="tile-body">
-        <div className="tile-titlerow">
-          <b>{name}</b>
-          {d && d.author ? <span className="tile-author">by {d.author}</span> : null}
-        </div>
-        <p className="tile-syn">{(d && d.synopsis) || sub || ""}</p>
-        <div className="tile-tags">
-          {((d && d.tags) || []).slice(0, 4).map((t, j) => <span className="tag" key={j}>{t}</span>)}
-          {d && bundleSummary(d) !== "空卡组" ? <span className="tag muted">{bundleSummary(d)}</span> : null}
-        </div>
-        <div className="tile-actions" onClick={(e) => e.stopPropagation()}>{actions}</div>
-      </div>
-    </div>
-  );
-}
 
-// 单卡轮播:一次一张 + 左右箭头 + 圆点(角色 / 出演用)。只有一张时不显箭头/点。
-function Carousel({ items, render }) {
-  const [i, setI] = useState(0);
-  const n = (items || []).length;
-  if (!n) return <p className="empty">(无)</p>;
-  const idx = Math.min(i, n - 1);
-  return (
-    <div className="carousel">
-      <div className="carousel-row">
-        {n > 1 && <button className="carousel-arrow" onClick={() => setI((x) => (x - 1 + n) % n)} aria-label="上一张">‹</button>}
-        <div className="carousel-stage">{render(items[idx], idx)}</div>
-        {n > 1 && <button className="carousel-arrow" onClick={() => setI((x) => (x + 1) % n)} aria-label="下一张">›</button>}
-      </div>
-      {n > 1 && (
-        <div className="carousel-dots">
-          {items.map((_, k) => <button key={k} className={"dot" + (k === idx ? " on" : "")} onClick={() => setI(k)} aria-label={`第 ${k + 1} 张`} />)}
-        </div>
-      )}
-    </div>
-  );
-}
 
-// 故事详情 modal(§1):点故事卡弹出,4 tab(简介 / 故事背景 / 角色 / 出演)。
-// 【剧透边界·硬约束】简介 / 故事 / 角色只渲染公开层(白名单字段);known_hidden、versions、隐藏事件、
-// 主线 / 事件 / 结局 / 角色边界 等一律不进 modal。出演 tab = 选身份(取代旧整页选人页),自带 coach 锚点。
-function StoryModal({ entry, setTab, onClose, onStart }) {
-  const preset = entry.preset;
-  const tab = entry.tab;
-  const d = (preset && preset.data) || {};
-  const name = d.name || (preset && preset.name) || "故事";
-  const synopsis = d.synopsis || (d.story && d.story.premise) || "";     // §2 降级:无 synopsis 取 premise
-  const author = d.author || "";
-  const tags = d.tags || [];
-  const premise = (d.story && d.story.premise) || "";
-  const worldEntries = (((d.world && d.world.entries) || [])).filter((e) => (e.visibility || "public") === "public"); // 只公开条目
-  const chars = d.characters || [];
-  // 详情「角色」tab 与出演兜底只取有展示内容(外貌/性格)的角色;次要NPC名册卡(内容全空的空壳)过滤掉,不当空角色卡显示。
-  // 根治需引擎侧补「次要NPC名册解析」(现 parse_character 不认名册结构,内容没 parse 进来)——已记入给 Gengyue 的引擎待办。
-  const shownChars = chars.filter((c) => { const cd = (c && c.data) || c || {}; return cd.look || cd.personality; });
-  // 可扮演:有 playables 用之;否则 §2 兜底=全体角色(从 NPC 卡降级出名/一句设定)
-  const playables = (d.playables && d.playables.length)
-    ? d.playables
-    : shownChars.map((c) => ({ name: (c.data || {}).name || "角色", role: ((c.data || {}).description || "").slice(0, 40) }));
+// —— muyan 封面墙:做旧纸·错位微倾的 CSS 色块封面(刻意少图,走线条风)——
+const HM_COVERS = [
+  { c: "#2b2620", tone: "#ece4d0" }, { c: "#b5402e", tone: "#f2e8d4" },
+  { c: "#33474a", tone: "#e7e0cc" }, { c: "#5e5039", tone: "#ece4d0" }, { c: "#8a753f", tone: "#f0e9d6" },
+];
+const HM_ROT = [-1.2, 0.8, -0.6, 1.1, -0.9, 1.4];
+const HM_OFF = [0, 26, 8, 30, 4, 24];
 
-  const TABS = [["intro", "简介"], ["bg", "故事背景"], ["chars", "角色"], ["cast", "出演"]];
-  const [castMode, setCastMode] = useState("list"); // list | custom
-  const [customText, setCustomText] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  async function startCustom() {
-    if (!customText.trim()) return;
-    setLoading(true);
-    try { onStart(await postJSON("/api/identify_player", { text: customText })); }
-    catch (e) { alert("识别失败:" + e.message); }
-    setLoading(false);
-  }
+// 场景缩略占位(真插画后填):一组冷暖各异的渐变,模拟二游场景封面。
+const LH_SCENES = [
+  "radial-gradient(120% 90% at 32% 18%, #9fb6d8, transparent 60%), linear-gradient(160deg,#43577a,#27344c)",
+  "radial-gradient(120% 90% at 68% 22%, #d8c592, transparent 60%), linear-gradient(160deg,#5a4a36,#2f2719)",
+  "radial-gradient(120% 90% at 38% 18%, #88b6a0, transparent 60%), linear-gradient(160deg,#2e4b44,#163029)",
+  "radial-gradient(120% 90% at 62% 22%, #c79aa8, transparent 60%), linear-gradient(160deg,#5b3a4a,#2c1f29)",
+  "radial-gradient(120% 90% at 34% 20%, #a59cce, transparent 60%), linear-gradient(160deg,#3a3560,#211d3a)",
+];
 
-  // 角色公开层白名单:名 / 外貌锚点 / 一句话锚点 / 标签 = 基础(默认只显示这些);
-  // 主设定 / 性格 / 公开可知收进「展开更多」(详情默认只讲基础,不铺全文)。
-  // anchor 是 §0 引擎摘要的公开一句话(不含 L4);绝不渲染 known_hidden、versions、tension、scenario、first_mes。
-  function PublicChar({ c }) {
-    const cd = (c && c.data) || c || {};
-    const [flipped, setFlipped] = useState(false);
-    return (
-      <div className={"modal-char flip" + (flipped ? " flipped" : "")}>
-        <div className="flip-inner">
-          <div className="flip-face flip-front">
-            <div className="mc-scroll">
-              <div className="mc-name">{cd.name || "角色"}</div>
-              {cd.look ? (
-                <div className="mc-block"><div className="mc-sub">外貌</div><p>{cd.look}</p></div>
-              ) : null}
-              {cd.personality ? (
-                <div className="mc-block"><div className="mc-sub">性格</div><p>{cd.personality}</p></div>
-              ) : null}
-            </div>
-            <button className="flip-btn" onClick={() => setFlipped(true)} aria-label="翻到背面看角色图" title="看角色图">↻</button>
-          </div>
-          <div className="flip-face flip-back">
-            {cd.image
-              ? <img src={cd.image} alt={cd.name || "角色"} />
-              : <div className="flip-img-placeholder">暂无角色图</div>}
-            <button className="flip-btn" onClick={() => setFlipped(false)} aria-label="翻回正面看设定" title="返回设定">↺</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="story-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-cover" style={coverStyle(d.cover)}>
-          {!d.cover && <span className="modal-cover-title">{name}</span>}
-          <button className="modal-close" onClick={onClose} aria-label="关闭">×</button>
-        </div>
-        <div className="modal-tabs" data-coach="modal-tabs">
-          {TABS.map(([k, label]) => (
-            <button key={k} data-coach={"modal-tab-" + k} className={tab === k ? "active" : ""} onClick={() => setTab(k)}>{label}</button>
-          ))}
-        </div>
-        <div className="modal-body">
-          {tab === "intro" && (
-            <div className="modal-pane">
-              <div className="pane-scroll modal-intro" data-coach="modal-intro">
-                <h3>{name}</h3>
-                <div className="modal-meta">{author ? <span>作者 {author}</span> : null}<span>{bundleSummary(d)}</span></div>
-                <p className="modal-syn">{synopsis || "(暂无简介)"}</p>
-                <div className="modal-tags">{tags.map((t, i) => <span className="tag" key={i}>{t}</span>)}</div>
-              </div>
-              <div className="pane-footer"><button className="primary modal-cta" onClick={() => setTab("cast")}>选身份 · 开始 →</button></div>
-            </div>
-          )}
-          {tab === "bg" && (
-            <div className="modal-pane">
-              <div className="pane-scroll modal-bg" data-coach="modal-bg">
-                <h4>前情</h4>
-                <p>{premise || "(这个故事还没写前情简介)"}</p>
-                {worldEntries.length > 0 && (
-                  <>
-                    <h4>世界设定</h4>
-                    {/* 只露最核心的几条公开条目(滚动看),不把世界书全抖出来。 */}
-                    {worldEntries.slice(0, 3).map((e, i) => (
-                      <div className="modal-world-entry" key={i}>
-                        <b>{e.comment || (e.keys || []).join(" / ") || "设定"}</b>
-                        <p>{e.content || ""}</p>
-                      </div>
-                    ))}
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-          {tab === "chars" && (
-            <div className="modal-pane modal-pane-chars" data-coach="modal-chars">
-              {shownChars.length
-                ? <Carousel items={shownChars} render={(c, i) => <PublicChar key={i} c={c} />} />
-                : <div className="pane-scroll"><p className="empty">(没有登场人物信息)</p></div>}
-            </div>
-          )}
-          {tab === "cast" && (castMode === "custom" ? (
-            <div className="modal-pane">
-              <div className="pane-scroll modal-cast-custom">
-                <p className="cs-sub">写下你要扮演的角色:身份、背景、目标、能力、限制、开局已知……AI 会把它识别成演出卡。</p>
-                <textarea className="cs-textarea" rows="6" value={customText} onChange={(e) => setCustomText(e.target.value)}
-                  placeholder="例:一个流落异乡的年轻铁匠,为寻失散的妹妹而来,擅长锻造与观察……" />
-                <label className="filebtn">上传 .txt / .md / .docx
-                  <input type="file" accept=".txt,.md,.docx" style={{ display: "none" }}
-                    onChange={async (e) => { const f = e.target.files[0]; if (f) setCustomText(await uploadFile(f)); }} />
-                </label>
-                <div className="cs-actions">
-                  <button className="primary" disabled={loading || !customText.trim()} onClick={startCustom}>{loading ? "识别中…" : "用这个角色开始"}</button>
-                  <button className="ghost" onClick={() => setCastMode("list")}>← 返回</button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="modal-pane">
-              <div className="cast-carousel" data-coach="select-grid">
-                <Carousel items={playables} render={(p) => (
-                  <div className="cast-card">
-                    <b>{p.name || "未命名"}</b>
-                    <span className="cast-role">{p.role || ""}</span>
-                    <button className="primary" onClick={() => onStart(p)}>以 TA 开始</button>
-                  </div>
-                )} />
-              </div>
-              <div className="pane-footer cast-extra">
-                <button className="ghost" data-coach="select-custom" onClick={() => setCastMode("custom")}>自定义角色</button>
-                <button className="ghost" onClick={() => onStart(null)}>直接开始(不指定主角)</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
 
-function StoriesHome({ onNew, presets, onLaunchPreset, onDeletePreset }) {
-  return (
-    <section className="stories-home">
-      <div className="home-hero">
-        <div><h2>开始你的故事</h2><p>从一个预设故事书开局,或新建一个属于你的故事。</p></div>
-        <button className="primary big" data-coach="new-story" onClick={onNew}>+ 新建故事</button>
-      </div>
-
-      <div className="home-section">
-        <h3>故事书<small> 配好的世界 + 角色 + 故事,点一下开新局</small></h3>
-        <div className="story-gallery" data-coach="gallery">
-          {!presets.length && <p className="empty">还没有预设故事书。</p>}
-          {presets.map((p, i) => (
-            <StoryTile key={i} d={p.data || {}} fallbackName={p.name}
-              coach={isTutorialPreset(p) ? "tutorial-tile" : undefined}
-              onOpen={() => onLaunchPreset(p)}
-              actions={<button className="primary" onClick={() => onLaunchPreset(p)}>开始</button>} />
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// 聊天页(占位)——后续批次接轻量 /api/chat 引擎。
-function ChatView() {
-  return (
-    <section className="view-shell chat-view">
-      <div className="view-head"><h2>聊天</h2><p>和单个角色一对一聊天,像微信对话框。轻量引擎(不带状态机/事件/世界时钟),后续批次接入。</p></div>
-      <div className="placeholder-pane" data-coach="chat-ph">
-        <p className="placeholder-big">聊天功能正在搭建中</p>
-        <p className="hint-line">规划:从故事库选一个角色 → 微信式对话框 → 轻量 <code>/api/chat</code> 引擎,纯角色对话,可后期融入剧情。</p>
-      </div>
-    </section>
-  );
-}
-
-// 「我的」中心(§5/§6):把作者/个人资产从主导航收进来——存档进度 + 我建的预设 + 我的卡库。
-// 第一阶段=localStorage / 本地 API 聚合壳,无账号系统(P0 属后端域,本批次不引入登录)。
-// dashboard 三面板布局(yufei 模板):上排 存档表格 + 预设横排;下排整宽卡库。
-function MineView({ saves, presets, activeId, authEnabled, user, onResume, onDeleteSave, onGoExplore, onOpenStory, onDeletePreset,
-                    addCharacter, addWorld, setStory, setPlayer, completeCard, goGame }) {
-  const [cardCount, setCardCount] = useState(null);
-  const loggedIn = authEnabled && user;
-  // 已登录:存档源走后端「我的存档」(跨设备,绑定账号);未登录/AUTH 关:走本地浏览器存档。
-  const [serverSaves, setServerSaves] = useState(null);
-  useEffect(() => {
-    if (!loggedIn) { setServerSaves(null); return undefined; }
-    let alive = true;
-    fetch("/api/my/sessions").then((r) => (r.ok ? r.json() : [])).then((list) => {
-      if (!alive) return;
-      setServerSaves((list || []).map((s) => ({
-        id: s.id, name: s.story || "", turns: s.turns || 0,
-        summary: s.last_input || "", updated: (s.updated_at || "").replace("T", " ").slice(0, 16),
-      })));
-    }).catch(() => { if (alive) setServerSaves([]); });
-    return () => { alive = false; };
-  }, [loggedIn, activeId]);
-  const source = loggedIn && serverSaves != null ? serverSaves : (saves || []);
-  // 只展示真正玩过/有内容的存档(过滤掉启动时登记的空占位 session)。
-  const realSaves = source.filter((s) => s.turns > 0 || (s.name && s.name.trim()) || (s.summary && s.summary.trim()));
-
-  // 头部统计 chip 的卡库总数(角色 + 玩家 + 世界 + 故事;事件随故事书不单算)。
-  useEffect(() => {
-    let alive = true;
-    Promise.all(["characters", "players", "worlds", "stories"].map((k) =>
-      fetch(`/api/library/${k}`).then((r) => (r.ok ? r.json() : [])).catch(() => [])
-    )).then((lists) => { if (alive) setCardCount(lists.reduce((n, l) => n + (l ? l.length : 0), 0)); });
-    return () => { alive = false; };
-  }, []);
-
-  return (
-    <section className="mine-view">
-      <div className="mine-head">
-        <div><h2>我的</h2><p>{loggedIn ? `已登录:${user.display_name || user.username} · 存档已绑定账号(跨设备可见)` : "本地保存(未登录)。"}</p></div>
-        <div className="mine-stats">
-          <span className="mine-stat"><b>{realSaves.length}</b>个存档</span>
-          <span className="mine-stat"><b>{(presets || []).length}</b>个我建的故事</span>
-          <span className="mine-stat"><b>{cardCount == null ? "…" : cardCount}</b>张卡</span>
-        </div>
-      </div>
-
-      <div className="mine-grid">
-        {/* 存档进度 */}
-        <section className="mine-panel" data-coach="mine-saves">
-          <div className="panel-head"><h3>存档进度</h3></div>
-          {realSaves.length ? (
-            <table className="saves-table">
-              <thead><tr><th>故事名</th><th>轮数</th><th>最近游玩</th><th>当前局</th><th>操作</th></tr></thead>
-              <tbody>
-                {realSaves.map((s) => (
-                  <tr key={s.id} className={s.id === activeId ? "current" : ""}>
-                    <td>{s.name || s.summary || "未命名故事"}</td>
-                    <td>{s.turns || 0} 轮</td>
-                    <td className="save-time">{s.updated || "—"}</td>
-                    <td>{s.id === activeId ? <span className="save-now-tag">当前局</span> : "—"}</td>
-                    <td><div className="row-actions">
-                      <button className="primary" onClick={() => onResume(s.id)}>续玩</button>
-                      <button className="del" onClick={() => onDeleteSave(s.id)}>删除</button>
-                    </div></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="empty-guide">
-              <p>还没有故事存档。去探索挑一个故事开始,玩起来会自动存档。</p>
-              <button className="primary" onClick={onGoExplore}>去探索 →</button>
-            </div>
-          )}
-          <div className="chat-saves-ph">聊天存档 —— 聊天功能上线后在这显示</div>
-        </section>
-
-        {/* 我建的预设 */}
-        <section className="mine-panel" data-coach="mine-presets">
-          <div className="panel-head"><h3>我建的预设</h3></div>
-          {(presets || []).length ? (
-            <div className="preset-list">
-              {presets.map((p, i) => {
-                const d = p.data || {};
-                const name = d.name || p.name || "未命名故事";
-                return (
-                  <div className="preset-row" key={i}>
-                    <div className="preset-thumb" style={coverStyle(d.cover)}>{!d.cover && <span>{name.slice(0, 6)}</span>}</div>
-                    <div className="preset-info">
-                      <div className="preset-titlerow"><b>{name}</b>{d.author ? <span className="preset-author">by {d.author}</span> : null}</div>
-                      <p className="preset-syn">{d.synopsis || (d.story && d.story.premise) || "(无简介)"}</p>
-                      <div className="preset-tags">
-                        {(d.tags || []).slice(0, 4).map((t, j) => <span className="tag" key={j}>{t}</span>)}
-                        {bundleSummary(d) !== "空卡组" ? <span className="tag muted">{bundleSummary(d)}</span> : null}
-                      </div>
-                    </div>
-                    <div className="preset-actions">
-                      <button className="primary" onClick={() => onOpenStory(p)}>开始</button>
-                      <button className="del" onClick={() => onDeletePreset(p)}>删除</button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="empty-guide"><p>还没有你建的故事。去「创作 / 新建故事」做一个,存成预设后会出现在这。</p></div>
-          )}
-        </section>
-      </div>
-
-      {/* 我的卡库(整宽) */}
-      <section className="mine-panel library-panel" data-coach="mine-library">
-        <div className="panel-head"><h3>我的卡库</h3></div>
-        <VaultView embedded hideMyStories
-          addCharacter={addCharacter} addWorld={addWorld} setStory={setStory} setPlayer={setPlayer}
-          completeCard={completeCard} goGame={goGame}
-          presets={presets} onLaunchPreset={onOpenStory} onDeletePreset={onDeletePreset} />
-      </section>
-    </section>
-  );
-}
 
 const BUILD_STEPS = [
   { key: "worlds", label: "世界 / 设定", optional: true, desc: "世界书 或 设定卡(组织 / 地点)的中层设定 — 先选类型" },
@@ -2550,7 +2010,6 @@ const COACH_DONE_KEY = "ais_onboarding_done"; // 跳过/不再显示后置 1,自
 const COACH_SEEN_KEY = "ais_coach_seen";      // 首用期间各屏是否已自动展示过 {home,select,story}
 
 function coachDone() { try { return localStorage.getItem(COACH_DONE_KEY) === "1"; } catch (e) { return true; } }
-function setCoachDone() { try { localStorage.setItem(COACH_DONE_KEY, "1"); } catch (e) {} }
 function coachSeen() { try { return JSON.parse(localStorage.getItem(COACH_SEEN_KEY)) || {}; } catch (e) { return {}; } }
 function markCoachSeen(screen) {
   try { const s = coachSeen(); s[screen] = true; localStorage.setItem(COACH_SEEN_KEY, JSON.stringify(s)); } catch (e) {}
@@ -2594,79 +2053,277 @@ const COACH = {
   ],
 };
 
-function CoachMarks({ steps, manual, onDone, onSkip, onAction, onStep }) {
-  const list = steps || [];
-  const [idx, setIdx] = useState(0);
-  const [rect, setRect] = useState(null);
-  const [pop, setPop] = useState(null);
-  const step = list[idx] || null;
 
-  // 通知外层当前步(modal 逐 tab 走查用它切到对应 tab,随后 60ms 重量锚点)。
-  useEffect(() => { if (onStep && step) onStep(step); }, [idx]);
 
-  // 量出当前步目标元素的位置(必要时先滚进视口);找不到 → rect=null,降级居中卡。
-  useEffect(() => {
-    if (!step) return undefined;
-    function measure() {
-      const el = step.sel ? document.querySelector(step.sel) : null;
-      if (!el) { setRect(null); return; }
-      let r = el.getBoundingClientRect();
-      if (r.top < 8 || r.bottom > window.innerHeight - 8) {
-        el.scrollIntoView({ block: "center", behavior: "auto" });
-        r = el.getBoundingClientRect();
+// recon 1:1 视图外壳:全屏 fill——按视口高定缩放,画布宽跟随视口(左右零留白;recon 页内部
+// 左右锚定自适应)。视口比设计稿更窄时退回 scale-to-fit(小留白,不裁内容)。导航点击委托保留。
+function ReconShell({ designW, designH, bg, onNav, onPrimary, children }) {
+  const ref = React.useRef(null);
+  const [dim, setDim] = React.useState({ scale: 1, w: designW, ox: 0, oy: 0 });
+  React.useEffect(() => {
+    function fit() {
+      const el = ref.current; if (!el) return;
+      const vw = el.clientWidth, vh = el.clientHeight;
+      const fillScale = vh / designH;
+      if (fillScale <= vw / designW) {
+        setDim({ scale: fillScale, w: Math.round(vw / fillScale), ox: 0, oy: 0 });
+      } else {
+        const s = Math.min(vw / designW, vh / designH);
+        setDim({ scale: s, w: designW, ox: Math.max(0, (vw - designW * s) / 2), oy: Math.max(0, (vh - designH * s) / 2) });
       }
-      setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
     }
-    measure();                          // 立刻量一次
-    const t = setTimeout(measure, 60);  // 布局 / 滚动后再校正一次(setTimeout 在后台标签也会触发,不用 rAF)
-    window.addEventListener("resize", measure);
-    window.addEventListener("scroll", measure, true);
-    return () => {
-      clearTimeout(t);
-      window.removeEventListener("resize", measure);
-      window.removeEventListener("scroll", measure, true);
-    };
-  }, [idx, step && step.sel]);
-
-  // 据目标位置摆 popover:优先放下方,放不下放上方,再不行贴边。
-  useEffect(() => {
-    if (!rect) { setPop(null); return; }
-    const ph = 190, pw = Math.min(320, window.innerWidth - 24);
-    const vw = window.innerWidth, vh = window.innerHeight, gap = 14, m = 12;
-    let top;
-    if (rect.top + rect.height + gap + ph <= vh) top = rect.top + rect.height + gap;
-    else if (rect.top - gap - ph >= 0) top = rect.top - gap - ph;
-    else top = Math.max(m, Math.min(vh - ph - m, rect.top));
-    const left = Math.max(m, Math.min(vw - pw - m, rect.left + rect.width / 2 - pw / 2));
-    setPop({ top, left });
-  }, [rect]);
-
-  if (!step) return null;
-  const last = idx === list.length - 1;
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [designW, designH]);
+  function onClick(e) {
+    const navEl = e.target.closest && e.target.closest("a, .nav a, .menu a, .lbar .nav a");
+    if (navEl) {
+      const zhEl = navEl.querySelector && navEl.querySelector(".zh");
+      const zh = ((zhEl && zhEl.textContent) || navEl.textContent || "").trim();
+      const map = { "首页": "home", "探索": "home", "故事库": "home", "当前故事": "game", "创作": "build", "聊天": "chat", "角色": "chat", "我的": "mine" };
+      if (onNav && map[zh]) { e.preventDefault(); onNav(map[zh]); return; }
+    }
+    if (onPrimary && e.target.closest) {
+      const c = e.target.closest("a, button, [class*='btn'], .lh-card, .ccard, [class*='enter'], [class*='cta'], [class*='exec']");
+      const t = ((c && c.textContent) || "").replace(/\s+/g, "");
+      if (c && (e.target.closest(".lh-card, .lh-btn-main, .b1") || /进入入局|ENTERTHESTORY|取下这本书|开始探索|开始旅程/.test(t))) {
+        e.preventDefault(); onPrimary();
+      }
+    }
+  }
   return (
-    <div className="coach-overlay">
-      {rect
-        ? <div className="coach-spot" style={{ top: rect.top - 6, left: rect.left - 6, width: rect.width + 12, height: rect.height + 12 }} />
-        : <div className="coach-backdrop" />}
-      <div className={"coach-pop" + (rect ? "" : " center")} style={rect && pop ? { top: pop.top, left: pop.left } : undefined}>
-        <div className="coach-count">{idx + 1} / {list.length}</div>
-        <h4>{step.title}</h4>
-        <p>{step.body}</p>
-        <div className="coach-actions">
-          <button className="coach-skip" onClick={manual ? onDone : onSkip}>{manual ? "关闭" : "跳过 · 不再显示"}</button>
-          <span className="spacer" />
-          {idx > 0 && !last && <button onClick={() => setIdx(idx - 1)}>上一步</button>}
-          {step.actionId && <button className="primary" onClick={() => onAction && onAction(step.actionId)}>{step.actionLabel || "去看看"}</button>}
-          {!last && <button className={step.actionId ? "" : "primary"} onClick={() => setIdx(idx + 1)}>下一步</button>}
-          {last && !manual && !step.actionId && <button className="primary" onClick={onDone}>知道了</button>}
-        </div>
+    <div ref={ref} className="recon-shell" onClick={onClick} style={bg ? { background: bg } : undefined}>
+      <style>{`
+        /* shell 挂载期间锁页面滚动 + 取消 styles.css 的 scrollbar-gutter 预留(治右侧 15px 空带) */
+        html, body { overflow:hidden !important; scrollbar-gutter:auto !important; }
+        .recon-shell{position:fixed; inset:0; z-index:40; background:#ece4d2; overflow:hidden;}
+        .recon-stage{position:absolute; transform-origin:0 0;}
+        /* 页面切换:淡入 + 轻浮(挂载即播;stage 的 scale 在外层,wrapper 只动 opacity/translate 不冲突) */
+        @keyframes rc-page-in { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+        .recon-fade{width:100%; height:100%; animation: rc-page-in .3s cubic-bezier(.22,1,.36,1) both;}
+        /* fill:画布根铺满 stage(覆盖各 .cv-* 的固定 width/height) */
+        .recon-fade > *{width:100% !important; height:100% !important;}
+        @media (prefers-reduced-motion: reduce){ .recon-fade{animation-duration:1ms;} }
+      `}</style>
+      <div className="recon-stage" style={{ width: dim.w, height: designH, left: dim.ox, top: dim.oy, transform: "scale(" + dim.scale + ")" }}>
+        <div className="recon-fade">{children}</div>
       </div>
     </div>
   );
 }
 
-function CoachHelpButton({ onClick }) {
-  return <button className="coach-help-btn" data-coach="help-btn" onClick={onClick} title="重看新手引导" aria-label="重看新手引导">?</button>;
+// 角色聊天控制器:OC 就是角色——/api/my/oc 的 OC 与预设角色合成同一份「角色」列表
+// (OC 排前、带真立绘,按名去重)。统一卡主导一对一,共用 /api/chat,历史按角色名维护。
+function ReconChatLive({ presets, onNav, mobile }) {
+  const presetCards = React.useMemo(() => {
+    const out = []; const seen = new Set();
+    (presets || []).forEach((p) => ((p.data && p.data.characters) || []).forEach((c) => {
+      const nm = (c.data && c.data.name) || c.name; if (!nm || seen.has(nm)) return; seen.add(nm); out.push(c);
+    }));
+    return out;
+  }, [presets]);
+  const [ocs, setOcs] = React.useState([]);
+  const [activeKey, setActiveKey] = React.useState("");
+  const [byKey, setByKey] = React.useState({});
+  const [input, setInput] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  React.useEffect(() => {
+    let alive = true;
+    fetch("/api/my/oc").then((r) => (r.ok ? r.json() : { ocs: [] }))
+      .then((d) => { if (alive) setOcs(d.ocs || []); })
+      .catch(() => { if (alive) setOcs([]); });
+    return () => { alive = false; };
+  }, []);
+  const list = React.useMemo(() => {
+    const out = []; const seen = new Set();
+    (ocs || []).forEach((o) => {
+      if (o.character && !seen.has(o.character)) { seen.add(o.character); out.push({ name: o.character, persona: o.persona, avatar: o.art || undefined, anim: o.anim || undefined, card: o.card }); }
+    });
+    presetCards.forEach((c) => {
+      const nm = (c.data && c.data.name) || c.name;
+      if (nm && !seen.has(nm)) { seen.add(nm); out.push({ name: nm, persona: c.data && c.data.persona, description: c.data && c.data.description, card: c }); }
+    });
+    return out;
+  }, [ocs, presetCards]);
+  const activeName = activeKey || (list[0] && list[0].name) || "";
+  const activeItem = list.find((x) => x.name === activeName) || null;
+  const messages = byKey[activeName] || [];
+  // 每次进入与某角色的对话 = 开一个全新故事:会话 id 带随机串,不复用旧局;
+  // 旧会话(历史 id)服务端原样保留,不受影响。
+  const sidsRef = React.useRef({});
+  const openedRef = React.useRef({});
+  const sidFor = (nm) => {
+    if (!sidsRef.current[nm]) sidsRef.current[nm] = "chat-" + nm + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    return sidsRef.current[nm];
+  };
+  // 自动开场:选中有卡的角色且本局还没有消息时,让角色先开口。
+  // 开场引子随机抽 + 全新会话无历史 → 同一角色多次开局,开场各不相同。
+  const OPEN_HINTS = [
+    "清晨的第一缕光线", "一场刚停的雨", "人潮散去的傍晚", "深夜里还亮着的灯",
+    "街角的不期而遇", "忙完手头事的午后", "一段旅途的间隙", "窗外突变的天气",
+    "一件让你在意的小东西", "远处传来的声音",
+  ];
+  React.useEffect(() => {
+    const nm = activeName, it = activeItem;
+    if (!nm || !it || !it.card) return;
+    if ((byKey[nm] || []).length || openedRef.current[nm]) return;
+    openedRef.current[nm] = true;
+    const hint = OPEN_HINTS[Math.floor(Math.random() * OPEN_HINTS.length)];
+    setBusy(true);
+    setByKey((m) => ({ ...m, [nm]: [{ who: nm, text: "……" }] }));
+    postJSON("/api/chat", {
+      card: it.card, session_id: sidFor(nm), world: null,
+      user: "（这是一次全新的相遇，和以往任何一次开场都不同。请你以「" + hint + "」为引子主动开启对话：先一两句动作或场景描写，再说出你的第一句话，把话头交给我。不要提及或复述这条指令。）",
+    })
+      .then((r) => setByKey((m) => ({ ...m, [nm]: [{ who: nm, text: (r && r.reply) || "（无回应）" }] })))
+      .catch((e) => { openedRef.current[nm] = false; setByKey((m) => ({ ...m, [nm]: [{ who: nm, text: "（开场失败：" + e.message + "）" }] })); })
+      .finally(() => setBusy(false));
+  }, [activeName, activeItem]);
+  async function send() {
+    const text = input.trim();
+    if (!text || !activeItem || busy) return;
+    if (!activeItem.card) {
+      setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: "（这位角色还没有引擎角色卡，暂时只能看资料，不能对话。）" }] }));
+      return;
+    }
+    setBusy(true);
+    setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: "me", text }] }));
+    setInput("");
+    try {
+      const r = await postJSON("/api/chat", { card: activeItem.card, session_id: sidFor(activeName), user: text, world: null });
+      setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: (r && r.reply) || "（无回应）" }] }));
+    } catch (e) {
+      setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: "（连接出错：" + e.message + "）" }] }));
+    } finally { setBusy(false); }
+  }
+  const ChatC = (mobile && window.MChat) ? window.MChat : window.ReconChat;
+  return (
+    <ChatC
+      characters={list}
+      activeName={activeName} messages={messages} value={input}
+      onChange={setInput} onSend={send} onNav={onNav}
+      onPick={(nm) => setActiveKey(nm)} />
+  );
+}
+
+// 创作桌控制器:对话式建卡(/api/build_card,前端维护对话+草稿),入库走 /api/library/save。
+function ReconCreateLive({ onNav, refreshHome, mobile }) {
+  const KINDS = [
+    { zh: "角色卡", en: "CHARACTER", k: "characters" },
+    { zh: "演出卡", en: "STAGING", k: "players" },
+    { zh: "设定卡 · 世界书", en: "LORE", k: "worlds" },
+    { zh: "故事书", en: "STORY", k: "stories" },
+    { zh: "事件卡", en: "EVENT", k: "characters" },
+  ];
+  const [ki, setKi] = React.useState(0);
+  const [messages, setMessages] = React.useState([{ who: "坊", text: "想造哪张卡？说一个画面、一句话都行——聊着聊着，卡就长出来了。" }]);
+  const [draft, setDraft] = React.useState({});
+  const [filled, setFilled] = React.useState([]);
+  const [input, setInput] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  async function send() {
+    const text = input.trim(); if (!text || busy) return;
+    setBusy(true);
+    const apiMsgs = [...messages, { who: "你", text }].map((m) => ({ role: m.who === "你" ? "user" : "assistant", content: m.text }));
+    setMessages((m) => [...m, { who: "你", text }]); setInput("");
+    try {
+      const r = await postJSON("/api/build_card", { kind: KINDS[ki].k, messages: apiMsgs, draft, seed: "" });
+      const ask = [r.reply, r.next_question].filter(Boolean).join(" ");
+      if (ask) setMessages((m) => [...m, { who: "坊", text: ask }]);
+      if (r.draft) setDraft(r.draft);
+      setFilled(r.filled || (r.draft ? Object.keys(r.draft) : []));
+    } catch (e) {
+      setMessages((m) => [...m, { who: "坊", text: "（建卡出错：" + e.message + "）" }]);
+    } finally { setBusy(false); }
+  }
+  async function saveCard() {
+    const d = draft || {};
+    if (!Object.keys(d).length) { alert("还没有可入库的卡，先聊几句让它长出来。"); return; }
+    const k = KINDS[ki].k;
+    try {
+      await postJSON("/api/library/save", { kind: k, data: k === "characters" ? { data: d } : d });
+      if (refreshHome) refreshHome();
+      alert("已收入卡库。");
+    } catch (e) { alert("入库失败：" + e.message); }
+  }
+  const d = draft || {};
+  const dname = d.name || (d.data && d.data.name) || "未命名";
+  const LABELS = { description: "简述", personality: "性格", scenario: "情境设定", first_mes: "开场白", mes_example: "对话示例", speech_rules: "说话规则", appearance: "外貌", persona: "人设", goals: "目标", secret: "隐藏真相", background: "背景", voice: "口癖", premise: "前提", title: "标题", entries: "条目" };
+  const fields = Object.keys(d).filter((k) => !["name", "character_id", "id"].includes(k)).map((k) => {
+    const v = d[k];
+    return { k: LABELS[k] || k, v: typeof v === "string" ? v : (Array.isArray(v) ? v.join("、") : JSON.stringify(v)), fresh: (filled || []).includes(k), hidden: /secret|隐藏|真相/i.test(k) };
+  });
+  const CreateC = (mobile && window.MCreate) ? window.MCreate : window.ReconCreate;
+  return (
+    <CreateC
+      cardKind={ki} kinds={KINDS} onKind={setKi}
+      messages={messages} value={input} onChange={setInput} onSend={send}
+      draft={{ name: dname, kind: KINDS[ki].zh, fields }}
+      onSaveDraft={() => alert("当前进度已在编辑中。")} onSaveCard={saveCard} onNav={onNav} />
+  );
+}
+
+// 登录后无昵称 → 强制设置(不可跳过;recon 暖纸卡风格,盖在整站之上)。
+function NicknameGate({ onDone }) {
+  const [name, setName] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState("");
+  async function submit() {
+    const nm = name.trim();
+    if (!nm) { setErr("起个名字吧,1-24 个字"); return; }
+    if (nm.length > 24) { setErr("昵称最长 24 个字"); return; }
+    if (busy) return;
+    setBusy(true); setErr("");
+    try {
+      const r = await postJSON("/api/my/display_name", { display_name: nm });
+      onDone((r && r.display_name) || nm);
+    } catch (e) { setErr(e.message || "保存失败"); }
+    finally { setBusy(false); }
+  }
+  return (
+    <div className="cv-nick">
+      <style>{`
+        .cv-nick {position:fixed; inset:0; z-index:70; display:grid; place-items:center; background:rgba(14,17,24,.62); backdrop-filter:blur(3px); font-family:"Kaiti SC","STKaiti","KaiTi",serif;}
+        @keyframes rcn-in { from { opacity:0; transform:translateY(16px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
+        .cv-nick .card {width:min(400px, 92vw); background:linear-gradient(180deg,#f6efdd,#efe6cf); border:1px solid rgba(203,176,121,.7);
+          padding:34px 38px 30px; position:relative; box-shadow:0 24px 60px -20px rgba(0,0,0,.6); animation:rcn-in .36s cubic-bezier(.22,1,.36,1) both;}
+        .cv-nick .card::before {content:""; position:absolute; inset:5px; border:1px solid rgba(43,38,32,.14); pointer-events:none;}
+        .cv-nick h2 {margin:0; font-family:"Songti SC","SimSun",serif; font-size:21px; letter-spacing:.16em; color:#2b2620; text-align:center;}
+        .cv-nick .sub {font-family:Georgia,serif; font-size:9.5px; letter-spacing:.3em; color:#a98a63; text-align:center; margin-top:7px;}
+        .cv-nick p {font-size:13px; line-height:1.9; color:#6f6757; margin:16px 0 14px; text-align:center;}
+        .cv-nick input {width:100%; background:rgba(255,255,255,.55); border:1px solid #c4b388; border-radius:0; box-shadow:none;
+          font-family:inherit; font-size:15px; color:#2b2620; padding:12px 14px; outline:none; text-align:center; letter-spacing:.06em;}
+        .cv-nick input:focus {border-color:#34463d; box-shadow:none;}
+        .cv-nick .err {font-size:12.5px; color:#9a4a3a; margin-top:8px; text-align:center;}
+        .cv-nick .go {width:100%; appearance:none; min-height:0; border-radius:0; height:48px; margin-top:16px; background:#34463d; color:#f3ead6;
+          border:1px solid #283831; font-family:"Songti SC","SimSun",serif; font-size:15px; letter-spacing:.3em; cursor:pointer; position:relative;}
+        .cv-nick .go::before {content:""; position:absolute; inset:3px; border:1px solid rgba(193,168,111,.5); pointer-events:none;}
+        .cv-nick .go:hover:not(:disabled) {background:#2c3a32; color:#f3ead6;}
+        .cv-nick .go:disabled {opacity:.6;}
+      `}</style>
+      <div className="card">
+        <h2>给自己起个名字</h2>
+        <div className="sub">SET YOUR NICKNAME</div>
+        <p>故事里的人要怎么称呼你?<br />这个名字会出现在你的档案与对话中。</p>
+        <input autoFocus value={name} maxLength={24} placeholder="1-24 个字"
+               onChange={(e) => setName(e.target.value)}
+               onKeyDown={(e) => e.key === "Enter" && submit()} />
+        {err && <div className="err">{err}</div>}
+        <button className="go" disabled={busy} onClick={submit}>{busy ? "…" : "就叫这个"}</button>
+      </div>
+    </div>
+  );
+}
+
+// —— 分页路由(hash):每页独立 URL,前进/后退/刷新/直链均按页工作 ——
+const VIEW_HASH = { landing: "#/", home: "#/explore", game: "#/play", build: "#/create", chat: "#/chat", mine: "#/mine" };
+const HASH_VIEW = { "": "landing", "#": "landing", "#/": "landing", "#/landing": "landing", "#/explore": "home", "#/play": "game", "#/create": "build", "#/chat": "chat", "#/mine": "mine" };
+const PAGE_TITLE = { landing: "YoRHa-A2 引擎", home: "故事库", game: "当前故事", build: "创作桌", chat: "角色聊天", mine: "个人中心" };
+function parseHash(h) {
+  h = (h != null ? h : (typeof location !== "undefined" ? location.hash : "")) || "";
+  if (h.indexOf("#/story/") === 0) return { view: "home", story: decodeURIComponent(h.slice(8)) };
+  return { view: HASH_VIEW[h] || null, story: null };
 }
 
 function App() {
@@ -2683,7 +2340,17 @@ function App() {
   const [restoredTurns, setRestoredTurns] = useState(null);
   const [restoredState, setRestoredState] = useState(null);
   const [restoredChoices, setRestoredChoices] = useState([]);
-  const [view, setView] = useState("home"); // home / game / build / vault
+  // 手机端(≤720px):同数据同引擎,换 ReconMobile 流式版式(底部 tab,单列)。
+  const [isMobile, setIsMobile] = useState(() => (typeof matchMedia !== "undefined" ? matchMedia("(max-width: 720px)").matches : false));
+  useEffect(() => {
+    const mq = matchMedia("(max-width: 720px)");
+    const fn = () => setIsMobile(mq.matches);
+    mq.addEventListener ? mq.addEventListener("change", fn) : mq.addListener(fn);
+    return () => { mq.removeEventListener ? mq.removeEventListener("change", fn) : mq.removeListener(fn); };
+  }, []);
+  const [view, setView] = useState(() => parseHash().view || "landing"); // 初始视图按 URL hash(分页直达)
+  const [pendingStory, setPendingStory] = useState(() => parseHash().story); // #/story/<名> 直链,等 presets 到位再开
+  const [loginShown, setLoginShown] = useState(false); // 标题开屏 → 点按钮才展开邮箱+验证码登录表单
   const [sidebarOpen, setSidebarOpen] = useState(true); // 游戏中侧边卡组栏开关
   const [isPreset, setIsPreset] = useState(false);      // 当前局是否由预设开(预设:无侧边栏 + 先选人)
   const [selecting, setSelecting] = useState(false);    // 预设进入后的选人页阶段
@@ -2706,14 +2373,8 @@ function App() {
 
   // 当前所在「引导屏」——每个界面都有 onboarding。modal 开 = 一条龙走查(简介→背景→角色→出演);
   // 否则按 view 分(探索/我的/创作/聊天/故事)。
-  const coachScreen =
-    storyModal ? "modal"
-    : view === "home" ? "home"
-    : view === "mine" ? "mine"
-    : view === "build" ? "build"
-    : view === "chat" ? "chat"
-    : view === "game" ? (started && characters.length > 0 ? "story" : "gameEmpty")
-    : null;
+  // recon 1:1 视图没有旧 data-coach 锚点 → 暂停自动新手引导(避免空浮窗压在新 UI 上);手动「?」仍可重放。
+  const coachScreen = null;
   useEffect(() => { coachRunRef.current = coachRun; }, [coachRun]);
 
   const addCharacter = (card) => setCharacters((xs) => [...xs, card]);
@@ -2740,7 +2401,71 @@ function App() {
       .then((d) => setAuth({ ready: true, enabled: !!d.auth_enabled, user: d.user || null }))
       .catch(() => setAuth({ ready: true, enabled: false, user: null }));
   }, []);
-  function onAuthed(user, token) { setToken(token); setAuth((a) => ({ ...a, user })); }
+  // 登录后:深链(#/chat 等)保留原目的地;否则进功能页(故事库)。
+  function onAuthed(user, token) { setToken(token); setAuth((a) => ({ ...a, user })); setView((v) => (v === "landing" ? "home" : v)); }
+  // 已登录用户刷新页面:跳过营销门面,直接落功能页。
+  useEffect(() => {
+    if (auth.ready && auth.user) setView((v) => (v === "landing" ? "home" : v));
+  }, [auth.ready, auth.user]);
+
+  // 登录后拉服务器侧「我的会话」(跨设备/运营分发的故事局),与本机存档合并给「我的·最近游玩」。
+  const [serverSaves, setServerSaves] = useState([]);
+  useEffect(() => {
+    if (!auth.user) { setServerSaves([]); return undefined; }
+    let alive = true;
+    fetch("/api/my/sessions")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows) => { if (alive) setServerSaves(Array.isArray(rows) ? rows : []); })
+      .catch(() => { if (alive) setServerSaves([]); });
+    return () => { alive = false; };
+  }, [auth.user, view]);   // 切视图时顺带刷新,玩完一局回「我的」立即可见
+  // —— 分页:状态 → URL(每次切页产生历史记录,后退/前进可用)+ 页标题 ——
+  const storyModalRef = useRef(null);
+  useEffect(() => { storyModalRef.current = storyModal; }, [storyModal]);
+  useEffect(() => {
+    const h = storyModal
+      ? "#/story/" + encodeURIComponent(storyModal.preset.name || (storyModal.preset.data && storyModal.preset.data.name) || "")
+      : (VIEW_HASH[view] || "#/");
+    if (location.hash !== h) location.hash = h;
+    const t = storyModal ? ((storyModal.preset.data && storyModal.preset.data.name) || storyModal.preset.name) : PAGE_TITLE[view];
+    document.title = (view === "landing" && !storyModal) ? "YoRHa-A2 引擎" : ((t || "") + " · YoRHa-A2 引擎");
+  }, [view, storyModal]);
+
+  // —— 分页:URL → 状态(浏览器后退/前进/手输地址) ——
+  useEffect(() => {
+    function onHash() {
+      const p = parseHash();
+      if (p.story) {
+        const cur = storyModalRef.current;
+        const curName = cur && (cur.preset.name || (cur.preset.data && cur.preset.data.name));
+        if (curName !== p.story) { setView("home"); setPendingStory(p.story); }
+      } else if (p.view) {
+        setStoryModal(null);
+        setView(p.view);
+      }
+    }
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  // —— 分页:#/story/<名> 直链 → presets 到位后打开对应故事详情 ——
+  useEffect(() => {
+    if (!pendingStory || !presets.length) return;
+    const hit = presets.find((p) => p.name === pendingStory || (p.data && p.data.name === pendingStory));
+    if (hit) setStoryModal({ preset: hit, tab: "intro" });
+    setPendingStory(null);   // 找不到就留在故事库
+  }, [pendingStory, presets]);
+
+  const mineSaves = useMemo(() => {
+    const server = (serverSaves || []).map((s) => ({
+      id: s.id, name: s.story || (s.player ? s.player + " 的一局" : "未命名故事"),
+      turns: s.turns || 0,
+      updated: s.updated_at ? String(s.updated_at).replace("T", " ").slice(0, 16) : "",
+    }));
+    const ids = new Set(server.map((s) => s.id));
+    const localOnly = (saves || []).filter((s) => s && s.id && !ids.has(s.id));
+    return [...localOnly, ...server];
+  }, [saves, serverSaves]);
   // 先 POST 吊销(此时 token 还在,fetch 钩子会带上),再清本地 → 服务端 token 立即失效,不留 60 天活口。
   async function onLogout() { try { await fetch("/api/auth/logout", { method: "POST" }); } catch (e) {} setToken(""); location.reload(); }
 
@@ -2929,162 +2654,152 @@ function App() {
   if (restoring || !auth.ready) {
     return (
       <div className="app">
-        <header><div><h1>AI 互动故事</h1><p>读取存档中…</p></div></header>
+        <header><div><h1>叙事引擎</h1><p>读取存档中…</p></div></header>
       </div>
     );
   }
 
-  // AUTH 开且未登录 → 全屏拦在登录页(数据独立的前提:每个人先有身份)。AUTH 关时此分支不触发,行为同现状。
+  // AUTH 开且未登录 → 标题开屏(ReconTitle);点任意进入按钮才展开现有邮箱+验证码登录表单。AUTH 关时不触发,行为同现状。
   if (auth.enabled && !auth.user) {
-    return <LoginView onAuthed={onAuthed} />;
+    if (loginShown) return <LoginView onAuthed={onAuthed} onBack={() => setLoginShown(false)} />;
+    return (
+      <window.ReconTitle
+        onStart={() => setLoginShown(true)} onLogin={() => setLoginShown(true)}
+        onGuest={() => setLoginShown(true)} onResume={() => setLoginShown(true)} />
+    );
   }
 
   return (
     <div className="app">
-      <TopNav view={view} setView={navTo} sessionId={sessionId}
-              authEnabled={auth.enabled} user={auth.user} onLogout={onLogout} />
-
-      {view === "home" && (
-        <main className="single-view">
-          <StoriesHome
-            onNew={onNew}
-            presets={presets}
-            onLaunchPreset={openStoryModal}
-            onDeletePreset={deletePreset}
-          />
-        </main>
+      {/* 登录后未设置昵称 → 强制设置(盖全站,不可跳过) */}
+      {auth.user && !(auth.user.display_name || "").trim() && (
+        <NicknameGate onDone={(nm) => setAuth((a) => ({ ...a, user: a.user ? { ...a.user, display_name: nm } : a.user }))} />
       )}
 
-      {view === "chat" && (
-        <main className="single-view">
-          <ChatView />
-        </main>
-      )}
+      {/* 营销门面(主页拆分出去:未登录/初次进入的 landing;登录后默认进功能页) */}
+      {view === "landing" && (isMobile ? (
+        <window.MLanding presets={presets} onNav={navTo} onOpenStory={openStoryModal} onNew={onNew} />
+      ) : (
+        <ReconShell designW={1672} designH={941}>
+          <window.ReconHome presets={presets} user={auth.user}
+            onNav={navTo} onOpenStory={openStoryModal} onNew={onNew}
+            onLogin={() => setView("mine")} />
+        </ReconShell>
+      ))}
 
-      {view === "mine" && (
-        <main className="single-view">
-          <MineView
-            saves={saves} presets={presets} activeId={sessionId}
-            authEnabled={auth.enabled} user={auth.user}
-            onResume={resumeSave} onDeleteSave={deleteSaveHandler} onGoExplore={() => setView("home")}
-            onOpenStory={openStoryModal} onDeletePreset={deletePreset}
-            addCharacter={addCharacter} addWorld={addWorld} setStory={setStory} setPlayer={setPlayer}
-            completeCard={completeCardFromVault} goGame={() => setView("game")}
-          />
-        </main>
-      )}
+      {/* 功能版探索/故事库(登录后的主页) */}
+      {view === "home" && (isMobile ? (
+        <window.MExplore presets={presets} onOpenStory={openStoryModal} onNew={onNew} onNav={navTo} />
+      ) : (
+        <ReconShell designW={1536} designH={1024}>
+          <window.ReconExplore presets={presets} user={auth.user}
+            onOpenStory={openStoryModal} onNew={onNew} onNav={navTo} />
+        </ReconShell>
+      ))}
 
-      {/* 在玩就一直挂着,只用 CSS 藏(不卸载)→ 切 tab 回来 turns/选项/状态都在内存里,瞬时显示、零 fetch(治"切回来慢")。 */}
-      {started && characters.length > 0 && (
-        <main className={"play-layout " + ((sidebarOpen && !isPreset) ? "has-left " : "") + (railOpen ? "has-right" : "")} style={view === "game" ? undefined : { display: "none" }}>
-          {sidebarOpen && !isPreset && (
-            <SetupPanel
-              characters={characters} setCharacters={setCharacters}
-              worldBooks={worldBooks} setWorldBooks={setWorldBooks}
-              story={story} setStory={setStory}
-              player={player} setPlayer={setPlayer}
-              mode={mode} setMode={setMode}
-              onStart={() => setStarted(true)}
-              onSavePreset={saveAsPreset}
-              playing
-            />
-          )}
-          <div className="play-main">
-            <div className="play-toolbar">
-              {!isPreset && (
-                <button className="side-toggle" onClick={() => setSidebarOpen((o) => !o)} title="开/关左侧卡组栏">
-                  {sidebarOpen ? "◀ 收起卡组栏" : "▶ 卡组栏"}
-                </button>
-              )}
-              <button className="side-toggle rail-toggle" data-coach="rail-toggle" onClick={() => setRailOpen((o) => !o)} title="开/关右侧状态栏">
-                {railOpen ? "状态栏 ▶" : "◀ 状态栏"}
-              </button>
+      {view === "chat" && (isMobile ? (
+        <ReconChatLive presets={presets} onNav={navTo} mobile />
+      ) : (
+        <ReconShell designW={1536} designH={1024}>
+          <ReconChatLive presets={presets} onNav={navTo} />
+        </ReconShell>
+      ))}
+
+      {view === "mine" && (() => {
+        const onAvatarUp = async (dataUri) => {
+          try {
+            const r = await postJSON("/api/my/avatar", { avatar: dataUri });
+            setAuth((a) => ({ ...a, user: a.user ? { ...a.user, avatar: (r && r.avatar) || dataUri } : a.user }));
+          } catch (e) { alert("头像上传失败:" + e.message); }
+        };
+        return isMobile ? (
+          <window.MMine user={auth.user} presets={presets} saves={mineSaves}
+            onNav={navTo} onResume={resumeSave} onNew={onNew} onLogout={onLogout} onAvatar={onAvatarUp} />
+        ) : (
+          <ReconShell designW={1536} designH={1024}>
+            <window.ReconProfile user={auth.user} presets={presets} saves={mineSaves}
+              onNav={navTo} onResume={resumeSave} onNew={onNew} onLogout={onLogout} onAvatar={onAvatarUp} />
+          </ReconShell>
+        );
+      })()}
+
+      {/* 游玩:recon 皮 + 实时引擎(StoryPanel skin=recon,引擎逻辑零改动)。只在 game 视图挂载;切走卸载,回来按 session 重拉。 */}
+      {view === "game" && started && characters.length > 0 && (() => {
+        const panel = (
+          <StoryPanel key={sessionId} skin="recon" mobile={isMobile} onNav={navTo}
+            coverArt={(pendingPreset && pendingPreset.cover) || ""}
+            characters={characters} world={world} story={story} player={player} mode={mode}
+            sessionId={sessionId} initialTurns={restoredTurns} initialState={restoredState} initialChoices={restoredChoices}
+            goHome={() => { refreshHome(); setStarted(false); setAssembling(false); setView("home"); }}
+            onTurn={() => { setTurnSeq((s) => s + 1); setSaves(loadSaves()); }} />
+        );
+        return isMobile ? panel : (
+          <ReconShell designW={1536} designH={1024} onNav={navTo}>{panel}</ReconShell>
+        );
+      })()}
+
+      {/* 当前故事·空态(recon 风格,带统一竖栏)。旧 SetupPanel 装配分支已无触发点,移除。 */}
+      {view === "game" && !(started && characters.length > 0) && (isMobile ? (
+        <window.MEmpty onNav={navTo} onNew={onNew} />
+      ) : (
+        <ReconShell designW={1536} designH={1024}>
+          <div className="cv-gempty">
+            <style>{`
+              .cv-gempty {position:relative; width:1536px; height:1024px; overflow:hidden;
+                background:repeating-linear-gradient(90deg, rgba(169,138,99,.028) 0 1px, transparent 1px 46px), #f3ece0;
+                color:#2c2820; font-family:"Kaiti SC","STKaiti","KaiTi",serif;}
+              .cv-gempty .mid {position:absolute; left:188px; right:0; top:0; bottom:0; display:grid; place-items:center;}
+              .cv-gempty .panel {width:520px; text-align:center; background:#faf4ea; border:1px solid #ddd0b4; padding:54px 48px; position:relative;}
+              .cv-gempty .panel::before {content:""; position:absolute; inset:6px; border:1px solid rgba(196,179,132,.4); pointer-events:none;}
+              .cv-gempty .panel .ic {color:#a98a63; margin-bottom:18px;}
+              .cv-gempty h2 {margin:0; font-family:"Songti SC","STSong","SimSun",serif; font-size:26px; letter-spacing:.12em; font-weight:700;}
+              .cv-gempty .en {font-family:Georgia,serif; font-style:italic; font-size:13px; letter-spacing:.1em; color:#a98a63; margin-top:8px;}
+              .cv-gempty p {font-size:14px; line-height:2; color:#6f6757; margin:18px 0 26px;}
+              .cv-gempty .btns {display:flex; gap:16px; justify-content:center;}
+              .cv-gempty .bm {height:50px; padding:0 30px; display:inline-flex; align-items:center; background:#34463d; color:#f3ead6; border:1px solid #283831; position:relative; cursor:pointer; font-family:"Songti SC","SimSun",serif; font-size:15px; letter-spacing:.16em;}
+              .cv-gempty .bm::before {content:""; position:absolute; inset:3px; border:1px solid rgba(193,168,111,.5);}
+              .cv-gempty .bo {height:50px; padding:0 28px; display:inline-flex; align-items:center; background:transparent; color:#163b57; border:1px solid #c4b388; cursor:pointer; font-family:"Songti SC","SimSun",serif; font-size:15px; letter-spacing:.16em;}
+            `}</style>
+            <window.ReconRail active="game" onNav={navTo} />
+            <div className="mid">
+              <div className="panel">
+                <div className="ic"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2"><path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h6M9 16h6"/></svg></div>
+                <h2>还没有进行中的故事</h2>
+                <div className="en">No Story In Progress</div>
+                <p>去「探索」取下一本书开局或续玩，<br/>或到「创作」从一张角色卡开始写你自己的故事。</p>
+                <div className="btns">
+                  <span className="bm" onClick={() => navTo("home")}>去探索</span>
+                  <span className="bo" onClick={onNew}>去创作</span>
+                </div>
+              </div>
             </div>
-            <StoryPanel key={sessionId} characters={characters} world={world} story={story} player={player} mode={mode} sessionId={sessionId} initialTurns={restoredTurns} initialState={restoredState} initialChoices={restoredChoices} goHome={() => { refreshHome(); setStarted(false); setAssembling(false); setView("home"); }} onTurn={() => { setTurnSeq((s) => s + 1); setSaves(loadSaves()); }} />
           </div>
-          {railOpen && <StateInspector sessionId={sessionId} refreshKey={turnSeq} />}
-        </main>
-      )}
+        </ReconShell>
+      ))}
 
-      {view === "game" && !(started && characters.length > 0) && assembling && (
-        <main>
-          <SetupPanel
-            characters={characters}
-            setCharacters={setCharacters}
-            worldBooks={worldBooks}
-            setWorldBooks={setWorldBooks}
-            story={story}
-            setStory={setStory}
-            player={player}
-            setPlayer={setPlayer}
-            mode={mode}
-            setMode={setMode}
-            onStart={() => setStarted(true)}
-            onSavePreset={saveAsPreset}
-            onBack={() => { refreshHome(); setAssembling(false); setView("home"); }}
-          />
-          <section className="story-shell standby">
-            <h2>组好卡组,开始故事</h2>
-            <p>左边挑/上传卡:至少一个角色,建议配上主角(玩家)卡、世界书、故事书。组好点左下「启动」。也可「保存为故事预设」下次复用。</p>
-          </section>
-        </main>
-      )}
+      {view === "build" && (isMobile ? (
+        <ReconCreateLive onNav={navTo} refreshHome={refreshHome} mobile />
+      ) : (
+        <ReconShell designW={1536} designH={1024}>
+          <ReconCreateLive onNav={navTo} refreshHome={refreshHome} />
+        </ReconShell>
+      ))}
 
-      {view === "game" && !(started && characters.length > 0) && !assembling && !selecting && (
-        <main className="single-view">
-          <section className="story-shell standby">
-            <h2>还没有进行中的故事</h2>
-            <p>去「首页」挑一个故事开局或续玩,或<button className="back-link" onClick={onNew}>新建一个故事</button>。</p>
-          </section>
-        </main>
-      )}
+      {storyModal && (isMobile ? (
+        <window.MStoryDetail preset={storyModal.preset}
+          onNav={(v) => { setStoryModal(null); navTo(v); }}
+          onEnter={(role) => startFromModal(role)}
+          onClose={() => setStoryModal(null)} />
+      ) : (
+        <ReconShell designW={1672} designH={941}>
+          <window.ReconStoryDetail preset={storyModal.preset}
+            onNav={(v) => { setStoryModal(null); navTo(v); }}
+            onEnter={(role) => startFromModal(role)}
+            onClose={() => setStoryModal(null)} />
+        </ReconShell>
+      ))}
 
-      {view === "build" && (
-        <main className="single-view">
-          {buildFlow ? (
-            <StepBuilder
-              characters={bChars} worldBooks={bWorlds} story={bStory} player={bPlayer}
-              addCharacter={(c) => setBChars((xs) => [...xs, c])} addWorld={(w) => setBWorlds((xs) => [...xs, w])}
-              setCharacters={setBChars} setWorldBooks={setBWorlds} setStory={setBStory} setPlayer={setBPlayer}
-              onStartStory={startBuiltStory}
-              onSavePreset={saveBuildAsPreset}
-              onExit={() => { setBuildFlow(false); refreshHome(); setView("home"); }}
-            />
-          ) : (
-            <BuildView
-              buildSeed={buildSeed}
-              clearSeed={() => setBuildSeed({ seed: "", draft: null })}
-              addCharacter={addCharacter}
-              addWorld={addWorld}
-              setStory={setStory}
-              setPlayer={setPlayer}
-              goGame={() => { setBuildSeed({ seed: "", draft: null }); setView(started ? "game" : "home"); }}
-            />
-          )}
-        </main>
-      )}
-
-      {storyModal && (
-        <StoryModal
-          entry={storyModal}
-          setTab={(k) => setStoryModal((m) => (m ? { ...m, tab: k } : m))}
-          onClose={() => setStoryModal(null)}
-          onStart={startFromModal}
-        />
-      )}
-
-      <CoachHelpButton onClick={replayCoach} />
-      {coachRun && (
-        <CoachMarks
-          key={coachRun.screen + (coachRun.manual ? "-m" : "")}
-          steps={COACH[coachRun.screen] || COACH.home}
-          manual={coachRun.manual}
-          onDone={() => { if (coachRun.screen === "modal") setStoryModal((m) => (m ? { ...m, tab: "intro" } : m)); setCoachRun(null); }}
-          onSkip={() => { if (coachRun.screen === "modal") setStoryModal((m) => (m ? { ...m, tab: "intro" } : m)); setCoachDone(); setCoachRun(null); }}
-          onAction={(id) => { if (id === "tutorial") startTutorial(); else if (id === "dismiss") setCoachRun(null); else if (id === "explore") { setView("home"); setCoachRun(null); } }}
-          onStep={(s) => { if (s && s.tab) setStoryModal((m) => (m ? { ...m, tab: s.tab } : m)); }}
-        />
-      )}
+      {/* 旧 coach 引导系统的锚点(data-coach)在 recon 视图里已不存在,浮窗与「?」按钮一并移除;代码保留待重接。 */}
     </div>
   );
 }
