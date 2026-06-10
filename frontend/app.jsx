@@ -3233,6 +3233,16 @@ function NicknameGate({ onDone }) {
   );
 }
 
+// —— 分页路由(hash):每页独立 URL,前进/后退/刷新/直链均按页工作 ——
+const VIEW_HASH = { landing: "#/", home: "#/explore", game: "#/play", build: "#/create", chat: "#/chat", mine: "#/mine" };
+const HASH_VIEW = { "": "landing", "#": "landing", "#/": "landing", "#/landing": "landing", "#/explore": "home", "#/play": "game", "#/create": "build", "#/chat": "chat", "#/mine": "mine" };
+const PAGE_TITLE = { landing: "YoRHa-A2 引擎", home: "故事库", game: "当前故事", build: "创作桌", chat: "角色聊天", mine: "个人中心" };
+function parseHash(h) {
+  h = (h != null ? h : (typeof location !== "undefined" ? location.hash : "")) || "";
+  if (h.indexOf("#/story/") === 0) return { view: "home", story: decodeURIComponent(h.slice(8)) };
+  return { view: HASH_VIEW[h] || null, story: null };
+}
+
 function App() {
   const [characters, setCharacters] = useState([]);
   const [worldBooks, setWorldBooks] = useState([]);
@@ -3247,7 +3257,8 @@ function App() {
   const [restoredTurns, setRestoredTurns] = useState(null);
   const [restoredState, setRestoredState] = useState(null);
   const [restoredChoices, setRestoredChoices] = useState([]);
-  const [view, setView] = useState("landing"); // landing(营销门面) / home(功能版故事库) / game / build / chat / mine
+  const [view, setView] = useState(() => parseHash().view || "landing"); // 初始视图按 URL hash(分页直达)
+  const [pendingStory, setPendingStory] = useState(() => parseHash().story); // #/story/<名> 直链,等 presets 到位再开
   const [loginShown, setLoginShown] = useState(false); // 标题开屏 → 点按钮才展开邮箱+验证码登录表单
   const [sidebarOpen, setSidebarOpen] = useState(true); // 游戏中侧边卡组栏开关
   const [isPreset, setIsPreset] = useState(false);      // 当前局是否由预设开(预设:无侧边栏 + 先选人)
@@ -3299,7 +3310,8 @@ function App() {
       .then((d) => setAuth({ ready: true, enabled: !!d.auth_enabled, user: d.user || null }))
       .catch(() => setAuth({ ready: true, enabled: false, user: null }));
   }, []);
-  function onAuthed(user, token) { setToken(token); setAuth((a) => ({ ...a, user })); setView("home"); }  // 登录后直接进功能页(故事库)
+  // 登录后:深链(#/chat 等)保留原目的地;否则进功能页(故事库)。
+  function onAuthed(user, token) { setToken(token); setAuth((a) => ({ ...a, user })); setView((v) => (v === "landing" ? "home" : v)); }
   // 已登录用户刷新页面:跳过营销门面,直接落功能页。
   useEffect(() => {
     if (auth.ready && auth.user) setView((v) => (v === "landing" ? "home" : v));
@@ -3316,6 +3328,43 @@ function App() {
       .catch(() => { if (alive) setServerSaves([]); });
     return () => { alive = false; };
   }, [auth.user, view]);   // 切视图时顺带刷新,玩完一局回「我的」立即可见
+  // —— 分页:状态 → URL(每次切页产生历史记录,后退/前进可用)+ 页标题 ——
+  const storyModalRef = useRef(null);
+  useEffect(() => { storyModalRef.current = storyModal; }, [storyModal]);
+  useEffect(() => {
+    const h = storyModal
+      ? "#/story/" + encodeURIComponent(storyModal.preset.name || (storyModal.preset.data && storyModal.preset.data.name) || "")
+      : (VIEW_HASH[view] || "#/");
+    if (location.hash !== h) location.hash = h;
+    const t = storyModal ? ((storyModal.preset.data && storyModal.preset.data.name) || storyModal.preset.name) : PAGE_TITLE[view];
+    document.title = (view === "landing" && !storyModal) ? "YoRHa-A2 引擎" : ((t || "") + " · YoRHa-A2 引擎");
+  }, [view, storyModal]);
+
+  // —— 分页:URL → 状态(浏览器后退/前进/手输地址) ——
+  useEffect(() => {
+    function onHash() {
+      const p = parseHash();
+      if (p.story) {
+        const cur = storyModalRef.current;
+        const curName = cur && (cur.preset.name || (cur.preset.data && cur.preset.data.name));
+        if (curName !== p.story) { setView("home"); setPendingStory(p.story); }
+      } else if (p.view) {
+        setStoryModal(null);
+        setView(p.view);
+      }
+    }
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  // —— 分页:#/story/<名> 直链 → presets 到位后打开对应故事详情 ——
+  useEffect(() => {
+    if (!pendingStory || !presets.length) return;
+    const hit = presets.find((p) => p.name === pendingStory || (p.data && p.data.name === pendingStory));
+    if (hit) setStoryModal({ preset: hit, tab: "intro" });
+    setPendingStory(null);   // 找不到就留在故事库
+  }, [pendingStory, presets]);
+
   const mineSaves = useMemo(() => {
     const server = (serverSaves || []).map((s) => ({
       id: s.id, name: s.story || (s.player ? s.player + " 的一局" : "未命名故事"),
