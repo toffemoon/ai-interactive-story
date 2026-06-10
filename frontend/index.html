@@ -1,17 +1,16 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" href="data:," />
-  <title>叙事引擎 · 互动故事</title>
+  <title>鍙欎簨寮曟搸 路 浜掑姩鏁呬簨</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="muyan.css?v=20260610a" />
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <!-- 首屏 loading:纯 HTML/CSS,页面一打开就在,治零构建下 babel 现编译 app.jsx 的 1-2s 白屏。
-       React 挂载后由 app.jsx 把 #boot 淡出移除。样式内联在此,不依赖 styles.css 的加载时机。 -->
+  <!-- 棣栧睆 loading:绾?HTML/CSS,椤甸潰涓€鎵撳紑灏卞湪,娌婚浂鏋勫缓涓?babel 鐜扮紪璇?app.jsx 鐨?1-2s 鐧藉睆銆?       React 鎸傝浇鍚庣敱 app.jsx 鎶?#boot 娣″嚭绉婚櫎銆傛牱寮忓唴鑱斿湪姝?涓嶄緷璧?styles.css 鐨勫姞杞芥椂鏈恒€?-->
   <style>
     #boot {
       position: fixed; inset: 0; z-index: 9999;
@@ -50,25 +49,25 @@
 </head>
 <body>
   <div id="root"></div>
-  <!-- 首屏 loading 节点(占位文案,最终由 yufei 定) -->
+  <!-- 棣栧睆 loading 鑺傜偣(鍗犱綅鏂囨,鏈€缁堢敱 yufei 瀹? -->
   <div id="boot">
-    <div class="boot-title">叙事引擎</div>
+    <div class="boot-title">鍙欎簨寮曟搸</div>
     <div class="boot-bar"><span></span></div>
-    <div class="boot-slogan">正在翻开你的故事……</div>
+    <div class="boot-slogan">姝ｅ湪缈诲紑浣犵殑鏁呬簨鈥︹€?/div>
   </div>
-  <!-- 缓存击穿:零构建下浏览器会缓存 app.jsx,改了不刷新就看不到。改前端时 bump 这个 ?v= 值,普通刷新即可生效。 -->
+  <!-- 缂撳瓨鍑荤┛:闆舵瀯寤轰笅娴忚鍣ㄤ細缂撳瓨 app.jsx,鏀逛簡涓嶅埛鏂板氨鐪嬩笉鍒般€傛敼鍓嶇鏃?bump 杩欎釜 ?v= 鍊?鏅€氬埛鏂板嵆鍙敓鏁堛€?-->
   <script src="mu-settle.js?v=20260610b"></script>
-  <!-- recon 1:1 视图组件(各自 .cv-<key> scope,window.Recon* 挂载;app.jsx 按 view 调用) -->
-  <script type="text/babel" src="views/ReconRail.jsx?v=20260610v"></script>
-  <script type="text/babel" src="views/ReconMobile.jsx?v=20260610v"></script>
-  <script type="text/babel" src="views/ReconExplore.jsx?v=20260610v"></script>
-  <script type="text/babel" src="views/ReconHome.jsx?v=20260610v"></script>
-  <script type="text/babel" src="views/ReconStoryDetail.jsx?v=20260610v"></script>
-  <script type="text/babel" src="views/ReconPlay.jsx?v=20260610v"></script>
-  <script type="text/babel" src="views/ReconChat.jsx?v=20260610v"></script>
-  <script type="text/babel" src="views/ReconProfile.jsx?v=20260610v"></script>
-  <script type="text/babel" src="views/ReconCreate.jsx?v=20260610v"></script>
-  <script type="text/babel" src="views/ReconTitle.jsx?v=20260610v"></script>
-  <script type="text/babel" src="app.jsx?v=20260610v" data-type="module"></script>
+  <!-- recon 1:1 瑙嗗浘缁勪欢(鍚勮嚜 .cv-<key> scope,window.Recon* 鎸傝浇;app.jsx 鎸?view 璋冪敤) -->
+  <script type="text/babel" src="views/ReconRail.jsx?v=20260610x"></script>
+  <script type="text/babel" src="views/ReconMobile.jsx?v=20260610x"></script>
+  <script type="text/babel" src="views/ReconExplore.jsx?v=20260610x"></script>
+  <script type="text/babel" src="views/ReconHome.jsx?v=20260610x"></script>
+  <script type="text/babel" src="views/ReconStoryDetail.jsx?v=20260610x"></script>
+  <script type="text/babel" src="views/ReconPlay.jsx?v=20260610x"></script>
+  <script type="text/babel" src="views/ReconChat.jsx?v=20260610x"></script>
+  <script type="text/babel" src="views/ReconProfile.jsx?v=20260610x"></script>
+  <script type="text/babel" src="views/ReconCreate.jsx?v=20260610x"></script>
+  <script type="text/babel" src="views/ReconTitle.jsx?v=20260610x"></script>
+  <script type="text/babel" src="app.jsx?v=20260610x" data-type="module"></script>
 </body>
 </html>

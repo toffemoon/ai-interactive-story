@@ -247,7 +247,7 @@ function ReconHome(props) {
         <div className="brand">
           <img className="em" src={brand.emblem} alt="" />
           <div>
-            <h1>YoRHa-A2 引擎</h1>
+            <h1>{brand.title}</h1>
             <div className="sub">{brand.sub}</div>
           </div>
         </div>

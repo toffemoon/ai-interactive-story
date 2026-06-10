@@ -1624,7 +1624,7 @@ function LoginView({ onAuthed, onBack }) {
     <div className="cv-login">
       <style>{`
         .cv-login {position:fixed; inset:0; z-index:60; display:grid; place-items:center;
-          background:center/cover no-repeat url(assets/recon/title-bg.png), linear-gradient(160deg,#27324a,#161c28 60%,#0e1118);
+          background:center/cover no-repeat url(assets/recon/title-pano.jpg), linear-gradient(160deg,#27324a,#161c28 60%,#0e1118);
           font-family:"Kaiti SC","STKaiti","KaiTi",serif;}
         .cv-login::before {content:""; position:absolute; inset:0; background:rgba(10,13,20,.45);}
         @keyframes rc-login-in { from { opacity:0; transform:translateY(18px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
