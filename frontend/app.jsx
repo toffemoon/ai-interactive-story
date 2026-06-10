@@ -367,6 +367,10 @@ function CharacterEditor({ card, index, onChange, onClose }) {
         外貌锚点(look)
         <textarea rows="2" value={data.look || ""} onChange={(e) => update("look", e.target.value)} placeholder="一句话视觉印象 + 标志特征" />
       </label>
+      <div className="meta-row">
+        <span className="meta-k">角色图(image)</span>
+        <ImgInput value={data.image || ""} onChange={(v) => update("image", v)} />
+      </div>
       <label>
         召回关键词(keys),用逗号分隔
         <input value={(data.keys || []).join(", ")} onChange={(e) => update("keys", e.target.value.split(/[,，]/).map((x) => x.trim()).filter(Boolean))} placeholder="标志性专名,比 tags 更细" />
@@ -2733,8 +2737,88 @@ const BUILD_STEPS = [
   { key: "players", label: "主角", optional: true, desc: "你扮演谁:身份 / 目标 / 能力 / 限制 / 开局已知与不知(可跳过用模板)" },
   { key: "stories", label: "故事框架", optional: true, desc: "前提 / 主线 / 结局 → 故事书" },
   { key: "events", label: "事件卡", optional: true, desc: "隐藏事件卡 → 挂到当前故事书(手动加;引擎暂无 AI 建事件)" },
+  { key: "meta", label: "封面 / 简介", optional: true, desc: "故事名 / 封面 / 角色图 / 标签 / 简介 — AI 先出一版,你来改" },
   { key: "summary", label: "汇总", desc: "打包成预设 + 开始故事" },
 ];
+
+// 图片输入:贴 URL 或本地上传(转 data-URI,随预设进库;同现有封面的存法)。>2MB 拒收提示压缩。
+function fileToDataURI(file, cb) {
+  if (file.size > 2 * 1024 * 1024) { alert("图片超过 2MB,请压缩后再传(会存进数据库,太大拖慢加载)。"); return; }
+  const r = new FileReader();
+  r.onload = () => cb(String(r.result));
+  r.readAsDataURL(file);
+}
+
+function ImgInput({ value, onChange }) {
+  const isData = (value || "").indexOf("data:") === 0;
+  return (
+    <div className="img-input">
+      {value ? <span className="img-thumb" style={{ backgroundImage: `url("${value}")` }} /> : null}
+      <input className="img-url" value={isData ? "" : (value || "")}
+             placeholder={isData ? "(已上传本地图片)" : "贴图片 URL,或右边上传"}
+             onChange={(e) => onChange(e.target.value)} />
+      <label className="upbtn small">↑ 上传
+        <input type="file" accept="image/*" style={{ display: "none" }}
+               onChange={(e) => { const f = e.target.files[0]; e.target.value = ""; if (f) fileToDataURI(f, onChange); }} />
+      </label>
+      {value ? <button className="upbtn small" onClick={() => onChange("")}>清除</button> : null}
+    </div>
+  );
+}
+
+// 汇总前一步「封面 / 简介」(2026-06-10 yufei):发布信息集中填 —— AI 生成一版简介+标签,用户改;
+// 封面/角色图 贴 URL 或本地上传;角色图直接写回各角色卡 data.image(翻转卡背面/详情页读这里)。
+function MetaStep({ meta, setMeta, story, characters, setCharacters, worldBooks, player }) {
+  const [genBusy, setGenBusy] = useState(false);
+  const [genErr, setGenErr] = useState("");
+  const up = (k, v) => setMeta({ ...meta, [k]: v });
+
+  async function genMeta() {
+    if (genBusy) return;
+    setGenBusy(true); setGenErr("");
+    try {
+      const summary = [
+        `故事名:${(meta.name || "").trim() || (story && story.title) || "(未定)"}`,
+        story && story.premise ? `前提:${story.premise}` : "",
+        `角色:${characters.map((c) => { const cd = c.data || {}; return (cd.name || "?") + ((cd.description || "") ? `(${(cd.description || "").slice(0, 40)})` : ""); }).join("、") || "(无)"}`,
+        worldBooks.length ? `世界:${worldBooks.map((w) => w.name || "设定").join("、")}` : "",
+        player ? `主角:${player.name || player.role || ""}` : "",
+      ].filter(Boolean).join("\n");
+      const out = await postJSON("/api/preset_meta", { summary });
+      setMeta({ ...meta,
+        synopsis: out.synopsis || meta.synopsis,
+        tags: (out.tags && out.tags.length) ? out.tags : (meta.tags || []) });
+    } catch (e) { setGenErr(e.message || "生成失败"); }
+    finally { setGenBusy(false); }
+  }
+
+  function setCharImage(i, v) {
+    setCharacters((xs) => xs.map((c, j) => (j === i ? { ...c, data: { ...(c.data || {}), image: v } } : c)));
+  }
+
+  return (
+    <section className="editor-panel meta-step">
+      <div className="editor-head">
+        <div><h3>发布信息</h3><span>探索页 / 详情页展示用。AI 先出一版简介和标签,改成你想要的;图片贴 URL 或本地上传。</span></div>
+        <button className="primary" disabled={genBusy} onClick={genMeta}>{genBusy ? "生成中…" : "AI 生成一版(简介+标签)"}</button>
+      </div>
+      {genErr && <p className="error">{genErr}</p>}
+      <label>故事名<input value={meta.name || ""} placeholder={(story && story.title) || "我的故事"} onChange={(e) => up("name", e.target.value)} /></label>
+      <label>简介(synopsis)<textarea rows="3" value={meta.synopsis || ""} placeholder="60~120 字,有钩子、不剧透;空着点上面按钮让 AI 写" onChange={(e) => up("synopsis", e.target.value)} /></label>
+      <label>标签,逗号分隔(最多 5 个)<input value={(meta.tags || []).join(", ")} onChange={(e) => up("tags", e.target.value.split(/[,，]/).map((x) => x.trim()).filter(Boolean).slice(0, 5))} /></label>
+      <label>作者<input value={meta.author || ""} placeholder="可空" onChange={(e) => up("author", e.target.value)} /></label>
+      <div className="meta-row"><span className="meta-k">故事封面</span><ImgInput value={meta.cover || ""} onChange={(v) => up("cover", v)} /></div>
+      <div className="ed-section">角色图片<span>翻转卡背面 / 故事详情页读这里,直接存进各角色卡</span></div>
+      {!characters.length && <p className="empty">还没建角色。回「角色」步建好再回来填图。</p>}
+      {characters.map((c, i) => (
+        <div className="meta-row" key={i}>
+          <span className="meta-k">{(c.data || {}).name || `角色 ${i + 1}`}</span>
+          <ImgInput value={(c.data || {}).image || ""} onChange={(v) => setCharImage(i, v)} />
+        </div>
+      ))}
+    </section>
+  );
+}
 
 // 事件卡步:表单手动加事件,挂到当前故事书的 events(没故事书则自动建一个空的)。不走 AI 对话(引擎无事件卡创作类型)。
 function EventStep({ story, setStory }) {
@@ -2790,6 +2874,7 @@ function StepBuilder({ characters, worldBooks, story, player, addCharacter, addW
   const [editing, setEditing] = useState(null);   // 正在查看/修改的卡 {kind, index}
   const [savedKeys, setSavedKeys] = useState(() => new Set()); // 已存入故事库的项 key (kind:index)
   const [saveErr, setSaveErr] = useState("");      // 入库失败提示
+  const [meta, setMeta] = useState({ name: "", synopsis: "", author: "", cover: "", tags: [] }); // 「封面/简介」步的发布信息
   const cur = BUILD_STEPS[step];
   const isLast = step === BUILD_STEPS.length - 1;
   const canLeaveCharStep = characters.length > 0;
@@ -2851,6 +2936,9 @@ function StepBuilder({ characters, worldBooks, story, player, addCharacter, addW
           </div>
           {cur.key === "events" ? (
             <EventStep story={story} setStory={setStory} />
+          ) : cur.key === "meta" ? (
+            <MetaStep meta={meta} setMeta={setMeta} story={story} characters={characters}
+              setCharacters={setCharacters} worldBooks={worldBooks} player={player} />
           ) : (
             <CardBuilder key={cur.key + nonce} kind={cur.key} seed={seed} firstAsk={FIRST_ASK[guideId]}
               onComplete={onCardComplete} onClose={() => {}} />
@@ -2876,7 +2964,7 @@ function StepBuilder({ characters, worldBooks, story, player, addCharacter, addW
           {!characters.length && <p className="error">还没有任何角色,至少建 1 张角色才能开始故事。回上面补一张。</p>}
           <div className="step-summary-actions">
             <button onClick={() => jump(0)}>← 回去补卡</button>
-            <button onClick={onSavePreset} disabled={!characters.length}>存成预设故事书</button>
+            <button onClick={() => onSavePreset(meta)} disabled={!characters.length}>存成预设故事书</button>
             <button className="primary" onClick={onStartStory} disabled={!characters.length}>开始故事 →</button>
           </div>
         </div>
@@ -3141,16 +3229,22 @@ function App() {
   }
 
   // 把创作工作区存成预设(用 build deck,不是游戏 deck)。
-  async function saveBuildAsPreset() {
-    const name = prompt("故事名(存成预设可复用)", (bStory && bStory.title) || (bChars[0] && bChars[0].data.name) || "我的故事");
-    if (name == null || !name.trim()) return;
-    const synopsis = prompt("简介(可空)", (bStory && bStory.premise) || "") || "";
-    const author = prompt("作者(可空)", "") || "";
-    const cover = prompt("封面图片 URL(可空,留空用纯色封面)", "") || "";
-    const tagSet = new Set([...((bStory && bStory.tags) || []), ...bChars.flatMap((c) => (c.data.tags || []))]);
+  // meta = 步骤式「封面/简介」步收的发布信息(2026-06-10);没填的字段按旧逻辑回退,name 实在没有才弹 prompt。
+  async function saveBuildAsPreset(meta) {
+    const m = meta || {};
+    let name = (m.name || "").trim() || (bStory && bStory.title) || (bChars[0] && bChars[0].data && bChars[0].data.name) || "";
+    if (!name) {
+      const p = prompt("故事名(存成预设可复用)", "我的故事");
+      if (p == null || !p.trim()) return;
+      name = p.trim();
+    }
+    const synopsis = (m.synopsis || "").trim() || (bStory && bStory.premise) || "";
+    const author = (m.author || "").trim();
+    const cover = m.cover || "";
+    const tagSet = new Set([...(m.tags || []), ...((bStory && bStory.tags) || []), ...bChars.flatMap((c) => (c.data.tags || []))]);
     const tags = [...tagSet].filter(Boolean).slice(0, 5);
     try {
-      const res = await postJSON("/api/presets", { name: name.trim(), characters: bChars, world: mergeWorldBooks(bWorlds), story: bStory, player: bPlayer, mode, synopsis, author, cover, tags });
+      const res = await postJSON("/api/presets", { name, characters: bChars, world: mergeWorldBooks(bWorlds), story: bStory, player: bPlayer, mode, synopsis, author, cover, tags });
       if (res && res.name) addToMyLib("presets", res.name);   // 自己建的故事记进「我的库」
       refreshHome();
       alert("已保存为故事预设。");

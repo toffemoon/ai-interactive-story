@@ -1445,3 +1445,10 @@ main.single-view { display: block; }
 }
 .builder-lib-list .bll-item:hover { border-color: var(--green); color: var(--green); }
 .builder-lib-list .empty { margin: 4px 0 0; font-size: 12px; }
+
+/* 「封面 / 简介」步 + 图片输入(2026-06-10) */
+.meta-row { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; }
+.meta-k { flex: 0 0 auto; min-width: 92px; font-size: 13px; color: var(--muted); }
+.img-input { display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; }
+.img-input .img-url { flex: 1 1 120px; min-width: 0; padding: 6px 10px; font-size: 12px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--ink); }
+.img-thumb { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 6px; border: 1px solid var(--line); background-size: cover; background-position: center; }
