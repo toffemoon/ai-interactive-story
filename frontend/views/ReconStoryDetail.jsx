@@ -143,13 +143,12 @@ const RECON_STORY_DETAIL_CSS = `
 
   
   .cv-story .bg {position:absolute; left:478px; top:415px; width:360px; z-index:4;}
-  .cv-story .chars {position:absolute; left:872px; top:415px; width:380px; z-index:4;}
+  /* 角色列右锚定:贴住入戏仪式栏,宽屏 fill 下随之分布(1672 设计宽时 ≈ 原 left:872) */
+  .cv-story .chars {position:absolute; right:440px; top:415px; width:380px; z-index:4;}
   .cv-story .bg ul, .cv-story .chars ul {list-style:none; margin:14px 0 0; padding:0;}
   .cv-story .bg li, .cv-story .chars li {font-family:var(--kai); font-size:13px; line-height:1.5; color:var(--soft); margin-bottom:13px; padding-left:16px; position:relative;}
   .cv-story .bg li::before, .cv-story .chars li::before {content:""; position:absolute; left:0; top:8px; width:5px; height:5px; border-radius:50%; background:var(--gold);}
   .cv-story .chars p {font-family:var(--kai); font-size:13px; line-height:1.95; color:var(--soft); margin:14px 0 0;}
-  .cv-story .watch {position:absolute; left:1150px; top:482px; width:70px; height:70px; z-index:4;
-    background:center/contain no-repeat url(assets/recon/story-detail-watch.png);}
 
   
   .cv-story .pickh {position:absolute; left:250px; top:566px; display:flex; align-items:center; gap:12px; z-index:4;}
@@ -169,7 +168,8 @@ const RECON_STORY_DETAIL_CSS = `
     -webkit-mask-image:linear-gradient(180deg,#000 80%,transparent); mask-image:linear-gradient(180deg,#000 80%,transparent);}
   .cv-story .card .nm {position:absolute; left:0; right:0; top:150px; text-align:center; font-family:var(--serif); font-size:16px; font-weight:700; color:var(--ink); letter-spacing:.04em; z-index:2;}
   .cv-story .card .role {position:absolute; left:0; right:0; top:175px; text-align:center; font-family:var(--kai); font-size:11px; color:var(--gold); letter-spacing:.04em; z-index:2;}
-  .cv-story .card .quote {position:absolute; left:14px; right:14px; top:195px; font-family:var(--kai); font-size:10.5px; line-height:1.55; color:var(--soft); text-align:center; z-index:2;}
+  .cv-story .card .quote {position:absolute; left:14px; right:14px; top:195px; font-family:var(--kai); font-size:10.5px; line-height:1.55; color:var(--soft); text-align:center; z-index:2;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
   .cv-story .card .act {position:absolute; left:0; right:0; bottom:8px; display:flex; align-items:center; justify-content:center; gap:5px; z-index:2;
     font-family:var(--serif); font-size:11px; letter-spacing:.14em; color:var(--green);}
   .cv-story .card.sel .act {color:var(--gold);}
@@ -323,7 +323,7 @@ function ReconStoryDetail(props) {
       <div className="book" onClick={() => onClose()} style={{ cursor: "pointer" }}>
         {pdata.cover
           ? <img src={pdata.cover} alt="" />
-          : <span className="bt"><b>{(pdata.name || preset.name || "未命名").slice(0, 6)}</b></span>}
+          : <span className="bt"><b>{(pdata.name || preset.name || "未命名").replace(/[\s·•．.,，:：;；!！?？-]+/g, "").slice(0, 6)}</b></span>}
       </div>
 
       {/* 标题区 */}
@@ -363,7 +363,6 @@ function ReconStoryDetail(props) {
           <p>这个故事还没有登记角色。</p>
         )}
       </div>
-      <div className="watch"></div>
 
       {/* ===== 选择你的角色 ===== */}
       <div className="pickh"><span className="star"><StarIcon size={15} /></span><b>选择你扮演谁</b><span className="en">CHOOSE YOUR ROLE</span><span className="dash"></span></div>
