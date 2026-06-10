@@ -56,19 +56,24 @@ function ReconProfile(props) {
   }
 
   // ---- 派生：真实计数 ----
+  // 优先用 P.assets(app 拉的「用户自己的卡库」计数,AUTH 开时已滤掉官方公共卡);
+  // 没传(standalone 测试)才回退 presets 推导。官方库不是个人资产,新号应显示 0。
   const _f = (x, k) => (x && x.data && x.data[k]) || undefined;
-  const charCount = presets.reduce((s, p) => s + ((_f(p, "characters") || []).length), 0);
-  const worldCount = presets.filter((p) => !!_f(p, "world")).length;
-  const tagSet = new Set();
-  presets.forEach((p) => (_f(p, "tags") || []).forEach((t) => tagSet.add(t)));
-  const tagCount = tagSet.size;
+  const A = P.assets || null;
+  const fallbackChar = presets.reduce((s, p) => s + ((_f(p, "characters") || []).length), 0);
+  const fallbackWorld = presets.filter((p) => !!_f(p, "world")).length;
+  const fallbackTags = (() => { const t = new Set(); presets.forEach((p) => (_f(p, "tags") || []).forEach((x) => t.add(x))); return t.size; })();
+  const storyCount = A ? A.stories : presets.length;
+  const charCount = A ? A.characters : fallbackChar;
+  const worldCount = A ? A.worlds : fallbackWorld;
+  const tagCount = A ? A.tags : fallbackTags;
 
   // ---- 派生：统计条 6 格（全部真实可得值）----
   const stats = [
-    { label: "创作故事", num: String(presets.length), small: null, tot: "本" },
+    { label: "创作故事", num: String(storyCount), small: null, tot: "本" },
     { label: "进行中", num: String(saves.length), small: null, tot: "局" },
     { label: "角色卡", num: String(charCount), small: null, tot: "张" },
-    { label: "故事书", num: String(presets.length), small: null, tot: "本" },
+    { label: "故事书", num: String(storyCount), small: null, tot: "本" },
     { label: "世界设定", num: String(worldCount), small: null, tot: "个" },
     { label: "标签", num: String(tagCount), small: null, tot: "类" },
   ];
@@ -88,10 +93,10 @@ function ReconProfile(props) {
     return { id: s.id, cover: _coverOf(nm), nm, rd: "第 " + (s.turns || 0) + " 回合" };
   });
 
-  // ---- 派生：我的资产（由 presets 派生的真实计数）----
+  // ---- 派生：我的资产（用户自己的卡;无 prop 时回退 presets 推导）----
   const assets = [
     { lb: "角色卡", num: String(charCount) },
-    { lb: "故事书", num: String(presets.length) },
+    { lb: "故事书", num: String(storyCount) },
     { lb: "世界设定", num: String(worldCount) },
     { lb: "标签", num: String(tagCount) },
   ];

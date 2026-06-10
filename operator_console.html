@@ -52,7 +52,6 @@ button.sec{background:#1a2028;border-color:var(--line2);color:var(--soft)}#st{fo
  <button id="tabDist" class="tab" onclick="showView('dist')">📦 分发卡/预设</button>
 </span>
 <span id="loginbar"><input id="liEmail" placeholder="邮箱/用户名" size="15"><input id="liPass" type="password" placeholder="密码" size="11"><button onclick="doLogin()">登录</button></span>
-<input id="tok" type="password" placeholder="OPERATOR_TOKEN(可空)" size="16">
 <span id="who"></span>
 <button id="logoutBtn" class="sec" style="display:none" onclick="doLogout()">退出</button>
 <span id="clk"></span><span id="st"></span></header>
@@ -99,9 +98,9 @@ button.sec{background:#1a2028;border-color:var(--line2);color:var(--soft)}#st{fo
 
 <script>
 const $=id=>document.getElementById(id);
-$("tok").value=localStorage.op_tok||""; $("tok").oninput=()=>{localStorage.op_tok=$("tok").value;boot();};
+try{localStorage.removeItem("op_tok");}catch(e){} // 旧 OPERATOR_TOKEN 残留清理(后门已废)
 let ROLE="",curUser=null,curUserObj=null,cur=null,accounts=[],ocs=[],ocLoaded=false;
-const H=()=>{const h={"Content-Type":"application/json"};if($("tok").value)h["X-Operator-Token"]=$("tok").value;const t=localStorage.ais_auth_token;if(t)h["Authorization"]="Bearer "+t;return h;};
+const H=()=>{const h={"Content-Type":"application/json"};const t=localStorage.ais_auth_token;if(t)h["Authorization"]="Bearer "+t;return h;};
 const st=t=>$("st").textContent=t;
 function el(t,c,x){const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;}
 function bub(role,name,text){const d=el("div","b "+role);if(name)d.appendChild(el("b",null,name+": "));d.appendChild(document.createTextNode(text));return d;}
@@ -114,9 +113,9 @@ async function doLogout(){try{await fetch("/api/auth/logout",{method:"POST",head
 function showView(v){$("accwrap").style.display=v==="acc"?"flex":"none";$("ocwrap").style.display=v==="oc"?"flex":"none";$("distwrap").style.display=v==="dist"?"block":"none";$("tabAcc").classList.toggle("on",v==="acc");$("tabOC").classList.toggle("on",v==="oc");$("tabDist").classList.toggle("on",v==="dist");if(v==="acc")loadAccounts();if(v==="oc"&&!ocLoaded){ocLoaded=true;loadOC();}if(v==="dist")loadUsers();}
 
 // ── 账户中心 ──
-async function loadAccounts(){try{const d=await j("/api/operator/users");accounts=d.users||[];const L=$("acclist");L.innerHTML="";accounts.forEach(u=>{const it=el("div","sess"+(u.id===curUser?" on":""));it.appendChild(el("div","id",u.email||u.username||u.id));it.appendChild(el("div","meta",u.role+" · "+(u.sessions||0)+"局"));it.onclick=()=>selectAccount(u);L.appendChild(it);});if(!accounts.length)L.appendChild(el("div","meta","(还没有用户)"));}catch(e){}}
+async function loadAccounts(){try{const d=await j("/api/operator/users");accounts=d.users||[];const L=$("acclist");L.innerHTML="";accounts.forEach(u=>{const it=el("div","sess"+(u.id===curUser?" on":""));it.appendChild(el("div","id",u.display_name||u.username||"(未设昵称)"));it.appendChild(el("div","meta",u.email||u.id));it.appendChild(el("div","meta",u.role+" · "+(u.sessions||0)+"局"));it.onclick=()=>selectAccount(u);L.appendChild(it);});if(!accounts.length)L.appendChild(el("div","meta","(还没有用户)"));}catch(e){}}
 function selectAccount(u){curUser=u.id;curUserObj=u;cur=null;document.querySelectorAll("#acclist .sess").forEach((n,k)=>n.classList.toggle("on",(accounts[k]||{}).id===u.id));$("dirpanel").style.display="none";$("accpanel").style.display="block";renderAccount();loadAccountSessions();loadDistOptions();}
-function renderAccount(){const u=curUserObj,P=$("accpanel");P.innerHTML="";P.appendChild(el("h3",null,"👤 "+(u.email||u.username)+"  ·  "+u.role+"  ·  "+(u.sessions||0)+"局"));
+function renderAccount(){const u=curUserObj,P=$("accpanel");P.innerHTML="";P.appendChild(el("h3",null,"👤 "+(u.display_name||u.username||"(未设昵称)")+"  ·  "+(u.email||u.id)+"  ·  "+u.role+"  ·  "+(u.sessions||0)+"局"));
  const roleBox=el("div","distbox");let rh='角色:<b>'+u.role+'</b>';
  if(u.role==="superadmin")rh+=' <span style="color:#888">(superadmin 由 .env 钉死,不可改)</span>';
  else rh+=' <button onclick="setRole(\'admin\')">设为 admin</button> <button class="sec" onclick="setRole(\'user\')">设为 user</button>';
@@ -142,11 +141,11 @@ async function playSay(){if(!cur){st("先选一条对话");return;}const m=$("pl
 // ── OC集(查看 + super 开测)──
 function mdToHtml(t){t=(t||"").replace(/^---\n[\s\S]*?\n---\n/,"").replace(/!\[\[.*?\]\]/g,"").replace(/\[\[(?:[^\]|]*\|)?([^\]]+)\]\]/g,"$1");const esc=s=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;");const inl=s=>esc(s).replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`([^`]+)`/g,"<code>$1</code>");let h="",ul=false;const cu=()=>{if(ul){h+="</ul>";ul=false;}};for(const line of t.split("\n")){if(!line.trim()){cu();continue;}let m;if(m=line.match(/^(#{1,6})\s+(.*)$/)){cu();const lv=Math.min(m[1].length+1,6);h+="<h"+lv+">"+inl(m[2])+"</h"+lv+">";}else if(m=line.match(/^\s*>\s?(.*)$/)){cu();h+="<blockquote>"+inl(m[1])+"</blockquote>";}else if(m=line.match(/^\s*[-*]\s+(.*)$/)){if(!ul){h+="<ul>";ul=true;}h+="<li>"+inl(m[1])+"</li>";}else{cu();h+="<p>"+inl(line)+"</p>";}}cu();return h;}
 async function loadOC(){try{const d=await j("/api/operator/oc");ocs=d.ocs||[];const L=$("oclist");L.innerHTML="";ocs.forEach((o,i)=>{const it=el("div","sess");it.appendChild(el("div","id","🍎 "+(o.character||"OC")));it.appendChild(el("div","meta","用户:"+(o.user||"?")));it.onclick=()=>showOC(i);L.appendChild(it);});if(ocs.length)showOC(0);else $("ocdetail").innerHTML="<p style=color:#999>(oc/index.json 里没有 OC)</p>";}catch(e){}}
-function showOC(i){const o=ocs[i];if(!o)return;document.querySelectorAll("#oclist .sess").forEach((n,k)=>n.classList.toggle("on",k===i));const canTest=(ROLE==="superadmin"||(!ROLE&&!!$("tok").value));let h="<div class=ocsec><h3>🍎 "+o.character+"　·　用户 "+o.user+"</h3>"+(o.card&&canTest?"<button class=octest onclick='startOCTest("+i+")'>▶ 用「"+o.character+"」开测对话(super)</button>":(o.card?"":"<p style=color:#999>(没有引擎角色卡,不能开测)</p>"));if(o.art)h+="<img class=ocimg src='"+o.art+"' alt=立绘>";h+=mdToHtml(o.profile)+"</div><div class=ocsec><h3>🗺 世界观</h3>";if(o.map)h+="<img class=ocimg src='"+o.map+"' alt=地图>";h+=mdToHtml(o.world)+"</div>";$("ocdetail").innerHTML=h;$("ocdetail").scrollTop=0;}
+function showOC(i){const o=ocs[i];if(!o)return;document.querySelectorAll("#oclist .sess").forEach((n,k)=>n.classList.toggle("on",k===i));const canTest=(ROLE==="superadmin");let h="<div class=ocsec><h3>🍎 "+o.character+"　·　用户 "+o.user+"</h3>"+(o.card&&canTest?"<button class=octest onclick='startOCTest("+i+")'>▶ 用「"+o.character+"」开测对话(super)</button>":(o.card?"":"<p style=color:#999>(没有引擎角色卡,不能开测)</p>"));if(o.art)h+="<img class=ocimg src='"+o.art+"' alt=立绘>";h+=mdToHtml(o.profile)+"</div><div class=ocsec><h3>🗺 世界观</h3>";if(o.map)h+="<img class=ocimg src='"+o.map+"' alt=地图>";h+=mdToHtml(o.world)+"</div>";$("ocdetail").innerHTML=h;$("ocdetail").scrollTop=0;}
 async function startOCTest(i){st("开局中…AI 生成开场");try{const d=await j("/api/operator/oc/start",{method:"POST",headers:H(),body:JSON.stringify({index:i})});cur=d.session_id;showView("acc");$("accpanel").style.display="none";$("dirpanel").style.display="flex";loadSession();st("已用「"+(d.character||"")+"」开测(临时局,无归属)");}catch(e){}}
 
 // ── 分发卡/预设(admin)──
-async function loadUsers(){try{const d=await j("/api/operator/users");const S=$("distUser");S.innerHTML="";(d.users||[]).forEach(u=>{const o=el("option",null,(u.email||u.username||u.id)+"  ·  "+u.role);o.value=u.id;S.appendChild(o);});if(!(d.users||[]).length)S.appendChild(el("option",null,"(还没有用户)"));}catch(e){}}
+async function loadUsers(){try{const d=await j("/api/operator/users");const S=$("distUser");S.innerHTML="";(d.users||[]).forEach(u=>{const o=el("option",null,(u.display_name||u.username||"(未设昵称)")+" · "+(u.email||u.id)+" · "+u.role);o.value=u.id;S.appendChild(o);});if(!(d.users||[]).length)S.appendChild(el("option",null,"(还没有用户)"));}catch(e){}}
 function distType(){const t=$("distType").value;$("distCardKindRow").style.display=t==="card"?"flex":"none";$("distName").placeholder=t==="card"?"卡 slug":"预设 slug";}
 async function doAssign(official){const uid=official?"":$("distUser").value;const t=$("distType").value;const name=$("distName").value.trim();const M=$("distMsg");if(!name){M.style.color="#a15";M.textContent="先填名称";return;}let url,body;if(t==="card"){url="/api/operator/assign_card";body={kind:$("distCardKind").value,name,user:uid};}else{url="/api/operator/assign_preset";body={name,user:uid};}try{const d=await j(url,{method:"POST",headers:H(),body:JSON.stringify(body)});M.style.color=d.assigned?"#0a7":"#a15";M.textContent=d.assigned?("✓ 已"+(official?"设回官方":"分发给该用户")):"未匹配(只能分发官方/公共行,或名称不对)";}catch(e){M.style.color="#a15";M.textContent="失败(权限或网络)";}}
 
@@ -155,10 +154,9 @@ async function boot(){
  ROLE="";let loggedIn=false;
  try{const r=await fetch("/api/auth/me",{headers:H()});const d=r.ok?await r.json():{};const u=d&&d.user;
   if(u){ROLE=u.role||"user";loggedIn=true;$("who").textContent="👤 "+(u.email||u.username)+" · "+ROLE;}
-  else if($("tok").value){ROLE="";loggedIn=true;$("who").textContent="🔑 OPERATOR 后门 · super";}
   else{$("who").textContent="";}
  }catch(e){$("who").textContent="";}
- const isSuper=ROLE==="superadmin"||(!ROLE&&!!$("tok").value);
+ const isSuper=ROLE==="superadmin";
  const isAdmin=ROLE==="admin";
  $("loginbar").style.display=loggedIn?"none":"";
  $("logoutBtn").style.display=(loggedIn&&ROLE)?"":"none";

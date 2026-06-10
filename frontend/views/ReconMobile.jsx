@@ -485,7 +485,7 @@
   }
 
   // —— 我的 ——
-  function MMine({ user, presets, saves, onResume, onNav, onLogout, onAvatar, onNew }) {
+  function MMine({ user, presets, saves, assets, onResume, onNav, onLogout, onAvatar, onNew }) {
     const { useRef } = React;
     const fileRef = useRef(null);
     const _coverOf = (nm) => {
@@ -502,7 +502,9 @@
       img.onload = () => { try { const S = 256, c = document.createElement("canvas"); c.width = S; c.height = S; const x = c.getContext("2d"); const m = Math.min(img.width, img.height); x.drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, S, S); onAvatar(c.toDataURL("image/jpeg", 0.85)); } finally { URL.revokeObjectURL(url); } };
       img.src = url;
     }
-    const charCount = (presets || []).reduce((s, p) => s + ((_f(p, "characters") || []).length), 0);
+    // 优先用 assets(用户自己的卡库计数,官方公共卡不算个人资产);无 prop 回退 presets 推导。
+    const storyCount = assets ? assets.stories : (presets || []).length;
+    const charCount = assets ? assets.characters : (presets || []).reduce((s, p) => s + ((_f(p, "characters") || []).length), 0);
     return (
       <MShell title="个人中心" en="Profile" active="mine" onNav={onNav}>
         <div className="me-card">
@@ -518,7 +520,7 @@
           <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={pick} />
         </div>
         <div className="me-stats">
-          <div className="me-stat"><b>{(presets || []).length}</b><span>创作故事</span></div>
+          <div className="me-stat"><b>{storyCount}</b><span>创作故事</span></div>
           <div className="me-stat"><b>{(saves || []).length}</b><span>进行中</span></div>
           <div className="me-stat"><b>{charCount}</b><span>角色卡</span></div>
         </div>

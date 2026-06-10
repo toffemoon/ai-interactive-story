@@ -199,17 +199,21 @@ function newSessionId() {
 const SESSION_KEY = "ais_session_id"; // 当前活动存档 id
 const SAVES_KEY = "ais_saves";        // 存档注册表(按浏览器,无鉴权下保隐私:只看自己这台机的存档)
 
+// 本地存档按账号隔离:登录后 key 带 user.id 后缀,换号/新号不会看到别人(或游客)在本机留下的存档。
+// 游客沿用旧 key(向后兼容老存档)。登录态由 setSavesScope 在 auth 解析后设置。
+let _savesScope = "";
+function setSavesScope(uid) { _savesScope = uid ? ("_u_" + uid) : ""; }
 function loadSaves() {
-  try { return JSON.parse(localStorage.getItem(SAVES_KEY)) || []; } catch (e) { return []; }
+  try { return JSON.parse(localStorage.getItem(SAVES_KEY + _savesScope)) || []; } catch (e) { return []; }
 }
 function persistSaves(saves) {
-  try { localStorage.setItem(SAVES_KEY, JSON.stringify(saves)); } catch (e) {}
+  try { localStorage.setItem(SAVES_KEY + _savesScope, JSON.stringify(saves)); } catch (e) {}
 }
 function getActiveId() {
-  try { return localStorage.getItem(SESSION_KEY) || ""; } catch (e) { return ""; }
+  try { return localStorage.getItem(SESSION_KEY + _savesScope) || ""; } catch (e) { return ""; }
 }
 function setActiveId(id) {
-  try { localStorage.setItem(SESSION_KEY, id); } catch (e) {}
+  try { localStorage.setItem(SESSION_KEY + _savesScope, id); } catch (e) {}
 }
 
 // 确保有一个活动存档并登记;同一浏览器重开还是同一局(后端数据一直持久化)。
@@ -2401,6 +2405,11 @@ function App() {
       .then((d) => setAuth({ ready: true, enabled: !!d.auth_enabled, user: d.user || null }))
       .catch(() => setAuth({ ready: true, enabled: false, user: null }));
   }, []);
+  // 本地存档作用域跟随账号:登录 = 只看自己这个号在本机的存档(新号=空);游客/AUTH 关 = 旧全局 key。
+  useEffect(() => {
+    setSavesScope(auth.enabled && auth.user ? auth.user.id : "");
+    setSaves(loadSaves());
+  }, [auth.enabled, auth.user && auth.user.id]);
   // 登录后:深链(#/chat 等)保留原目的地;否则进功能页(故事库)。
   function onAuthed(user, token) { setToken(token); setAuth((a) => ({ ...a, user })); setView((v) => (v === "landing" ? "home" : v)); }
   // 已登录用户刷新页面:跳过营销门面,直接落功能页。
@@ -2419,6 +2428,25 @@ function App() {
       .catch(() => { if (alive) setServerSaves([]); });
     return () => { alive = false; };
   }, [auth.user, view]);   // 切视图时顺带刷新,玩完一局回「我的」立即可见
+
+  // 「我的资产」= 用户自己的卡(AUTH 开时滤掉 official 官方公共卡;关时本机即本人,全算)。
+  // 此前个人中心把官方故事库整库算成新号资产(40 张角色卡等),与事实不符。
+  const [myAssets, setMyAssets] = useState(null);
+  useEffect(() => {
+    if (view !== "mine") return undefined;
+    let alive = true;
+    Promise.all(["stories", "characters", "worlds", "players"].map((k) =>
+      fetch("/api/library/" + k).then((r) => (r.ok ? r.json() : [])).catch(() => [])
+    )).then(([st, ch, wo, pl]) => {
+      if (!alive) return;
+      const own = (xs) => (auth.enabled ? (xs || []).filter((x) => !x.official) : (xs || []));
+      const tags = new Set();
+      own(st).forEach((x) => (((x.data || {}).tags) || []).forEach((t) => tags.add(t)));
+      own(ch).forEach((x) => ((((x.data || {}).data || {}).tags) || []).forEach((t) => tags.add(t)));
+      setMyAssets({ stories: own(st).length, characters: own(ch).length, worlds: own(wo).length, players: own(pl).length, tags: tags.size });
+    });
+    return () => { alive = false; };
+  }, [view, auth.enabled, auth.user && auth.user.id]);
   // —— 分页:状态 → URL(每次切页产生历史记录,后退/前进可用)+ 页标题 ——
   const storyModalRef = useRef(null);
   useEffect(() => { storyModalRef.current = storyModal; }, [storyModal]);
@@ -2713,11 +2741,11 @@ function App() {
           } catch (e) { alert("头像上传失败:" + e.message); }
         };
         return isMobile ? (
-          <window.MMine user={auth.user} presets={presets} saves={mineSaves}
+          <window.MMine user={auth.user} presets={presets} saves={mineSaves} assets={myAssets}
             onNav={navTo} onResume={resumeSave} onNew={onNew} onLogout={onLogout} onAvatar={onAvatarUp} />
         ) : (
           <ReconShell designW={1536} designH={1024}>
-            <window.ReconProfile user={auth.user} presets={presets} saves={mineSaves}
+            <window.ReconProfile user={auth.user} presets={presets} saves={mineSaves} assets={myAssets}
               onNav={navTo} onResume={resumeSave} onNew={onNew} onLogout={onLogout} onAvatar={onAvatarUp} />
           </ReconShell>
         );
