@@ -219,6 +219,46 @@ def api_my_sessions(user: dict | None = Depends(current_user_dep)):
     return storage.list_sessions(user_id=user["id"])
 
 
+class DisplayNameReq(BaseModel):
+    display_name: str
+
+
+@app.post("/api/my/display_name")
+def api_my_display_name(req: DisplayNameReq, user: dict | None = Depends(current_user_dep)):
+    """设置昵称(登录后无昵称时前端强制走这里;之后也可改)。1-24 字,去首尾空白。"""
+    if user is None:
+        raise HTTPException(401, "请先登录")
+    nm = (req.display_name or "").strip()
+    if not nm or len(nm) > 24:
+        raise HTTPException(400, "昵称需为 1-24 个字符")
+    pool = auth.get_pool()
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute("update users set display_name = %s where id = %s::uuid", (nm, user["id"]))
+    return {"ok": True, "display_name": nm}
+
+
+class AvatarReq(BaseModel):
+    avatar: str
+
+
+@app.post("/api/my/avatar")
+def api_my_avatar(req: AvatarReq, user: dict | None = Depends(current_user_dep)):
+    """上传/更换头像。前端已做居中裁方+缩放(256×256 JPEG);服务端只收 data URI 并设上限,
+    防绕过前端直接塞大图。存 users.avatar(DB 持久;Render 磁盘易失不可存盘)。"""
+    if user is None:
+        raise HTTPException(401, "请先登录")
+    a = (req.avatar or "").strip()
+    allowed = ("data:image/jpeg;base64,", "data:image/png;base64,", "data:image/webp;base64,")
+    if not a.startswith(allowed):
+        raise HTTPException(400, "头像格式不支持(仅 jpeg/png/webp 的 data URI)")
+    if len(a) > 200_000:   # 256² JPEG 一般 ~20KB;200KB 已是宽限,超出说明绕过了前端压缩
+        raise HTTPException(400, "头像过大,请重新选择(会自动压缩到 256×256)")
+    pool = auth.get_pool()
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute("update users set avatar = %s where id = %s::uuid", (a, user["id"]))
+    return {"ok": True, "avatar": a}
+
+
 @app.get("/api/my/oc")
 def api_my_oc(user: dict | None = Depends(current_user_dep)):
     """当前用户可聊的 OC(聊天页「OC」栏数据源;卡主导的一对一对话走 /api/chat)。

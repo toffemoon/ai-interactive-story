@@ -3181,6 +3181,58 @@ function ReconCreateLive({ onNav, refreshHome }) {
   );
 }
 
+// 登录后无昵称 → 强制设置(不可跳过;recon 暖纸卡风格,盖在整站之上)。
+function NicknameGate({ onDone }) {
+  const [name, setName] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState("");
+  async function submit() {
+    const nm = name.trim();
+    if (!nm) { setErr("起个名字吧,1-24 个字"); return; }
+    if (nm.length > 24) { setErr("昵称最长 24 个字"); return; }
+    if (busy) return;
+    setBusy(true); setErr("");
+    try {
+      const r = await postJSON("/api/my/display_name", { display_name: nm });
+      onDone((r && r.display_name) || nm);
+    } catch (e) { setErr(e.message || "保存失败"); }
+    finally { setBusy(false); }
+  }
+  return (
+    <div className="cv-nick">
+      <style>{`
+        .cv-nick {position:fixed; inset:0; z-index:70; display:grid; place-items:center; background:rgba(14,17,24,.62); backdrop-filter:blur(3px); font-family:"Kaiti SC","STKaiti","KaiTi",serif;}
+        @keyframes rcn-in { from { opacity:0; transform:translateY(16px) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
+        .cv-nick .card {width:400px; background:linear-gradient(180deg,#f6efdd,#efe6cf); border:1px solid rgba(203,176,121,.7);
+          padding:34px 38px 30px; position:relative; box-shadow:0 24px 60px -20px rgba(0,0,0,.6); animation:rcn-in .36s cubic-bezier(.22,1,.36,1) both;}
+        .cv-nick .card::before {content:""; position:absolute; inset:5px; border:1px solid rgba(43,38,32,.14); pointer-events:none;}
+        .cv-nick h2 {margin:0; font-family:"Songti SC","SimSun",serif; font-size:21px; letter-spacing:.16em; color:#2b2620; text-align:center;}
+        .cv-nick .sub {font-family:Georgia,serif; font-size:9.5px; letter-spacing:.3em; color:#a98a63; text-align:center; margin-top:7px;}
+        .cv-nick p {font-size:13px; line-height:1.9; color:#6f6757; margin:16px 0 14px; text-align:center;}
+        .cv-nick input {width:100%; background:rgba(255,255,255,.55); border:1px solid #c4b388; border-radius:0; box-shadow:none;
+          font-family:inherit; font-size:15px; color:#2b2620; padding:12px 14px; outline:none; text-align:center; letter-spacing:.06em;}
+        .cv-nick input:focus {border-color:#34463d; box-shadow:none;}
+        .cv-nick .err {font-size:12.5px; color:#9a4a3a; margin-top:8px; text-align:center;}
+        .cv-nick .go {width:100%; appearance:none; min-height:0; border-radius:0; height:48px; margin-top:16px; background:#34463d; color:#f3ead6;
+          border:1px solid #283831; font-family:"Songti SC","SimSun",serif; font-size:15px; letter-spacing:.3em; cursor:pointer; position:relative;}
+        .cv-nick .go::before {content:""; position:absolute; inset:3px; border:1px solid rgba(193,168,111,.5); pointer-events:none;}
+        .cv-nick .go:hover:not(:disabled) {background:#2c3a32; color:#f3ead6;}
+        .cv-nick .go:disabled {opacity:.6;}
+      `}</style>
+      <div className="card">
+        <h2>给自己起个名字</h2>
+        <div className="sub">SET YOUR NICKNAME</div>
+        <p>故事里的人要怎么称呼你?<br />这个名字会出现在你的档案与对话中。</p>
+        <input autoFocus value={name} maxLength={24} placeholder="1-24 个字"
+               onChange={(e) => setName(e.target.value)}
+               onKeyDown={(e) => e.key === "Enter" && submit()} />
+        {err && <div className="err">{err}</div>}
+        <button className="go" disabled={busy} onClick={submit}>{busy ? "…" : "就叫这个"}</button>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [characters, setCharacters] = useState([]);
   const [worldBooks, setWorldBooks] = useState([]);
@@ -3479,6 +3531,11 @@ function App() {
 
   return (
     <div className="app">
+      {/* 登录后未设置昵称 → 强制设置(盖全站,不可跳过) */}
+      {auth.user && !(auth.user.display_name || "").trim() && (
+        <NicknameGate onDone={(nm) => setAuth((a) => ({ ...a, user: a.user ? { ...a.user, display_name: nm } : a.user }))} />
+      )}
+
       {/* 营销门面(主页拆分出去:未登录/初次进入的 landing;登录后默认进功能页) */}
       {view === "landing" && (
         <ReconShell designW={1672} designH={941}>
@@ -3505,7 +3562,13 @@ function App() {
       {view === "mine" && (
         <ReconShell designW={1536} designH={1024}>
           <window.ReconProfile user={auth.user} presets={presets} saves={mineSaves}
-            onNav={navTo} onResume={resumeSave} onNew={onNew} onLogout={onLogout} />
+            onNav={navTo} onResume={resumeSave} onNew={onNew} onLogout={onLogout}
+            onAvatar={async (dataUri) => {
+              try {
+                const r = await postJSON("/api/my/avatar", { avatar: dataUri });
+                setAuth((a) => ({ ...a, user: a.user ? { ...a.user, avatar: (r && r.avatar) || dataUri } : a.user }));
+              } catch (e) { alert("头像上传失败:" + e.message); }
+            }} />
         </ReconShell>
       )}
 

@@ -97,10 +97,11 @@ def _row_to_user(r) -> dict:
             "display_name": r["display_name"], "role": role,
             "is_admin": role in ("admin", "superadmin"),
             "email_verified": bool(r["email_verified_at"]) if "email_verified_at" in r.keys() else True,
+            "avatar": (r["avatar"] if "avatar" in r.keys() else None),
             "status": r["status"]}
 
 
-_USER_COLS = "id, username, email, display_name, role, email_verified_at, status"
+_USER_COLS = "id, username, email, display_name, role, email_verified_at, status, avatar"
 
 
 # ── 用户 CRUD / 认证 ─────────────────────────────────────────────────
@@ -122,11 +123,13 @@ def create_user(email: str, password: str, username: str | None = None,
             cur.execute("select 1 from users where username = %s", (username,))
             if cur.fetchone():
                 raise HTTPException(409, "用户名已被占用")
+        # display_name 不再用 username/邮箱前缀冒充:用户没主动起昵称就存 NULL,
+        # 前端据此在登录后强制走「设置昵称」(见 /api/my/display_name)。
         cur.execute(
             f"""insert into users (username, email, password_hash, display_name, email_verified_at)
                values (%s, %s, %s, %s, {('now()' if email_verified else 'null')})
                returning {_USER_COLS}""",
-            (username, email, hash_password(password), display_name or username or email.split("@")[0]),
+            (username, email, hash_password(password), (display_name or "").strip() or None),
         )
         return _row_to_user(cur.fetchone())
 
@@ -176,7 +179,7 @@ def resolve_token(token: str) -> dict | None:
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(
-            """select u.id, u.username, u.email, u.display_name, u.role, u.email_verified_at, u.status
+            """select u.id, u.username, u.email, u.display_name, u.role, u.email_verified_at, u.status, u.avatar
                from auth_tokens t join users u on u.id = t.user_id
                where t.token_hash = %s and t.revoked_at is null and t.expires_at > now()""",
             (_token_hash(token),),

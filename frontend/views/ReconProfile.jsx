@@ -30,6 +30,30 @@ function ReconProfile(props) {
   // ---- 派生：档案 ----
   const profileName = user ? (user.display_name || user.username) : "访客";
   const uidLine = user ? ("账户 · " + (user.role || "user")) : "未登录 · 游客模式";
+  const avatarSrc = (user && user.avatar) || "assets/recon/profile-avatar.png";
+
+  // ---- 头像上传:居中裁方 + 压缩到 256×256 JPEG(尺寸处理在客户端,服务端只收小图)----
+  const fileRef = React.useRef(null);
+  function pickAvatar(ev) {
+    const f = ev.target.files && ev.target.files[0];
+    ev.target.value = "";
+    if (!f || !P.onAvatar) return;
+    if (!/^image\//.test(f.type)) { alert("请选择图片文件"); return; }
+    const url = URL.createObjectURL(f);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const S = 256, c = document.createElement("canvas");
+        c.width = S; c.height = S;
+        const x = c.getContext("2d");
+        const m = Math.min(img.width, img.height);
+        x.drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, S, S);
+        P.onAvatar(c.toDataURL("image/jpeg", 0.85));
+      } finally { URL.revokeObjectURL(url); }
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); alert("图片读取失败"); };
+    img.src = url;
+  }
 
   // ---- 派生：真实计数 ----
   const _f = (x, k) => (x && x.data && x.data[k]) || undefined;
@@ -236,7 +260,7 @@ function ReconProfile(props) {
           <div className="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></div>
           <div className="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 6l9 7 9-7"/></svg></div>
           <div className="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg></div>
-          <img className="av" src="assets/recon/profile-headavatar.png" alt="" />
+          <img className="av" src={(user && user.avatar) || "assets/recon/profile-headavatar.png"} alt="" />
           {user && P.onLogout ? (
             <span onClick={P.onLogout} style={{ cursor: "pointer", fontFamily: "var(--serif)", fontSize: 12.5, letterSpacing: ".1em", color: "var(--soft)", border: "1px solid var(--line2)", padding: "7px 14px" }}>退出登录</span>
           ) : null}
@@ -246,10 +270,13 @@ function ReconProfile(props) {
       {/* ============ 主区 ============ */}
       <div className="main">
 
-        {/* 档案卡 */}
+        {/* 档案卡(点头像可上传更换;客户端裁方压缩) */}
         <div className="profile">
           <div className="heroimg"></div>
-          <img className="av" src="assets/recon/profile-avatar.png" alt="" />
+          <img className="av" src={avatarSrc} alt="" title={user ? "点击更换头像" : undefined}
+               style={user && P.onAvatar ? { cursor: "pointer" } : undefined}
+               onClick={() => { if (user && P.onAvatar && fileRef.current) fileRef.current.click(); }} />
+          <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={pickAvatar} />
           <div className="head">
             <span className="nm">{profileName}</span>
           </div>
