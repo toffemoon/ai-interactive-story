@@ -166,11 +166,12 @@ const RECON_STORY_DETAIL_CSS = `
     font-family:var(--serif); font-size:10px; letter-spacing:.1em; padding:3px 10px; z-index:3; border-bottom-right-radius:2px;}
   .cv-story .card .av {position:absolute; left:50%; transform:translateX(-50%); top:0; width:174px; height:150px; object-fit:cover; object-position:top center;
     -webkit-mask-image:linear-gradient(180deg,#000 80%,transparent); mask-image:linear-gradient(180deg,#000 80%,transparent);}
-  .cv-story .card .nm {position:absolute; left:0; right:0; top:150px; text-align:center; font-family:var(--serif); font-size:16px; font-weight:700; color:var(--ink); letter-spacing:.04em; z-index:2;}
-  .cv-story .card .role {position:absolute; left:0; right:0; top:175px; text-align:center; font-family:var(--kai); font-size:11px; color:var(--gold); letter-spacing:.04em; z-index:2;}
-  .cv-story .card .quote {position:absolute; left:14px; right:14px; top:195px; font-family:var(--kai); font-size:10.5px; line-height:1.55; color:var(--soft); text-align:center; z-index:2;
-    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
-  .cv-story .card .act {position:absolute; left:0; right:0; bottom:8px; display:flex; align-items:center; justify-content:center; gap:5px; z-index:2;
+  /* 卡内文字区改流式排版(头像区下方依序排,不再绝对定位互撞);人设截 1 行,完整版在右栏入戏仪式 */
+  .cv-story .card .nm {margin:158px 8px 0; text-align:center; font-family:var(--serif); font-size:16px; font-weight:700; color:var(--ink); letter-spacing:.04em; position:relative; z-index:2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .cv-story .card .role {margin:5px 12px 0; text-align:center; font-family:var(--kai); font-size:11px; color:var(--gold); letter-spacing:.04em; position:relative; z-index:2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .cv-story .card .quote {margin:6px 14px 0; font-family:var(--kai); font-size:10.5px; line-height:1.55; color:var(--soft); text-align:center; position:relative; z-index:2;
+    display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden;}
+  .cv-story .card .act {position:absolute; left:0; right:0; bottom:8px; display:flex; align-items:center; justify-content:center; gap:5px; z-index:3; background:var(--paper); padding:4px 0;
     font-family:var(--serif); font-size:11px; letter-spacing:.14em; color:var(--green);}
   .cv-story .card.sel .act {color:var(--gold);}
   .cv-story .card .act svg {color:var(--green);}
@@ -203,7 +204,8 @@ const RECON_STORY_DETAIL_CSS = `
   .cv-story .rart::after {content:attr(data-ini); font-family:var(--serif); font-size:96px; color:var(--gold); font-weight:700;}
   .cv-story .rname {position:absolute; left:0; right:0; top:322px; text-align:center;}
   .cv-story .rname h3 {margin:0; font-family:var(--serif); font-size:25px; font-weight:700; letter-spacing:.06em; color:var(--ink);}
-  .cv-story .rname .role {font-family:var(--kai); font-size:13px; color:var(--soft); letter-spacing:.08em; margin-top:7px;}
+  .cv-story .rname .role {font-family:var(--kai); font-size:13px; color:var(--soft); letter-spacing:.08em; margin-top:7px; padding:0 26px;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
 
   .cv-story .attrs {position:absolute; left:30px; right:30px; top:386px;}
   .cv-story .attr {display:flex; align-items:flex-start; gap:14px; padding:9px 0; border-top:1px solid var(--line);}
