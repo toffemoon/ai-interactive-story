@@ -138,10 +138,10 @@ function ReconTitle(props) {
   /* 开屏:整层标题内容淡入,按钮组再轻错峰一拍 */
   @keyframes rct-in { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
   .cv-title .brand, .cv-title .lang, .cv-title .ripple, .cv-title .astra, .cv-title .emblem,
-  .cv-title .title, .cv-title .titen, .cv-title .tagline, .cv-title .taglineen,
+  .cv-title .title, .cv-title .titen, .cv-title .tagline,
   .cv-title .resume, .cv-title .foot-l, .cv-title .foot-c, .cv-title .foot-r { animation: rct-in .5s cubic-bezier(.22,1,.36,1) both; }
   .cv-title .btns { animation: rct-in .5s cubic-bezier(.22,1,.36,1) .14s both; }
-  @media (prefers-reduced-motion: reduce){ .cv-title .btns, .cv-title .brand, .cv-title .lang, .cv-title .ripple, .cv-title .astra, .cv-title .emblem, .cv-title .title, .cv-title .titen, .cv-title .tagline, .cv-title .taglineen, .cv-title .resume, .cv-title .foot-l, .cv-title .foot-c, .cv-title .foot-r { animation-duration:1ms; } }
+  @media (prefers-reduced-motion: reduce){ .cv-title .btns, .cv-title .brand, .cv-title .lang, .cv-title .ripple, .cv-title .astra, .cv-title .emblem, .cv-title .title, .cv-title .titen, .cv-title .tagline, .cv-title .resume, .cv-title .foot-l, .cv-title .foot-c, .cv-title .foot-r { animation-duration:1ms; } }
   .cv-title .brand { left:40px; top:36px; display:flex; align-items:center; gap:11px; }
   .cv-title .brand svg { color:var(--goldink); }
   .cv-title .brand span { font-family:var(--serifen); font-size:14px; letter-spacing:.34em; color:var(--inkk); font-weight:600; }
@@ -154,11 +154,12 @@ function ReconTitle(props) {
   .cv-title .emblem { left:176px; top:182px; color:var(--goldink); opacity:.96; filter:drop-shadow(0 2px 8px rgba(255,250,238,.7)); }
   .cv-title .title { left:64px; top:244px; margin:0; font-family:var(--serif); font-weight:700; font-size:76px; letter-spacing:.08em; color:#17120b; text-shadow:0 2px 14px rgba(246,240,228,.8); white-space:nowrap; }
   .cv-title .title b { font-weight:900; }
+  .cv-title .title .ver { font-family:var(--serifen); font-size:22px; font-weight:600; color:var(--goldink); letter-spacing:.08em; margin-left:14px; vertical-align:18px; }
   .cv-title .titen { left:70px; top:352px; display:flex; align-items:center; gap:16px; }
   .cv-title .titen i { width:34px; height:1px; background:var(--goldink); opacity:.8; }
   .cv-title .titen span { font-family:var(--serifen); font-size:22px; letter-spacing:.5em; color:var(--inkk); font-weight:700; }
-  .cv-title .tagline { left:70px; top:400px; font-family:var(--serif); font-size:22px; line-height:1.95; color:var(--ink); text-shadow:0 1px 8px rgba(246,240,228,.7); }
-  .cv-title .taglineen { left:70px; top:474px; font-family:var(--serifen); font-size:12px; letter-spacing:.22em; line-height:1.9; color:var(--ink-dim); }
+  .cv-title .tagline { left:70px; top:408px; font-family:var(--kai); font-size:16px; letter-spacing:.1em; color:var(--ink-dim); text-shadow:0 1px 8px rgba(246,240,228,.7); }
+  .cv-title .tagline::before { content:""; display:inline-block; width:7px; height:7px; background:var(--goldink); transform:rotate(45deg); margin-right:11px; vertical-align:1px; }
   .cv-title .btns { left:64px; top:582px; display:flex; flex-direction:column; gap:14px; }
   .cv-title .btn { display:flex; align-items:center; gap:18px; width:362px; height:62px; padding:0 24px; background:var(--btn); border:1px solid var(--btn-line); cursor:pointer; position:relative; box-shadow:0 6px 22px -10px rgba(60,48,30,.45); }
   .cv-title .btn::after { content:""; position:absolute; inset:3px; border:1px solid rgba(43,38,32,.12); pointer-events:none; }
@@ -179,10 +180,10 @@ function ReconTitle(props) {
     .cv-title .ripple, .cv-title .astra, .cv-title .lang, .cv-title .foot-l, .cv-title .foot-r { display:none; }
     .cv-title .emblem { left:50%; transform:translateX(-50%); top:90px; width:100px; height:100px; }
     .cv-title .title { left:0; right:0; top:208px; text-align:center; font-size:38px; letter-spacing:.06em; }
+    .cv-title .title .ver { font-size:13px; vertical-align:8px; margin-left:8px; }
     .cv-title .titen { left:0; right:0; top:268px; justify-content:center; }
     .cv-title .titen span { font-size:13px; letter-spacing:.3em; }
-    .cv-title .tagline { left:24px; right:24px; top:312px; text-align:center; font-size:15px; }
-    .cv-title .taglineen { display:none; }
+    .cv-title .tagline { left:24px; right:24px; top:312px; text-align:center; font-size:14px; }
     .cv-title .btns { left:24px; right:24px; top:auto; bottom:120px; }
     .cv-title .btn { width:100%; height:54px; }
     .cv-title .btn .tx .zh { font-size:17px; }
@@ -209,10 +210,9 @@ function ReconTitle(props) {
         <path d="M12 1.2l1.7 8.9L22 12l-8.3 1.9L12 22.8l-1.7-8.9L2 12l8.3-1.9z" fill="currentColor" fillOpacity="0.9" stroke="none" />
         <path d="M12 4.5l.8 6.7 6.7.8-6.7.8-.8 6.7-.8-6.7L4.5 12l6.7-.8z" fill="#fff7e4" stroke="none" />
       </svg>
-      <h1 className="title"><b>YoRHa-A2</b> 引擎</h1>
+      <h1 className="title"><b>YoRHa-A2</b> 引擎<span className="ver">v0.1</span></h1>
       <div className="titen"><i></i><span>YORHA-A2 ENGINE</span></div>
-      <div className="tagline">你的一次选择，将改写无数故事的命运。<br />欢迎来到，属于你的世界。</div>
-      <div className="taglineen">YOUR CHOICES. COUNTLESS POSSIBILITIES.<br />THIS IS YOUR STORY.</div>
+      <div className="tagline">测试阶段使用电脑或者平板获得更好的体验</div>
       <div className="btns">
         <div className="btn primary" onClick={onStart}>
           <span className="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4"><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5l-2.2 4.8-4.8 2.2 2.2-4.8z" fill="currentColor" /></svg></span>

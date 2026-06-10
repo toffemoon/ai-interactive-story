@@ -284,7 +284,9 @@ def api_my_oc(user: dict | None = Depends(current_user_dep)):
             return True
         who = {str(user.get("username") or ""), str(user.get("email") or ""), str(user.get("display_name") or "")}
         who.discard("")
-        return str(e.get("user", "")) in who
+        owners = e.get("user", "")
+        owners = owners if isinstance(owners, list) else [owners]   # 支持单人(str)或多人(list)
+        return any(str(o) in who for o in owners)
 
     out = []
     for e in entries:
