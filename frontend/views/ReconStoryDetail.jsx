@@ -173,6 +173,9 @@ const RECON_STORY_DETAIL_CSS = `
     display:grid; place-items:center; color:var(--soft); background:var(--paper); z-index:5; cursor:pointer; font-size:16px; user-select:none;}
   .cv-story .rarrow:hover {color:var(--ink); border-color:var(--gold2);}
   .cv-story .rarrow.l {left:0;} .cv-story .rarrow.r {right:0;}
+  /* 圆柱感:行两侧渐隐(卡片滑进滑出像从滚筒边缘转进来) */
+  .cv-story .cyl {-webkit-mask-image:linear-gradient(90deg, transparent 0, #000 70px, #000 calc(100% - 70px), transparent 100%);
+    mask-image:linear-gradient(90deg, transparent 0, #000 70px, #000 calc(100% - 70px), transparent 100%);}
   /* 页码小圆点(老 Carousel):当前卡实心金,可点击直达。
      hover 只放大不变色——金色描边在 8px 小点上看起来像实心,会误读成"旧点没熄" */
   .cv-story .rdots {display:flex; justify-content:center; gap:9px; margin-top:13px;}
@@ -309,31 +312,31 @@ function _normRole(x) {
   };
 }
 
-// 横排轮播(老 Netflix Carousel 行为):一张卡一个圆点,箭头一次切一张卡;
-// 切到最后一张再点 › 循环回第一张。圆点可点击直达;手动拖动也同步。不出滚动条。
+// 横排轮播(无缝循环 + 圆柱感):一张卡一个圆点,箭头一次切一张;
+// 卡片渲染两份(A/B 两组),滑进 B 组后无感瞬移回 A 组等价位置——最后一张的"下一张"是接着滑出来的第一张,
+// 不倒带回开头。两侧渐隐 mask 由 CSS 实现。圆点可点击直达;手动拖动停稳后同步。
 function RxCarousel({ rowClass, children }) {
   const ref = React.useRef(null);
   const [cur, setCur] = useState(0);
-  const [overflow, setOverflow] = useState(false);
-  const curRef = React.useRef(0);     // 权威索引(防快速连点时闭包读到旧 state)
-  const sup = React.useRef(0);        // goto 后屏蔽滚动回读,直到滚动停稳(防平滑滚动中途/钳位时点位被拉回)
+  const phys = React.useRef(0);       // 物理卡位(0..2n-1;落定后归一回 0..n-1)
+  const sup = React.useRef(0);        // 编程滚动期间屏蔽手动回读
   const settleT = React.useRef(null);
-  const count = React.Children.count(children);
-  React.useEffect(() => {
-    const recalc = () => { const el = ref.current; if (el) setOverflow(el.scrollWidth > el.clientWidth + 8); };
-    recalc();
-    window.addEventListener("resize", recalc);
-    return () => window.removeEventListener("resize", recalc);
-  }, [count]);
-  // 自绘 rAF 缓动(不用原生 smooth:连发时浏览器滚动动画器会进坏状态,连兜底都被回卷);
-  // 每帧 instant 定位,新动画自动取消旧动画,终点确定。
+  const n = React.Children.count(children);
+  const setWidth = (el) => { const its = [...el.children]; return its.length >= n + 1 ? its[n].offsetLeft - its[0].offsetLeft : 0; };
+  // 无感归一:位置在 B 组(>=n)时,瞬移回 A 组等价位置(视觉完全相同)
+  const normalize = (el) => {
+    const w = setWidth(el); if (!w) return;
+    while (phys.current >= n) { el.scrollTo({ left: el.scrollLeft - w, behavior: "instant" }); phys.current -= n; }
+    while (phys.current < 0) { el.scrollTo({ left: el.scrollLeft + w, behavior: "instant" }); phys.current += n; }
+  };
+  // 自绘 rAF 缓动(不用原生 smooth:连发时浏览器滚动动画器会进坏状态);终点兜底含后台标签
   const animT = React.useRef(null);
   const animEndT = React.useRef(null);
-  const animateTo = (el, target) => {
-    if (animT.current) cancelAnimationFrame(animT.current);
-    if (animEndT.current) clearTimeout(animEndT.current);
+  const stopAnim = () => { if (animT.current) cancelAnimationFrame(animT.current); if (animEndT.current) clearTimeout(animEndT.current); };
+  const animateTo = (el, target, onDone) => {
     const start = el.scrollLeft, dist = target - start, t0 = performance.now(), dur = 320;
-    if (Math.abs(dist) < 1) return;
+    const finish = () => { el.scrollTo({ left: target, behavior: "instant" }); if (onDone) onDone(); };
+    if (Math.abs(dist) < 1) { finish(); return; }
     const tick = (now) => {
       const p = Math.min(1, (now - t0) / dur);
       const ease = 1 - Math.pow(1 - p, 3);
@@ -341,22 +344,26 @@ function RxCarousel({ rowClass, children }) {
       if (p < 1) animT.current = requestAnimationFrame(tick);
     };
     animT.current = requestAnimationFrame(tick);
-    // 终点兜底:后台/被遮挡标签 rAF 不跑(动画零帧),节流后的定时器也要把位置钉到终点
-    animEndT.current = setTimeout(() => {
-      const e2 = ref.current; if (!e2) return;
-      if (Math.abs(e2.scrollLeft - target) > 1) e2.scrollTo({ left: target, behavior: "instant" });
-    }, dur + 130);
+    animEndT.current = setTimeout(() => { const e2 = ref.current; if (e2) finish(); }, dur + 130);
   };
   const goto = (i) => {
-    const el = ref.current; if (!el) return;
-    const its = [...el.children]; const n = its.length; if (!n) return;
-    const idx = ((i % n) + n) % n;   // 循环:最后一张的下一张 = 第一张
-    const target = Math.min(its[idx].offsetLeft - its[0].offsetLeft, Math.max(0, el.scrollWidth - el.clientWidth));
-    sup.current = Date.now() + 800;
-    curRef.current = idx; setCur(idx);
-    animateTo(el, target);
+    const el = ref.current; if (!el || !n) return;
+    stopAnim();
+    normalize(el);                     // 先把物理位归一到 A 组,再算这次的目标
+    let pt = i;                        // 目标物理位:箭头传 phys±1(可为 -1 或 n,踩进克隆区造成"连续滑出"错觉)
+    if (pt < 0) {                      // 从第一张往左:先无感瞬移到 B 组等价位,再往回滑
+      const w = setWidth(el); if (!w) return;
+      el.scrollTo({ left: el.scrollLeft + w, behavior: "instant" });
+      phys.current += n; pt += n;
+    }
+    const its = [...el.children];
+    if (!its[pt]) return;
+    const target = Math.min(its[pt].offsetLeft - its[0].offsetLeft, Math.max(0, el.scrollWidth - el.clientWidth));
+    sup.current = Date.now() + 900;
+    phys.current = pt; setCur(((pt % n) + n) % n);
+    animateTo(el, target, () => normalize(el));
   };
-  // 手动拖动:滚动停稳 140ms 后才按「最近的卡」同步点位(滚动中途不回读)
+  // 手动拖动:停稳 140ms 后按「最近的物理卡」同步并归一
   const onScroll = () => {
     if (settleT.current) clearTimeout(settleT.current);
     settleT.current = setTimeout(() => {
@@ -365,17 +372,20 @@ function RxCarousel({ rowClass, children }) {
       const base = its[0].offsetLeft, sl = el.scrollLeft;
       let best = 0, bd = Infinity;
       its.forEach((it, i) => { const d = Math.abs((it.offsetLeft - base) - sl); if (d < bd) { bd = d; best = i; } });
-      curRef.current = best; setCur(best);
+      phys.current = best; normalize(el); setCur(((phys.current % n) + n) % n);
     }, 140);
   };
   return (
     <div className="rowwrap">
-      <div className="rarrow l" onClick={() => goto(curRef.current - 1)}>‹</div>
-      <div className="rarrow r" onClick={() => goto(curRef.current + 1)}>›</div>
-      <div className={rowClass} ref={ref} onScroll={onScroll}>{children}</div>
-      {overflow && count > 1 && (
+      <div className="rarrow l" onClick={() => goto(phys.current - 1)}>‹</div>
+      <div className="rarrow r" onClick={() => goto(phys.current + 1)}>›</div>
+      <div className={rowClass + " cyl"} ref={ref} onScroll={onScroll}>
+        <React.Fragment key="set-a">{children}</React.Fragment>
+        <React.Fragment key="set-b">{children}</React.Fragment>
+      </div>
+      {n > 1 && (
         <div className="rdots">
-          {Array.from({ length: count }, (_, i) => (
+          {Array.from({ length: n }, (_, i) => (
             <span key={i} className={"rdot" + (i === cur ? " on" : "")} onClick={() => goto(i)}></span>
           ))}
         </div>
