@@ -1,6 +1,9 @@
 [
   {
-    "user": "Larus Canus",
+    "user": [
+      "Larus Canus",
+      "304455208@qq.com"
+    ],
     "character": "萍狗",
     "profile": "larus-canus/profile.md",
     "world": "larus-canus/world.md",
