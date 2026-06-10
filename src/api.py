@@ -262,7 +262,9 @@ def api_my_avatar(req: AvatarReq, user: dict | None = Depends(current_user_dep))
 @app.get("/api/my/oc")
 def api_my_oc(user: dict | None = Depends(current_user_dep)):
     """当前用户可聊的 OC(聊天页「OC」栏数据源;卡主导的一对一对话走 /api/chat)。
-    AUTH 关 = 全部可见(本地开发);开 = 按 oc/index.json 的 user 字段匹配,admin/superadmin 看全部。
+    AUTH 关 = 全部可见(本地开发);开 = 纯按 oc/index.json 的 user 名单匹配。
+    admin/superadmin 在玩家面与普通用户一视同仁(2026-06-10 主理人定):
+    admin 专属内容只进 /operator(OC集 tab),不进主站玩家 UI。
     返回含引擎卡数据(card.md 解析后的 CharacterCard);没有卡的 OC 标 card=None(只读资料,不可聊)。"""
     idx = OC_DIR / "index.json"
     if not idx.is_file():
@@ -280,8 +282,6 @@ def api_my_oc(user: dict | None = Depends(current_user_dep)):
             return True                      # AUTH 关(本地开发):全部可见
         if user is None:
             return False                     # AUTH 开 + 未登录(游客):私人 OC 一律不可见
-        if user.get("is_admin") or user.get("role") in ("admin", "superadmin"):
-            return True
         who = {str(user.get("username") or ""), str(user.get("email") or ""), str(user.get("display_name") or "")}
         who.discard("")
         owners = e.get("user", "")
