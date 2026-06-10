@@ -108,6 +108,10 @@ function ReconChat(props) {
   .cv-chat .recenth b {font-family:var(--serif); font-size:11px; letter-spacing:.12em; color:var(--soft);}
   .cv-chat .recenth .en {font-family:var(--serifen); font-size:7px; letter-spacing:.24em; color:var(--faint);}
   .cv-chat .recenth i {flex:1; height:1px; background:var(--line);}
+  .cv-chat .rlist {overflow-y:auto; max-height:400px;}
+  .cv-chat .rlist::-webkit-scrollbar {width:5px;} .cv-chat .rlist::-webkit-scrollbar-thumb {background:var(--line2);}
+  .cv-chat .inputbar .box input {border:none; outline:none; background:transparent; box-shadow:none; border-radius:0; padding:0; width:100%; color:var(--ink); font-family:var(--kai); font-size:13.5px;}
+  .cv-chat .inputbar .box input:focus {border:none; box-shadow:none;}
   .cv-chat .rc {display:flex; align-items:center; gap:10px; padding:8px 16px; margin:0 8px; cursor:pointer; position:relative;}
   .cv-chat .rc .av {width:36px; height:36px; border-radius:50%; flex:none; object-fit:cover; border:1px solid rgba(169,138,99,.4);}
   .cv-chat .rc .av.sv {display:grid; place-items:center; background:#cdb49a; color:#fff; font-family:var(--serif); font-size:14px; border:1px solid rgba(169,138,99,.4);}
@@ -164,7 +168,8 @@ function ReconChat(props) {
   .cv-chat .charbar .actions .b {display:flex; align-items:center; gap:6px; height:30px; padding:0 16px; border:1px solid var(--line2); color:var(--soft); font-family:var(--serif); font-size:12.5px; letter-spacing:.06em; cursor:pointer; background:var(--paper);}
 
   
-  .cv-chat .chat {position:absolute; left:288px; top:200px; right:368px; bottom:128px; overflow:hidden; z-index:4;}
+  .cv-chat .chat {position:absolute; left:288px; top:200px; right:368px; bottom:128px; overflow-y:auto; z-index:4;}
+  .cv-chat .chat::-webkit-scrollbar {width:5px;} .cv-chat .chat::-webkit-scrollbar-thumb {background:var(--line2);}
   .cv-chat .syscue {text-align:center; font-family:var(--kai); font-size:11px; color:var(--faint); letter-spacing:.06em; margin-bottom:22px;}
   .cv-chat .syscue span {display:inline-block; padding:0 12px; position:relative;}
   .cv-chat .syscue span::before, .cv-chat .syscue span::after {content:""; position:absolute; top:50%; width:60px; height:1px; background:var(--line);}
@@ -262,12 +267,14 @@ function ReconChat(props) {
           ))}
         </div>
         <div className="recenth"><b>近期聊天</b><span className="en">RECENT CHATS</span><i></i></div>
-        {characters.map((c, i) => (
-          <div className={"rc" + (active && c.name === active.name ? " on" : "")} key={i} style={{ cursor: "pointer" }} onClick={() => onPick(c.name)}>
-            <Avatar c={c} cls="av" />
-            <div className="bd"><div className="nm">{c.name}</div><div className="ms">{c.persona || ""}</div></div>
-          </div>
-        ))}
+        <div className="rlist">
+          {characters.map((c, i) => (
+            <div className={"rc" + (active && c.name === active.name ? " on" : "")} key={i} style={{ cursor: "pointer" }} onClick={() => onPick(c.name)}>
+              <Avatar c={c} cls="av" />
+              <div className="bd"><div className="nm">{c.name}</div><div className="ms">{c.persona || ""}</div></div>
+            </div>
+          ))}
+        </div>
         <div className="newchat" style={{ cursor: "pointer" }} onClick={() => onNav("build")}><span className="star"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l1.6 6.4L20 11l-6.4 1.6L12 19l-1.6-6.4L4 11l6.4-1.6z" /></svg></span><span className="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4l4 4-11 11H5v-4z" /></svg></span><div className="tx"><div className="zh">新建对话</div><div className="en">NEW CHAT</div></div></div>
       </div>
 

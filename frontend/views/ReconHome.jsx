@@ -171,6 +171,10 @@ function ReconHome(props) {
   .cv-home .b1 span {position:relative;}
   .cv-home .b2 {height:54px; padding:0 30px; background:transparent; border:1px solid var(--line2); color:var(--navy);
     font-family:var(--serif); font-size:16px; letter-spacing:.18em; cursor:pointer;}
+  /* 防 styles.css 全局 button 规则泄漏:圆角归零 + hover 不变深色 */
+  .cv-home .b1, .cv-home .b2 {border-radius:0; min-height:0;}
+  .cv-home .b1:hover:not(:disabled) {background:var(--navy); color:#f3ead6;}
+  .cv-home .b2:hover:not(:disabled) {background:transparent; color:var(--navy);}
 
   
   .cv-home .feat-h {position:absolute; left:56px; top:584px; display:flex; align-items:baseline; gap:14px; z-index:3;}
@@ -189,7 +193,7 @@ function ReconHome(props) {
   .cv-home .card .no {position:absolute; left:13px; top:13px; font-family:var(--serifen); font-size:13px; font-weight:700; color:#f3ead6; letter-spacing:.06em; text-shadow:0 1px 2px rgba(0,0,0,.5);}
   .cv-home .card .new {position:absolute; left:64px; top:11px; background:#b5402e; color:#f5ede2; font-family:var(--serif); font-size:9px; letter-spacing:.1em; padding:2px 5px;}
   .cv-home .card .bd {flex:1; min-width:0; padding-top:2px;}
-  .cv-home .card .bd b {display:block; font-family:var(--serif); font-size:15.5px; font-weight:700; color:var(--ink); letter-spacing:.04em;}
+  .cv-home .card .bd b {display:block; font-family:var(--serif); font-size:15.5px; font-weight:700; color:var(--ink); letter-spacing:.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .cv-home .card .bd .tags {font-family:var(--kai); font-size:10.5px; color:var(--gold); margin-top:6px; letter-spacing:.06em;}
   .cv-home .card .bd .syn {font-family:var(--kai); font-size:11px; line-height:1.65; color:var(--soft); margin-top:7px;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}

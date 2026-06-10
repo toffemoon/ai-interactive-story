@@ -152,6 +152,9 @@ function ReconPlay(props) {
   .cv-play .ccard {flex:1; min-width:0; background:var(--paper3); border:1px solid var(--line); padding:14px 15px 11px; position:relative; cursor:pointer;}
   .cv-play .avi {width:42px; height:42px; border-radius:50%; flex:none; border:1px solid var(--line2); background:var(--paper2); display:grid; place-items:center; font-family:var(--serif); font-size:16px; font-weight:700; color:var(--gold);}
   .cv-play .avi.sm {width:42px; height:42px; font-size:15px;}
+  /* 防 styles.css 全局 input 规则泄漏 */
+  .cv-play .freein {border-radius:0; box-shadow:none;}
+  .cv-play .freein:focus {box-shadow:none;}
   
   .cv-play .ccard::before, .cv-play .ccard::after {content:""; position:absolute; width:9px; height:9px; border:1px solid var(--line2); opacity:.6;}
   .cv-play .ccard::before {left:5px; top:5px; border-right:none; border-bottom:none;}

@@ -135,7 +135,8 @@ function ReconCreate(props) {
   .cv-create .talk .th .en {font-family:var(--serifen); font-size:8px; letter-spacing:.24em; color:var(--gold); align-self:flex-end; margin-bottom:2px;}
   .cv-create .talk .th .hint {margin-left:auto; font-family:var(--kai); font-size:10.5px; color:var(--faint); letter-spacing:.02em;}
 
-  .cv-create .scroll {flex:1; min-height:0; overflow:hidden; padding:8px 26px 4px;}
+  .cv-create .scroll {flex:1; min-height:0; overflow-y:auto; padding:8px 26px 4px;}
+  .cv-create .scroll::-webkit-scrollbar {width:5px;} .cv-create .scroll::-webkit-scrollbar-thumb {background:var(--line2);}
   .cv-create .syscue {text-align:center; font-family:var(--kai); font-size:11px; color:var(--faint); letter-spacing:.08em; margin:12px 0 20px;}
   .cv-create .syscue span {display:inline-block; padding:0 14px; position:relative;}
   .cv-create .syscue span::before, .cv-create .syscue span::after {content:""; position:absolute; top:50%; width:54px; height:1px; background:var(--line);}
@@ -190,7 +191,8 @@ function ReconCreate(props) {
   .cv-create .card .head .nm b {display:block; font-family:var(--serif); font-size:30px; font-weight:700; letter-spacing:.08em; color:#fbf5ea; text-shadow:0 1px 5px rgba(0,0,0,.45);}
   .cv-create .card .head .nm s {font-family:var(--kai); font-size:11.5px; letter-spacing:.06em; color:rgba(251,245,234,.92); text-decoration:none; text-shadow:0 1px 3px rgba(0,0,0,.45);}
 
-  .cv-create .card .fields {flex:1; min-height:0; overflow:hidden; padding:16px 22px 4px;}
+  .cv-create .card .fields {flex:1; min-height:0; overflow-y:auto; padding:16px 22px 4px;}
+  .cv-create .card .fields::-webkit-scrollbar {width:5px;} .cv-create .card .fields::-webkit-scrollbar-thumb {background:var(--line2);}
   .cv-create .card .frow {padding:11px 0 12px; border-bottom:1px solid #ece2cf; position:relative;}
   .cv-create .card .frow .fk {display:flex; align-items:center; gap:8px; margin-bottom:6px;}
   .cv-create .card .frow .fk .k {font-family:var(--serif); font-size:13px; font-weight:700; letter-spacing:.1em; color:var(--ink);}

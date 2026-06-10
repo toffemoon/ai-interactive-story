@@ -144,7 +144,9 @@ const RECON_STORY_DETAIL_CSS = `
   .cv-story .pickh .en {font-family:var(--serifen); font-size:10px; letter-spacing:.3em; color:var(--gold);}
   .cv-story .pickh .dash {width:90px; height:1px; background:repeating-linear-gradient(90deg,var(--line2) 0 6px,transparent 6px 12px);}
 
-  .cv-story .cards {position:absolute; left:250px; top:600px; z-index:4; display:flex; gap:12px;}
+  .cv-story .cards {position:absolute; left:250px; right:420px; top:600px; z-index:4; display:flex; gap:12px; overflow-x:auto; overflow-y:hidden; padding-bottom:8px; scroll-behavior:smooth;}
+  .cv-story .cards::-webkit-scrollbar {height:6px;} .cv-story .cards::-webkit-scrollbar-thumb {background:var(--line2);}
+  .cv-story .cards .card {flex:none;}
   .cv-story .card {width:224px; height:248px; background:var(--paper); border:1px solid var(--line); position:relative; overflow:hidden;}
   .cv-story .card.sel {border:1px solid var(--gold2); box-shadow:inset 0 0 0 1px rgba(193,168,111,.45), 0 2px 10px rgba(169,138,99,.12);}
   .cv-story .card .badge {position:absolute; left:0; top:0; background:linear-gradient(180deg,#3a4d42,#2d3e35); color:#e9dcbf;
@@ -243,9 +245,17 @@ function ReconStoryDetail(props) {
   const tags = pdata.tags || [];
   const author = pdata.author || "";
   // 背景:有 world 文本就拆行成条目;没有就不显示假条目。
-  const backstory = (pdata.world ? String(pdata.world).split(/\n+/) : [])
-    .map((s) => s.trim())
-    .filter(Boolean);
+  // world 兼容三种形态:字符串 / {entries:[{name,text}]} / 其它对象(取文本字段)。
+  const backstory = (() => {
+    const w = pdata.world;
+    if (!w) return [];
+    let lines = [];
+    if (typeof w === "string") lines = w.split(/\n+/);
+    else if (Array.isArray(w.entries)) lines = w.entries.map((e) => (e && (e.name ? e.name + "：" : "") + (e.text || e.content || "")) || "");
+    else if (typeof w.text === "string") lines = w.text.split(/\n+/);
+    else lines = [];
+    return lines.map((s) => String(s).trim()).filter(Boolean).slice(0, 4).map((s) => (s.length > 60 ? s.slice(0, 60) + "……" : s));
+  })();
 
   // 角色列表(展示用):优先 characters,空则用 playables。
   const charList = ((pdata.characters && pdata.characters.length ? pdata.characters : pdata.playables) || [])
@@ -355,9 +365,10 @@ function ReconStoryDetail(props) {
         <div className="blkh"><b>角色</b><span className="en">CHARACTERS</span></div>
         {charList.length > 0 ? (
           <ul>
-            {charList.map((c, i) => (
-              <li key={i}><b>{c.name}</b>{c.persona || c.description ? "　" + (c.persona || c.description) : ""}</li>
+            {charList.slice(0, 5).map((c, i) => (
+              <li key={i}><b>{c.name}</b>{c.persona || c.description ? "　" + ((c.persona || c.description) + "").slice(0, 42) : ""}</li>
             ))}
+            {charList.length > 5 && <li style={{ color: "var(--faint)" }}>……等共 {charList.length} 位角色，入局后逐一登场。</li>}
           </ul>
         ) : (
           <p>这个故事还没有登记角色。</p>
