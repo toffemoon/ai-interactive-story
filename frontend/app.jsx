@@ -2196,26 +2196,278 @@ function StoryModal({ entry, setTab, onClose, onStart }) {
   );
 }
 
-function StoriesHome({ onNew, presets, onLaunchPreset, onDeletePreset }) {
-  return (
-    <section className="stories-home">
-      <div className="home-hero">
-        <div><h2>开始你的故事</h2><p>从一个预设故事书开局,或新建一个属于你的故事。</p></div>
-        <button className="primary big" data-coach="new-story" onClick={onNew}>+ 新建故事</button>
-      </div>
+// ── 探索页(商城式,2026-06-10 yufei 拍板):二级切换「故事书 | 卡」;两边都有 搜索 + 排序(综合/按时间)+ 标签分类;
+// 卡页再按卡种分(全部/角色卡/演出卡/世界书·设定卡/故事书/事件卡)。「热度」排序需开局计数(引擎域,提案见
+// decisions/2026-06-10-开局计数与热度排序-提案.md),v1 不上。「收进我的库」仅登录态显示(AUTH 关时公共库本就全员可见)。
+const GENRE_ORDER = ["言情", "科幻", "奇幻", "悬疑", "都市", "同人", "原创", "教学"];
 
-      <div className="home-section">
-        <h3>故事书<small> 配好的世界 + 角色 + 故事,点一下开新局</small></h3>
-        <div className="story-gallery" data-coach="gallery">
-          {!presets.length && <p className="empty">还没有预设故事书。</p>}
-          {presets.map((p, i) => (
-            <StoryTile key={i} d={p.data || {}} fallbackName={p.name}
-              coach={isTutorialPreset(p) ? "tutorial-tile" : undefined}
-              onOpen={() => onLaunchPreset(p)}
-              actions={<button className="primary" onClick={() => onLaunchPreset(p)}>开始</button>} />
+function buildGenreChips(tagLists) {
+  const count = new Map();
+  let untagged = false;
+  tagLists.forEach((tags) => {
+    if (!tags || !tags.length) { untagged = true; return; }
+    tags.forEach((t) => t && count.set(t, (count.get(t) || 0) + 1));
+  });
+  const ordered = [
+    ...GENRE_ORDER.filter((g) => count.has(g)),
+    ...[...count.keys()].filter((t) => !GENRE_ORDER.includes(t)).sort((a, b) => count.get(b) - count.get(a)),
+  ].slice(0, 12);
+  return ["全部", ...ordered, ...(untagged ? ["未分类"] : [])];
+}
+
+function hitGenre(tags, genre) {
+  if (genre === "全部") return true;
+  if (genre === "未分类") return !tags || !tags.length;
+  return (tags || []).includes(genre);
+}
+
+function hitSearch(q, ...fields) {
+  const s = q.trim().toLowerCase();
+  if (!s) return true;
+  return fields.some((f) => (Array.isArray(f) ? f.join(" ") : (f || "")).toLowerCase().includes(s));
+}
+
+function ExploreToolbar({ q, setQ, sort, setSort, chips, genre, setGenre, placeholder }) {
+  return (
+    <div className="explore-toolbar">
+      <div className="tb-row">
+        <input className="explore-search" placeholder={placeholder} value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="bo-chips">
+          {[["default", "综合"], ["time", "按时间"]].map(([k, label]) => (
+            <button key={k} className={"bo-chip" + (sort === k ? " on" : "")} onClick={() => setSort(k)}>{label}</button>
           ))}
         </div>
       </div>
+      {chips.length > 2 && (
+        <div className="tb-row">
+          {chips.map((c) => (
+            <button key={c} className={"bo-chip" + (genre === c ? " on" : "")} onClick={() => setGenre(c)}>{c}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExploreStories({ presets, onLaunchPreset }) {
+  const [q, setQ] = useState("");
+  const [sort, setSort] = useState("default");
+  const [genre, setGenre] = useState("全部");
+  const chips = useMemo(() => buildGenreChips(presets.map((p) => (p.data || {}).tags)), [presets]);
+  const shown = useMemo(() => {
+    let xs = presets.filter((p) => {
+      const d = p.data || {};
+      return hitGenre(d.tags, genre) && hitSearch(q, d.name || p.name, d.synopsis, d.author, d.tags);
+    });
+    if (sort === "time") xs = [...xs].sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""));
+    return xs;
+  }, [presets, q, sort, genre]);
+  return (
+    <div className="home-section">
+      <h3>故事书<small> 配好的世界 + 角色 + 故事,点一下开新局</small></h3>
+      <ExploreToolbar q={q} setQ={setQ} sort={sort} setSort={setSort} chips={chips} genre={genre} setGenre={setGenre}
+                      placeholder="搜故事:名字 / 简介 / 作者 / 标签" />
+      <div className="story-gallery" data-coach="gallery">
+        {!presets.length && <p className="empty">还没有预设故事书。</p>}
+        {presets.length > 0 && !shown.length && <p className="empty">没有匹配的故事。换个关键词或分类试试。</p>}
+        {shown.map((p, i) => (
+          <StoryTile key={p.name || i} d={p.data || {}} fallbackName={p.name}
+            coach={isTutorialPreset(p) ? "tutorial-tile" : undefined}
+            onOpen={() => onLaunchPreset(p)}
+            actions={<button className="primary" onClick={() => onLaunchPreset(p)}>开始</button>} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const MARKET_KINDS = [["all", "全部"], ["characters", "角色卡"], ["players", "演出卡"], ["worlds", "世界书 / 设定卡"], ["stories", "故事书"], ["events", "事件卡"]];
+const MARKET_KIND_LABEL = Object.fromEntries(MARKET_KINDS);
+
+function marketName(it) {
+  if (it.kind === "characters") return ((it.data || {}).data || {}).name || it.name;
+  if (it.kind === "stories") return (it.data || {}).title || it.name;
+  return (it.data || {}).name || it.name;
+}
+function marketTags(it) {
+  if (it.kind === "characters") return ((it.data || {}).data || {}).tags || (it.data || {}).tags || [];
+  return (it.data || {}).tags || [];
+}
+function marketDesc(it) {
+  const d = it.data || {};
+  if (it.kind === "characters") return (d.data || {}).description || "";
+  if (it.kind === "players") return d.role || (d.goals || []).join(" / ");
+  if (it.kind === "worlds") return `${(d.entries || []).length} 条条目`;
+  if (it.kind === "stories") return d.premise || `${(d.events || []).length} 个事件`;
+  if (it.kind === "events") return (it._story ? `属:${it._story}` : "") + (d.hidden ? " · 隐藏" : "");
+  return "";
+}
+
+// 卡详情(只读速览):只渲染公开层 —— 角色卡 known_hidden / versions / 性格 / scenario / first_mes 一律不进
+// (剧透边界硬约束,同 StoryModal);世界书只列 public 条目;故事书只给 premise + 数量,不展开事件/结局。
+function CardPeek({ item, onClose }) {
+  const d = item.data || {};
+  const cd = item.kind === "characters" ? (d.data || {}) : d;
+  const pubEntries = item.kind === "worlds" ? (d.entries || []).filter((e) => (e.visibility || "public") === "public") : [];
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="peek-card" onClick={(e) => e.stopPropagation()}>
+        <div className="mc-top">
+          <span className="kind-badge">{MARKET_KIND_LABEL[item.kind]}</span>
+          <b className="mc-name">{marketName(item)}</b>
+          <button className="modal-close peek-close" onClick={onClose} aria-label="关闭">×</button>
+        </div>
+        {item.kind === "characters" && (
+          <>
+            {cd.description && <p className="peek-line">{cd.description}</p>}
+            {cd.look && <p className="peek-line"><span className="peek-k">外貌</span>{cd.look}</p>}
+          </>
+        )}
+        {item.kind === "players" && (
+          <>
+            {cd.role && <p className="peek-line">{cd.role}</p>}
+            {(cd.goals || []).length > 0 && <p className="peek-line"><span className="peek-k">目标</span>{cd.goals.join(" / ")}</p>}
+          </>
+        )}
+        {item.kind === "worlds" && (
+          <>
+            <p className="peek-line">{pubEntries.length} 条公开条目{(d.entries || []).length > pubEntries.length ? `(另有 ${(d.entries || []).length - pubEntries.length} 条入局后揭晓)` : ""}</p>
+            {pubEntries.slice(0, 8).map((e, i) => <p className="peek-line dim" key={i}>· {e.title || (e.keys || []).join(" / ") || "条目"}</p>)}
+          </>
+        )}
+        {item.kind === "stories" && (
+          <>
+            {d.premise && <p className="peek-line">{d.premise}</p>}
+            <p className="peek-line dim">{(d.events || []).length} 个事件 · {(d.endings || []).length} 个结局(内容入局后揭晓)</p>
+          </>
+        )}
+        <div className="mc-tags">{marketTags(item).map((t, j) => <span className="tag" key={j}>{t}</span>)}</div>
+      </div>
+    </div>
+  );
+}
+
+function ExploreCards({ loggedIn }) {
+  const [all, setAll] = useState(null);      // null = 读取中
+  const [kind, setKind] = useState("all");
+  const [q, setQ] = useState("");
+  const [sort, setSort] = useState("default");
+  const [genre, setGenre] = useState("全部");
+  const [page, setPage] = useState(1);
+  const [peek, setPeek] = useState(null);
+  const [added, setAdded] = useState({});    // `${kind}/${name}` -> true,收录反馈
+
+  useEffect(() => {
+    let alive = true;
+    Promise.all(["characters", "players", "worlds", "stories"].map((k) =>
+      fetch(`/api/library/${k}`).then((r) => (r.ok ? r.json() : [])).then((xs) => xs.map((x) => ({ ...x, kind: k }))).catch(() => [])
+    )).then((lists) => {
+      if (!alive) return;
+      const flat = lists.flat();
+      const evs = [];   // 事件卡随故事书:从故事聚合(只读,同 VaultView)
+      flat.filter((x) => x.kind === "stories").forEach((s) => ((s.data || {}).events || []).forEach((e) =>
+        evs.push({ kind: "events", name: e.title || e.event_id || "事件", data: e, _story: (s.data || {}).title || s.name, official: s.official, updated_at: s.updated_at })));
+      setAll([...flat, ...evs]);
+    });
+    return () => { alive = false; };
+  }, []);
+
+  const chips = useMemo(() => buildGenreChips((all || []).map(marketTags)), [all]);
+  const shown = useMemo(() => {
+    let xs = (all || []).filter((it) =>
+      (kind === "all" || it.kind === kind)
+      && hitGenre(marketTags(it), genre)
+      && hitSearch(q, marketName(it), marketDesc(it), marketTags(it)));
+    if (sort === "time") xs = [...xs].sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""));
+    else xs = [...xs].sort((a, b) => (a.official === b.official            // 综合:官方优先,再按更新时间
+      ? (b.updated_at || "").localeCompare(a.updated_at || "")
+      : (b.official ? 1 : -1)));
+    return xs;
+  }, [all, kind, q, sort, genre]);
+  useEffect(() => { setPage(1); }, [kind, q, genre, sort]);
+
+  const PER = 12;
+  const totalPages = Math.max(1, Math.ceil(shown.length / PER));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = shown.slice((safePage - 1) * PER, safePage * PER);
+
+  async function collect(it) {
+    const key = it.kind + "/" + it.name;
+    try {
+      await postJSON("/api/library/save", { kind: it.kind, data: it.data });
+      setAdded((m) => ({ ...m, [key]: true }));
+    } catch (err) { alert("收录失败:" + err.message); }
+  }
+
+  return (
+    <div className="home-section">
+      <h3>卡市集<small> 别人建好的卡直接拿来用:收进库后,新建故事时从卡库导入</small></h3>
+      <div className="vault-tabs">
+        {MARKET_KINDS.map(([k, label]) => (
+          <button key={k} className={kind === k ? "active" : ""} onClick={() => setKind(k)}>{label}</button>
+        ))}
+      </div>
+      <ExploreToolbar q={q} setQ={setQ} sort={sort} setSort={setSort} chips={chips} genre={genre} setGenre={setGenre}
+                      placeholder="搜卡:名字 / 描述 / 标签" />
+      {all === null && <p className="empty">读取中…</p>}
+      {all !== null && !shown.length && <p className="empty">没有匹配的卡。换个关键词或分类试试。</p>}
+      <div className="market-grid">
+        {pageItems.map((it, i) => {
+          const key = it.kind + "/" + it.name;
+          return (
+            <div key={key + i} className={"market-card" + (it.kind === "events" ? " static" : "")}
+                 onClick={() => it.kind !== "events" && setPeek(it)}>
+              <div className="mc-top">
+                <span className="kind-badge">{MARKET_KIND_LABEL[it.kind]}</span>
+                <b className="mc-name">{marketName(it)}</b>
+              </div>
+              <p className="mc-desc">{(marketDesc(it) || "").slice(0, 80)}</p>
+              <div className="mc-tags">
+                {marketTags(it).slice(0, 4).map((t, j) => <span className="tag" key={j}>{t}</span>)}
+                {it.official === false && <span className="tag muted">我的</span>}
+              </div>
+              {it.kind !== "events" && (
+                <div className="mc-actions" onClick={(e) => e.stopPropagation()}>
+                  <button onClick={() => setPeek(it)}>详情</button>
+                  {loggedIn && (added[key]
+                    ? <span className="vc-note">已收进我的卡库</span>
+                    : <button className="primary" onClick={() => collect(it)}>收进我的库</button>)}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {all !== null && totalPages > 1 && (
+        <div className="vault-pager">
+          <button disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>‹</button>
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
+            <button key={n} className={n === safePage ? "active" : ""} onClick={() => setPage(n)}>{n}</button>
+          ))}
+          <button disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)}>›</button>
+        </div>
+      )}
+      {peek && <CardPeek item={peek} onClose={() => setPeek(null)} />}
+    </div>
+  );
+}
+
+function StoriesHome({ onNew, presets, onLaunchPreset, onDeletePreset, loggedIn }) {
+  const [tab, setTab] = useState("stories");   // stories | cards(二级切换)
+  return (
+    <section className="stories-home">
+      <div className="home-hero">
+        <div><h2>开始你的故事</h2><p>从一个预设故事书开局,逛逛卡市集,或新建一个属于你的故事。</p></div>
+        <button className="primary big" data-coach="new-story" onClick={onNew}>+ 新建故事</button>
+      </div>
+      <div className="explore-tabs">
+        {[["stories", "故事书"], ["cards", "卡"]].map(([k, label]) => (
+          <button key={k} className={tab === k ? "active" : ""} onClick={() => setTab(k)}>{label}</button>
+        ))}
+      </div>
+      {tab === "stories"
+        ? <ExploreStories presets={presets} onLaunchPreset={onLaunchPreset} />
+        : <ExploreCards loggedIn={loggedIn} />}
     </section>
   );
 }
@@ -2951,6 +3203,7 @@ function App() {
             presets={presets}
             onLaunchPreset={openStoryModal}
             onDeletePreset={deletePreset}
+            loggedIn={auth.enabled && !!auth.user}
           />
         </main>
       )}

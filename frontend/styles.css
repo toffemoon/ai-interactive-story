@@ -1353,3 +1353,44 @@ main.single-view { display: block; }
 }
 .login-code-btn:disabled { opacity: .55; cursor: default; }
 .login-hint { font-size: 12px; color: var(--green); margin: -4px 0 10px; }
+
+/* ── 探索页(商城):二级切换 + 工具条 + 卡市集(2026-06-10) ── */
+.explore-tabs { display: flex; gap: 6px; margin: 0 0 14px; }
+.explore-tabs button {
+  border: 1px solid var(--line); background: #fff; color: var(--muted);
+  padding: 7px 20px; border-radius: 999px; font-size: 14px; cursor: pointer;
+}
+.explore-tabs button.active { background: var(--soft); border-color: var(--green); color: var(--green); font-weight: 600; }
+.explore-toolbar { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.explore-toolbar .tb-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.explore-search {
+  flex: 1 1 240px; max-width: 420px; padding: 8px 12px; font-size: 13px;
+  border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink);
+}
+.explore-search:focus { outline: none; border-color: var(--green); }
+.market-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.market-card {
+  border: 1px solid var(--line); border-radius: 10px; background: #fff;
+  padding: 12px; display: flex; flex-direction: column; gap: 6px; cursor: pointer;
+}
+.market-card:hover { border-color: var(--green); }
+.market-card.static { cursor: default; }
+.mc-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.kind-badge {
+  flex: 0 0 auto; font-size: 10px; padding: 1px 8px; border-radius: 10px;
+  background: var(--soft); color: var(--green); border: 1px solid var(--green);
+}
+.mc-name { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-desc { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.5; min-height: 2.8em; overflow: hidden; }
+.mc-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.mc-tags .tag { font-size: 10px; padding: 1px 7px; border-radius: 10px; background: var(--soft); color: #5a5a52; }
+.mc-actions { display: flex; gap: 6px; margin-top: auto; align-items: center; }
+.peek-card {
+  background: #fff; border: 1px solid var(--line); border-radius: 12px;
+  width: min(520px, 92vw); max-height: 80vh; overflow: auto; padding: 16px;
+  display: flex; flex-direction: column; gap: 8px; position: relative;
+}
+.peek-close { position: absolute; top: 10px; right: 10px; }
+.peek-line { margin: 0; font-size: 13px; line-height: 1.6; color: var(--ink); }
+.peek-line.dim { color: var(--muted); font-size: 12px; }
+.peek-k { color: var(--muted); margin-right: 8px; font-size: 12px; }
