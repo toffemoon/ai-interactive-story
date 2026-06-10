@@ -24,12 +24,15 @@ bge-small-zh-v1.5(轻、快、中文好,512 维),只是存/检索落到 pgvector
 from __future__ import annotations
 
 import hashlib
+import logging
 import threading
 
 from psycopg.types.json import Jsonb
 from pgvector import Vector
 
 from .db import get_pool
+
+log = logging.getLogger("memory")
 
 _model = None
 _available = True
@@ -66,7 +69,7 @@ def ensure_loading() -> None:
             _load_model()
         except Exception as e:  # 加载失败:本进程不再重试,调用方继续纯文本降级
             _load_failed = True
-            print(f"[memory] embedding model load failed: {e}")
+            log.error("embedding model load failed: %s", e)
         finally:
             _loading = False
 
@@ -82,7 +85,7 @@ def _mark_unavailable(exc: Exception) -> None:
     """向量检索只是增强项;pg 出错时本进程降级为纯文本,不影响主流程。"""
     global _available
     _available = False
-    print(f"[memory] vector store disabled for this process: {exc}")
+    log.error("vector store disabled for this process: %s", exc)
 
 
 def _embed(texts: list[str]) -> list[list[float]]:
