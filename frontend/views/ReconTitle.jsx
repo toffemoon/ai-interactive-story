@@ -52,6 +52,22 @@ function ReconTitle(props) {
   .cv-title .foot-c { left:0; right:0; bottom:30px; text-align:center; font-family:var(--serifen); font-size:12px; letter-spacing:.08em; color:var(--cream-faint); }
   .cv-title .foot-r { right:40px; bottom:30px; display:flex; align-items:center; gap:8px; font-family:var(--kai); font-size:12.5px; color:var(--cream-dim); }
   .cv-title .foot-r svg { color:#d8b46a; }
+  /* —— 开屏演出:错峰入场 + 罗盘常态浮动 —— */
+  @keyframes ttIn { from {opacity:0; transform:translateY(18px);} to {opacity:1; transform:translateY(0);} }
+  @keyframes ttFloat { 0%,100% {transform:translateY(0);} 50% {transform:translateY(-7px);} }
+  .cv-title .emblem { animation: ttIn .7s cubic-bezier(.22,1,.36,1) .1s both, ttFloat 5.6s ease-in-out 1.2s infinite; }
+  .cv-title .title { animation: ttIn .7s cubic-bezier(.22,1,.36,1) .2s both; }
+  .cv-title .titen { animation: ttIn .6s cubic-bezier(.22,1,.36,1) .34s both; }
+  .cv-title .tagline { animation: ttIn .6s cubic-bezier(.22,1,.36,1) .46s both; }
+  .cv-title .taglineen { animation: ttIn .6s cubic-bezier(.22,1,.36,1) .56s both; }
+  .cv-title .btns .btn { transition: transform .22s cubic-bezier(.22,1,.36,1), box-shadow .22s; }
+  .cv-title .btns .btn:hover { transform: translateX(6px); box-shadow: 0 10px 28px -10px rgba(0,0,0,.7); }
+  .cv-title .btns .btn:nth-child(1) { animation: ttIn .55s cubic-bezier(.22,1,.36,1) .62s both; }
+  .cv-title .btns .btn:nth-child(2) { animation: ttIn .55s cubic-bezier(.22,1,.36,1) .72s both; }
+  .cv-title .btns .btn:nth-child(3) { animation: ttIn .55s cubic-bezier(.22,1,.36,1) .82s both; }
+  .cv-title .resume { animation: ttIn .55s cubic-bezier(.22,1,.36,1) .94s both; }
+  .cv-title .ripple, .cv-title .astra, .cv-title .brand, .cv-title .lang { animation: ttIn .8s ease .3s both; }
+  @media (prefers-reduced-motion: reduce){ .cv-title * {animation-duration:1ms !important;} }
 `}</style>
       <div className="bg"></div>
       <div className="scrim"></div>

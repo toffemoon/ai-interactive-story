@@ -3036,10 +3036,48 @@ function ReconShell({ designW, designH, bg, onNav, onPrimary, children }) {
       <style>{`
         .recon-shell{position:fixed; inset:0; z-index:40; background:#ece4d2; overflow:hidden; display:grid; place-items:center;}
         .recon-stage{flex:none; transform-origin:center center;}
+        /* 内容入场:淡入上浮(放内层,避免与缩放 transform 冲突) */
+        .recon-fade{width:100%; height:100%; animation:reFadeUp .48s cubic-bezier(.22,1,.36,1) both;}
+        @keyframes reFadeUp{from{opacity:0; transform:translateY(16px);} to{opacity:1; transform:translateY(0);}}
+        @media (prefers-reduced-motion: reduce){ .recon-fade{animation-duration:1ms;} }
       `}</style>
       <div className="recon-stage" style={{ width: designW, height: designH, transform: "scale(" + scale + ")" }}>
-        {children}
+        <div className="recon-fade">{children}</div>
       </div>
+    </div>
+  );
+}
+
+// 全屏转场:wipe=翻页斜扫(暖纸+金边,视图切换) / ripple=涟漪入局(墨绿涨满,进入故事)。
+function TransitionFx({ fx }) {
+  if (!fx) return null;
+  return (
+    <div className={"fx fx-" + fx.kind + " " + fx.phase}>
+      <style>{`
+        .fx{position:fixed; inset:0; z-index:220; pointer-events:all;}
+        /* —— 翻页斜扫 —— */
+        .fx-wipe .sheet{position:absolute; inset:-12%;
+          background:linear-gradient(105deg,#f7f0e1 0%,#efe6d2 70%,#e9dec6 100%);
+          box-shadow:-6px 0 24px rgba(43,38,32,.25); border-left:3px solid #b89a59;}
+        .fx-wipe .sheet::after{content:"NARRATIVE ENGINE"; position:absolute; left:50%; top:50%;
+          transform:translate(-50%,-50%) skewX(8deg); font-family:Georgia,serif; font-size:13px;
+          letter-spacing:.6em; color:rgba(169,138,99,.35);}
+        .fx-wipe.in .sheet{animation:fxWipeIn .3s cubic-bezier(.7,0,.3,1) both;}
+        .fx-wipe.out .sheet{animation:fxWipeOut .36s cubic-bezier(.7,0,.3,1) both;}
+        @keyframes fxWipeIn{from{transform:translateX(118%) skewX(-8deg);} to{transform:translateX(0) skewX(-8deg);}}
+        @keyframes fxWipeOut{from{transform:translateX(0) skewX(-8deg);} to{transform:translateX(-118%) skewX(-8deg);}}
+        /* —— 涟漪入局 —— */
+        .fx-ripple{display:grid; place-items:center; background:transparent;}
+        .fx-ripple .ink{width:140vmax; height:140vmax; border-radius:50%; flex:none;
+          background:radial-gradient(circle, #31423a 0%, #243630 55%, #161e1a 100%);
+          box-shadow:0 0 0 6px rgba(193,168,111,.25);}
+        .fx-ripple.in .ink{animation:fxRipIn .46s cubic-bezier(.55,0,.45,1) both;}
+        @keyframes fxRipIn{from{transform:scale(0);} to{transform:scale(1);}}
+        .fx-ripple.out{animation:fxFade .42s ease .05s both;}
+        @keyframes fxFade{from{opacity:1;} to{opacity:0;}}
+        @media (prefers-reduced-motion: reduce){ .fx *, .fx{animation-duration:1ms !important;} }
+      `}</style>
+      {fx.kind === "wipe" ? <div className="sheet"></div> : <div className="ink"></div>}
     </div>
   );
 }
@@ -3154,6 +3192,21 @@ function App() {
   const [restoredChoices, setRestoredChoices] = useState([]);
   const [view, setView] = useState("home"); // home / game / build / vault
   const [loginShown, setLoginShown] = useState(false); // 标题开屏 → 点按钮才展开邮箱+验证码登录表单
+  // 转场:wipe(翻页斜扫,切视图)/ ripple(涟漪入局,进故事)。两段式:扫入→中点换页→扫出。
+  const [fx, setFx] = useState(null);
+  const fxBusy = useRef(false);
+  function playFx(kind, swap) {
+    if (fxBusy.current) { swap(); return; }   // 转场进行中再触发:直接换页,不叠加
+    fxBusy.current = true;
+    setFx({ kind, phase: "in" });
+    const tIn = kind === "ripple" ? 470 : 310;
+    const tOut = kind === "ripple" ? 480 : 370;
+    setTimeout(() => {
+      swap();
+      setFx({ kind, phase: "out" });
+      setTimeout(() => { setFx(null); fxBusy.current = false; }, tOut);
+    }, tIn);
+  }
   const [sidebarOpen, setSidebarOpen] = useState(true); // 游戏中侧边卡组栏开关
   const [isPreset, setIsPreset] = useState(false);      // 当前局是否由预设开(预设:无侧边栏 + 先选人)
   const [selecting, setSelecting] = useState(false);    // 预设进入后的选人页阶段
@@ -3208,11 +3261,15 @@ function App() {
   // 先 POST 吊销(此时 token 还在,fetch 钩子会带上),再清本地 → 服务端 token 立即失效,不留 60 天活口。
   async function onLogout() { try { await fetch("/api/auth/logout", { method: "POST" }); } catch (e) {} setToken(""); location.reload(); }
 
-  // 顶部导航:点「创作」tab 直接进步骤式引导(创作界面=步骤式);其余 tab 正常切。
+  // 主导航:翻页斜扫转场;同视图点击不动。
   function navTo(k) {
-    if (k === "build") setBuildFlow(true);
-    setSaves(loadSaves());   // 切 tab 刷新存档列表:进行中那局每轮已写 localStorage,这样「我的」立刻看得到,不必刷新页面
-    setView(k);
+    if (k === view && !storyModal) return;
+    playFx("wipe", () => {
+      if (storyModal) setStoryModal(null);   // 从故事详情切走时一并收起
+      if (k === "build") setBuildFlow(true);
+      setSaves(loadSaves());   // 切 tab 刷新存档列表:进行中那局每轮已写 localStorage,这样「我的」立刻看得到
+      setView(k);
+    });
   }
 
   function resetGameState() {
@@ -3258,8 +3315,8 @@ function App() {
     } catch (e) { alert("保存失败:" + e.message); }
   }
 
-  // 点故事卡 → 弹详情 modal(只浏览,不建存档)。预设 + 自装配都走这同一个 modal(§2)。
-  function openStoryModal(p, tab) { setStoryModal({ preset: p, tab: tab || "intro" }); }
+  // 点故事卡 → 故事详情(翻页斜扫进入)。
+  function openStoryModal(p, tab) { playFx("wipe", () => setStoryModal({ preset: p, tab: tab || "intro" })); }
 
   // 真正开始(modal 出演 tab 定身份)时才建会话 + 载入预设卡组。
   function loadPresetDeck(d) {
@@ -3277,13 +3334,15 @@ function App() {
     setAssembling(false);
   }
 
-  // modal 出演 tab 定身份(playable / 自定义识别结果 / null=作者直接开始)→ 载卡组 + 开玩。
+  // 「涟漪入局」定身份 → 墨绿涟漪涨满 → 载卡组开玩。
   function startFromModal(playerCard) {
     if (!storyModal) return;
-    loadPresetDeck(storyModal.preset.data || {});
-    setStoryModal(null);
-    startWithPlayer(playerCard);   // setPlayer(if any) + 移除同名 NPC + selecting=false + started=true
-    setView("game");
+    playFx("ripple", () => {
+      loadPresetDeck(storyModal.preset.data || {});
+      setStoryModal(null);
+      startWithPlayer(playerCard);   // setPlayer(if any) + 移除同名 NPC + selecting=false + started=true
+      setView("game");
+    });
   }
 
   // coach marks「开始新手教学」CTA:开《新人入店》modal 直接落出演 tab → select 引导接力(闭环)。
@@ -3311,10 +3370,12 @@ function App() {
     refreshHome();
   }
 
-  // 从存档进入 = 玩家模式,不显示左侧卡组栏(作者/开发者模式未完成,暂不暴露;isPreset 当前仅控制「无卡组栏」)。
+  // 从存档进入 = 玩家模式(涟漪入局转场)。
   function resumeSave(id) {
-    if (id !== sessionId) setRestoring(true);   // 切到不同存档:先显示「读取存档中」,等 restore effect 拉到新局再渲染,避免慢加载时还显示上一个档
-    setActiveId(id); setSessionId(id); setAssembling(false); setIsPreset(true); setSelecting(false); setView("game");
+    playFx("ripple", () => {
+      if (id !== sessionId) setRestoring(true);   // 切到不同存档:先显示「读取存档中」,等 restore effect 拉到新局再渲染
+      setActiveId(id); setSessionId(id); setAssembling(false); setIsPreset(true); setSelecting(false); setView("game");
+    });
   }
 
   async function deleteSaveHandler(id) {
@@ -3488,13 +3549,14 @@ function App() {
       {storyModal && (
         <ReconShell designW={1672} designH={941}>
           <window.ReconStoryDetail preset={storyModal.preset}
-            onNav={(v) => { setStoryModal(null); navTo(v); }}
+            onNav={navTo}
             onEnter={(role) => startFromModal(role)}
-            onClose={() => setStoryModal(null)} />
+            onClose={() => playFx("wipe", () => setStoryModal(null))} />
         </ReconShell>
       )}
 
       {/* 旧 coach 引导系统的锚点(data-coach)在 recon 视图里已不存在,浮窗与「?」按钮一并移除;代码保留待重接。 */}
+      <TransitionFx fx={fx} />
     </div>
   );
 }
