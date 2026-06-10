@@ -68,7 +68,7 @@ function ReconCreate(props) {
   }
   .cv-create * {box-sizing:border-box;}
   .cv-create {
-    position:relative; width:1536px; height:1024px; overflow:hidden;
+    position:relative; width:100%; height:100vh; min-height:640px; overflow:hidden;
     background:
       repeating-linear-gradient(90deg, rgba(169,138,99,.028) 0 1px, transparent 1px 46px),
       var(--bg);
@@ -108,7 +108,7 @@ function ReconCreate(props) {
   .cv-create .pcard .insp .vl {display:flex; align-items:center; gap:6px; font-family:var(--serifen); font-size:16px; font-weight:700; color:var(--navy);}
   .cv-create .pcard .insp .vl svg {color:var(--gold2);}
 
-  .cv-create .top {position:absolute; left:188px; right:0; top:0; height:84px; z-index:20; display:flex; align-items:center;}
+  .cv-create .top {position:absolute; left:216px; right:0; top:0; height:84px; z-index:20; display:flex; align-items:center;}
   .cv-create .top::after {content:""; position:absolute; left:24px; right:24px; bottom:0; height:1px; background:linear-gradient(90deg,transparent,var(--line2) 6%,var(--line2) 94%,transparent);}
   .cv-create .crumb {display:flex; align-items:baseline; gap:14px; margin-left:32px;}
   .cv-create .crumb .ti {font-family:var(--serif); font-size:30px; font-weight:700; letter-spacing:.06em; color:var(--ink);}
@@ -123,7 +123,7 @@ function ReconCreate(props) {
   .cv-create .tdiv {width:1px; height:30px; background:var(--line2); opacity:.7;}
   .cv-create .tgear {color:var(--faint); cursor:pointer; display:grid; place-items:center; width:22px; height:22px;}
 
-  .cv-create .tabs {position:absolute; left:212px; right:24px; top:96px; height:46px; display:flex; align-items:flex-end; gap:0; z-index:10;}
+  .cv-create .tabs {position:absolute; left:240px; right:24px; top:96px; height:46px; display:flex; align-items:flex-end; gap:0; z-index:10;}
   .cv-create .tabs::after {content:""; position:absolute; left:0; right:0; bottom:0; height:1px; background:var(--line2);}
   .cv-create .tab {display:flex; flex-direction:column; align-items:center; gap:3px; padding:0 22px 11px; cursor:pointer; position:relative;}
   .cv-create .tab .zh {font-family:var(--serif); font-size:14.5px; letter-spacing:.08em; color:var(--faint);}
@@ -133,7 +133,7 @@ function ReconCreate(props) {
   .cv-create .tab.on::after {content:""; position:absolute; left:14px; right:14px; bottom:0; height:2px; background:var(--gold); z-index:2;}
   .cv-create .tab + .tab::before {content:""; position:absolute; left:0; top:7px; bottom:14px; width:1px; background:var(--line);}
 
-  .cv-create .deck {position:absolute; left:212px; right:24px; top:160px; bottom:24px; display:flex; gap:22px;}
+  .cv-create .deck {position:absolute; left:240px; right:24px; top:160px; bottom:24px; display:flex; gap:22px;}
 
   .cv-create .talk {flex:1; min-width:0; background:var(--paper); border:1px solid var(--line); display:flex; flex-direction:column; position:relative;}
   .cv-create .talk .th {display:flex; align-items:center; gap:10px; padding:15px 22px 13px; border-bottom:1px solid var(--line);}

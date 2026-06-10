@@ -1,6 +1,7 @@
 // ReconPlay — 游玩页面 1:1(由 _recon/play.html 端成 React window 组件)
 function ReconPlay(props) {
   const p = props || {};
+  const onNav = p.onNav;
   const onChoice = p.onChoice || (() => {});
   const onSubmit = p.onSubmit || (() => {});
   const onChange = p.onChange;
@@ -61,7 +62,7 @@ function ReconPlay(props) {
   }
   .cv-play * {box-sizing:border-box;}
   .cv-play {
-    position:relative; width:1536px; height:1024px; overflow:hidden;
+    position:relative; width:100%; height:100vh; min-height:640px; overflow:hidden;
     background:
       repeating-linear-gradient(90deg, rgba(169,138,99,.028) 0 1px, transparent 1px 46px),
       var(--bg);
@@ -103,12 +104,11 @@ function ReconPlay(props) {
   .cv-play .pcard .insp .vl svg {color:var(--gold2);}
 
   
-  .cv-play .top {position:absolute; left:188px; right:0; top:0; height:60px; z-index:20; display:flex; align-items:center;}
+  .cv-play .top {position:absolute; left:216px; right:0; top:0; height:60px; z-index:20; display:flex; align-items:center;}
   .cv-play .top::after {content:""; position:absolute; left:24px; right:24px; bottom:0; height:1px; background:linear-gradient(90deg,transparent,var(--line2) 6%,var(--line2) 94%,transparent);}
   .cv-play .crumb {display:flex; align-items:baseline; gap:11px; margin-left:32px;}
-  .cv-play .crumb .lb {font-family:var(--kai); font-size:10px; letter-spacing:.22em; color:var(--faint);}
+  .cv-play .crumb .lb {font-family:var(--kai); font-size:14px; letter-spacing:.18em; color:var(--soft);}
   .cv-play .crumb .ti {font-family:var(--serif); font-size:18px; font-weight:700; letter-spacing:.05em; color:var(--ink);}
-  .cv-play .crumb .ed {color:var(--gold); font-size:13px; transform:translateY(1px);}
   .cv-play .topr {position:absolute; right:22px; top:0; height:60px; display:flex; align-items:center; gap:22px;}
   
   .cv-play .titem {display:flex; align-items:center; gap:7px; color:var(--soft); cursor:pointer;}
@@ -156,28 +156,25 @@ function ReconPlay(props) {
   .cv-play .tsuper .zh {font-family:var(--serif); font-size:11px; letter-spacing:.06em;}
   .cv-play .tsuper .en {font-family:var(--serifen); font-size:7px; letter-spacing:.2em; color:var(--faint);}
   .cv-play .tgear {color:var(--faint); cursor:pointer; display:grid; place-items:center; width:22px; height:22px;}
-  
-  .cv-play .topdeco {position:absolute; right:0; top:0; width:156px; height:56px; z-index:1; pointer-events:none; opacity:.85; mix-blend-mode:multiply;
-    background:no-repeat right top/contain url(assets/recon/play-topdeco.png);}
 
   
-  .cv-play .main {display:block; position:absolute; left:212px; top:78px; right:364px; bottom:24px; overflow-y:auto; overflow-x:hidden; padding-right:4px;}
+  .cv-play .main {display:block; position:absolute; left:240px; top:78px; right:364px; bottom:24px; overflow-y:auto; overflow-x:hidden; padding-right:4px;}
   .cv-play .main::-webkit-scrollbar {width:7px;} .cv-play .main::-webkit-scrollbar-thumb {background:var(--line2);}
 
   
   .cv-play .scene {position:relative; width:100%; height:306px; border:1px solid var(--line); overflow:hidden; background:var(--paper2);}
-  .cv-play .scene .art {position:absolute; right:0; top:0; bottom:0; width:82%;
-    background:center/cover no-repeat url(assets/recon/play-scene.png); filter:brightness(.93) contrast(1.06) saturate(1.04);}
-  
-  .cv-play .scene .art::before {content:""; position:absolute; inset:0; background:linear-gradient(90deg,var(--paper2) 0%,rgba(246,239,226,.80) 13%,rgba(246,239,226,.34) 28%,transparent 48%);}
-  .cv-play .scene .veil {position:absolute; inset:0; background:linear-gradient(90deg,var(--paper2) 4%,rgba(246,239,226,.0) 40%);}
+  /* 配图占文字区右侧,用 mask 把图本体渐隐进纸底(无叠色层,看不到分界线);文字落在纯纸面上 */
+  .cv-play .scene .art {position:absolute; left:430px; right:0; top:0; bottom:0;
+    background:center/cover no-repeat url(assets/recon/play-scene.png); filter:brightness(.93) contrast(1.06) saturate(1.04);
+    -webkit-mask-image:linear-gradient(90deg, transparent 0, rgba(0,0,0,.5) 180px, #000 360px);
+    mask-image:linear-gradient(90deg, transparent 0, rgba(0,0,0,.5) 180px, #000 360px);}
   .cv-play .scene .round {position:absolute; left:24px; top:18px; display:flex; align-items:center; gap:9px;}
   .cv-play .scene .round i {width:14px; height:1px; background:var(--gold);}
   .cv-play .scene .round span {font-family:var(--serif); font-size:11px; letter-spacing:.14em; color:var(--soft);}
   .cv-play .scene .round b {font-family:var(--serifen); font-size:10px; letter-spacing:.16em; color:var(--gold); font-weight:600;}
-  .cv-play .scene h2 {position:absolute; left:24px; top:46px; margin:0; font-family:var(--serif); font-weight:700; font-size:34px; letter-spacing:.06em; color:var(--ink); max-width:52%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .cv-play .scene .sub {position:absolute; left:25px; top:96px; font-family:var(--kai); font-size:13px; letter-spacing:.04em; color:var(--soft);}
-  .cv-play .scene .prose {position:absolute; left:25px; top:132px; bottom:16px; width:430px; overflow-y:auto; font-family:var(--kai); font-size:13.5px; line-height:2.0; color:#5b5346; margin:0;}
+  .cv-play .scene h2 {position:absolute; left:24px; top:44px; margin:0; font-family:var(--serif); font-weight:700; font-size:25px; letter-spacing:.06em; color:var(--ink); max-width:430px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .cv-play .scene .sub {position:absolute; left:25px; top:80px; font-family:var(--kai); font-size:13px; letter-spacing:.04em; color:var(--soft);}
+  .cv-play .scene .prose {position:absolute; left:25px; top:108px; bottom:16px; width:430px; overflow-y:auto; font-family:var(--kai); font-size:15px; line-height:1.95; color:#5b5346; margin:0;}
   .cv-play .scene .prose::-webkit-scrollbar {width:5px;} .cv-play .scene .prose::-webkit-scrollbar-thumb {background:var(--line2);}
 
   
@@ -186,16 +183,18 @@ function ReconPlay(props) {
   .cv-play .ph b {font-family:var(--serif); font-size:14px; font-weight:700; letter-spacing:.12em; color:var(--ink);}
   .cv-play .ph .en {font-family:var(--serifen); font-size:8.5px; letter-spacing:.26em; color:var(--gold);}
   .cv-play .ph .ln {flex:1; height:1px; background:linear-gradient(90deg,var(--line2),transparent);}
+  /* 名字/横杠/正文三列定宽,名字长短不影响横杠与正文起始位置 */
   .cv-play .prow {display:flex; align-items:center; gap:14px; padding:12px 4px; border-bottom:1px solid var(--line);}
   .cv-play .prow img {width:42px; height:42px; border-radius:50%; flex:none; object-fit:cover; border:1px solid var(--line2);}
-  .cv-play .prow .nm {width:54px; flex:none; font-family:var(--serif); font-size:14px; font-weight:700; color:var(--ink);}
+  .cv-play .prow .nm {width:92px; flex:none; font-family:var(--serif); font-size:14px; font-weight:700; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .cv-play .prow .dash {width:18px; height:1px; background:var(--line2); flex:none;}
-  .cv-play .prow .ln-q {font-family:var(--kai); font-size:14px; color:var(--soft); letter-spacing:.02em;}
+  .cv-play .prow .ln-q {flex:1; min-width:0; font-family:var(--kai); font-size:15px; color:var(--soft); letter-spacing:.02em; line-height:1.8;}
 
   
   .cv-play .choices {margin-top:20px;}
   .cv-play .cgrid {display:flex; gap:11px; margin-top:13px;}
-  .cv-play .ccard {flex:1; min-width:0; background:var(--paper3); border:1px solid var(--line); padding:14px 15px 11px; position:relative; cursor:pointer;}
+  .cv-play .ccard {flex:1; min-width:0; background:var(--paper3); border:1px solid var(--line); padding:14px 15px 11px; position:relative; cursor:pointer;
+    display:flex; flex-direction:column;}
   .cv-play .avi {width:42px; height:42px; border-radius:50%; flex:none; border:1px solid var(--line2); background:var(--paper2); display:grid; place-items:center; font-family:var(--serif); font-size:16px; font-weight:700; color:var(--gold);}
   .cv-play .avi.sm {width:42px; height:42px; font-size:15px;}
   /* 防 styles.css 全局 input 规则泄漏 */
@@ -212,8 +211,10 @@ function ReconPlay(props) {
   .cv-play .ccard .ch {display:flex; align-items:center; gap:11px;}
   .cv-play .ccard .ic {width:30px; height:30px; display:grid; place-items:center; color:var(--navy); flex:none;}
   .cv-play .ccard b {font-family:var(--serif); font-size:15px; font-weight:700; color:var(--ink); letter-spacing:.04em;}
-  .cv-play .ccard p {font-family:var(--kai); font-size:10.5px; line-height:1.55; color:var(--soft); margin:9px 0 0;}
-  .cv-play .ccard .cf {display:flex; align-items:center; justify-content:space-between; margin-top:11px; padding-top:9px; border-top:1px solid #ece2cf;}
+  .cv-play .ccard p {font-family:var(--kai); font-size:14px; line-height:1.7; color:var(--soft); margin:9px 0 0;}
+  /* 行动/ask 分类行固定沉底,不随描述长短浮动 */
+  .cv-play .ccard .cf {display:flex; align-items:center; justify-content:space-between; margin-top:auto; padding-top:9px; border-top:1px solid #ece2cf;}
+  .cv-play .ccard .ch + p {margin-bottom:11px;}
   .cv-play .ccard .cat {display:flex; align-items:center; gap:5px; font-family:var(--serif); font-size:10.5px; color:var(--faint); letter-spacing:.04em;}
   .cv-play .ccard .cat svg {color:var(--line2);}
   .cv-play .ccard .cost {display:flex; align-items:center; gap:4px; font-family:var(--serifen); font-size:10.5px; color:var(--faint);}
@@ -277,24 +278,22 @@ function ReconPlay(props) {
   .cv-play .evs .r .nw {font-family:var(--serifen); font-size:8px; letter-spacing:.1em; color:#b5402e; border:1px solid #d8a99e; padding:1px 4px;}
 
   .cv-play .rtabs {display:flex; gap:9px; margin-top:13px;}
-  .cv-play .rtab {flex:1; display:flex; align-items:center; justify-content:center; gap:7px; height:38px; border:1px solid var(--line2); cursor:pointer;}
-  .cv-play .rtab svg {color:var(--soft);}
-  .cv-play .rtab .zh {font-family:var(--serif); font-size:12px; color:var(--soft);}
-  .cv-play .rtab .en {font-family:var(--serifen); font-size:7px; letter-spacing:.16em; color:var(--faint);}
-  .cv-play .rtab.on {background:#ece2d3; border-color:var(--gold);}
-  .cv-play .rtab.on .zh {color:var(--navy); font-weight:700;}
+  .cv-play .rtab {flex:1; min-width:0; display:flex; align-items:center; justify-content:center; gap:8px; height:42px; border:1px solid var(--line2); cursor:default; overflow:hidden;}
+  .cv-play .rtab svg {color:var(--soft); flex:none;}
+  .cv-play .rtab .tt {display:flex; flex-direction:column; align-items:flex-start; line-height:1; min-width:0;}
+  .cv-play .rtab .zh {font-family:var(--serif); font-size:12.5px; color:var(--soft); white-space:nowrap;}
+  .cv-play .rtab .en {font-family:var(--serifen); font-size:7px; letter-spacing:.14em; color:var(--faint); margin-top:3px; white-space:nowrap;}
 
   .cv-play .tips {position:relative; margin-top:14px; padding-top:13px; border-top:1px solid var(--line); min-height:118px;}
   .cv-play .tips .th {display:flex; align-items:center; gap:8px;}
   .cv-play .tips .th svg {color:var(--gold);}
   .cv-play .tips .th b {font-family:var(--serif); font-size:12px; font-weight:700; color:var(--soft); letter-spacing:.06em;}
   .cv-play .tips .th .en {font-family:var(--serifen); font-size:7.5px; letter-spacing:.2em; color:var(--faint);}
-  .cv-play .tips p {font-family:var(--kai); font-size:11.5px; line-height:1.85; color:var(--soft); margin:9px 0 0; width:175px;}
-  .cv-play .tips .chibi {position:absolute; right:-4px; bottom:-18px; width:95px; height:auto;}
+  .cv-play .tips p {font-family:var(--kai); font-size:12.5px; line-height:1.85; color:var(--soft); margin:9px 0 0;}
 `}</style>
 
-      {/* 左 引擎竖栏(全站统一 ReconRail;点击由外层 ReconShell 委托导航) */}
-      <window.ReconRail active="game">
+      {/* 左 引擎竖栏(全站统一 ReconRail;onNav 直连,logo 可回 landing) */}
+      <window.ReconRail active="game" onNav={onNav}>
         <div className="pcard">
           <div className="ttl">玩家身份<span>PLAYER</span></div>
           <img className="por" src="assets/recon/play-player.png" alt="" />
@@ -303,13 +302,11 @@ function ReconPlay(props) {
         </div>
       </window.ReconRail>
 
-      {/* 顶 面包屑 */}
+      {/* 顶 面包屑(无功能图标已清:存档/回溯/重生成/✎/装饰底图) */}
       <div className="top">
-        <div className="topdeco"></div>
         <div className="crumb">
           <span className="lb">当前故事</span>
           <span className="ti">《{story}》</span>
-          <span className="ed">✎</span>
         </div>
         {/* 顶栏全部真实可用:故事记录(全量回看)/ 撤回上一轮(恢复 pre-turn 快照,零 LLM)/
             重生成(接 /api/reroll)/ 自动存档状态指示。SUPERVISOR/齿轮仍未实现 → 不摆。 */}
@@ -345,7 +342,6 @@ function ReconPlay(props) {
         {/* 场景 */}
         <div className="scene">
           <div className="art" style={sceneArt ? { backgroundImage: "url(" + sceneArt + ")" } : undefined}></div>
-          <div className="veil"></div>
           <div className="round"><span>当前回合</span><i></i><b>{round}</b>{busy && <span className="gen">叙事推演中<i>▋</i></span>}</div>
           <h2>{sceneTitle}</h2>
           <div className="sub">{sceneSub}</div>
@@ -356,18 +352,20 @@ function ReconPlay(props) {
         <div className="presence">
           <div className="ph"><b>角色发言</b><span className="en">DIALOGUE</span><span className="ln"></span></div>
           {dialogues ? dialogues.map((d, i) => (
-            <div className="prow" key={round + "-" + i} style={{ animationDelay: (i * 80) + "ms" }}><span className="avi">{ini(d.name)}</span><span className="nm" style={{ width: (d.name || "").length > 2 ? "72px" : undefined }}>{d.name}</span><span className="dash"></span><span className="ln-q">{d.text}</span></div>
+            <div className="prow" key={round + "-" + i} style={{ animationDelay: (i * 80) + "ms" }}><span className="avi">{ini(d.name)}</span><span className="nm" title={d.name}>{d.name}</span><span className="dash"></span><span className="ln-q">{d.text}</span></div>
           )) : (
             <div className="prow" style={{ borderBottom: "none" }}><span className="ln-q" style={{ color: "var(--faint)" }}>{busy ? "（角色正在回应……）" : "（本回合暂无角色发言）"}</span></div>
           )}
         </div>
 
-        {/* 你的行动 */}
+        {/* 你的行动(点选项不直接发送:行动文本回填到下方自由行动输入框,玩家可改可直接执行) */}
         <div className="choices">
           <div className="ph"><b>你的行动</b><span className="en">CHOICES</span><span className="ln"></span></div>
           <div className="cgrid">
             {choices ? choices.slice(0, 4).map((c, i) => (
-              <div className="ccard" key={round + "-" + i} onClick={() => !busy && onChoice(c)} style={{ cursor: busy ? "default" : "pointer", animationDelay: (120 + i * 70) + "ms" }}>
+              <div className="ccard" key={round + "-" + i}
+                onClick={() => { if (busy) return; const t = c.label || c.title || c.description || c.desc || ""; if (onChange) onChange(t); else onChoice(c); }}
+                style={{ cursor: busy ? "default" : "pointer", animationDelay: (120 + i * 70) + "ms" }}>
                 <div className="ch"><span className="ic">{choiceIcon(i)}</span><b>{c.label || c.title || ("选项 " + (i + 1))}</b></div>
                 <p>{c.description || c.desc || ""}</p>
                 <div className="cf"><span className="cat"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6 4.4 2.3 7.2-6.3-4.6L5.7 21 8 14.8 2 10.4h7.6z"/></svg>{c.intent || "行动"}</span></div>
@@ -442,7 +440,6 @@ function ReconPlay(props) {
         <div className="tips">
           <div className="th"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2 8 8 2-8 2-2 8-2-8-8-2 8-2z"/></svg><b>提示</b><span className="en">/ TIPS</span></div>
           <p>你可以选择推荐行动，或自由输入任何你想法，故事会因你而改变。</p>
-          <img className="chibi" src="assets/recon/play-chibi-br.png" alt="" />
         </div>
       </div>
 

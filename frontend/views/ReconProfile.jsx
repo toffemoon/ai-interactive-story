@@ -120,7 +120,7 @@ function ReconProfile(props) {
   }
   .cv-profile * {box-sizing:border-box;}
   .cv-profile {
-    position:relative; width:1536px; height:1024px; overflow:hidden;
+    position:relative; width:100%; height:100vh; min-height:640px; overflow:hidden;
     background:
       repeating-linear-gradient(90deg, rgba(169,138,99,.025) 0 1px, transparent 1px 44px),
       var(--bg);
@@ -153,7 +153,7 @@ function ReconProfile(props) {
     background:bottom/cover no-repeat url(assets/recon/profile-qchar.png);}
 
   
-  .cv-profile .top {position:absolute; left:188px; right:0; top:0; height:108px; z-index:8;}
+  .cv-profile .top {position:absolute; left:216px; right:0; top:0; height:108px; z-index:8;}
   .cv-profile .top::after {content:""; position:absolute; left:34px; right:40px; bottom:0; height:1px;
     background:linear-gradient(90deg,transparent,var(--line2) 4%,var(--line2) 96%,transparent);}
   .cv-profile .top .ttl {position:absolute; left:34px; top:30px; display:flex; align-items:baseline; gap:16px;}
@@ -171,7 +171,8 @@ function ReconProfile(props) {
   .cv-profile .top .av {width:38px; height:38px; border-radius:50%; object-fit:cover; border:1px solid var(--line2);}
 
   
-  .cv-profile .main {position:absolute; left:212px; right:32px; top:120px; bottom:18px;}
+  .cv-profile .main {position:absolute; left:240px; right:32px; top:120px; bottom:18px; overflow-y:auto; padding-right:4px;}
+  .cv-profile .main::-webkit-scrollbar {width:7px;} .cv-profile .main::-webkit-scrollbar-thumb {background:var(--line2);}
 
   
   .cv-profile .profile {position:relative; height:152px; background:var(--paper); border:1px solid var(--line);}

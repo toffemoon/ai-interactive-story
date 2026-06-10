@@ -94,13 +94,13 @@ function ReconChat(props) {
   }
   .cv-chat * {box-sizing:border-box;}
   .cv-chat {
-    position:relative; width:1536px; height:1024px; overflow:hidden;
+    position:relative; width:100%; height:100vh; min-height:640px; overflow:hidden;
     background:var(--bg);
     color:var(--ink); font-family:var(--kai);
   }
 
   
-  .cv-chat .side {position:absolute; left:0; top:0; width:240px; height:1024px;
+  .cv-chat .side {position:absolute; left:0; top:0; width:240px; bottom:0;
     background:linear-gradient(180deg,#f5eee3,#f2eadd);
     border-right:1px solid var(--line); z-index:10;
     background-image:repeating-linear-gradient(0deg, rgba(169,138,99,.018) 0 1px, transparent 1px 38px);}
@@ -181,7 +181,7 @@ function ReconChat(props) {
   .cv-chat .topr .me .nm {font-family:var(--serif); font-size:12px; color:var(--ink);}
 
   
-  .cv-chat .pagehd {position:absolute; left:236px; top:54px; z-index:5;}
+  .cv-chat .pagehd {position:absolute; left:264px; top:54px; z-index:5;}
   .cv-chat .pagehd h2 {margin:0; display:flex; align-items:baseline; gap:14px;}
   .cv-chat .pagehd h2 .zh {font-family:var(--serif); font-weight:700; font-size:28px; letter-spacing:.06em; color:var(--ink);}
   .cv-chat .pagehd h2 .en {font-family:var(--serifen); font-style:italic; font-size:18px; color:var(--gold); letter-spacing:.02em;}
@@ -189,7 +189,7 @@ function ReconChat(props) {
   .cv-chat .pagehd p {margin:9px 0 0; font-family:var(--kai); font-size:13px; color:var(--soft); letter-spacing:.04em;}
 
   
-  .cv-chat .charbar {position:absolute; left:236px; top:122px; right:368px; height:62px; border-bottom:1px solid var(--line);
+  .cv-chat .charbar {position:absolute; left:264px; top:122px; right:368px; height:62px; border-bottom:1px solid var(--line);
     display:flex; align-items:center; gap:13px; z-index:5;}
   .cv-chat .charbar .av {width:46px; height:46px; border-radius:50%; object-fit:cover; border:1px solid var(--line2);}
   .cv-chat .charbar .stk {display:flex; flex-direction:column; gap:5px;}
@@ -201,7 +201,7 @@ function ReconChat(props) {
   .cv-chat .charbar .actions .b {display:flex; align-items:center; gap:6px; height:30px; padding:0 16px; border:1px solid var(--line2); color:var(--soft); font-family:var(--serif); font-size:12.5px; letter-spacing:.06em; cursor:pointer; background:var(--paper);}
 
   
-  .cv-chat .chat {position:absolute; left:236px; top:200px; right:368px; bottom:128px; overflow-y:auto; z-index:4;}
+  .cv-chat .chat {position:absolute; left:264px; top:200px; right:368px; bottom:128px; overflow-y:auto; z-index:4;}
   .cv-chat .chat::-webkit-scrollbar {width:5px;} .cv-chat .chat::-webkit-scrollbar-thumb {background:var(--line2);}
   .cv-chat .syscue {text-align:center; font-family:var(--kai); font-size:11px; color:var(--faint); letter-spacing:.06em; margin-bottom:22px;}
   .cv-chat .syscue span {display:inline-block; padding:0 12px; position:relative;}
@@ -226,7 +226,7 @@ function ReconChat(props) {
   .cv-chat .msg.me .time {text-align:right;}
 
   
-  .cv-chat .inputbar {position:absolute; left:236px; right:368px; bottom:26px; height:96px; z-index:6;
+  .cv-chat .inputbar {position:absolute; left:264px; right:368px; bottom:26px; height:96px; z-index:6;
     display:flex; align-items:center; gap:14px; padding:13px 16px;
     background:var(--paper2); border:1px solid var(--line2);}
   .cv-chat .inputbar::before {content:""; position:absolute; inset:5px; border:1px solid rgba(169,138,99,.28); pointer-events:none;}

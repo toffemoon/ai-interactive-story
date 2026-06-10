@@ -38,7 +38,7 @@ const RECON_STORY_DETAIL_CSS = `
   }
   .cv-story * {box-sizing:border-box;}
   .cv-story {
-    position:relative; width:1672px; height:941px; overflow:hidden;
+    position:relative; width:100%; min-height:100vh;
     background:
       repeating-linear-gradient(90deg, rgba(169,138,99,.026) 0 1px, transparent 1px 46px),
       var(--bg);
@@ -46,8 +46,17 @@ const RECON_STORY_DETAIL_CSS = `
   }
 
   
-  .cv-story .nav {position:absolute; left:0; right:0; top:0; height:88px; z-index:30;}
-  .cv-story .nav::after {content:""; position:absolute; left:212px; right:30px; bottom:0; height:1px;
+  /* 竖栏固定;中间内容流式(随页滚动);右侧入戏仪式栏 absolute 拉通到页底 */
+  .cv-story .cv-rail {position:fixed;}
+  .cv-story .mid {position:relative; margin:0 382px 0 216px; padding:118px 38px 60px 34px; z-index:4; min-width:0;}
+  .cv-story .row1 {display:flex; gap:36px; align-items:flex-start;}
+  .cv-story .bookcol {flex:none; width:236px; position:relative; padding-top:14px;}
+  .cv-story .headcol {flex:1; min-width:0;}
+  .cv-story .row2 {margin-top:6px;}
+  /* 顶栏固定:滚动时与右栏入戏仪式一起钉在视口 */
+  .cv-story .nav {position:fixed; left:0; right:0; top:0; height:88px; z-index:28;
+    background:repeating-linear-gradient(90deg, rgba(169,138,99,.026) 0 1px, transparent 1px 46px), var(--bg);}
+  .cv-story .nav::after {content:""; position:absolute; left:240px; right:30px; bottom:0; height:1px;
     background:linear-gradient(90deg,transparent,var(--line2) 6%,var(--line2) 94%,transparent);}
   .cv-story .brand {position:absolute; left:18px; top:16px; display:flex; align-items:center; gap:12px;}
   .cv-story .brand .em {width:46px; height:46px; object-fit:contain;}
@@ -110,7 +119,7 @@ const RECON_STORY_DETAIL_CSS = `
   .cv-story .ritual { animation: rcs-in .44s cubic-bezier(.22,1,.36,1) .32s both; }
   @media (prefers-reduced-motion: reduce){ .cv-story .book, .cv-story .booktab, .cv-story .stitle, .cv-story .intro, .cv-story .bg, .cv-story .chars, .cv-story .pickh, .cv-story .cards, .cv-story .ritual { animation-duration:1ms; animation-delay:0ms; } }
   /* 书封:只用库里真实 cover(.book img);没有 cover = 中性书封(纸底+竖排书名),不放假书图 */
-  .cv-story .book {position:absolute; left:248px; top:118px; width:236px; height:300px; z-index:4;
+  .cv-story .book {position:relative; width:236px; height:300px; z-index:4;
     border:1px solid var(--line2); background:linear-gradient(165deg,#efe6d2,#ddd0b2);
     box-shadow:6px 8px 0 rgba(43,38,32,.10); overflow:hidden;}
   .cv-story .book::after {content:""; position:absolute; inset:8px; border:1px solid rgba(169,138,99,.38); pointer-events:none;}
@@ -118,21 +127,21 @@ const RECON_STORY_DETAIL_CSS = `
   .cv-story .book .bt {position:absolute; inset:0; display:grid; place-items:center;}
   .cv-story .book .bt b {writing-mode:vertical-rl; font-family:var(--serif); letter-spacing:.24em; color:var(--gold); font-weight:700;
     max-height:240px; line-height:1.7;}
-  .cv-story .booktab {position:absolute; left:206px; top:138px; width:84px; height:36px; z-index:5;
+  .cv-story .booktab {position:absolute; left:-16px; top:32px; width:84px; height:36px; z-index:5;
     background:linear-gradient(180deg,#3a4d42,#2d3e35); border:1px solid rgba(193,168,111,.5);
     display:flex; flex-direction:column; align-items:center; justify-content:center;}
   .cv-story .booktab .zh {font-family:var(--serif); font-size:11px; color:#e9dcbf; letter-spacing:.08em;}
   .cv-story .booktab .en {font-family:var(--serifen); font-size:6.5px; letter-spacing:.16em; color:rgba(216,199,154,.75); margin-top:1px;}
 
   
-  .cv-story .intro {position:absolute; left:478px; top:300px; width:360px; z-index:4;}
+  .cv-story .intro {margin-top:28px; max-width:620px;}
   .cv-story .blkh {display:flex; align-items:baseline; gap:9px;}
   .cv-story .blkh b {font-family:var(--serif); font-size:16px; font-weight:700; letter-spacing:.1em; color:var(--ink);}
   .cv-story .blkh .en {font-family:var(--serifen); font-size:9px; letter-spacing:.26em; color:var(--gold);}
-  .cv-story .intro p {font-family:var(--kai); font-size:13px; line-height:1.95; color:var(--soft); margin:12px 0 0;}
+  .cv-story .intro p {font-family:var(--kai); font-size:15px; line-height:1.95; color:var(--soft); margin:12px 0 0;}
 
   
-  .cv-story .stitle {position:absolute; left:640px; top:120px; z-index:4;}
+  .cv-story .stitle {padding-top:8px;}
   .cv-story .stitle h2 {margin:0; font-family:var(--serif); font-size:34px; font-weight:700; letter-spacing:.05em; color:var(--ink);}
   .cv-story .stitle .en {font-family:var(--serifen); font-size:16px; letter-spacing:.32em; color:var(--faint); margin-top:7px;}
   .cv-story .stitle .tags {display:flex; gap:24px; margin-top:16px; font-family:var(--kai); font-size:13px; color:var(--soft); letter-spacing:.06em;}
@@ -144,40 +153,89 @@ const RECON_STORY_DETAIL_CSS = `
   .cv-story .stitle .meta b {color:var(--soft); font-weight:400;}
 
   
-  .cv-story .bg {position:absolute; left:478px; top:415px; width:360px; z-index:4;}
-  /* 角色列右锚定:贴住入戏仪式栏,宽屏 fill 下随之分布(1672 设计宽时 ≈ 原 left:872) */
-  .cv-story .chars {position:absolute; right:440px; top:415px; width:380px; z-index:4;}
-  .cv-story .bg ul, .cv-story .chars ul {list-style:none; margin:14px 0 0; padding:0;}
-  .cv-story .bg li, .cv-story .chars li {font-family:var(--kai); font-size:13px; line-height:1.5; color:var(--soft); margin-bottom:13px; padding-left:16px; position:relative;}
-  .cv-story .bg li::before, .cv-story .chars li::before {content:""; position:absolute; left:0; top:8px; width:5px; height:5px; border-radius:50%; background:var(--gold);}
-  .cv-story .chars p {font-family:var(--kai); font-size:13px; line-height:1.95; color:var(--soft); margin:14px 0 0;}
+  /* 背景:前情 + 世界设定公开条目(老 Netflix 详情卡的内容版式,平铺进页面) */
+  .cv-story .bg {margin-top:34px; max-width:1000px; min-width:0;}
+  .cv-story .bgblock {margin-top:16px;}
+  .cv-story .bgsub {font-family:var(--serif); font-size:13.5px; font-weight:700; letter-spacing:.1em; color:var(--gold);}
+  .cv-story .bgblock p {font-family:var(--kai); font-size:15px; line-height:1.9; color:var(--soft); margin:7px 0 0;
+    display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden;}
+  .cv-story .bgblock.lead p {-webkit-line-clamp:8;}
+  /* 角色:翻转卡横排(正面 名+外貌+性格 公开层,背面 角色图;只收有展示内容的角色) */
+  .cv-story .chars {margin-top:34px; min-width:0;}
+  .cv-story .chars ul {list-style:none; margin:14px 0 0; padding:0;}
+  .cv-story .chars li {font-family:var(--kai); font-size:15px; line-height:1.7; color:var(--soft); margin-bottom:13px; padding-left:16px; position:relative;}
+  .cv-story .chars li::before {content:""; position:absolute; left:0; top:8px; width:5px; height:5px; border-radius:50%; background:var(--gold);}
+  .cv-story .chars p {font-family:var(--kai); font-size:15px; line-height:1.95; color:var(--soft); margin:14px 0 0;}
+  /* 横排不出滚动条,改 Netflix 式两侧箭头(老 Carousel);两侧留箭头槽,不压卡片 */
+  .cv-story .rowwrap {position:relative; margin-top:16px; padding:0 48px;}
+  .cv-story .rowwrap .chrow, .cv-story .rowwrap .cards {margin-top:0;}
+  .cv-story .rarrow {position:absolute; top:50%; transform:translateY(-50%); width:34px; height:34px; border:1px solid var(--line2); border-radius:50%;
+    display:grid; place-items:center; color:var(--soft); background:var(--paper); z-index:5; cursor:pointer; font-size:16px; user-select:none;}
+  .cv-story .rarrow:hover {color:var(--ink); border-color:var(--gold2);}
+  .cv-story .rarrow.l {left:0;} .cv-story .rarrow.r {right:0;}
+  /* 页码小圆点(老 Carousel):当前卡实心金,可点击直达。
+     hover 只放大不变色——金色描边在 8px 小点上看起来像实心,会误读成"旧点没熄" */
+  .cv-story .rdots {display:flex; justify-content:center; gap:9px; margin-top:13px;}
+  .cv-story .rdot {width:8px; height:8px; border-radius:50%; border:1px solid var(--line2); background:transparent; cursor:pointer; transition:transform .15s;}
+  .cv-story .rdot:hover {transform:scale(1.35);}
+  .cv-story .rdot.on {background:var(--gold); border-color:var(--gold);}
+  .cv-story .chrow {display:flex; gap:14px; margin-top:16px; overflow-x:auto; overflow-y:hidden; padding-bottom:4px; scrollbar-width:none;}
+  .cv-story .chrow::-webkit-scrollbar {display:none;}
+  .cv-story .fchar {flex:none; width:244px; height:300px; position:relative; perspective:900px;}
+  .cv-story .fchar .fin {position:absolute; inset:0; transform-style:preserve-3d; transition:transform .45s cubic-bezier(.3,.8,.3,1);}
+  .cv-story .fchar.flip .fin {transform:rotateY(180deg);}
+  .cv-story .fchar .ff, .cv-story .fchar .fb {position:absolute; inset:0; -webkit-backface-visibility:hidden; backface-visibility:hidden;
+    background:var(--paper); border:1px solid var(--line);}
+  .cv-story .fchar .ff {padding:16px 16px 14px; display:flex; flex-direction:column;}
+  .cv-story .fchar .ff::after {content:""; position:absolute; inset:5px; border:1px solid rgba(196,179,132,.3); pointer-events:none;}
+  .cv-story .fchar .fnm {font-family:var(--serif); font-size:17px; font-weight:700; color:var(--ink); letter-spacing:.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .cv-story .fchar .fscroll {flex:1; overflow-y:auto; margin-top:6px; padding-right:5px; min-height:0;}
+  .cv-story .fchar .fscroll::-webkit-scrollbar {width:5px;} .cv-story .fchar .fscroll::-webkit-scrollbar-thumb {background:var(--line2);}
+  .cv-story .fchar .fsub {font-family:var(--serif); font-size:12px; font-weight:700; letter-spacing:.1em; color:var(--gold); margin-top:10px;}
+  .cv-story .fchar .fscroll p {font-family:var(--kai); font-size:13.5px; line-height:1.8; color:var(--soft); margin:4px 0 0;}
+  .cv-story .fchar .fb {transform:rotateY(180deg); overflow:hidden; display:grid; place-items:center; cursor:pointer;}
+  .cv-story .fchar .fb img {width:100%; height:100%; object-fit:cover; display:block;}
+  .cv-story .fchar .fb .noimg {font-family:var(--kai); font-size:13px; color:var(--faint); letter-spacing:.08em;}
+  .cv-story .fbtn {position:absolute; right:9px; bottom:9px; width:30px; height:30px; border-radius:50%; border:1px solid var(--line2);
+    background:rgba(250,244,234,.92); color:var(--soft); display:grid; place-items:center; cursor:pointer; min-height:0; padding:0; font-size:14px; line-height:1; z-index:3;}
+  .cv-story .fbtn:hover {background:rgba(193,168,111,.25); color:var(--ink);}
+  .cv-story .fchar .fb .fbtn {background:rgba(34,29,22,.45); color:#f0e8d4; border-color:rgba(240,232,212,.55);}
 
   
-  .cv-story .pickh {position:absolute; left:250px; top:566px; display:flex; align-items:center; gap:12px; z-index:4;}
+  .cv-story .pickh {display:flex; align-items:center; gap:12px; margin-top:38px;}
   .cv-story .pickh .star {color:var(--gold); display:grid; place-items:center;}
   .cv-story .pickh b {font-family:var(--serif); font-size:17px; font-weight:700; letter-spacing:.12em; color:var(--ink);}
   .cv-story .pickh .en {font-family:var(--serifen); font-size:10px; letter-spacing:.3em; color:var(--gold);}
   .cv-story .pickh .dash {width:90px; height:1px; background:repeating-linear-gradient(90deg,var(--line2) 0 6px,transparent 6px 12px);}
 
-  .cv-story .cards {position:absolute; left:250px; right:420px; top:600px; z-index:4; display:flex; gap:12px; overflow-x:auto; overflow-y:hidden; padding-bottom:8px; scroll-behavior:smooth;}
-  .cv-story .cards::-webkit-scrollbar {height:6px;} .cv-story .cards::-webkit-scrollbar-thumb {background:var(--line2);}
-  .cv-story .cards .card {flex:none;}
-  .cv-story .card {width:224px; height:248px; background:var(--paper); border:1px solid var(--line); position:relative; overflow:hidden;}
-  .cv-story .card.sel {border:1px solid var(--gold2); box-shadow:inset 0 0 0 1px rgba(193,168,111,.45), 0 2px 10px rgba(169,138,99,.12);}
-  .cv-story .card .badge {position:absolute; left:0; top:0; background:linear-gradient(180deg,#3a4d42,#2d3e35); color:#e9dcbf;
-    font-family:var(--serif); font-size:10px; letter-spacing:.1em; padding:3px 10px; z-index:3; border-bottom-right-radius:2px;}
-  .cv-story .card .av {position:absolute; left:50%; transform:translateX(-50%); top:0; width:174px; height:150px; object-fit:cover; object-position:top center;
-    -webkit-mask-image:linear-gradient(180deg,#000 80%,transparent); mask-image:linear-gradient(180deg,#000 80%,transparent);}
-  /* 卡内文字区改流式排版(头像区下方依序排,不再绝对定位互撞);人设截 1 行,完整版在右栏入戏仪式 */
-  .cv-story .card .nm {margin:158px 8px 0; text-align:center; font-family:var(--serif); font-size:16px; font-weight:700; color:var(--ink); letter-spacing:.04em; position:relative; z-index:2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .cv-story .card .role {margin:5px 12px 0; text-align:center; font-family:var(--kai); font-size:11px; color:var(--gold); letter-spacing:.04em; position:relative; z-index:2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .cv-story .card .quote {margin:6px 14px 0; font-family:var(--kai); font-size:10.5px; line-height:1.55; color:var(--soft); text-align:center; position:relative; z-index:2;
-    display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden;}
-  .cv-story .card .act {position:absolute; left:0; right:0; bottom:8px; display:flex; align-items:center; justify-content:center; gap:5px; z-index:3; background:var(--paper); padding:4px 0;
-    font-family:var(--serif); font-size:11px; letter-spacing:.14em; color:var(--green);}
-  .cv-story .card.sel .act {color:var(--gold);}
-  .cv-story .card .act svg {color:var(--green);}
-  .cv-story .card.sel .act svg {color:var(--gold);}
+  .cv-story .cards {margin-top:16px; display:flex; gap:12px; overflow-x:auto; overflow-y:hidden; padding-bottom:4px; scrollbar-width:none;}
+  .cv-story .cards::-webkit-scrollbar {display:none;}
+  /* 选角:老 Netflix 出演卡(文本卡:名 + 一句设定;点选联动右栏入戏仪式) */
+  .cv-story .castcard {flex:none; width:212px; background:var(--paper); border:1px solid var(--line); padding:20px 16px 13px;
+    text-align:center; cursor:pointer; position:relative; display:flex; flex-direction:column;}
+  .cv-story .castcard::after {content:""; position:absolute; inset:5px; border:1px solid rgba(196,179,132,.3); pointer-events:none;}
+  .cv-story .castcard.sel {border-color:var(--gold2); box-shadow:inset 0 0 0 1px rgba(193,168,111,.45), 0 2px 10px rgba(169,138,99,.12);}
+  .cv-story .castcard b {display:block; font-family:var(--serif); font-size:17px; font-weight:700; color:var(--ink); letter-spacing:.04em;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .cv-story .castcard .crole {font-family:var(--kai); font-size:13px; line-height:1.7; color:var(--soft); margin-top:8px; min-height:44px;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+  .cv-story .castcard .act {display:flex; align-items:center; justify-content:center; gap:5px; margin-top:auto; padding-top:10px;
+    border-top:1px solid #ece2cf; font-family:var(--serif); font-size:12px; letter-spacing:.14em; color:var(--green);}
+  .cv-story .castcard.sel .act {color:var(--gold);}
+  .cv-story .castcard .act svg {color:currentColor;}
+  /* 自定义角色面板(识别成演出卡进入,公开层同老 modal) */
+  .cv-story .custompanel {margin-top:14px; max-width:760px; background:var(--paper); border:1px solid var(--line); padding:16px 18px; position:relative;}
+  .cv-story .custompanel::before {content:""; position:absolute; inset:5px; border:1px solid rgba(196,179,132,.3); pointer-events:none;}
+  .cv-story .custompanel .cs-sub {font-family:var(--kai); font-size:13.5px; line-height:1.8; color:var(--soft); margin:0; position:relative;}
+  .cv-story .custompanel textarea {width:100%; min-height:108px; margin-top:10px; border:1px solid var(--line2); background:var(--paper2);
+    color:var(--ink); font-family:var(--kai); font-size:14px; line-height:1.8; padding:10px 12px; outline:none; resize:vertical; border-radius:0; position:relative; box-shadow:none;}
+  .cv-story .custompanel .csrow {display:flex; align-items:center; gap:10px; margin-top:12px; position:relative;}
+  .cv-story .cbtn {height:34px; padding:0 16px; display:inline-flex; align-items:center; border:1px solid var(--navy-line); background:transparent;
+    color:var(--navy); font-family:var(--serif); font-size:13px; letter-spacing:.08em; cursor:pointer; border-radius:0; min-height:0;}
+  .cv-story .cbtn:hover:not(:disabled) {background:rgba(185,154,89,.12); color:var(--navy);}
+  .cv-story .cbtn.pri {background:var(--green); color:#eef0e2; border-color:#283831;}
+  .cv-story .cbtn.pri:hover:not(:disabled) {background:#2c3a32; color:#eef0e2;}
+  .cv-story .cbtn:disabled {opacity:.55; cursor:default;}
 
   
   .cv-story .opscene {position:absolute; left:250px; top:855px; width:660px; z-index:4;}
@@ -190,37 +248,38 @@ const RECON_STORY_DETAIL_CSS = `
   .cv-story .opscene .txt p {margin:0 0 5px; font-family:var(--kai); font-size:12px; line-height:1.7; color:var(--soft); letter-spacing:.02em;}
 
   
-  .cv-story .ritual {position:absolute; right:0; top:88px; bottom:0; width:382px; z-index:10;
+  /* 入戏仪式:固定在视口右侧不随页面滚走;内部流式,入局按钮紧贴角色信息成一个整体 */
+  .cv-story .ritual {position:fixed; right:0; top:88px; bottom:0; width:382px; z-index:10;
     border-left:1px solid var(--line2);
-    background:linear-gradient(180deg, rgba(250,244,234,.55), rgba(246,239,226,.3));}
-  .cv-story .rh {position:absolute; left:30px; top:24px; display:flex; align-items:center; gap:9px;}
+    background:linear-gradient(180deg, rgba(250,244,234,.55), rgba(246,239,226,.3));
+    display:flex; flex-direction:column; padding:24px 30px 26px; overflow-y:auto;}
+  .cv-story .ritual::-webkit-scrollbar {width:6px;} .cv-story .ritual::-webkit-scrollbar-thumb {background:var(--line2);}
+  .cv-story .rh {display:flex; align-items:center; gap:9px; flex:none;}
   .cv-story .rh .star {color:var(--gold); display:grid; place-items:center;}
   .cv-story .rh b {font-family:var(--serif); font-size:17px; font-weight:700; letter-spacing:.14em; color:var(--ink);}
   .cv-story .rh .sep {color:var(--line2); font-family:var(--serifen); font-size:14px; margin:0 1px;}
   .cv-story .rh .en {font-family:var(--serifen); font-size:10px; letter-spacing:.3em; color:var(--faint);}
-  .cv-story .card .avn {display:grid; place-items:center; background:linear-gradient(170deg,#efe6d2,#ded1b4); border-bottom:1px solid var(--line);}
-  .cv-story .card .avn b {font-family:var(--serif); font-size:44px; color:var(--gold); font-weight:700;}
   /* 入戏仪式立绘:角色无真立绘 → 中性大首字块(不放固定假立绘) */
-  .cv-story .rart {position:absolute; left:14px; right:0; top:42px; height:270px;
+  .cv-story .rart {height:228px; flex:none; margin-top:18px;
     background:linear-gradient(170deg,#efe6d2,#dccfb1); display:grid; place-items:center;}
-  .cv-story .rart::after {content:attr(data-ini); font-family:var(--serif); font-size:96px; color:var(--gold); font-weight:700;}
-  .cv-story .rname {position:absolute; left:0; right:0; top:322px; text-align:center;}
+  .cv-story .rart::after {content:attr(data-ini); font-family:var(--serif); font-size:88px; color:var(--gold); font-weight:700;}
+  .cv-story .rname {text-align:center; flex:none; margin-top:14px;}
   .cv-story .rname h3 {margin:0; font-family:var(--serif); font-size:25px; font-weight:700; letter-spacing:.06em; color:var(--ink);}
   .cv-story .rname .role {font-family:var(--kai); font-size:13px; color:var(--soft); letter-spacing:.08em; margin-top:7px; padding:0 26px;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
 
-  .cv-story .attrs {position:absolute; left:30px; right:30px; top:386px;}
+  .cv-story .attrs {flex:none; margin-top:10px;}
   .cv-story .attr {display:flex; align-items:flex-start; gap:14px; padding:9px 0; border-top:1px solid var(--line);}
   .cv-story .attr:first-child {border-top:none;}
   .cv-story .attr .lab {flex:none; width:58px; font-family:var(--serif); font-size:12px; color:var(--gold); letter-spacing:.1em; margin-top:2px;}
-  .cv-story .attr .v {flex:1; font-family:var(--kai); font-size:13px; line-height:1.5; color:var(--ink); letter-spacing:.02em;}
+  .cv-story .attr .v {flex:1; font-family:var(--kai); font-size:15px; line-height:1.6; color:var(--ink); letter-spacing:.02em;}
   .cv-story .attr.mono .v {font-style:italic; color:var(--soft);}
   .cv-story .wave {display:inline-flex; align-items:center; gap:14px; margin-top:7px;}
   .cv-story .wave svg {color:var(--line2);}
   .cv-story .wave .spk {color:var(--gold);}
 
   
-  .cv-story .enter {position:absolute; left:30px; right:30px; top:689px; height:94px;
+  .cv-story .enter {position:relative; flex:none; margin-top:18px; height:94px;
     background:linear-gradient(180deg,#3c4f44,#2c3c33); border:1px solid var(--navy-line);
     display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer;}
   .cv-story .enter::before {content:""; position:absolute; inset:5px; border:1px solid rgba(193,168,111,.5);}
@@ -250,6 +309,108 @@ function _normRole(x) {
   };
 }
 
+// 横排轮播(老 Netflix Carousel 行为):一张卡一个圆点,箭头一次切一张卡;
+// 切到最后一张再点 › 循环回第一张。圆点可点击直达;手动拖动也同步。不出滚动条。
+function RxCarousel({ rowClass, children }) {
+  const ref = React.useRef(null);
+  const [cur, setCur] = useState(0);
+  const [overflow, setOverflow] = useState(false);
+  const curRef = React.useRef(0);     // 权威索引(防快速连点时闭包读到旧 state)
+  const sup = React.useRef(0);        // goto 后屏蔽滚动回读,直到滚动停稳(防平滑滚动中途/钳位时点位被拉回)
+  const settleT = React.useRef(null);
+  const count = React.Children.count(children);
+  React.useEffect(() => {
+    const recalc = () => { const el = ref.current; if (el) setOverflow(el.scrollWidth > el.clientWidth + 8); };
+    recalc();
+    window.addEventListener("resize", recalc);
+    return () => window.removeEventListener("resize", recalc);
+  }, [count]);
+  // 自绘 rAF 缓动(不用原生 smooth:连发时浏览器滚动动画器会进坏状态,连兜底都被回卷);
+  // 每帧 instant 定位,新动画自动取消旧动画,终点确定。
+  const animT = React.useRef(null);
+  const animEndT = React.useRef(null);
+  const animateTo = (el, target) => {
+    if (animT.current) cancelAnimationFrame(animT.current);
+    if (animEndT.current) clearTimeout(animEndT.current);
+    const start = el.scrollLeft, dist = target - start, t0 = performance.now(), dur = 320;
+    if (Math.abs(dist) < 1) return;
+    const tick = (now) => {
+      const p = Math.min(1, (now - t0) / dur);
+      const ease = 1 - Math.pow(1 - p, 3);
+      el.scrollTo({ left: start + dist * ease, behavior: "instant" });
+      if (p < 1) animT.current = requestAnimationFrame(tick);
+    };
+    animT.current = requestAnimationFrame(tick);
+    // 终点兜底:后台/被遮挡标签 rAF 不跑(动画零帧),节流后的定时器也要把位置钉到终点
+    animEndT.current = setTimeout(() => {
+      const e2 = ref.current; if (!e2) return;
+      if (Math.abs(e2.scrollLeft - target) > 1) e2.scrollTo({ left: target, behavior: "instant" });
+    }, dur + 130);
+  };
+  const goto = (i) => {
+    const el = ref.current; if (!el) return;
+    const its = [...el.children]; const n = its.length; if (!n) return;
+    const idx = ((i % n) + n) % n;   // 循环:最后一张的下一张 = 第一张
+    const target = Math.min(its[idx].offsetLeft - its[0].offsetLeft, Math.max(0, el.scrollWidth - el.clientWidth));
+    sup.current = Date.now() + 800;
+    curRef.current = idx; setCur(idx);
+    animateTo(el, target);
+  };
+  // 手动拖动:滚动停稳 140ms 后才按「最近的卡」同步点位(滚动中途不回读)
+  const onScroll = () => {
+    if (settleT.current) clearTimeout(settleT.current);
+    settleT.current = setTimeout(() => {
+      const el = ref.current; if (!el || Date.now() < sup.current) return;
+      const its = [...el.children]; if (!its.length) return;
+      const base = its[0].offsetLeft, sl = el.scrollLeft;
+      let best = 0, bd = Infinity;
+      its.forEach((it, i) => { const d = Math.abs((it.offsetLeft - base) - sl); if (d < bd) { bd = d; best = i; } });
+      curRef.current = best; setCur(best);
+    }, 140);
+  };
+  return (
+    <div className="rowwrap">
+      <div className="rarrow l" onClick={() => goto(curRef.current - 1)}>‹</div>
+      <div className="rarrow r" onClick={() => goto(curRef.current + 1)}>›</div>
+      <div className={rowClass} ref={ref} onScroll={onScroll}>{children}</div>
+      {overflow && count > 1 && (
+        <div className="rdots">
+          {Array.from({ length: count }, (_, i) => (
+            <span key={i} className={"rdot" + (i === cur ? " on" : "")} onClick={() => goto(i)}></span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 角色翻转卡(老 Netflix 详情卡的 PublicChar,平铺进页面):正面只渲染公开层——名/外貌/性格;
+// known_hidden、versions、tension、scenario、first_mes 一律不进(剧透边界硬约束)。背面角色图。
+function RxStoryFlipChar({ c }) {
+  const cd = (c && c.data) || c || {};
+  const [flip, setFlip] = useState(false);
+  return (
+    <div className={"fchar" + (flip ? " flip" : "")}>
+      <div className="fin">
+        <div className="ff">
+          <b className="fnm">{cd.name || "角色"}</b>
+          <div className="fscroll">
+            {cd.look ? <React.Fragment><div className="fsub">外貌</div><p>{cd.look}</p></React.Fragment> : null}
+            {cd.personality ? <React.Fragment><div className="fsub">性格</div><p>{cd.personality}</p></React.Fragment> : null}
+          </div>
+          <button className="fbtn" title="翻面看角色图" onClick={() => setFlip(true)}>↻</button>
+        </div>
+        <div className="fb" onClick={() => setFlip(false)}>
+          {cd.image
+            ? <img src={cd.image} alt={cd.name || "角色"} />
+            : <div className="noimg">暂无角色图</div>}
+          <button className="fbtn" title="翻回设定" onClick={(e) => { e.stopPropagation(); setFlip(false); }}>↺</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ReconStoryDetail(props) {
   const P = props || {};
   const onNav = P.onNav || (() => {});
@@ -266,18 +427,19 @@ function ReconStoryDetail(props) {
   const synopsis = pdata.synopsis || story.premise || "";
   const tags = pdata.tags || [];
   const author = pdata.author || "";
-  // 背景:有 world 文本就拆行成条目;没有就不显示假条目。
-  // world 兼容三种形态:字符串 / {entries:[{name,text}]} / 其它对象(取文本字段)。
-  const backstory = (() => {
+  // 背景(老 modal「故事背景」tab 的内容版式):前情 + 世界设定公开条目(只露最核心几条,不抖全世界书)。
+  const premise = story.premise || "";
+  const worldEntries = (() => {
     const w = pdata.world;
     if (!w) return [];
-    let lines = [];
-    if (typeof w === "string") lines = w.split(/\n+/);
-    else if (Array.isArray(w.entries)) lines = w.entries.map((e) => (e && (e.name ? e.name + "：" : "") + (e.text || e.content || "")) || "");
-    else if (typeof w.text === "string") lines = w.text.split(/\n+/);
-    else lines = [];
-    return lines.map((s) => String(s).trim()).filter(Boolean).slice(0, 4).map((s) => (s.length > 60 ? s.slice(0, 60) + "……" : s));
+    if (Array.isArray(w.entries)) return w.entries.filter((e) => e && (e.visibility || "public") === "public").slice(0, 3);
+    if (typeof w === "string") return w.split(/\n+/).map((s) => s.trim()).filter(Boolean).slice(0, 3).map((s) => ({ comment: "", content: s }));
+    if (typeof w.text === "string") return [{ comment: "", content: w.text }];
+    return [];
   })();
+  // 角色翻转卡只收有展示内容(外貌/性格)的角色;内容全空的名册壳过滤掉,空了退回文字列表。
+  const rawChars = pdata.characters || [];
+  const flipChars = rawChars.filter((c) => { const cd = (c && c.data) || c || {}; return cd.look || cd.personality; });
 
   // 角色列表(展示用):优先 characters,空则用 playables。
   const charList = ((pdata.characters && pdata.characters.length ? pdata.characters : pdata.playables) || [])
@@ -294,6 +456,21 @@ function ReconStoryDetail(props) {
   const [selIdx, setSelIdx] = useState(0);
   const selected = cards[selIdx] || cards[0];
   const enterRole = selected && !selected.spectator ? selected : null;
+
+  // 自定义角色(老 modal「出演」tab 的自由出演):写身份 → /api/identify_player 识别成演出卡 → 直接入局。
+  const [castMode, setCastMode] = useState("list");
+  const [customText, setCustomText] = useState("");
+  const [identifying, setIdentifying] = useState(false);
+  async function startCustom() {
+    if (!customText.trim() || identifying) return;
+    setIdentifying(true);
+    try {
+      const r = await fetch("/api/identify_player", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: customText }) });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      onEnter(await r.json());
+    } catch (e) { alert("识别失败:" + e.message); }
+    setIdentifying(false);
+  }
 
   return (
     <div className="cv-story">
@@ -322,74 +499,107 @@ function ReconStoryDetail(props) {
         </div>
       </window.ReconRail>
 
-      {/* ===== 中左:书(点击=放回书架/返回) ===== */}
-      <div className="booktab" onClick={() => onClose()} style={{ cursor: "pointer" }}><div className="zh">放回书架</div><div className="en">CLOSE</div></div>
-      <div className="book" onClick={() => onClose()} style={{ cursor: "pointer" }}>
-        {pdata.cover
-          ? <img src={pdata.cover} alt="" />
-          : (() => {
-              const t = (pdata.name || preset.name || "未命名").replace(/[\s·•．.,，:：;；!！?？\-—~～]+/g, "").slice(0, 12);
-              return <span className="bt"><b style={{ fontSize: t.length > 6 ? 21 : 26 }}>{t}</b></span>;
-            })()}
-      </div>
-
-      {/* 标题区 */}
-      <div className="stitle">
-        <h2>{bookName}</h2>
-        {tags.length > 0 && <div className="tags">{tags.map((t, i) => <span key={i}>{t}</span>)}</div>}
-        {author ? <div className="meta"><span><b>作者</b>　{author}</span></div> : null}
-      </div>
-
-      {/* 简介 */}
-      <div className="intro">
-        <div className="blkh"><b>简介</b><span className="en">INTRO</span></div>
-        <p>{synopsis || "暂无简介。"}</p>
-      </div>
-
-      {/* 背景(仅当 preset 有 world 文本时显示,不再写死假设定) */}
-      {backstory.length > 0 && (
-        <div className="bg">
-          <div className="blkh"><b>背景</b><span className="en">BACKSTORY</span></div>
-          <ul>
-            {backstory.map((b, i) => <li key={i}>{b}</li>)}
-          </ul>
-        </div>
-      )}
-
-      {/* 角色 */}
-      <div className="chars">
-        <div className="blkh"><b>角色</b><span className="en">CHARACTERS</span></div>
-        {charList.length > 0 ? (
-          <ul>
-            {charList.slice(0, 5).map((c, i) => (
-              <li key={i}><b>{c.name}</b>{c.persona || c.description ? "　" + ((c.persona || c.description) + "").slice(0, 42) : ""}</li>
-            ))}
-            {charList.length > 5 && <li style={{ color: "var(--faint)" }}>……等共 {charList.length} 位角色，入局后逐一登场。</li>}
-          </ul>
-        ) : (
-          <p>这个故事还没有登记角色。</p>
-        )}
-      </div>
-
-      {/* ===== 选择你的角色 ===== */}
-      <div className="pickh"><span className="star"><StarIcon size={15} /></span><b>选择你扮演谁</b><span className="en">CHOOSE YOUR ROLE</span><span className="dash"></span></div>
-      <div className="cards">
-        {cards.map((c, i) => {
-          const sel = i === selIdx;
-          return (
-            <div className={"card" + (sel ? " sel" : "")} key={i} onClick={() => setSelIdx(i)} style={{ cursor: "pointer" }}>
-              {sel && <span className="badge">已选择</span>}
-              {/* 库里角色没有立绘字段 → 首字中性块,不放与角色无关的假人像;旁观者用罗盘徽 */}
-              {c.spectator
-                ? <img className="av" src="assets/recon/story-detail-emblem.png" alt="" style={{ objectFit: "contain", padding: 28, boxSizing: "border-box" }} />
-                : <span className="av avn"><b>{(c.name || "?").trim().charAt(0)}</b></span>}
-              <div className="nm">{c.name}</div>
-              <div className="role">{c.persona || (c.spectator ? "旁观者" : "可扮演")}</div>
-              {c.description ? <div className="quote">{c.description}</div> : null}
-              <div className="act"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z" /></svg>{sel ? "已选择" : "可扮演"}</div>
+      {/* ===== 中间内容(流式,随页滚动) ===== */}
+      <div className="mid">
+        <div className="row1">
+          <div className="bookcol">
+            {/* 书(点击=放回书架/返回) */}
+            <div className="booktab" onClick={() => onClose()} style={{ cursor: "pointer" }}><div className="zh">放回书架</div><div className="en">CLOSE</div></div>
+            <div className="book" onClick={() => onClose()} style={{ cursor: "pointer" }}>
+              {pdata.cover
+                ? <img src={pdata.cover} alt="" />
+                : (() => {
+                    const t = (pdata.name || preset.name || "未命名").replace(/[\s·•．.,，:：;；!！?？\-—~～]+/g, "").slice(0, 12);
+                    return <span className="bt"><b style={{ fontSize: t.length > 6 ? 21 : 26 }}>{t}</b></span>;
+                  })()}
             </div>
-          );
-        })}
+          </div>
+          <div className="headcol">
+            {/* 标题区 */}
+            <div className="stitle">
+              <h2>{bookName}</h2>
+              {tags.length > 0 && <div className="tags">{tags.map((t, i) => <span key={i}>{t}</span>)}</div>}
+              {author ? <div className="meta"><span><b>作者</b>　{author}</span></div> : null}
+            </div>
+            {/* 简介 */}
+            <div className="intro">
+              <div className="blkh"><b>简介</b><span className="en">INTRO</span></div>
+              <p>{synopsis || "暂无简介。"}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="row2">
+          {/* 背景(老 modal 内容版式:前情 + 世界设定公开条目;无数据不显示假设定) */}
+          {(premise || worldEntries.length > 0) && (
+            <div className="bg">
+              <div className="blkh"><b>背景</b><span className="en">BACKSTORY</span></div>
+              {premise ? (
+                <div className="bgblock lead"><div className="bgsub">前情</div><p>{premise}</p></div>
+              ) : null}
+              {worldEntries.map((e, i) => (
+                <div className="bgblock" key={i}>
+                  <div className="bgsub">{e.comment || (e.keys || []).join(" / ") || "世界设定"}</div>
+                  <p>{e.content || ""}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 角色:翻转卡横排(公开层);没有可展示的角色内容时退回文字列表 */}
+          <div className="chars">
+            <div className="blkh"><b>角色</b><span className="en">CHARACTERS</span></div>
+            {flipChars.length > 0 ? (
+              <RxCarousel rowClass="chrow">
+                {flipChars.map((c, i) => <RxStoryFlipChar key={i} c={c} />)}
+              </RxCarousel>
+            ) : charList.length > 0 ? (
+              <ul>
+                {charList.slice(0, 5).map((c, i) => (
+                  <li key={i}><b>{c.name}</b>{c.persona || c.description ? "　" + ((c.persona || c.description) + "").slice(0, 42) : ""}</li>
+                ))}
+                {charList.length > 5 && <li style={{ color: "var(--faint)" }}>……等共 {charList.length} 位角色，入局后逐一登场。</li>}
+              </ul>
+            ) : (
+              <p>这个故事还没有登记角色。</p>
+            )}
+          </div>
+        </div>
+
+        {/* ===== 选择你的角色(老 Netflix 出演卡 + 自定义角色) ===== */}
+        <div className="pickh"><span className="star"><StarIcon size={15} /></span><b>选择你扮演谁</b><span className="en">CHOOSE YOUR ROLE</span><span className="dash"></span></div>
+        <RxCarousel rowClass="cards">
+          {cards.map((c, i) => {
+            const sel = i === selIdx && castMode !== "custom";
+            return (
+              <div className={"castcard" + (sel ? " sel" : "")} key={i} onClick={() => { setSelIdx(i); setCastMode("list"); }}>
+                <b>{c.name}</b>
+                <div className="crole">{c.persona || (c.spectator ? "不扮演特定角色,以观察者视角进入" : "可扮演")}</div>
+                <div className="act"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8z" /></svg>{sel ? "已选择" : "可扮演"}</div>
+              </div>
+            );
+          })}
+          <div className={"castcard" + (castMode === "custom" ? " sel" : "")} onClick={() => setCastMode((m) => (m === "custom" ? "list" : "custom"))}>
+            <b>自定义角色</b>
+            <div className="crole">写下你想扮演的身份,AI 识别成演出卡进入</div>
+            <div className="act"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 20l1-4L16 5l3 3L8 19z"/></svg>自由出演</div>
+          </div>
+        </RxCarousel>
+        {castMode === "custom" && (
+          <div className="custompanel">
+            <p className="cs-sub">写下你要扮演的角色:身份、背景、目标、能力、限制、开局已知……AI 会把它识别成演出卡。</p>
+            <textarea value={customText} onChange={(e) => setCustomText(e.target.value)}
+              placeholder="例:一个流落异乡的年轻铁匠,为寻失散的妹妹而来,擅长锻造与观察……" />
+            <div className="csrow">
+              <label className="cbtn">上传 .txt / .md / .docx
+                <input type="file" accept=".txt,.md,.docx" style={{ display: "none" }}
+                  onChange={async (e) => { const f = e.target.files[0]; if (!f) return; try { setCustomText(await window.uploadFile(f)); } catch (err) { alert("上传失败:" + err.message); } }} />
+              </label>
+              <span style={{ flex: 1 }}></span>
+              <button className="cbtn pri" disabled={identifying || !customText.trim()} onClick={startCustom}>{identifying ? "识别中…" : "用这个角色开始"}</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ===== 右:入戏仪式(跟随选中角色) ===== */}

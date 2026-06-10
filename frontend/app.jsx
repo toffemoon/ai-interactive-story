@@ -2155,12 +2155,14 @@ const COACH = {
 
 
 
-// recon 1:1 视图外壳:全屏 fill——按视口高定缩放,画布宽跟随视口(左右零留白;recon 页内部
-// 左右锚定自适应)。视口比设计稿更窄时退回 scale-to-fit(小留白,不裁内容)。导航点击委托保留。
-function ReconShell({ designW, designH, bg, onNav, onPrimary, children }) {
+// recon 视图外壳。两种模式:
+// - fluid(响应式,B 路线目标态):不缩放,正常文档流 + 页面滚动,文字按真实尺寸渲染(清晰,浏览器缩放可用)。
+// - 旧 fill(过渡期):固定设计稿画布按视口缩放(transform: scale,文字会位图发糊)。逐页转 fluid 后退役。
+function ReconShell({ designW, designH, bg, fluid, onNav, onPrimary, children }) {
   const ref = React.useRef(null);
   const [dim, setDim] = React.useState({ scale: 1, w: designW, ox: 0, oy: 0 });
   React.useEffect(() => {
+    if (fluid) return;
     function fit() {
       const el = ref.current; if (!el) return;
       const vw = el.clientWidth, vh = el.clientHeight;
@@ -2175,7 +2177,7 @@ function ReconShell({ designW, designH, bg, onNav, onPrimary, children }) {
     fit();
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
-  }, [designW, designH]);
+  }, [designW, designH, fluid]);
   function onClick(e) {
     const navEl = e.target.closest && e.target.closest("a, .nav a, .menu a, .lbar .nav a");
     if (navEl) {
@@ -2191,6 +2193,21 @@ function ReconShell({ designW, designH, bg, onNav, onPrimary, children }) {
         e.preventDefault(); onPrimary();
       }
     }
+  }
+  if (fluid) {
+    return (
+      <div ref={ref} className="recon-shell recon-fluid" onClick={onClick} style={bg ? { background: bg } : undefined}>
+        <style>{`
+          html, body { overflow:hidden !important; scrollbar-gutter:auto !important; }
+          .recon-shell.recon-fluid{position:fixed; inset:0; z-index:40; background:#ece4d2; overflow-y:auto; overflow-x:hidden;}
+          /* 入场只动 opacity——transform(哪怕 identity)会让 fixed 竖栏失去视口锚定(跟内容一起滚走) */
+          @keyframes rc-fluid-in { from { opacity:0; } to { opacity:1; } }
+          .recon-fluid .recon-fade{width:100%; min-height:100%; animation: rc-fluid-in .32s ease-out both;}
+          @media (prefers-reduced-motion: reduce){ .recon-fluid .recon-fade{animation-duration:1ms;} }
+        `}</style>
+        <div className="recon-fade">{children}</div>
+      </div>
+    );
   }
   return (
     <div ref={ref} className="recon-shell" onClick={onClick} style={bg ? { background: bg } : undefined}>
@@ -2910,7 +2927,7 @@ function App() {
       {view === "landing" && (isMobile ? (
         <window.MLanding presets={presets} onNav={navTo} onOpenStory={openStoryModal} onNew={onNew} />
       ) : (
-        <ReconShell designW={1672} designH={941}>
+        <ReconShell fluid>
           <window.ReconHome presets={presets} user={auth.user}
             onNav={navTo} onOpenStory={openStoryModal} onNew={onNew}
             onLogin={() => setView("mine")} />
@@ -2922,7 +2939,7 @@ function App() {
         <window.MExplore presets={presets} loadErr={presetsErr} onRetry={refreshHome}
           onOpenStory={openStoryModal} onNew={onNew} onNav={navTo} />
       ) : (
-        <ReconShell designW={1536} designH={1024}>
+        <ReconShell fluid>
           <window.ReconExplore presets={presets} user={auth.user} loadErr={presetsErr} onRetry={refreshHome}
             onOpenStory={openStoryModal} onNew={onNew} onNav={navTo} />
         </ReconShell>
@@ -2931,7 +2948,7 @@ function App() {
       {view === "chat" && (isMobile ? (
         <ReconChatLive presets={presets} onNav={navTo} uid={auth.user ? auth.user.id : ""} mobile />
       ) : (
-        <ReconShell designW={1536} designH={1024}>
+        <ReconShell fluid>
           <ReconChatLive presets={presets} onNav={navTo} uid={auth.user ? auth.user.id : ""} />
         </ReconShell>
       ))}
@@ -2949,7 +2966,7 @@ function App() {
             savesErr={savesErr} onRetrySaves={retrySaves}
             onNav={navTo} onResume={resumeSave} onNew={onNew} onLogout={onLogout} onAvatar={onAvatarUp} />
         ) : (
-          <ReconShell designW={1536} designH={1024}>
+          <ReconShell fluid>
             <window.ReconProfile user={auth.user} presets={presets} saves={mineSaves} assets={myAssets}
               savesErr={savesErr} onRetrySaves={retrySaves}
               onNav={navTo} onResume={resumeSave} onNew={onNew} onLogout={onLogout} onAvatar={onAvatarUp} />
@@ -2968,7 +2985,7 @@ function App() {
             onTurn={() => { setTurnSeq((s) => s + 1); setSaves(loadSaves()); }} />
         );
         return isMobile ? panel : (
-          <ReconShell designW={1536} designH={1024} onNav={navTo}>{panel}</ReconShell>
+          <ReconShell fluid onNav={navTo}>{panel}</ReconShell>
         );
       })()}
 
@@ -2976,13 +2993,13 @@ function App() {
       {view === "game" && !(started && characters.length > 0) && (isMobile ? (
         <window.MEmpty onNav={navTo} onNew={onNew} />
       ) : (
-        <ReconShell designW={1536} designH={1024}>
+        <ReconShell fluid>
           <div className="cv-gempty">
             <style>{`
-              .cv-gempty {position:relative; width:1536px; height:1024px; overflow:hidden;
+              .cv-gempty {position:relative; width:100%; height:100vh; min-height:640px; overflow:hidden;
                 background:repeating-linear-gradient(90deg, rgba(169,138,99,.028) 0 1px, transparent 1px 46px), #f3ece0;
                 color:#2c2820; font-family:"Kaiti SC","STKaiti","KaiTi",serif;}
-              .cv-gempty .mid {position:absolute; left:188px; right:0; top:0; bottom:0; display:grid; place-items:center;}
+              .cv-gempty .mid {position:absolute; left:216px; right:0; top:0; bottom:0; display:grid; place-items:center;}
               .cv-gempty .panel {width:520px; text-align:center; background:#faf4ea; border:1px solid #ddd0b4; padding:54px 48px; position:relative;}
               .cv-gempty .panel::before {content:""; position:absolute; inset:6px; border:1px solid rgba(196,179,132,.4); pointer-events:none;}
               .cv-gempty .panel .ic {color:#a98a63; margin-bottom:18px;}
@@ -3014,7 +3031,7 @@ function App() {
       {view === "build" && (isMobile ? (
         <ReconCreateLive onNav={navTo} refreshHome={refreshHome} mobile />
       ) : (
-        <ReconShell designW={1536} designH={1024}>
+        <ReconShell fluid>
           <ReconCreateLive onNav={navTo} refreshHome={refreshHome} />
         </ReconShell>
       ))}
@@ -3025,7 +3042,7 @@ function App() {
           onEnter={(role) => startFromModal(role)}
           onClose={() => setStoryModal(null)} />
       ) : (
-        <ReconShell designW={1672} designH={941}>
+        <ReconShell fluid>
           <window.ReconStoryDetail preset={storyModal.preset}
             onNav={(v) => { setStoryModal(null); navTo(v); }}
             onEnter={(role) => startFromModal(role)}
