@@ -140,11 +140,11 @@ function ReconCreate(props) {
   .cv-create .talk .th .badge {width:22px; height:22px; border:1px solid var(--line2); display:grid; place-items:center; color:var(--gold); flex:none;}
   .cv-create .talk .th b {font-family:var(--serif); font-size:15px; font-weight:700; letter-spacing:.1em; color:var(--ink);}
   .cv-create .talk .th .en {font-family:var(--serifen); font-size:8px; letter-spacing:.24em; color:var(--gold); align-self:flex-end; margin-bottom:2px;}
-  .cv-create .talk .th .hint {margin-left:auto; font-family:var(--kai); font-size:10.5px; color:var(--faint); letter-spacing:.02em;}
+  .cv-create .talk .th .hint {margin-left:auto; font-family:var(--kai); font-size:12px; color:var(--faint); letter-spacing:.02em;}
 
   .cv-create .scroll {flex:1; min-height:0; overflow-y:auto; padding:8px 26px 4px;}
   .cv-create .scroll::-webkit-scrollbar {width:5px;} .cv-create .scroll::-webkit-scrollbar-thumb {background:var(--line2);}
-  .cv-create .syscue {text-align:center; font-family:var(--kai); font-size:11px; color:var(--faint); letter-spacing:.08em; margin:12px 0 20px;}
+  .cv-create .syscue {text-align:center; font-family:var(--kai); font-size:12px; color:var(--faint); letter-spacing:.08em; margin:12px 0 20px;}
   .cv-create .syscue span {display:inline-block; padding:0 14px; position:relative;}
   .cv-create .syscue span::before, .cv-create .syscue span::after {content:""; position:absolute; top:50%; width:54px; height:1px; background:var(--line);}
   .cv-create .syscue span::before {right:100%;} .cv-create .syscue span::after {left:100%;}
@@ -152,10 +152,10 @@ function ReconCreate(props) {
   .cv-create .line {padding:13px 0 14px; border-bottom:1px solid #ece2cf;}
   .cv-create .line .lh {display:flex; align-items:center; gap:9px; margin-bottom:7px;}
   .cv-create .line .lh .dot {width:6px; height:6px; transform:rotate(45deg); flex:none;}
-  .cv-create .line .lh .who {font-family:var(--serif); font-size:12.5px; font-weight:700; letter-spacing:.06em; color:var(--ink);}
+  .cv-create .line .lh .who {font-family:var(--serif); font-size:13.5px; font-weight:700; letter-spacing:.06em; color:var(--ink);}
   .cv-create .line .lh .en {font-family:var(--serifen); font-size:7.5px; letter-spacing:.2em; color:var(--faint);}
   .cv-create .line .lh .ln {flex:1; height:1px; background:linear-gradient(90deg,var(--line),transparent);}
-  .cv-create .line .bd {font-family:var(--kai); font-size:13.5px; line-height:1.95; letter-spacing:.01em; padding-left:15px;}
+  .cv-create .line .bd {font-family:var(--kai); font-size:15px; line-height:1.95; letter-spacing:.01em; padding-left:15px;}
   .cv-create .line.ai .lh .dot {background:var(--gold);}
   .cv-create .line.ai .bd {color:var(--ink); border-left:2px solid var(--gold2);}
   .cv-create .line.me .lh .dot {background:var(--green);}
@@ -166,7 +166,7 @@ function ReconCreate(props) {
   .cv-create .composer .box {position:relative; height:62px; background:var(--paper); border:1px solid var(--line2); display:flex; align-items:center; padding:0 18px;}
   .cv-create .composer .box::before {content:""; position:absolute; inset:4px; border:1px solid rgba(169,138,99,.22); pointer-events:none;}
   .cv-create .composer .box .phin {flex:1; min-width:0; border:none; outline:none; background:transparent; box-shadow:none; border-radius:0; padding:0;
-    font-family:var(--kai); font-size:13.5px; color:var(--ink);}
+    font-family:var(--kai); font-size:15px; color:var(--ink);}
   .cv-create .composer .box .phin::placeholder {color:var(--faint);}
   .cv-create .composer .box .phin:focus {border:none; box-shadow:none;}
   .cv-create .blink {display:inline-block; font-style:normal; animation:rcr-blink 1s steps(2) infinite;}
@@ -177,7 +177,7 @@ function ReconCreate(props) {
   .cv-create .composer .box .send .en {font-family:var(--serifen); font-size:7px; letter-spacing:.26em; color:rgba(243,234,214,.65); position:relative;}
   .cv-create .composer .up {display:flex; align-items:center; gap:8px; margin-top:11px; padding-left:2px;}
   .cv-create .composer .up .ic {color:var(--gold); display:grid; place-items:center;}
-  .cv-create .composer .up .tx {font-family:var(--kai); font-size:11px; color:var(--soft); letter-spacing:.02em;}
+  .cv-create .composer .up .tx {font-family:var(--kai); font-size:12.5px; color:var(--soft); letter-spacing:.02em;}
   .cv-create .composer .up .tx b {color:var(--ink); font-weight:700;}
 
   .cv-create .preview {width:472px; flex:none; display:flex; flex-direction:column;}
@@ -207,11 +207,11 @@ function ReconCreate(props) {
   .cv-create .card .fields::-webkit-scrollbar {width:5px;} .cv-create .card .fields::-webkit-scrollbar-thumb {background:var(--line2);}
   .cv-create .card .frow {padding:11px 0 12px; border-bottom:1px solid #ece2cf; position:relative;}
   .cv-create .card .frow .fk {display:flex; align-items:center; gap:8px; margin-bottom:6px;}
-  .cv-create .card .frow .fk .k {font-family:var(--serif); font-size:13px; font-weight:700; letter-spacing:.1em; color:var(--ink);}
+  .cv-create .card .frow .fk .k {font-family:var(--serif); font-size:14px; font-weight:700; letter-spacing:.1em; color:var(--ink);}
   .cv-create .card .frow .fk .en {font-family:var(--serifen); font-size:7px; letter-spacing:.2em; color:var(--faint);}
   .cv-create .card .frow .fk .lock {margin-left:6px; color:var(--gold); display:grid; place-items:center;}
   .cv-create .card .frow .fk .new {margin-left:auto; font-family:var(--serifen); font-size:7.5px; letter-spacing:.12em; padding:1px 5px;}
-  .cv-create .card .frow .fv {font-family:var(--kai); font-size:12.5px; line-height:1.85; color:var(--soft); letter-spacing:.01em;}
+  .cv-create .card .frow .fv {font-family:var(--kai); font-size:15px; line-height:1.85; color:var(--soft); letter-spacing:.01em;}
   .cv-create .card .frow.hl-gold {margin:0 -10px; padding-left:10px; padding-right:10px; background:linear-gradient(90deg,rgba(193,168,111,.10),transparent);}
   .cv-create .card .frow.hl-gold::before {content:""; position:absolute; left:0; top:6px; bottom:6px; width:2px; background:var(--gold2);}
   .cv-create .card .frow.hl-gold .new {color:#8a6f49; border:1px solid var(--line2);}
