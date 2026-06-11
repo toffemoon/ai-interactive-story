@@ -18,6 +18,35 @@ const SAMPLE = {
   saves: [],
 };
 
+// 预设书卡:竖版像一本书,封面在前(无封面用程序化书封),翻开背面是详情+操作(开始/删除)。
+function RxBookTile({ name, syn, tags, cover, onStart, onDelete }) {
+  const [flip, setFlip] = React.useState(false);
+  return (
+    <div className={"bookcard" + (flip ? " flip" : "")}>
+      <div className="bk-in">
+        <div className="bk-f" onClick={() => setFlip(true)} title="翻开看详情">
+          {cover
+            ? <img src={cover} alt="" draggable={false} />
+            : <div className="bk-ph"><b>{(name || "书").slice(0, 6)}</b></div>}
+          <div className="bk-band"><b>{name}</b></div>
+          <span className="bk-flip">↻</span>
+        </div>
+        <div className="bk-b">
+          <div className="bk-hd"><span className="bk-badge">预设</span></div>
+          <b className="bk-nm">{name}</b>
+          <div className="bk-ds">{syn}</div>
+          <div className="bk-tgs">{tags}</div>
+          <div className="bk-ft">
+            {onStart && <button className="bk-btn pri" onClick={(e) => { e.stopPropagation(); onStart(); }}>开始</button>}
+            {onDelete && <button className="bk-btn" onClick={(e) => { e.stopPropagation(); onDelete(); }}>删除</button>}
+          </div>
+          <span className="bk-flip" title="翻回封面" onClick={() => setFlip(false)}>↺</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ReconProfile(props) {
   const P = props || {};
   const user = P.user !== undefined ? P.user : SAMPLE.user;
@@ -360,7 +389,43 @@ function ReconProfile(props) {
   .cv-profile .rdot.on {background:var(--gold); border-color:var(--gold);}
   .cv-profile .pcrow {display:flex; gap:18px; overflow-x:auto; overflow-y:hidden; padding-bottom:4px; scrollbar-width:none;}
   .cv-profile .pcrow::-webkit-scrollbar {display:none;}
-  .cv-profile .pcrow .mcard {flex:none; width:300px;}
+  /* 预设书卡:竖版书封,封面在前,翻开是详情+操作 */
+  .cv-profile .bookcard {flex:none; width:212px; height:302px; position:relative; perspective:1000px; animation:rcp-in .38s cubic-bezier(.22,1,.36,1) both;
+    transition:transform .3s cubic-bezier(.22,1,.36,1);}
+  .cv-profile .bookcard:hover {transform:translateY(-4px);}
+  .cv-profile .bookcard .bk-in {position:absolute; inset:0; transform-style:preserve-3d; transition:transform .45s cubic-bezier(.3,.8,.3,1);}
+  .cv-profile .bookcard.flip .bk-in {transform:rotateY(180deg);}
+  .cv-profile .bookcard .bk-f, .cv-profile .bookcard .bk-b {position:absolute; inset:0; -webkit-backface-visibility:hidden; backface-visibility:hidden;
+    background:var(--paper); border:1px solid var(--line); overflow:hidden;}
+  .cv-profile .bookcard:hover .bk-f, .cv-profile .bookcard:hover .bk-b {box-shadow:0 14px 26px -16px rgba(43,38,32,.38);}
+  .cv-profile .bookcard .bk-f {cursor:pointer;}
+  .cv-profile .bookcard .bk-f::after {content:""; position:absolute; left:7px; top:0; bottom:0; width:1px; background:rgba(43,38,32,.18); pointer-events:none;}
+  .cv-profile .bookcard .bk-f img {width:100%; height:100%; object-fit:cover; display:block;}
+  .cv-profile .bookcard .bk-ph {width:100%; height:100%; display:grid; place-items:center; background:linear-gradient(160deg,#efe6d2,#ddd0b2);}
+  .cv-profile .bookcard .bk-ph b {font-family:var(--serif); font-size:24px; color:#6f6757; letter-spacing:.3em; writing-mode:vertical-rl;}
+  .cv-profile .bookcard .bk-band {position:absolute; left:0; right:0; bottom:0; padding:26px 12px 10px; text-align:center;
+    background:linear-gradient(180deg, transparent, rgba(34,29,22,.66) 60%);}
+  .cv-profile .bookcard .bk-band b {font-family:var(--serif); font-size:16px; color:#f5efe3; letter-spacing:.08em;
+    display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .cv-profile .bookcard .bk-flip {position:absolute; right:9px; bottom:9px; width:30px; height:30px; border-radius:50%; z-index:3;
+    border:1px solid var(--line2); background:rgba(250,244,234,.92); color:var(--soft); display:grid; place-items:center; font-size:14px; cursor:pointer; user-select:none;}
+  .cv-profile .bookcard .bk-flip:hover {background:rgba(193,168,111,.25); color:var(--ink);}
+  .cv-profile .bookcard .bk-b {transform:rotateY(180deg); padding:16px 18px 13px; display:flex; flex-direction:column;}
+  .cv-profile .bookcard .bk-b::after {content:""; position:absolute; inset:5px; border:1px solid rgba(196,179,132,.3); pointer-events:none;}
+  .cv-profile .bookcard .bk-badge {font-family:var(--serif); font-size:11.5px; letter-spacing:.08em; color:#8a6f49;
+    border:1px solid var(--gold2); background:rgba(193,168,111,.12); padding:2px 9px;}
+  .cv-profile .bookcard .bk-nm {display:block; font-family:var(--serif); font-size:17px; font-weight:700; letter-spacing:.04em; margin-top:10px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .cv-profile .bookcard .bk-ds {font-family:var(--kai); font-size:15px; line-height:1.7; color:var(--soft); margin-top:8px;
+    display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden;}
+  .cv-profile .bookcard .bk-tgs {font-family:var(--kai); font-size:12px; color:var(--gold); margin-top:auto; letter-spacing:.04em;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:17px;}
+  .cv-profile .bookcard .bk-ft {display:flex; align-items:center; gap:9px; border-top:1px solid var(--line); padding-top:10px; margin-top:8px; padding-right:38px;}
+  .cv-profile .bookcard .bk-btn {height:31px; padding:0 15px; border:1px solid var(--navy-line); background:transparent; color:var(--navy);
+    font-family:var(--serif); font-size:13.5px; letter-spacing:.08em; cursor:pointer; border-radius:0; min-height:0;}
+  .cv-profile .bookcard .bk-btn:hover {background:rgba(185,154,89,.12);}
+  .cv-profile .bookcard .bk-btn.pri {background:var(--green); color:#eef0e2; border-color:#283831;}
+  .cv-profile .bookcard .bk-btn.pri:hover {background:#2c3a32;}
 `}</style>
 
       {/* ============ 左竖栏 ============ */}
@@ -480,9 +545,8 @@ function ReconProfile(props) {
         {myPresets.length ? (
           <window.RxCarousel rowClass="pcrow">
             {myPresets.map((p, i) => (
-              <window.RxMarketTile key={i} label="预设" name={p.nm} desc={p.syn}
-                tags={p.tags.join(" · ")} img={p.cover}
-                onPrimary={P.onOpenStory ? () => P.onOpenStory(p.raw) : undefined} primaryLabel="开始"
+              <RxBookTile key={i} name={p.nm} syn={p.syn} tags={p.tags.join(" · ")} cover={p.cover}
+                onStart={P.onOpenStory ? () => P.onOpenStory(p.raw) : undefined}
                 onDelete={P.onDeletePreset ? () => P.onDeletePreset(p.raw) : undefined} />
             ))}
           </window.RxCarousel>
