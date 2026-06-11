@@ -332,6 +332,15 @@ function RxCarousel({ rowClass, children }) {
   // 自绘 rAF 缓动(不用原生 smooth:连发时浏览器滚动动画器会进坏状态);终点兜底含后台标签
   const animT = React.useRef(null);
   const animEndT = React.useRef(null);
+  // 卡 ≤3 不开轮播:克隆组会让同一张卡在两侧渐隐区重复露出,不干净。
+  // 静态排开:无箭头/圆点/渐隐/克隆,保留 rowwrap 让左右留白与轮播行对齐。(放在全部 hooks 之后,顺序稳定)
+  if (n <= 3) {
+    return (
+      <div className="rowwrap">
+        <div className={rowClass}>{children}</div>
+      </div>
+    );
+  }
   const stopAnim = () => { if (animT.current) cancelAnimationFrame(animT.current); if (animEndT.current) clearTimeout(animEndT.current); };
   const animateTo = (el, target, onDone) => {
     const start = el.scrollLeft, dist = target - start, t0 = performance.now(), dur = 320;
