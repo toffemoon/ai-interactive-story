@@ -332,12 +332,28 @@ function RxCarousel({ rowClass, children }) {
   // 自绘 rAF 缓动(不用原生 smooth:连发时浏览器滚动动画器会进坏状态);终点兜底含后台标签
   const animT = React.useRef(null);
   const animEndT = React.useRef(null);
-  // 卡 ≤3 不开轮播:克隆组会让同一张卡在两侧渐隐区重复露出,不干净。
-  // 静态排开:无箭头/圆点/渐隐/克隆,保留 rowwrap 让左右留白与轮播行对齐。(放在全部 hooks 之后,顺序稳定)
-  if (n <= 3) {
+  // 整组卡放得下容器时不开轮播:无缝循环预期"卡行溢出",不溢出时克隆组同屏可见、
+  // 步进被边界 clamp(圆点在走画面不动)、瞬移让点的和看的不是同一实例——机制整个失效。
+  const [fits, setFits] = React.useState(false);
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const check = () => {
+      const its = [...el.children];
+      if (!its.length) return;
+      const last = its[Math.min(n, its.length) - 1];   // 前 n 个 = 单组(静态时即全部)
+      const w = last.offsetLeft + last.offsetWidth - its[0].offsetLeft;
+      setFits(w <= el.clientWidth + 1);
+    };
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, [n]);
+  // 卡 ≤3 或整组放得下 → 静态排开:无箭头/圆点/渐隐/克隆。(放在全部 hooks 之后,顺序稳定)
+  if (n <= 3 || fits) {
     return (
       <div className="rowwrap">
-        <div className={rowClass}>{children}</div>
+        <div className={rowClass} ref={ref}>{children}</div>
       </div>
     );
   }
