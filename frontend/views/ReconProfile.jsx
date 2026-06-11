@@ -25,10 +25,14 @@ function RxBookTile({ name, syn, tags, cover, onStart, onDelete, flip, onFlip })
   const [own, setOwn] = React.useState(false);
   const flipped = onFlip ? !!flip : own;
   const setFlip = (v) => { if (onFlip) onFlip(v); else setOwn(v); };
+  // 翻转挂最外层 toggle:preserve-3d 下 Chromium 命中判定不稳,点击常落在 bk-in 容器层
+  // (而非 bk-f/bk-b),内层各自挂 handler 会随机失灵——外层兜底则命中哪层都能翻;
+  // 操作按钮 stopPropagation 自保。
   return (
-    <div className={"bookcard" + (flipped ? " flip" : "")}>
+    <div className={"bookcard" + (flipped ? " flip" : "")} onClick={() => setFlip(!flipped)}
+      title={flipped ? "点击翻回封面" : "点击翻开看详情"}>
       <div className="bk-in">
-        <div className="bk-f" onClick={() => setFlip(true)} title="翻开看详情">
+        <div className="bk-f">
           {cover
             ? <img src={cover} alt="" draggable={false} />
             : <div className="bk-ph"><b>{(name || "书").slice(0, 6)}</b></div>}
@@ -44,7 +48,7 @@ function RxBookTile({ name, syn, tags, cover, onStart, onDelete, flip, onFlip })
             {onStart && <button className="bk-btn pri" onClick={(e) => { e.stopPropagation(); onStart(); }}>开始</button>}
             {onDelete && <button className="bk-btn" onClick={(e) => { e.stopPropagation(); onDelete(); }}>删除</button>}
           </div>
-          <span className="bk-flip" title="翻回封面" onClick={() => setFlip(false)}>↺</span>
+          <span className="bk-flip" title="翻回封面">↺</span>
         </div>
       </div>
     </div>
@@ -399,12 +403,15 @@ function ReconProfile(props) {
   .cv-profile .pcrow::-webkit-scrollbar {display:none;}
   /* 预设书卡:竖版书封,封面在前,翻开是详情+操作 */
   .cv-profile .bookcard {flex:none; width:212px; height:302px; position:relative; perspective:1000px; animation:rcp-in .38s cubic-bezier(.22,1,.36,1) both;
-    transition:transform .3s cubic-bezier(.22,1,.36,1);}
+    transition:transform .3s cubic-bezier(.22,1,.36,1); cursor:pointer;}
   .cv-profile .bookcard:hover {transform:translateY(-4px);}
   .cv-profile .bookcard .bk-in {position:absolute; inset:0; transform-style:preserve-3d; transition:transform .45s cubic-bezier(.3,.8,.3,1);}
   .cv-profile .bookcard.flip .bk-in {transform:rotateY(180deg);}
   .cv-profile .bookcard .bk-f, .cv-profile .bookcard .bk-b {position:absolute; inset:0; -webkit-backface-visibility:hidden; backface-visibility:hidden;
     background:var(--paper); border:1px solid var(--line); overflow:hidden;}
+  /* preserve-3d 内 z-index 失效,hit-test 按 3D 深度排序:两面各自 translateZ 抬出 0 平面,
+     当前朝前的面深度最高才能接到点击(否则命中悬空落到 bk-in 容器,↺ 点不到)。 */
+  .cv-profile .bookcard .bk-f {transform:translateZ(2px);}
   /* 背面朝前时封面层不接事件(否则点击全被 DOM 上层的封面截胡,↺ 永远点不到),反之亦然 */
   .cv-profile .bookcard.flip .bk-f {pointer-events:none;}
   .cv-profile .bookcard:not(.flip) .bk-b {pointer-events:none;}
@@ -421,7 +428,7 @@ function ReconProfile(props) {
   .cv-profile .bookcard .bk-flip {position:absolute; right:9px; top:9px; width:30px; height:30px; border-radius:50%; z-index:3;
     border:1px solid var(--line2); background:rgba(250,244,234,.92); color:var(--soft); display:grid; place-items:center; font-size:14px; cursor:pointer; user-select:none;}
   .cv-profile .bookcard .bk-flip:hover {background:rgba(193,168,111,.25); color:var(--ink);}
-  .cv-profile .bookcard .bk-b {transform:rotateY(180deg); padding:16px 18px 13px; display:flex; flex-direction:column;}
+  .cv-profile .bookcard .bk-b {transform:rotateY(180deg) translateZ(2px); padding:16px 18px 13px; display:flex; flex-direction:column;}
   .cv-profile .bookcard .bk-b::after {content:""; position:absolute; inset:5px; border:1px solid rgba(196,179,132,.3); pointer-events:none;}
   .cv-profile .bookcard .bk-badge {font-family:var(--serif); font-size:11.5px; letter-spacing:.08em; color:#8a6f49;
     border:1px solid var(--gold2); background:rgba(193,168,111,.12); padding:2px 9px;}
