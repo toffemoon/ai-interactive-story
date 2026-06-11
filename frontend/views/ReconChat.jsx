@@ -167,22 +167,6 @@ function ReconChat(props) {
 
 
   
-  .cv-chat .topr {position:absolute; right:24px; top:24px; display:flex; align-items:center; gap:26px; z-index:20;}
-  .cv-chat .topr .ti {display:flex; align-items:center; gap:7px; cursor:pointer;}
-  .cv-chat .topr .ti .ic {color:var(--soft);}
-  .cv-chat .topr .ti .lb {display:flex; flex-direction:column;}
-  .cv-chat .topr .ti .lb .zh {font-family:var(--serif); font-size:12px; color:var(--soft); letter-spacing:.04em;}
-  .cv-chat .topr .ti .lb .en {font-family:var(--serifen); font-size:7px; letter-spacing:.22em; color:var(--faint); margin-top:1px;}
-  .cv-chat .topr .ti .lb .tm {font-family:var(--serifen); font-size:11px; color:var(--ink); letter-spacing:.02em; margin-top:2px;}
-  .cv-chat .topr .ti .cm {font-size:8px; color:var(--faint); margin-left:1px;}
-  .cv-chat .topr .sep {width:1px; height:24px; background:var(--line);}
-  .cv-chat .topr .me {display:flex; align-items:center; gap:9px; cursor:pointer;}
-  .cv-chat .topr .me img {width:34px; height:34px; border-radius:50%; object-fit:cover; border:1px solid var(--line2);}
-  .cv-chat .topr .me .col {display:flex; flex-direction:column; align-items:flex-start; gap:3px;}
-  .cv-chat .topr .me .lv {font-family:var(--serifen); font-size:8px; color:#f3ead6; background:var(--green); padding:1px 5px; align-self:flex-start;}
-  .cv-chat .topr .me .nm {font-family:var(--serif); font-size:12px; color:var(--ink);}
-
-  
   .cv-chat .pagehd {position:absolute; left:264px; top:54px; z-index:5;}
   .cv-chat .pagehd h2 {margin:0; display:flex; align-items:baseline; gap:14px;}
   .cv-chat .pagehd h2 .zh {font-family:var(--serif); font-weight:700; font-size:28px; letter-spacing:.06em; color:var(--ink);}
@@ -332,12 +316,7 @@ function ReconChat(props) {
         {/* 「新建对话」入口已撤(2026-06-11 yufei);重开会话的 onNewChat 逻辑保留在控制器,要恢复时把按钮接回来即可 */}
       </window.ReconRail>
 
-      {/* 顶栏右侧:文案=实际去向(此前「记忆」跳游玩、「档案」跳个人中心,名实不符) */}
-      <div className="topr">
-        <div className="ti" style={{ cursor: "pointer" }} onClick={() => onNav("game")}><span className="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 4h11l3 3v13H5z" /><path d="M9 9h6M9 13h6M9 17h4" /></svg></span><div className="lb"><div className="zh">当前故事</div><div className="en">STORY</div></div></div>
-        <div className="sep"></div>
-        <div className="me" style={{ cursor: "pointer" }} onClick={() => onNav("mine")}><span className="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4" /><path d="M5 20c0-4 3.4-6 7-6s7 2 7 6" /></svg></span><div className="col"><span className="nm">我的</span></div></div>
-      </div>
+      {/* 顶栏右侧快捷导航已撤(2026-06-11 yufei):与左侧 rail 重复 */}
 
       {/* 中部标题 */}
       <div className="pagehd">
