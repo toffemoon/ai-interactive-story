@@ -34,10 +34,17 @@ function ReconCreate(props) {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [(P.messages || []).length, busy]);
-  // 上传文档(解析填草稿)+ 汇总面板的预设名/简介
+  // 上传文档(解析填草稿)+ 汇总面板的预设名/简介 + 从库补卡的展开态
   const fileRef = React.useRef(null);
   const [bname, setBname] = React.useState("");
   const [bsyn, setBsyn] = React.useState("");
+  const [libFor, setLibFor] = React.useState("");      // 当前展开「从库选」的卡种 key
+  const [libItems, setLibItems] = React.useState(null); // null=读取中
+  const openLib = (k) => {
+    if (libFor === k) { setLibFor(""); return; }
+    setLibFor(k); setLibItems(null);
+    if (P.onLibList) P.onLibList(k).then((rows) => setLibItems(rows || [])).catch(() => setLibItems([]));
+  };
 
   // 顶部卡分类签：kinds 数组，选中 = cardKind 索引
   const KINDS = (P.kinds && P.kinds.length ? P.kinds : SAMPLE_KINDS);
@@ -173,6 +180,11 @@ function ReconCreate(props) {
     font-family:var(--kai); font-size:15px; color:var(--ink);}
   .cv-create .composer .box .phin::placeholder {color:var(--faint);}
   .cv-create .composer .box .phin:focus {border:none; box-shadow:none;}
+  .cv-create .composer .box .upbtn {flex:none; display:flex; align-items:center; gap:6px; height:36px; padding:0 14px; margin-right:14px;
+    border:1px solid var(--line2); background:var(--paper2); color:var(--soft); user-select:none;
+    font-family:var(--serif); font-size:12.5px; letter-spacing:.08em; white-space:nowrap;}
+  .cv-create .composer .box .upbtn:hover {color:var(--ink); border-color:var(--gold2);}
+  .cv-create .composer .box .upbtn svg {color:var(--gold);}
   .cv-create .blink {display:inline-block; font-style:normal; animation:rcr-blink 1s steps(2) infinite;}
   @keyframes rcr-blink {50% {opacity:0;}}
   /* 汇总面板:四张台子草稿一览 + 打包成预设 */
@@ -193,6 +205,14 @@ function ReconCreate(props) {
   .cv-create .bundle .bgo {flex:none; height:44px; padding:0 26px; background:var(--green); color:#f3ead6; display:grid; place-items:center;
     font-family:var(--serif); font-size:13.5px; letter-spacing:.14em; cursor:pointer; user-select:none;}
   .cv-create .bundle .bnote {font-family:var(--kai); font-size:12.5px; color:var(--faint); margin:14px 0 0;}
+  .cv-create .bundle .brow .blib {margin-left:auto; flex:none; font-family:var(--serif); font-size:12px; letter-spacing:.06em;
+    color:var(--gold); cursor:pointer; user-select:none; white-space:nowrap;}
+  .cv-create .bundle .brow .blib:hover, .cv-create .bundle .brow .blib.on {color:var(--ink);}
+  .cv-create .bundle .blist {display:flex; flex-wrap:wrap; gap:8px; padding:10px 2px 12px; border-bottom:1px solid #ece2cf; background:var(--paper3);}
+  .cv-create .bundle .blist .bli {font-family:var(--kai); font-size:13px; color:var(--ink); border:1px solid var(--line2);
+    padding:5px 13px; cursor:pointer; user-select:none; background:var(--paper);}
+  .cv-create .bundle .blist .bli:hover {border-color:var(--gold2); color:var(--ink);}
+  .cv-create .bundle .blist .bli.dim {color:var(--faint); border:none; cursor:default; background:transparent;}
   .cv-create .composer .box .send {flex:none; width:104px; height:48px; margin-left:14px; background:var(--green); position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; cursor:pointer;}
   .cv-create .composer .box .send::before {content:""; position:absolute; inset:3px; border:1px solid rgba(193,168,111,.45);}
   .cv-create .composer .box .send .zh {font-family:var(--serif); font-size:13px; letter-spacing:.18em; color:#f3ead6; position:relative; display:flex; align-items:center; gap:6px;}
@@ -297,12 +317,36 @@ function ReconCreate(props) {
         {P.summaryOn ? (
         <div className="bundle">
           <div className="bh"><b>汇总</b><span className="en">BUNDLE</span><span className="hint">把四张台子上的草稿打包成一个可玩预设</span></div>
-          {(P.desksInfo || []).map((d, i) => (
-            <div className="brow" key={i}>
-              <span className="bk">{d.zh}</span>
-              {d.fields ? <span className="bv">{d.name || "未命名"}<i>{d.fields} 个字段</i></span> : <span className="bv empty">还空着</span>}
-            </div>
-          ))}
+          {(P.desksInfo || []).map((d, i) => {
+            const parts = [...(d.builtNames || [])];
+            if (d.fields) parts.push((d.name || "未命名") + "(草稿)");
+            return (
+              <React.Fragment key={i}>
+                <div className="brow">
+                  <span className="bk">{d.zh}</span>
+                  {parts.length
+                    ? <span className="bv">{parts.join("、")}<i>{parts.length} 张</i></span>
+                    : <span className="bv empty">还空着</span>}
+                  {P.onLibList && (
+                    <span className={"blib" + (libFor === d.k ? " on" : "")} onClick={() => openLib(d.k)}>
+                      {libFor === d.k ? "收起" : "+ 从库选"}
+                    </span>
+                  )}
+                </div>
+                {libFor === d.k && (
+                  <div className="blist">
+                    {libItems === null && <span className="bli dim">读取中…</span>}
+                    {libItems !== null && !libItems.length && <span className="bli dim">库里还没有这种卡。</span>}
+                    {(libItems || []).map((it, j) => (
+                      <span className="bli" key={j} onClick={() => { if (P.onLibAdd) P.onLibAdd(d.k, it); setLibFor(""); }}>
+                        {(it && it.name) || "未命名"}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          })}
           <div className="bform">
             <input className="bin" placeholder="预设名(必填)" value={bname} onChange={(e) => setBname(e.target.value)} />
             <input className="bin" placeholder="一句话简介(可空)" value={bsyn} onChange={(e) => setBsyn(e.target.value)} />
@@ -347,6 +391,16 @@ function ReconCreate(props) {
           {/* 输入框换真 input:此前的 contentEditable 提示语是真实 DOM 文本,会和用户输入混在一起发给 AI */}
           <div className="composer">
             <div className="box">
+              {/* 上传:文档按当前卡种解析填进草稿(行内紧凑款,不另占一行) */}
+              {P.onUpload && (
+                <div className="upbtn" onClick={() => { if (!busy && fileRef.current) fileRef.current.click(); }}
+                  style={{ cursor: busy ? "default" : "pointer", opacity: busy ? 0.55 : 1 }} title={"上传文档,解析成" + dKind + "填进草稿"}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 20h16" /></svg>
+                  <span>上传</span>
+                  <input type="file" ref={fileRef} accept=".txt,.md,.json" style={{ display: "none" }}
+                    onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f && P.onUpload) P.onUpload(f); }} />
+                </div>
+              )}
               <input
                 className="phin"
                 value={value}
@@ -359,16 +413,6 @@ function ReconCreate(props) {
                 <span className="en">ENTER</span>
               </div>
             </div>
-            {/* 上传文档:执笔人按当前卡种解析,填进草稿继续聊着完善 */}
-            {P.onUpload && (
-              <div className="up" onClick={() => { if (!busy && fileRef.current) fileRef.current.click(); }}
-                style={{ cursor: busy ? "default" : "pointer", opacity: busy ? 0.55 : 1 }}>
-                <span className="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 20h16" /></svg></span>
-                <span className="tx"><b>上传</b></span>
-                <input type="file" ref={fileRef} accept=".txt,.md,.json" style={{ display: "none" }}
-                  onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f && P.onUpload) P.onUpload(f); }} />
-              </div>
-            )}
           </div>
         </div>
 
@@ -406,8 +450,13 @@ function ReconCreate(props) {
                 </div>
               ))}
             </div>
-            {/* 「存草稿」未实现(此前只弹 alert 假装存了)→ 移除;入库是唯一真实出口 */}
+            {/* 下一张 = 当前草稿收进台子接着建(同种卡可多张,汇总一起打包);收入卡库 = 存进我的库 */}
             <div className="cardfoot">
+              {P.onNext && (
+                <div className="b ghost" onClick={() => !busy && P.onNext()} style={{ opacity: busy ? 0.55 : 1 }}>
+                  <span className="zh">下一张</span><span className="en">NEXT CARD{draft.builtCount ? " · 已收 " + draft.builtCount : ""}</span>
+                </div>
+              )}
               <div className="b solid" onClick={() => onSaveCard()}><span className="zh">收入卡库</span><span className="en">ADD TO LIBRARY</span></div>
             </div>
           </div>
