@@ -2289,11 +2289,12 @@ function ReconChatLive({ presets, onNav, mobile, uid }) {
     (myCards || []).forEach((c) => {
       const d = (c.data && c.data.data) || c.data || {};
       const nm = d.name || c.name;
-      if (nm && !seen.has(nm)) { seen.add(nm); out.push({ name: nm, persona: d.persona || d.personality, description: d.description, card: c.data }); }
+      if (nm && !seen.has(nm)) { seen.add(nm); out.push({ name: nm, persona: d.persona || d.personality, description: d.description, avatar: d.avatar || d.image || undefined, card: c.data }); }
     });
     presetCards.forEach((c) => {
       const nm = (c.data && c.data.name) || c.name;
-      if (nm && !seen.has(nm)) { seen.add(nm); out.push({ name: nm, persona: c.data && c.data.persona, description: c.data && c.data.description, card: c }); }
+      const d = c.data || {};
+      if (nm && !seen.has(nm)) { seen.add(nm); out.push({ name: nm, persona: d.persona, description: d.description, avatar: d.avatar || d.image || undefined, card: c }); }
     });
     return out;
   }, [ocs, myCards, presetCards]);
