@@ -418,11 +418,11 @@ function ReconProfile(props) {
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .cv-profile .bookcard .bk-ds {font-family:var(--kai); font-size:15px; line-height:1.7; color:var(--soft); margin-top:8px;
     display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden;}
-  .cv-profile .bookcard .bk-tgs {font-family:var(--kai); font-size:12px; color:var(--gold); margin-top:auto; letter-spacing:.04em;
+  .cv-profile .bookcard .bk-tgs {font-family:var(--kai); font-size:13px; color:var(--gold); margin-top:auto; letter-spacing:.04em;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:17px;}
   .cv-profile .bookcard .bk-ft {display:flex; align-items:center; gap:9px; border-top:1px solid var(--line); padding-top:10px; margin-top:8px; padding-right:38px;}
-  .cv-profile .bookcard .bk-btn {height:31px; padding:0 15px; border:1px solid var(--navy-line); background:transparent; color:var(--navy);
-    font-family:var(--serif); font-size:13.5px; letter-spacing:.08em; cursor:pointer; border-radius:0; min-height:0;}
+  .cv-profile .bookcard .bk-btn {height:33px; padding:0 15px; border:1px solid var(--navy-line); background:transparent; color:var(--navy);
+    font-family:var(--serif); font-size:15px; letter-spacing:.08em; cursor:pointer; border-radius:0; min-height:0;}
   .cv-profile .bookcard .bk-btn:hover {background:rgba(185,154,89,.12);}
   .cv-profile .bookcard .bk-btn.pri {background:var(--green); color:#eef0e2; border-color:#283831;}
   .cv-profile .bookcard .bk-btn.pri:hover {background:#2c3a32;}
