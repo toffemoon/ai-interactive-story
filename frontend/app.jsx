@@ -3076,6 +3076,7 @@ function App() {
           <ReconShell fluid>
             <window.ReconProfile user={auth.user} presets={presets} saves={mineSaves} assets={myAssets}
               savesErr={savesErr} onRetrySaves={retrySaves}
+              onOpenStory={openStoryModal} onDeletePreset={deletePreset} onDeleteSave={deleteSaveHandler}
               onNav={navTo} onResume={resumeSave} onNew={onNew} onLogout={onLogout} onAvatar={onAvatarUp} />
           </ReconShell>
         );
