@@ -19,10 +19,14 @@ const SAMPLE = {
 };
 
 // 预设书卡:竖版像一本书,封面在前(无封面用程序化书封),翻开背面是详情+操作(开始/删除)。
-function RxBookTile({ name, syn, tags, cover, onStart, onDelete }) {
-  const [flip, setFlip] = React.useState(false);
+// flip/onFlip 传入时受控:轮播无缝循环会把每张卡渲染成 A/B 两个克隆实例,瞬移换组后
+// 若各自持独立翻面态,点翻的是这组、看到的是没翻的那组(「某一张翻不了」的根因)——状态必须按卡共享。
+function RxBookTile({ name, syn, tags, cover, onStart, onDelete, flip, onFlip }) {
+  const [own, setOwn] = React.useState(false);
+  const flipped = onFlip ? !!flip : own;
+  const setFlip = (v) => { if (onFlip) onFlip(v); else setOwn(v); };
   return (
-    <div className={"bookcard" + (flip ? " flip" : "")}>
+    <div className={"bookcard" + (flipped ? " flip" : "")}>
       <div className="bk-in">
         <div className="bk-f" onClick={() => setFlip(true)} title="翻开看详情">
           {cover
@@ -130,6 +134,9 @@ function ReconProfile(props) {
     const d = (p && p.data) || {};
     return { raw: p, nm: d.name || p.name || "未命名故事", syn: d.synopsis || (d.story && d.story.premise) || "(无简介)", cover: d.cover || "", tags: (d.tags || []).slice(0, 4), author: d.author || "" };
   });
+
+  // 书卡翻面态(按预设序号共享,轮播 A/B 克隆实例同步翻;见 RxBookTile 注释)
+  const [bookFlips, setBookFlips] = React.useState({});
 
   // ---- 我的卡库(对照旧版 VaultView:四类卡浏览 + 删除;数据视图内自拉)----
   const LIB_KINDS = [["characters", "角色"], ["players", "演出"], ["worlds", "世界"], ["stories", "故事"]];
@@ -550,6 +557,7 @@ function ReconProfile(props) {
           <window.RxCarousel rowClass="pcrow">
             {myPresets.map((p, i) => (
               <RxBookTile key={i} name={p.nm} syn={p.syn} tags={p.tags.join(" · ")} cover={p.cover}
+                flip={!!bookFlips[i]} onFlip={(v) => setBookFlips((s) => ({ ...s, [i]: v }))}
                 onStart={P.onOpenStory ? () => P.onOpenStory(p.raw) : undefined}
                 onDelete={P.onDeletePreset ? () => P.onDeletePreset(p.raw) : undefined} />
             ))}
