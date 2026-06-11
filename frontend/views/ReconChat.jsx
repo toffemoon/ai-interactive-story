@@ -134,7 +134,7 @@ function ReconChat(props) {
   .cv-chat .recenth i {flex:1; height:1px; background:var(--line);}
   /* 聊天双栏切换(OC / 角色) */
   .cv-chat .modetabs {display:flex; gap:6px; margin:12px 14px 4px; border:1px solid var(--line); background:var(--paper); padding:4px;}
-  .cv-chat .modetabs a {flex:1; text-align:center; padding:7px 0; cursor:pointer; font-family:var(--serif); font-size:12px; letter-spacing:.14em; color:var(--soft); transition:background .25s, color .2s;}
+  .cv-chat .modetabs a {flex:1; text-align:center; padding:7px 0; cursor:pointer; font-family:var(--serif); font-size:15px; letter-spacing:.14em; color:var(--soft); transition:background .25s, color .2s;}
   .cv-chat .modetabs a.on {background:var(--green); color:#f3ead6; font-weight:700;}
   .cv-chat .modetabs a .n {font-family:var(--serifen); font-size:10px; margin-left:4px; opacity:.75;}
   /* 新消息浮现(已有消息节点 key 不变不重播,只有新挂载的动) */
@@ -147,30 +147,24 @@ function ReconChat(props) {
   @keyframes rcc-dot {0%,100%{opacity:.25;} 50%{opacity:1;}}
   /* 空态出路按钮 */
   .cv-chat .cta {display:inline-flex; align-items:center; height:38px; padding:0 22px; border:1px solid var(--line2); background:var(--paper);
-    font-family:var(--serif); font-size:13px; letter-spacing:.1em; color:var(--navy); cursor:pointer;}
+    font-family:var(--serif); font-size:15px; letter-spacing:.1em; color:var(--navy); cursor:pointer;}
   .cv-chat .cta:hover {background:var(--paper2);}
   .cv-chat .rlist {overflow-y:auto; max-height:400px;}
   .cv-chat .rlist::-webkit-scrollbar {width:5px;} .cv-chat .rlist::-webkit-scrollbar-thumb {background:var(--line2);}
-  .cv-chat .inputbar .box input {border:none; outline:none; background:transparent; box-shadow:none; border-radius:0; padding:0; width:100%; color:var(--ink); font-family:var(--kai); font-size:13.5px;}
+  .cv-chat .inputbar .box input {border:none; outline:none; background:transparent; box-shadow:none; border-radius:0; padding:0; width:100%; color:var(--ink); font-family:var(--kai); font-size:15px;}
   .cv-chat .inputbar .box input:focus {border:none; box-shadow:none;}
   .cv-chat .rc {display:flex; align-items:center; gap:10px; padding:8px 16px; margin:0 8px; cursor:pointer; position:relative;}
   .cv-chat .rc .av {width:36px; height:36px; border-radius:50%; flex:none; object-fit:cover; border:1px solid rgba(169,138,99,.4);}
   .cv-chat .rc .av.sv {display:grid; place-items:center; background:#cdb49a; color:#fff; font-family:var(--serif); font-size:14px; border:1px solid rgba(169,138,99,.4);}
   .cv-chat .rc .bd {min-width:0; flex:1;}
-  .cv-chat .rc .bd .nm {font-family:var(--serif); font-size:12.5px; color:var(--ink); letter-spacing:.04em;}
-  .cv-chat .rc .bd .ms {font-family:var(--kai); font-size:10px; color:var(--faint); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .cv-chat .rc .bd .nm {font-family:var(--serif); font-size:15px; color:var(--ink); letter-spacing:.04em;}
+  .cv-chat .rc .bd .ms {font-family:var(--kai); font-size:13px; color:var(--faint); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .cv-chat .rc .tm {position:absolute; right:14px; top:10px; font-family:var(--serifen); font-size:9px; color:var(--faint);}
   .cv-chat .rc.on {background:var(--green); border-radius:2px;}
   .cv-chat .rc.on .bd .nm {color:#f3ead6;}
   .cv-chat .rc.on .bd .ms {color:rgba(243,234,214,.7);}
   .cv-chat .rc.on .tm {color:rgba(243,234,214,.6);}
 
-  .cv-chat .newchat {position:absolute; left:18px; right:18px; bottom:22px; height:50px; border:1px solid var(--line2);
-    background:var(--paper); display:flex; align-items:center; justify-content:center; gap:12px; cursor:pointer;}
-  .cv-chat .newchat .ic {color:var(--gold);}
-  .cv-chat .newchat .tx .zh {font-family:var(--serif); font-size:13px; letter-spacing:.1em; color:var(--ink);}
-  .cv-chat .newchat .tx .en {font-family:var(--serifen); font-size:7.5px; letter-spacing:.26em; color:var(--faint); margin-top:2px;}
-  .cv-chat .newchat .star {position:absolute; left:18px; color:var(--gold2);}
 
   
   .cv-chat .topr {position:absolute; right:24px; top:24px; display:flex; align-items:center; gap:26px; z-index:20;}
@@ -194,7 +188,7 @@ function ReconChat(props) {
   .cv-chat .pagehd h2 .zh {font-family:var(--serif); font-weight:700; font-size:28px; letter-spacing:.06em; color:var(--ink);}
   .cv-chat .pagehd h2 .en {font-family:var(--serifen); font-style:italic; font-size:18px; color:var(--gold); letter-spacing:.02em;}
   .cv-chat .pagehd h2 .en::before {content:"/ ";}
-  .cv-chat .pagehd p {margin:9px 0 0; font-family:var(--kai); font-size:13px; color:var(--soft); letter-spacing:.04em;}
+  .cv-chat .pagehd p {margin:9px 0 0; font-family:var(--kai); font-size:15px; color:var(--soft); letter-spacing:.04em;}
 
   
   .cv-chat .charbar {position:absolute; left:264px; top:122px; right:368px; height:62px; border-bottom:1px solid var(--line);
@@ -203,15 +197,15 @@ function ReconChat(props) {
   .cv-chat .charbar .stk {display:flex; flex-direction:column; gap:5px;}
   .cv-chat .charbar .nm {font-family:var(--serif); font-size:18px; font-weight:700; color:var(--ink); letter-spacing:.04em; display:flex; align-items:center; gap:7px;}
   .cv-chat .charbar .tag {display:inline-grid; place-items:center; width:16px; height:16px; border:1px solid var(--line2); color:var(--faint); font-size:9px;}
-  .cv-chat .charbar .fav {font-family:var(--kai); font-size:11px; color:var(--soft);}
+  .cv-chat .charbar .fav {font-family:var(--kai); font-size:13px; color:var(--soft);}
   .cv-chat .charbar .fav b {font-family:var(--serifen); color:var(--green); font-weight:700;}
   .cv-chat .charbar .actions {margin-left:auto; display:flex; gap:10px;}
-  .cv-chat .charbar .actions .b {display:flex; align-items:center; gap:6px; height:30px; padding:0 16px; border:1px solid var(--line2); color:var(--soft); font-family:var(--serif); font-size:12.5px; letter-spacing:.06em; cursor:pointer; background:var(--paper);}
+  .cv-chat .charbar .actions .b {display:flex; align-items:center; gap:6px; height:30px; padding:0 16px; border:1px solid var(--line2); color:var(--soft); font-family:var(--serif); font-size:15px; letter-spacing:.06em; cursor:pointer; background:var(--paper);}
 
   
   .cv-chat .chat {position:absolute; left:264px; top:200px; right:368px; bottom:128px; overflow-y:auto; z-index:4;}
   .cv-chat .chat::-webkit-scrollbar {width:5px;} .cv-chat .chat::-webkit-scrollbar-thumb {background:var(--line2);}
-  .cv-chat .syscue {text-align:center; font-family:var(--kai); font-size:11px; color:var(--faint); letter-spacing:.06em; margin-bottom:22px;}
+  .cv-chat .syscue {text-align:center; font-family:var(--kai); font-size:12px; color:var(--faint); letter-spacing:.06em; margin-bottom:22px;}
   .cv-chat .syscue span {display:inline-block; padding:0 12px; position:relative;}
   .cv-chat .syscue span::before, .cv-chat .syscue span::after {content:""; position:absolute; top:50%; width:60px; height:1px; background:var(--line);}
   .cv-chat .syscue span::before {right:100%;} .cv-chat .syscue span::after {left:100%;}
@@ -219,10 +213,10 @@ function ReconChat(props) {
   .cv-chat .msg {display:flex; gap:12px; margin-bottom:17px; max-width:560px;}
   .cv-chat .msg .av {width:38px; height:38px; border-radius:50%; flex:none; object-fit:cover; border:1px solid var(--line2);}
   .cv-chat .msg .col {min-width:0;}
-  .cv-chat .msg .who {font-family:var(--serif); font-size:13px; color:var(--ink); margin-bottom:5px; letter-spacing:.04em; display:flex; align-items:center; gap:6px;}
+  .cv-chat .msg .who {font-family:var(--serif); font-size:15px; color:var(--ink); margin-bottom:5px; letter-spacing:.04em; display:flex; align-items:center; gap:6px;}
   .cv-chat .msg .who .bdg {display:inline-grid; place-items:center; width:14px; height:14px; border:1px solid var(--line2); color:var(--faint);}
   .cv-chat .msg .who .bdg svg {width:9px; height:9px;}
-  .cv-chat .msg .bub {font-family:var(--kai); font-size:13.5px; line-height:1.7; color:var(--ink); position:relative;}
+  .cv-chat .msg .bub {font-family:var(--kai); font-size:15px; line-height:1.7; color:var(--ink); position:relative;}
   .cv-chat .msg .bub .nar {color:var(--soft); font-style:italic;}
   .cv-chat .msg .time {font-family:var(--serifen); font-size:9px; color:var(--faint); margin-top:5px;}
 
@@ -230,7 +224,7 @@ function ReconChat(props) {
   .cv-chat .msg.me {margin-left:auto; flex-direction:row-reverse; max-width:470px; align-items:flex-start;}
   .cv-chat .msg.me .col {display:flex; flex-direction:column; align-items:flex-end;}
   .cv-chat .msg.me .bub {background:var(--teal); color:#f2ede2; padding:10px 15px; border-radius:3px;
-    box-shadow:0 1px 0 rgba(0,0,0,.04); font-size:13px; line-height:1.75;}
+    box-shadow:0 1px 0 rgba(0,0,0,.04); font-size:15px; line-height:1.75;}
   .cv-chat .msg.me .time {text-align:right;}
 
   
@@ -242,12 +236,12 @@ function ReconChat(props) {
   .cv-chat .inputbar .ctx .ic {color:var(--soft);}
   .cv-chat .inputbar .ctx .tx {font-family:var(--kai); font-size:9px; color:var(--faint); letter-spacing:.04em; white-space:nowrap;}
   .cv-chat .inputbar .box {flex:1; height:64px; background:var(--paper); border:1px solid var(--line); display:flex; align-items:center; padding:0 20px; position:relative;}
-  .cv-chat .inputbar .box .ph {font-family:var(--kai); font-size:13.5px; color:var(--faint);}
+  .cv-chat .inputbar .box .ph {font-family:var(--kai); font-size:15px; color:var(--faint);}
   .cv-chat .inputbar .send {flex:none; width:108px; height:64px; background:var(--green); border:1px solid #283831;
     position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; cursor:pointer;}
   .cv-chat .inputbar .send::before {content:""; position:absolute; inset:3px; border:1px solid rgba(193,168,111,.4);}
   .cv-chat .inputbar .send .ic {color:#e9dcc4; position:relative;}
-  .cv-chat .inputbar .send .zh {font-family:var(--serif); font-size:13px; letter-spacing:.16em; color:#f3ead6; position:relative;}
+  .cv-chat .inputbar .send .zh {font-family:var(--serif); font-size:15px; letter-spacing:.16em; color:#f3ead6; position:relative;}
   .cv-chat .inputbar .send .en {font-family:var(--serifen); font-size:7px; letter-spacing:.28em; color:rgba(243,234,214,.65); position:relative;}
 
   
@@ -269,9 +263,9 @@ function ReconChat(props) {
   .cv-chat .rcard .portrait .name b {display:block; font-family:var(--serif); font-size:22px; font-weight:700; color:#fff; letter-spacing:.06em; text-shadow:0 1px 4px rgba(0,0,0,.5);}
   .cv-chat .rcard .portrait .name s {font-family:var(--serifen); font-style:italic; font-size:12px; color:rgba(255,255,255,.85); text-decoration:none; text-shadow:0 1px 3px rgba(0,0,0,.5);}
 
-  .cv-chat .rcard .tagline {padding:11px 18px 2px; font-family:var(--kai); font-size:11.5px; color:var(--soft); letter-spacing:.02em;}
+  .cv-chat .rcard .tagline {padding:11px 18px 2px; font-family:var(--kai); font-size:15px; color:var(--soft); letter-spacing:.02em;}
   .cv-chat .rcard .attrs {padding:6px 18px 4px; display:flex; flex-direction:column; gap:6px;}
-  .cv-chat .rcard .attrs .r {display:flex; align-items:flex-start; gap:10px; font-size:12px;}
+  .cv-chat .rcard .attrs .r {display:flex; align-items:flex-start; gap:10px; font-size:15px;}
   .cv-chat .rcard .attrs .r .ic {width:16px; flex:none; color:var(--gold); display:grid; place-items:center; margin-top:1px;}
   .cv-chat .rcard .attrs .r .k {font-family:var(--kai); color:var(--faint); width:36px; flex:none;}
   .cv-chat .rcard .attrs .r .v {font-family:var(--kai); color:var(--ink); flex:1;}
@@ -280,17 +274,17 @@ function ReconChat(props) {
   .cv-chat .rcard .desc .dh {display:flex; align-items:center; gap:8px; margin-bottom:7px;}
   .cv-chat .rcard .desc .dh b {font-family:var(--serif); font-size:12px; color:var(--ink); letter-spacing:.06em;}
   .cv-chat .rcard .desc .dh i {flex:1; height:1px; background:var(--line);}
-  .cv-chat .rcard .desc p {margin:0; font-family:var(--kai); font-size:11.5px; line-height:1.85; color:var(--soft); letter-spacing:.02em;}
+  .cv-chat .rcard .desc p {margin:0; font-family:var(--kai); font-size:15px; line-height:1.85; color:var(--soft); letter-spacing:.02em;}
 
   .cv-chat .rcard .favblk {padding:10px 18px 0;}
-  .cv-chat .rcard .favblk .t {display:flex; justify-content:space-between; font-family:var(--kai); font-size:11px; color:var(--soft);}
+  .cv-chat .rcard .favblk .t {display:flex; justify-content:space-between; font-family:var(--kai); font-size:13px; color:var(--soft);}
   .cv-chat .rcard .favblk .t b {font-family:var(--serifen); color:var(--green); font-weight:700;}
   .cv-chat .rcard .favblk .bar {height:5px; background:var(--line); margin-top:7px; position:relative; border-radius:3px; overflow:hidden;}
   .cv-chat .rcard .favblk .bar i {position:absolute; left:0; top:0; bottom:0; width:68%; background:#aaa094;}
 
   .cv-chat .rcard .gift {margin:13px 18px 16px; height:42px; border:1px solid var(--line2); background:var(--paper2);
     display:flex; align-items:center; justify-content:center; gap:9px; cursor:pointer;
-    font-family:var(--serif); font-size:13px; letter-spacing:.12em; color:var(--soft);}
+    font-family:var(--serif); font-size:15px; letter-spacing:.12em; color:var(--soft);}
   .cv-chat .rcard .gift .ic {color:var(--gold);}
   /* 添加角色:列表底部入口 + 卡库选择弹窗 */
   .cv-chat .rlist .addrc .av.sv {display:grid; place-items:center; font-size:20px; color:var(--gold); border-style:dashed;}
@@ -335,10 +329,7 @@ function ReconChat(props) {
             </div>
           )}
         </div>
-        {/* 新建对话 = 与当前角色重开一段全新会话(此前误跳创作桌) */}
-        {onNewChat && (
-          <div className="newchat" style={{ cursor: busy ? "default" : "pointer", opacity: busy ? 0.5 : 1 }} onClick={() => !busy && onNewChat()}><span className="star"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3l1.6 6.4L20 11l-6.4 1.6L12 19l-1.6-6.4L4 11l6.4-1.6z" /></svg></span><span className="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4l4 4-11 11H5v-4z" /></svg></span><div className="tx"><div className="zh">新建对话</div><div className="en">NEW CHAT</div></div></div>
-        )}
+        {/* 「新建对话」入口已撤(2026-06-11 yufei);重开会话的 onNewChat 逻辑保留在控制器,要恢复时把按钮接回来即可 */}
       </window.ReconRail>
 
       {/* 顶栏右侧:文案=实际去向(此前「记忆」跳游玩、「档案」跳个人中心,名实不符) */}
@@ -367,7 +358,7 @@ function ReconChat(props) {
       <div className="chat" ref={chatRef}>
         {/* 会话来源提示:恢复的对话 vs 全新相遇,一行说清,新手不再迷惑"上次聊的去哪了" */}
         {characters.length > 0 && messages.length > 0 && (
-          <div className="syscue"><span>{P.restored ? "已接上上次的对话 · 点左下「新建对话」可重新开始" : "✦ 新的相遇已开始"}</span></div>
+          <div className="syscue"><span>{P.restored ? "已接上上次的对话" : "✦ 新的相遇已开始"}</span></div>
         )}
         {!characters.length ? (
           <>
@@ -425,7 +416,7 @@ function ReconChat(props) {
               : (busy ? "TA 正在回复,稍候片刻…" : "输入你想说的话…")}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={onInputKey}
-            style={{ width: "100%", border: "none", outline: "none", background: "transparent", font: "inherit", color: "var(--ink)" }}
+            style={{ width: "100%", border: "none", outline: "none", background: "transparent", fontFamily: "var(--kai)", fontSize: 15, color: "var(--ink)" }}
           />
         </div>
         <div className="send" style={{ cursor: busy || !canChat ? "default" : "pointer", opacity: busy || !canChat ? 0.55 : 1 }} onClick={() => !busy && canChat && onSend()}><span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 3L3 11l7 3 3 7z" /><path d="M21 3l-11 11" /></svg></span><span className="zh">{busy ? "落笔中" : "发送"}</span><span className="en">ENTER</span></div>
