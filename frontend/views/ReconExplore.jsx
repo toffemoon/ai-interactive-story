@@ -411,6 +411,15 @@ function ReconExplore(props) {
             })}
             {!sShown.length && <div className="hint" style={{ gridColumn: "1/-1", padding: "70px 0 30px" }}>没有匹配的故事。换个关键词或分类试试。</div>}
           </div>
+        ) : P.loadErr ? (
+          /* 加载失败 ≠ 书架为空:失败要长得像失败,给重试出路(有缓存时上面 presets.length 分支兜住,不清屏) */
+          <div className="empty">
+            <div className="panel">
+              <h3>书架加载失败</h3>
+              <p>没能从服务器取到故事列表,<br/>可能是网络抖动或服务暂时不可用。</p>
+              <span className="newbtn" onClick={() => P.onRetry && P.onRetry()}>点击重试</span>
+            </div>
+          </div>
         ) : (
           <div className="empty">
             <div className="panel">
