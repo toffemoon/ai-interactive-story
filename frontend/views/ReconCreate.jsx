@@ -152,7 +152,7 @@ function ReconCreate(props) {
   .cv-create .line {padding:13px 0 14px; border-bottom:1px solid #ece2cf;}
   .cv-create .line .lh {display:flex; align-items:center; gap:9px; margin-bottom:7px;}
   .cv-create .line .lh .dot {width:6px; height:6px; transform:rotate(45deg); flex:none;}
-  .cv-create .line .lh .who {font-family:var(--serif); font-size:13.5px; font-weight:700; letter-spacing:.06em; color:var(--ink);}
+  .cv-create .line .lh .who {font-family:var(--serif); font-size:13.5px; font-weight:700; letter-spacing:.06em; color:var(--ink); white-space:nowrap;}
   .cv-create .line .lh .en {font-family:var(--serifen); font-size:7.5px; letter-spacing:.2em; color:var(--faint);}
   .cv-create .line .lh .ln {flex:1; height:1px; background:linear-gradient(90deg,var(--line),transparent);}
   .cv-create .line .bd {font-family:var(--kai); font-size:15px; line-height:1.95; letter-spacing:.01em; padding-left:15px;}
@@ -281,7 +281,7 @@ function ReconCreate(props) {
                 <div key={i} className={"line " + (mine ? "me" : "ai")}>
                   <div className="lh">
                     <span className="dot"></span>
-                    <span className="who">{mine ? "你 · 口述" : "执笔 · 坊"}</span>
+                    <span className="who">{mine ? (P.userName || "你") : "执笔人"}</span>
                     <span className="en">{mine ? "YOU" : "THE PEN"}</span>
                     <span className="ln"></span>
                   </div>
@@ -292,7 +292,7 @@ function ReconCreate(props) {
             {/* 等待反馈:LLM 推演 5-30s,给一行动效占位 */}
             {busy && (
               <div className="line ai">
-                <div className="lh"><span className="dot"></span><span className="who">执笔 · 坊</span><span className="en">THE PEN</span><span className="ln"></span></div>
+                <div className="lh"><span className="dot"></span><span className="who">执笔人</span><span className="en">THE PEN</span><span className="ln"></span></div>
                 <div className="bd" style={{ color: "var(--faint)", fontStyle: "italic" }}>执笔人推演中<i className="blink">▋</i></div>
               </div>
             )}

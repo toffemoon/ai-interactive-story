@@ -2384,7 +2384,7 @@ function ReconChatLive({ presets, onNav, mobile, uid }) {
 }
 
 // 创作桌控制器:对话式建卡(/api/build_card,前端维护对话+草稿),入库走 /api/library/save。
-function ReconCreateLive({ onNav, refreshHome, mobile }) {
+function ReconCreateLive({ onNav, refreshHome, mobile, user }) {
   // 「事件卡」tab 暂不提供:此前误映射到 characters(AI 按角色卡引导、产物存错库),
   // 事件应随故事书创建;待接 EventStep 表单后再恢复。
   const KINDS = [
@@ -2447,6 +2447,7 @@ function ReconCreateLive({ onNav, refreshHome, mobile }) {
     <CreateC
       cardKind={ki} kinds={KINDS} onKind={setKi}
       messages={desk.messages} value={desk.input} onChange={(v) => patchDesk(KINDS[ki].k, { input: v })} onSend={send} busy={busy}
+      userName={(user && (user.display_name || user.username)) || ""}
       draft={{ name: dname, kind: KINDS[ki].zh, fields }}
       onSaveCard={saveCard} onNav={onNav} />
   );
@@ -3035,10 +3036,10 @@ function App() {
       ))}
 
       {view === "build" && (isMobile ? (
-        <ReconCreateLive onNav={navTo} refreshHome={refreshHome} mobile />
+        <ReconCreateLive onNav={navTo} refreshHome={refreshHome} user={auth.user} mobile />
       ) : (
         <ReconShell fluid>
-          <ReconCreateLive onNav={navTo} refreshHome={refreshHome} />
+          <ReconCreateLive onNav={navTo} refreshHome={refreshHome} user={auth.user} />
         </ReconShell>
       ))}
 
