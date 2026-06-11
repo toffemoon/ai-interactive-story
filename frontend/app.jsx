@@ -2420,6 +2420,49 @@ function ReconCreateLive({ onNav, refreshHome, mobile, user }) {
       patchDesk(kk, (d0) => ({ messages: [...d0.messages, { who: "坊", text: "（建卡出错：" + e.message + "）" }] }));
     } finally { setBusy(false); }
   }
+  // 上传文档 → 按当前卡种解析(identify 系端点,解析即自动入库)→ 填进当前台子的草稿,继续聊着完善。
+  async function handleUpload(file) {
+    if (!file || busy) return;
+    const kk = KINDS[ki].k;
+    const kz = KINDS[ki].zh;
+    setBusy(true);
+    patchDesk(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text: "(上传了《" + file.name + "》)" }] }));
+    try {
+      const text = await uploadFile(file);
+      const EP = { characters: "/api/identify", worlds: "/api/identify_world", stories: "/api/identify_story", players: "/api/identify_player" };
+      const out = await postJSON(EP[kk], { text });
+      const draft = kk === "characters" ? (out.data || out) : out;
+      const nm = draft.name || draft.title || "未命名";
+      patchDesk(kk, (d0) => ({
+        draft,
+        filled: Object.keys(draft),
+        messages: [...d0.messages, { who: "坊", text: "《" + nm + "》解析好了——已按" + kz + "填进右边的草稿,顺手也收进了你的卡库。哪里不对,聊着改。" }],
+      }));
+    } catch (e) {
+      patchDesk(kk, (d0) => ({ messages: [...d0.messages, { who: "坊", text: "(解析失败:" + e.message + ")" }] }));
+    } finally { setBusy(false); }
+  }
+  // 汇总:四张台子的草稿打包成一个可玩预设(对齐旧步骤式创作「汇总」步的语义;空台子不进预设)。
+  const [summaryOn, setSummaryOn] = React.useState(false);
+  async function bundlePreset(name, synopsis) {
+    if (busy) return;
+    const has = (o) => (o && Object.keys(o).length ? o : null);
+    const ch = has(desks.characters.draft), wd = has(desks.worlds.draft), st = has(desks.stories.draft), pl = has(desks.players.draft);
+    if (!ch) { alert("至少要有一张角色卡草稿才能打包。先去「角色卡」台子聊一张出来。"); return; }
+    if (!name || !name.trim()) { alert("给这个预设起个名字。"); return; }
+    const tags = [...new Set([...(ch.tags || []), ...((st || {}).tags || [])])].filter(Boolean).slice(0, 5);
+    setBusy(true);
+    try {
+      await postJSON("/api/presets", {
+        name: name.trim(), characters: [wrapCard(ch)], world: wd, story: st, player: pl,
+        playables: pl ? [pl] : [], mode: "standard", synopsis: (synopsis || "").trim(),
+        author: (user && (user.display_name || user.username)) || "", cover: "", tags,
+      });
+      if (refreshHome) refreshHome();
+      alert("已打包成预设。去「探索」页就能看到它,点开即玩。");
+    } catch (e) { alert("打包失败:" + e.message); }
+    finally { setBusy(false); }
+  }
   async function saveCard() {
     const d = desk.draft || {};
     if (!Object.keys(d).length) { alert("还没有可入库的卡，先聊几句让它长出来。"); return; }
@@ -2442,13 +2485,19 @@ function ReconCreateLive({ onNav, refreshHome, mobile, user }) {
     const v = d[k];
     return { k: LABELS[k] || k, v: typeof v === "string" ? v : (Array.isArray(v) ? v.join("、") : JSON.stringify(v)), fresh: (desk.filled || []).includes(k), hidden: /secret|隐藏|真相/i.test(k) };
   });
+  const desksInfo = KINDS.map(({ zh, k }) => {
+    const dd = desks[k].draft || {};
+    return { zh, name: dd.name || dd.title || "", fields: Object.keys(dd).length };
+  });
   const CreateC = (mobile && window.MCreate) ? window.MCreate : window.ReconCreate;
   return (
     <CreateC
-      cardKind={ki} kinds={KINDS} onKind={setKi}
+      cardKind={ki} kinds={KINDS} onKind={(i) => { setKi(i); setSummaryOn(false); }}
       messages={desk.messages} value={desk.input} onChange={(v) => patchDesk(KINDS[ki].k, { input: v })} onSend={send} busy={busy}
       userName={(user && (user.display_name || user.username)) || ""}
       draft={{ name: dname, kind: KINDS[ki].zh, fields }}
+      onUpload={handleUpload}
+      summaryOn={summaryOn} onSummary={() => setSummaryOn(true)} desksInfo={desksInfo} onBundle={bundlePreset}
       onSaveCard={saveCard} onNav={onNav} />
   );
 }

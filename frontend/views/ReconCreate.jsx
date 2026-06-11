@@ -34,6 +34,10 @@ function ReconCreate(props) {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [(P.messages || []).length, busy]);
+  // 上传文档(解析填草稿)+ 汇总面板的预设名/简介
+  const fileRef = React.useRef(null);
+  const [bname, setBname] = React.useState("");
+  const [bsyn, setBsyn] = React.useState("");
 
   // 顶部卡分类签：kinds 数组，选中 = cardKind 索引
   const KINDS = (P.kinds && P.kinds.length ? P.kinds : SAMPLE_KINDS);
@@ -162,7 +166,7 @@ function ReconCreate(props) {
   .cv-create .line.me .lh .who {color:var(--soft);}
   .cv-create .line.me .bd {color:var(--soft); font-style:italic; border-left:2px solid #9fb09a;}
 
-  .cv-create .composer {flex:none; border-top:1px solid var(--line); padding:14px 22px 16px; background:var(--paper2);}
+  .cv-create .composer {flex:none; border-top:1px solid var(--line); padding:14px 26px 16px; background:var(--paper2);}
   .cv-create .composer .box {position:relative; height:62px; background:var(--paper); border:1px solid var(--line2); display:flex; align-items:center; padding:0 18px;}
   .cv-create .composer .box::before {content:""; position:absolute; inset:4px; border:1px solid rgba(169,138,99,.22); pointer-events:none;}
   .cv-create .composer .box .phin {flex:1; min-width:0; border:none; outline:none; background:transparent; box-shadow:none; border-radius:0; padding:0;
@@ -171,6 +175,24 @@ function ReconCreate(props) {
   .cv-create .composer .box .phin:focus {border:none; box-shadow:none;}
   .cv-create .blink {display:inline-block; font-style:normal; animation:rcr-blink 1s steps(2) infinite;}
   @keyframes rcr-blink {50% {opacity:0;}}
+  /* 汇总面板:四张台子草稿一览 + 打包成预设 */
+  .cv-create .bundle {flex:1; min-width:0; background:var(--paper); border:1px solid var(--line); padding:22px 30px; overflow-y:auto;}
+  .cv-create .bundle .bh {display:flex; align-items:center; gap:10px; padding-bottom:13px; border-bottom:1px solid var(--line);}
+  .cv-create .bundle .bh b {font-family:var(--serif); font-size:15px; font-weight:700; letter-spacing:.1em; color:var(--ink);}
+  .cv-create .bundle .bh .en {font-family:var(--serifen); font-size:8px; letter-spacing:.24em; color:var(--gold);}
+  .cv-create .bundle .bh .hint {margin-left:auto; font-family:var(--kai); font-size:12px; color:var(--faint);}
+  .cv-create .bundle .brow {display:flex; align-items:baseline; gap:14px; padding:13px 2px; border-bottom:1px solid #ece2cf;}
+  .cv-create .bundle .brow .bk {flex:none; width:110px; font-family:var(--serif); font-size:14px; font-weight:700; color:var(--ink); letter-spacing:.06em;}
+  .cv-create .bundle .brow .bv {font-family:var(--kai); font-size:15px; color:var(--ink);}
+  .cv-create .bundle .brow .bv i {font-style:normal; font-family:var(--serifen); font-size:11px; color:var(--faint); margin-left:10px;}
+  .cv-create .bundle .brow .bv.empty {color:var(--faint);}
+  .cv-create .bundle .bform {display:flex; gap:12px; margin-top:20px; align-items:center;}
+  .cv-create .bundle .bin {flex:1; min-width:0; background:var(--paper2); border:1px solid var(--line2); border-radius:0; box-shadow:none; outline:none;
+    font-family:var(--kai); font-size:14px; color:var(--ink); padding:11px 13px;}
+  .cv-create .bundle .bin::placeholder {color:var(--faint);}
+  .cv-create .bundle .bgo {flex:none; height:44px; padding:0 26px; background:var(--green); color:#f3ead6; display:grid; place-items:center;
+    font-family:var(--serif); font-size:13.5px; letter-spacing:.14em; cursor:pointer; user-select:none;}
+  .cv-create .bundle .bnote {font-family:var(--kai); font-size:12.5px; color:var(--faint); margin:14px 0 0;}
   .cv-create .composer .box .send {flex:none; width:104px; height:48px; margin-left:14px; background:var(--green); position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; cursor:pointer;}
   .cv-create .composer .box .send::before {content:""; position:absolute; inset:3px; border:1px solid rgba(193,168,111,.45);}
   .cv-create .composer .box .send .zh {font-family:var(--serif); font-size:13px; letter-spacing:.18em; color:#f3ead6; position:relative; display:flex; align-items:center; gap:6px;}
@@ -254,18 +276,43 @@ function ReconCreate(props) {
         {/* 存草稿/撤销/重做/齿轮均未实现 → 隐藏,不摆死按钮;实现后再恢复 */}
       </div>
 
-      {/* 卡分类索引签 */}
+      {/* 卡分类索引签(+ 汇总:四张台子草稿打包成预设) */}
       <div className="tabs">
         {KINDS.map((t, i) => (
-          <div key={i} className={"tab" + (i === cardKind ? " on" : "")} onClick={() => onKind(i)}>
+          <div key={i} className={"tab" + (i === cardKind && !P.summaryOn ? " on" : "")} onClick={() => onKind(i)}>
             <span className="zh">{t.zh}</span>
             <span className="en">{t.en}</span>
           </div>
         ))}
+        {P.onSummary && (
+          <div className={"tab" + (P.summaryOn ? " on" : "")} onClick={() => P.onSummary()}>
+            <span className="zh">汇总</span>
+            <span className="en">BUNDLE</span>
+          </div>
+        )}
       </div>
 
-      {/* 主体两栏 */}
+      {/* 主体两栏(汇总态:整块换成打包面板) */}
       <div className="deck">
+        {P.summaryOn ? (
+        <div className="bundle">
+          <div className="bh"><b>汇总</b><span className="en">BUNDLE</span><span className="hint">把四张台子上的草稿打包成一个可玩预设</span></div>
+          {(P.desksInfo || []).map((d, i) => (
+            <div className="brow" key={i}>
+              <span className="bk">{d.zh}</span>
+              {d.fields ? <span className="bv">{d.name || "未命名"}<i>{d.fields} 个字段</i></span> : <span className="bv empty">还空着</span>}
+            </div>
+          ))}
+          <div className="bform">
+            <input className="bin" placeholder="预设名(必填)" value={bname} onChange={(e) => setBname(e.target.value)} />
+            <input className="bin" placeholder="一句话简介(可空)" value={bsyn} onChange={(e) => setBsyn(e.target.value)} />
+            <div className="bgo" onClick={() => !busy && P.onBundle && P.onBundle(bname, bsyn)}
+              style={{ opacity: busy ? 0.55 : 1, cursor: busy ? "default" : "pointer" }}>{busy ? "打包中…" : "打包成预设"}</div>
+          </div>
+          <p className="bnote">至少要有一张角色卡草稿;打包后去「探索」页就能看到,点开即玩。空着的台子不会进预设。</p>
+        </div>
+        ) : (
+        <React.Fragment>
         {/* 左：与 AI 对谈 */}
         <div className="talk">
           <div className="th">
@@ -312,6 +359,16 @@ function ReconCreate(props) {
                 <span className="en">ENTER</span>
               </div>
             </div>
+            {/* 上传文档:执笔人按当前卡种解析,填进草稿继续聊着完善 */}
+            {P.onUpload && (
+              <div className="up" onClick={() => { if (!busy && fileRef.current) fileRef.current.click(); }}
+                style={{ cursor: busy ? "default" : "pointer", opacity: busy ? 0.55 : 1 }}>
+                <span className="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 20h16" /></svg></span>
+                <span className="tx">手里已有写好的设定?<b>上传文档</b>,执笔人解析成{dKind}填进草稿</span>
+                <input type="file" ref={fileRef} accept=".txt,.md,.json" style={{ display: "none" }}
+                  onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f && P.onUpload) P.onUpload(f); }} />
+              </div>
+            )}
           </div>
         </div>
 
@@ -355,6 +412,8 @@ function ReconCreate(props) {
             </div>
           </div>
         </div>
+        </React.Fragment>
+        )}
       </div>
 
     </div>
