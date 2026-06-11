@@ -124,13 +124,7 @@ function ReconProfile(props) {
   const _libTags = (it) => { const d = (it.data && it.data.data) || it.data || {}; return (d.tags || []).slice(0, 4).join(" · "); };
   const LIB_LABEL = { characters: "角色卡", players: "演出卡", worlds: "世界书", stories: "故事书" };
 
-  // ---- 派生：我的资产（用户自己的卡;无 prop 时回退 presets 推导）----
-  const assets = [
-    { lb: "角色卡", num: String(charCount) },
-    { lb: "故事书", num: String(storyCount) },
-    { lb: "世界设定", num: String(worldCount) },
-    { lb: "标签", num: String(tagCount) },
-  ];
+  // (「我的资产」四格已删——与统计条重复)
 
   return (
     <div className="cv-profile">
@@ -358,13 +352,10 @@ function ReconProfile(props) {
       <div className="top">
         <div className="ttl"><h2>个人中心</h2><span className="en">Personal Center</span></div>
         <div className="sub">管理你的档案、故事与卡牌资产</div>
+        {/* 右上角原有 铃铛/邮件/设置 死图标 + 小头像(与档案卡大头像重复)已清,只留有功能的退出登录 */}
         <div className="tr">
-          <div className="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></div>
-          <div className="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 6l9 7 9-7"/></svg></div>
-          <div className="ic"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg></div>
-          <img className="av" src={(user && user.avatar) || "assets/recon/profile-headavatar.png"} alt="" />
           {user && P.onLogout ? (
-            <span onClick={P.onLogout} style={{ cursor: "pointer", fontFamily: "var(--serif)", fontSize: 12.5, letterSpacing: ".1em", color: "var(--soft)", border: "1px solid var(--line2)", padding: "7px 14px" }}>退出登录</span>
+            <span onClick={P.onLogout} style={{ cursor: "pointer", fontFamily: "var(--serif)", fontSize: 13.5, letterSpacing: ".1em", color: "var(--soft)", border: "1px solid var(--line2)", padding: "7px 14px" }}>退出登录</span>
           ) : null}
         </div>
       </div>
@@ -393,7 +384,7 @@ function ReconProfile(props) {
               </span>
             ) : null}
           </div>
-          <div className="uid">{uidLine}{user && P.onLogout ? <span className="logout" onClick={() => P.onLogout()}>退出登录</span> : null}</div>
+          <div className="uid">{uidLine}</div>
         </div>
 
         {/* 统计条 */}
@@ -448,17 +439,7 @@ function ReconProfile(props) {
               </div>
             )}
 
-            <div className="sec-h" style={{ marginTop: "24px" }}><b>我的资产</b><span className="en">MY ASSETS</span><span className="all" style={{ cursor: "pointer" }} onClick={() => onNav("build")}>去创作 ›</span></div>
-            <div className="assets" style={{ marginTop: "0" }}>
-              {[
-                <svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="3" width="18" height="24"/><circle cx="15" cy="12" r="3.4"/><path d="M9.5 22c1-3 3.2-4.4 5.5-4.4S19.5 19 20.5 22"/></svg>,
-                <svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"><path d="M15 7C13 5 9 5 6 6v18c3-1 7-1 9 1 2-2 6-2 9-1V6c-3-1-7-1-9 1z"/><path d="M15 7v19"/></svg>,
-                <svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"><circle cx="15" cy="15" r="11"/><path d="M15 4v22M4 15h22"/><path d="M15 8l3.2 3.8L23 15l-4.8 3.2L15 22l-3.2-3.8L7 15l4.8-3.2z"/></svg>,
-                <svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3v24M3 15h24"/><path d="M15 9l2 4 4 2-4 2-2 4-2-4-4-2 4-2z"/></svg>,
-              ].map((icon, i) => (
-                <div className="acard" key={i}><div className="em">{icon}</div><div className="lb">{assets[i].lb}</div><div className="num">{assets[i].num}</div></div>
-              ))}
-            </div>
+            {/* 「我的资产」四格已删(与上方统计条重复;统计条本就是全量真实计数) */}
           </div>
 
           {/* 右栏 —— 成就占位 */}
