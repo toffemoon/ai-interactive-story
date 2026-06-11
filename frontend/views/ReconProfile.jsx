@@ -18,6 +18,64 @@ const SAMPLE = {
   saves: [],
 };
 
+// 预设环形轮播(CSS 3D 版「卡片环形轮播」:深色面板 + 透视环 + 中央聚焦 + 金边卡面/卡背;
+// three.js 原版 demo 留给首页全屏场景,这里零依赖近似同款观感)。拖拽转环/箭头步进/点侧卡聚焦。
+function RxPresetRing({ items, onStart, onDelete }) {
+  const n = items.length;
+  const step = 360 / n;
+  const radius = Math.max(330, Math.round((n * 240) / (2 * Math.PI)));
+  const [offset, setOffset] = React.useState(0);
+  const cur = ((Math.round(-offset / step) % n) + n) % n;
+  const drag = React.useRef(null);
+  const moved = React.useRef(false);
+  const onDown = (e) => { drag.current = { x: e.clientX, o: offset }; moved.current = false; };
+  const onMove = (e) => {
+    if (!drag.current) return;
+    const dx = e.clientX - drag.current.x;
+    if (Math.abs(dx) > 5) moved.current = true;
+    setOffset(drag.current.o + dx * 0.22);
+  };
+  const onUp = () => { if (!drag.current) return; drag.current = null; setOffset((o) => Math.round(o / step) * step); };
+  const goto = (i) => {
+    // 取与当前 offset 最近的等价角(走短弧,不绕远)
+    setOffset((o) => { const target = -i * step; const k = Math.round((o - target) / 360); return target + k * 360; });
+  };
+  const curItem = items[cur];
+  return (
+    <div className="ringwrap" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}>
+      <div className="ringstage">
+        <div className="ring" style={{ transform: "translateZ(" + (-radius) + "px) rotateY(" + offset + "deg)" }}>
+          {items.map((p, i) => (
+            <div className={"ringcard" + (i === cur ? " cur" : "")} key={i}
+              style={{ transform: "rotateY(" + (i * step) + "deg) translateZ(" + radius + "px)" }}
+              onClick={() => { if (!moved.current && i !== cur) goto(i); }}>
+              <div className="rcf">
+                {p.cover
+                  ? <img src={p.cover} alt="" draggable={false} />
+                  : <div className="rcph"><b>{p.nm.slice(0, 4)}</b></div>}
+                <div className="rcband"><b>{p.nm}</b>{p.tags.length ? <span>{p.tags[0]}</span> : null}</div>
+              </div>
+              <div className="rcb"><span className="em">✦</span></div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="ringarr l" onClick={() => goto((cur - 1 + n) % n)}>‹</div>
+      <div className="ringarr r" onClick={() => goto((cur + 1) % n)}>›</div>
+      {curItem && (
+        <div className="ringinfo">
+          <div className="ri-nm">{curItem.nm}</div>
+          <div className="ri-syn">{curItem.syn}</div>
+          <div className="ri-acts">
+            {onStart && <span className="ri-btn pri" onClick={() => onStart(curItem.raw)}>开始</span>}
+            {onDelete && <span className="ri-btn" onClick={() => onDelete(curItem.raw)}>删除</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ReconProfile(props) {
   const P = props || {};
   const user = P.user !== undefined ? P.user : SAMPLE.user;
@@ -199,9 +257,9 @@ function ReconProfile(props) {
   
   .cv-profile .profile {position:relative; height:152px; background:var(--paper); border:1px solid var(--line);}
   .cv-profile .profile::before {content:""; position:absolute; inset:5px; border:1px solid rgba(196,179,132,.4); pointer-events:none;}
-  .cv-profile .profile .av {position:absolute; left:20px; top:11px; width:128px; height:128px; border-radius:50%; object-fit:cover; border:2px solid var(--line2);}
+  .cv-profile .profile .av {position:absolute; left:20px; top:50%; transform:translateY(-50%); width:118px; height:118px; border-radius:50%; object-fit:cover; border:2px solid var(--line2); z-index:2;}
   /* 头像编辑入口:显式可见(相机角标 + 文字钮),不靠"点头像"这种隐形操作 */
-  .cv-profile .profile .avedit {position:absolute; left:112px; top:104px; width:34px; height:34px; border-radius:50%;
+  .cv-profile .profile .avedit {position:absolute; left:104px; top:calc(50% + 26px); width:34px; height:34px; border-radius:50%;
     background:var(--green); border:1px solid #283831; display:grid; place-items:center; color:#f3ead6; cursor:pointer; z-index:3;
     box-shadow:0 2px 8px rgba(43,38,32,.25);}
   .cv-profile .profile .avedit:hover {background:#2c3a32;}
@@ -209,7 +267,9 @@ function ReconProfile(props) {
     letter-spacing:.08em; color:var(--soft); cursor:pointer; border:1px solid var(--line2); background:var(--paper2); padding:4px 12px;}
   .cv-profile .profile .avchip:hover {color:var(--ink); border-color:var(--gold);}
   .cv-profile .profile .avchip svg {color:var(--gold);}
-  .cv-profile .profile .head {position:absolute; left:170px; top:18px; display:flex; align-items:center; gap:10px;}
+  /* 信息组:名字+账户态组团垂直居中,与头像对齐(此前名字贴顶/uid 贴底,中间空着) */
+  .cv-profile .profile .pinfo {position:absolute; left:166px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:9px; z-index:2;}
+  .cv-profile .profile .head {display:flex; align-items:center; gap:10px;}
   .cv-profile .profile .head .nm {font-family:var(--serif); font-weight:700; font-size:23px; letter-spacing:.06em; color:var(--ink);}
   .cv-profile .profile .head .edit {color:var(--gold); display:grid; place-items:center;}
   .cv-profile .profile .lvrow {position:absolute; left:172px; top:52px; display:flex; align-items:center; gap:12px;}
@@ -218,7 +278,7 @@ function ReconProfile(props) {
   .cv-profile .profile .lvrow .xp i {position:absolute; left:0; top:0; bottom:0; width:68%; background:linear-gradient(90deg,var(--gold),var(--gold2)); border-radius:2px;}
   .cv-profile .profile .lvrow .xpn {font-family:var(--serifen); font-size:11px; letter-spacing:.04em; color:var(--faint);}
   .cv-profile .profile .sig {position:absolute; left:172px; top:84px; font-family:var(--kai); font-size:13px; color:var(--soft); letter-spacing:.04em;}
-  .cv-profile .profile .uid {position:absolute; left:172px; bottom:18px; font-family:var(--serifen); font-size:10.5px; letter-spacing:.08em; color:var(--faint);}
+  .cv-profile .profile .uid {font-family:var(--serifen); font-size:12px; letter-spacing:.08em; color:var(--faint);}
   .cv-profile .profile .heroimg {position:absolute; right:0; top:0; bottom:0; width:480px; opacity:.92;
     background:center/cover no-repeat url(assets/recon/profile-room.png);
     -webkit-mask-image:linear-gradient(90deg,transparent,#000 42%); mask-image:linear-gradient(90deg,transparent,#000 42%);}
@@ -342,6 +402,51 @@ function ReconProfile(props) {
   .cv-profile .mbtn.pri:hover:not(:disabled) {background:#2c3a32; color:#eef0e2;}
   .cv-profile .mnote {font-family:var(--kai); font-size:12.5px; color:var(--faint); margin-left:auto;}
   .cv-profile .msp {flex:1;}
+
+  /* ===== 预设环形轮播(深色展柜 + CSS 3D 环) ===== */
+  .cv-profile .ringwrap {position:relative; margin-top:18px; padding:30px 0 24px; overflow:hidden; user-select:none; touch-action:pan-y;
+    background:
+      radial-gradient(ellipse 60% 90% at 50% -20%, rgba(232,200,122,.28), transparent 60%),
+      radial-gradient(ellipse 120% 100% at 50% 110%, rgba(20,14,8,.55), transparent 70%),
+      linear-gradient(180deg, #221a10, #15100a 70%, #0f0b07);
+    border:1px solid #3a2e1c;}
+  .cv-profile .ringwrap::before {content:""; position:absolute; left:50%; top:-40%; width:340px; height:130%; transform:translateX(-50%) rotate(8deg);
+    background:linear-gradient(180deg, rgba(255,236,190,.16), transparent 75%); pointer-events:none;}
+  .cv-profile .ringstage {height:330px; perspective:1150px; cursor:grab;}
+  .cv-profile .ringstage:active {cursor:grabbing;}
+  .cv-profile .ring {position:absolute; left:50%; top:34px; width:0; height:0; transform-style:preserve-3d; transition:transform .55s cubic-bezier(.22,1,.36,1);}
+  .cv-profile .ringcard {position:absolute; left:-102px; top:0; width:204px; height:282px; transform-style:preserve-3d; cursor:pointer;}
+  .cv-profile .ringcard .rcf, .cv-profile .ringcard .rcb {position:absolute; inset:0; border-radius:10px; overflow:hidden;
+    -webkit-backface-visibility:hidden; backface-visibility:hidden;
+    border:2px solid #b88d3f; box-shadow:0 0 0 1px rgba(255,226,160,.35) inset, 0 18px 40px -18px rgba(0,0,0,.85);}
+  .cv-profile .ringcard .rcf {background:#241c12; filter:brightness(.62) saturate(.85); transition:filter .45s;}
+  .cv-profile .ringcard.cur .rcf {filter:none; box-shadow:0 0 0 1px rgba(255,226,160,.5) inset, 0 0 34px -4px rgba(232,200,122,.45), 0 22px 46px -16px rgba(0,0,0,.9);}
+  .cv-profile .ringcard .rcf img {width:100%; height:100%; object-fit:cover; display:block;}
+  .cv-profile .ringcard .rcph {width:100%; height:100%; display:grid; place-items:center; background:linear-gradient(165deg,#3b2f1d,#1c150c);}
+  .cv-profile .ringcard .rcph b {font-family:var(--serif); font-size:26px; color:#e8c87a; letter-spacing:.3em; writing-mode:vertical-rl;}
+  .cv-profile .ringcard .rcband {position:absolute; left:0; right:0; bottom:0; padding:26px 12px 10px; text-align:center;
+    background:linear-gradient(180deg, transparent, rgba(10,6,2,.82) 55%);}
+  .cv-profile .ringcard .rcband b {display:block; font-family:var(--serif); font-size:16px; color:#f5e6c8; letter-spacing:.08em;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .cv-profile .ringcard .rcband span {font-family:var(--kai); font-size:11.5px; color:#d8b35e; letter-spacing:.12em;}
+  .cv-profile .ringcard .rcb {transform:rotateY(180deg); display:grid; place-items:center;
+    background:linear-gradient(160deg,#2c2214,#191307 70%);}
+  .cv-profile .ringcard .rcb .em {font-size:34px; color:rgba(232,200,122,.5);}
+  .cv-profile .ringcard .rcb::after {content:""; position:absolute; inset:10px; border:1px solid rgba(232,200,122,.3); border-radius:6px;}
+  .cv-profile .ringarr {position:absolute; top:158px; width:38px; height:38px; border-radius:50%; border:1px solid #6b572f;
+    background:rgba(20,14,8,.6); color:#e8c87a; display:grid; place-items:center; font-size:19px; cursor:pointer; z-index:5; user-select:none;}
+  .cv-profile .ringarr:hover {background:rgba(58,46,28,.85); color:#fff2cc;}
+  .cv-profile .ringarr.l {left:22px;} .cv-profile .ringarr.r {right:22px;}
+  .cv-profile .ringinfo {position:relative; text-align:center; margin-top:6px; z-index:4;}
+  .cv-profile .ringinfo .ri-nm {font-family:var(--serif); font-size:19px; font-weight:700; color:#f5e6c8; letter-spacing:.1em;}
+  .cv-profile .ringinfo .ri-syn {font-family:var(--kai); font-size:13.5px; color:rgba(245,230,200,.62); margin-top:6px; max-width:560px;
+    margin-left:auto; margin-right:auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .cv-profile .ringinfo .ri-acts {display:flex; gap:12px; justify-content:center; margin-top:12px;}
+  .cv-profile .ringinfo .ri-btn {height:34px; padding:0 26px; display:grid; place-items:center; cursor:pointer; user-select:none;
+    font-family:var(--serif); font-size:14px; letter-spacing:.16em; color:#e8c87a; border:1px solid #6b572f; background:rgba(20,14,8,.5);}
+  .cv-profile .ringinfo .ri-btn:hover {color:#fff2cc; border-color:#b88d3f;}
+  .cv-profile .ringinfo .ri-btn.pri {background:linear-gradient(180deg,#b88d3f,#8a6a2c); color:#1c150c; font-weight:700; border-color:#e8c87a;}
+  .cv-profile .ringinfo .ri-btn.pri:hover {background:linear-gradient(180deg,#d4a94e,#a07c34); color:#120d06;}
 `}</style>
 
       {/* ============ 左竖栏 ============ */}
@@ -375,16 +480,18 @@ function ReconProfile(props) {
             </span>
           ) : null}
           <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={pickAvatar} />
-          <div className="head">
-            <span className="nm">{profileName}</span>
-            {user && P.onAvatar ? (
-              <span className="avchip" onClick={() => fileRef.current && fileRef.current.click()}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.2"/></svg>
-                更换头像
-              </span>
-            ) : null}
+          <div className="pinfo">
+            <div className="head">
+              <span className="nm">{profileName}</span>
+              {user && P.onAvatar ? (
+                <span className="avchip" onClick={() => fileRef.current && fileRef.current.click()}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.2"/></svg>
+                  更换头像
+                </span>
+              ) : null}
+            </div>
+            <div className="uid">{uidLine}</div>
           </div>
-          <div className="uid">{uidLine}</div>
         </div>
 
         {/* 统计条 */}
@@ -454,17 +561,18 @@ function ReconProfile(props) {
           </div>
         </div>
 
-        {/* ===== 我的预设(整宽卡片网格,沿用卡市集翻转卡效果) ===== */}
+        {/* ===== 我的预设(环形轮播;卡少于 2 张退化为卡片网格) ===== */}
         <div className="sec-h" style={{ marginTop: "26px" }}><b>我的预设</b><span className="en">MY PRESETS</span><span className="all" style={{ cursor: "pointer" }} onClick={() => onNav("build")}>去创作打包 ›</span></div>
-        {myPresets.length ? (
+        {myPresets.length >= 2 ? (
+          <RxPresetRing items={myPresets}
+            onStart={P.onOpenStory ? (raw) => P.onOpenStory(raw) : undefined}
+            onDelete={P.onDeletePreset ? (raw) => P.onDeletePreset(raw) : undefined} />
+        ) : myPresets.length === 1 ? (
           <div className="mgrid">
-            {myPresets.map((p, i) => (
-              <window.RxMarketTile key={i} label="预设" name={p.nm} desc={p.syn}
-                tags={p.tags.join(" · ")} img={p.cover}
-                style={{ animationDelay: (Math.min(i, 10) * 40) + "ms" }}
-                onPrimary={P.onOpenStory ? () => P.onOpenStory(p.raw) : undefined} primaryLabel="开始"
-                onDelete={P.onDeletePreset ? () => P.onDeletePreset(p.raw) : undefined} />
-            ))}
+            <window.RxMarketTile label="预设" name={myPresets[0].nm} desc={myPresets[0].syn}
+              tags={myPresets[0].tags.join(" · ")} img={myPresets[0].cover}
+              onPrimary={P.onOpenStory ? () => P.onOpenStory(myPresets[0].raw) : undefined} primaryLabel="开始"
+              onDelete={P.onDeletePreset ? () => P.onDeletePreset(myPresets[0].raw) : undefined} />
           </div>
         ) : (
           <div className="vdim">还没有预设。在创作桌的「汇总」打包一个,会出现在这里。</div>
