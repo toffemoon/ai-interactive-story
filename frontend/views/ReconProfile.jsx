@@ -272,7 +272,8 @@ function ReconProfile(props) {
   .cv-profile .sec-h {display:flex; align-items:center; gap:11px; margin-bottom:11px;}
   .cv-profile .sec-h b {font-family:var(--serif); font-size:16px; font-weight:700; letter-spacing:.12em; color:var(--ink);}
   .cv-profile .sec-h .en {font-family:var(--serifen); font-size:9px; letter-spacing:.26em; color:var(--gold);}
-  .cv-profile .sec-h .all {margin-left:auto; font-family:var(--kai); font-size:11px; letter-spacing:.04em; color:var(--soft);}
+  .cv-profile .sec-h .all {margin-left:auto; font-family:var(--kai); font-size:14px; letter-spacing:.04em; color:var(--soft); opacity:.65;}
+  .cv-profile .sec-h .all:hover {opacity:1;}
 
   
   .cv-profile .recent {display:flex; gap:14px;}
@@ -397,6 +398,9 @@ function ReconProfile(props) {
   .cv-profile .bookcard.flip .bk-in {transform:rotateY(180deg);}
   .cv-profile .bookcard .bk-f, .cv-profile .bookcard .bk-b {position:absolute; inset:0; -webkit-backface-visibility:hidden; backface-visibility:hidden;
     background:var(--paper); border:1px solid var(--line); overflow:hidden;}
+  /* 背面朝前时封面层不接事件(否则点击全被 DOM 上层的封面截胡,↺ 永远点不到),反之亦然 */
+  .cv-profile .bookcard.flip .bk-f {pointer-events:none;}
+  .cv-profile .bookcard:not(.flip) .bk-b {pointer-events:none;}
   .cv-profile .bookcard:hover .bk-f, .cv-profile .bookcard:hover .bk-b {box-shadow:0 14px 26px -16px rgba(43,38,32,.38);}
   .cv-profile .bookcard .bk-f {cursor:pointer;}
   .cv-profile .bookcard .bk-f::after {content:""; position:absolute; left:7px; top:0; bottom:0; width:1px; background:rgba(43,38,32,.18); pointer-events:none;}
@@ -407,7 +411,7 @@ function ReconProfile(props) {
     background:linear-gradient(180deg, transparent, rgba(34,29,22,.66) 60%);}
   .cv-profile .bookcard .bk-band b {font-family:var(--serif); font-size:16px; color:#f5efe3; letter-spacing:.08em;
     display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .cv-profile .bookcard .bk-flip {position:absolute; right:9px; bottom:9px; width:30px; height:30px; border-radius:50%; z-index:3;
+  .cv-profile .bookcard .bk-flip {position:absolute; right:9px; top:9px; width:30px; height:30px; border-radius:50%; z-index:3;
     border:1px solid var(--line2); background:rgba(250,244,234,.92); color:var(--soft); display:grid; place-items:center; font-size:14px; cursor:pointer; user-select:none;}
   .cv-profile .bookcard .bk-flip:hover {background:rgba(193,168,111,.25); color:var(--ink);}
   .cv-profile .bookcard .bk-b {transform:rotateY(180deg); padding:16px 18px 13px; display:flex; flex-direction:column;}
@@ -420,9 +424,9 @@ function ReconProfile(props) {
     display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden;}
   .cv-profile .bookcard .bk-tgs {font-family:var(--kai); font-size:13px; color:var(--gold); margin-top:auto; letter-spacing:.04em;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:17px;}
-  .cv-profile .bookcard .bk-ft {display:flex; align-items:center; gap:9px; border-top:1px solid var(--line); padding-top:10px; margin-top:8px; padding-right:38px;}
-  .cv-profile .bookcard .bk-btn {height:33px; padding:0 15px; border:1px solid var(--navy-line); background:transparent; color:var(--navy);
-    font-family:var(--serif); font-size:15px; letter-spacing:.08em; cursor:pointer; border-radius:0; min-height:0;}
+  .cv-profile .bookcard .bk-ft {display:flex; align-items:center; gap:9px; border-top:1px solid var(--line); padding-top:10px; margin-top:8px;}
+  .cv-profile .bookcard .bk-btn {flex:1; height:33px; padding:0 8px; border:1px solid var(--navy-line); background:transparent; color:var(--navy);
+    font-family:var(--serif); font-size:15px; letter-spacing:.08em; cursor:pointer; border-radius:0; min-height:0; white-space:nowrap;}
   .cv-profile .bookcard .bk-btn:hover {background:rgba(185,154,89,.12);}
   .cv-profile .bookcard .bk-btn.pri {background:var(--green); color:#eef0e2; border-color:#283831;}
   .cv-profile .bookcard .bk-btn.pri:hover {background:#2c3a32;}
@@ -520,7 +524,7 @@ function ReconProfile(props) {
               ))}
             </div>
             {hasLocal && (
-              <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 8, letterSpacing: ".04em" }}>
+              <div style={{ fontSize: 14, color: "var(--faint)", opacity: 0.7, marginTop: 8, letterSpacing: ".04em", fontFamily: "var(--kai)" }}>
                 标记「仅本机」的存档只保存在当前浏览器;登录后玩的对局会跟随账号、可跨设备继续。
               </div>
             )}
