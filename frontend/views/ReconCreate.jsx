@@ -364,7 +364,7 @@ function ReconCreate(props) {
               <div className="up" onClick={() => { if (!busy && fileRef.current) fileRef.current.click(); }}
                 style={{ cursor: busy ? "default" : "pointer", opacity: busy ? 0.55 : 1 }}>
                 <span className="ic"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 20h16" /></svg></span>
-                <span className="tx">手里已有写好的设定?<b>上传文档</b>,执笔人解析成{dKind}填进草稿</span>
+                <span className="tx"><b>上传</b></span>
                 <input type="file" ref={fileRef} accept=".txt,.md,.json" style={{ display: "none" }}
                   onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f && P.onUpload) P.onUpload(f); }} />
               </div>
