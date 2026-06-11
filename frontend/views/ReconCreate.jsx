@@ -137,7 +137,7 @@ function ReconCreate(props) {
   .cv-create .tabs {position:absolute; left:240px; right:24px; top:96px; height:46px; display:flex; align-items:flex-end; gap:0; z-index:10;}
   .cv-create .tabs::after {content:""; position:absolute; left:0; right:0; bottom:0; height:1px; background:var(--line2);}
   .cv-create .tab {display:flex; flex-direction:column; align-items:center; gap:3px; padding:0 22px 11px; cursor:pointer; position:relative;}
-  .cv-create .tab .zh {font-family:var(--serif); font-size:14.5px; letter-spacing:.08em; color:var(--faint);}
+  .cv-create .tab .zh {font-family:var(--serif); font-size:15px; letter-spacing:.08em; color:var(--faint);}
   .cv-create .tab .en {font-family:var(--serifen); font-size:7px; letter-spacing:.22em; color:var(--faint); opacity:.75;}
   .cv-create .tab.on .zh {color:var(--ink); font-weight:700;}
   .cv-create .tab.on .en {color:var(--gold);}
@@ -173,7 +173,8 @@ function ReconCreate(props) {
   .cv-create .line.me .lh .who {color:var(--soft);}
   .cv-create .line.me .bd {color:var(--soft); font-style:italic; border-left:2px solid #9fb09a;}
 
-  .cv-create .composer {flex:none; border-top:1px solid var(--line); padding:14px 26px 16px; background:var(--paper2);}
+  /* display:block 压掉 styles.css 全局 .composer 的 grid 泄漏(两列模板会把 box 挤进第一列,右侧空出幽灵列) */
+  .cv-create .composer {flex:none; display:block; border-top:1px solid var(--line); padding:14px 26px 16px; background:var(--paper2);}
   .cv-create .composer .box {position:relative; height:62px; background:var(--paper); border:1px solid var(--line2); display:flex; align-items:center; padding:0 18px;}
   .cv-create .composer .box::before {content:""; position:absolute; inset:4px; border:1px solid rgba(169,138,99,.22); pointer-events:none;}
   .cv-create .composer .box .phin {flex:1; min-width:0; border:none; outline:none; background:transparent; box-shadow:none; border-radius:0; padding:0;
@@ -182,7 +183,7 @@ function ReconCreate(props) {
   .cv-create .composer .box .phin:focus {border:none; box-shadow:none;}
   .cv-create .composer .box .upbtn {flex:none; display:flex; align-items:center; gap:6px; height:36px; padding:0 14px; margin-right:14px;
     border:1px solid var(--line2); background:var(--paper2); color:var(--soft); user-select:none;
-    font-family:var(--serif); font-size:12.5px; letter-spacing:.08em; white-space:nowrap;}
+    font-family:var(--serif); font-size:15px; letter-spacing:.08em; white-space:nowrap;}
   .cv-create .composer .box .upbtn:hover {color:var(--ink); border-color:var(--gold2);}
   .cv-create .composer .box .upbtn svg {color:var(--gold);}
   .cv-create .blink {display:inline-block; font-style:normal; animation:rcr-blink 1s steps(2) infinite;}
@@ -192,30 +193,30 @@ function ReconCreate(props) {
   .cv-create .bundle .bh {display:flex; align-items:center; gap:10px; padding-bottom:13px; border-bottom:1px solid var(--line);}
   .cv-create .bundle .bh b {font-family:var(--serif); font-size:15px; font-weight:700; letter-spacing:.1em; color:var(--ink);}
   .cv-create .bundle .bh .en {font-family:var(--serifen); font-size:8px; letter-spacing:.24em; color:var(--gold);}
-  .cv-create .bundle .bh .hint {margin-left:auto; font-family:var(--kai); font-size:12px; color:var(--faint);}
+  .cv-create .bundle .bh .hint {margin-left:auto; font-family:var(--kai); font-size:15px; color:var(--faint);}
   .cv-create .bundle .brow {display:flex; align-items:baseline; gap:14px; padding:13px 2px; border-bottom:1px solid #ece2cf;}
-  .cv-create .bundle .brow .bk {flex:none; width:110px; font-family:var(--serif); font-size:14px; font-weight:700; color:var(--ink); letter-spacing:.06em;}
+  .cv-create .bundle .brow .bk {flex:none; width:110px; font-family:var(--serif); font-size:15px; font-weight:700; color:var(--ink); letter-spacing:.06em;}
   .cv-create .bundle .brow .bv {font-family:var(--kai); font-size:15px; color:var(--ink);}
-  .cv-create .bundle .brow .bv i {font-style:normal; font-family:var(--serifen); font-size:11px; color:var(--faint); margin-left:10px;}
+  .cv-create .bundle .brow .bv i {font-style:normal; font-family:var(--serifen); font-size:13px; color:var(--faint); margin-left:10px;}
   .cv-create .bundle .brow .bv.empty {color:var(--faint);}
   .cv-create .bundle .bform {display:flex; gap:12px; margin-top:20px; align-items:center;}
   .cv-create .bundle .bin {flex:1; min-width:0; background:var(--paper2); border:1px solid var(--line2); border-radius:0; box-shadow:none; outline:none;
-    font-family:var(--kai); font-size:14px; color:var(--ink); padding:11px 13px;}
+    font-family:var(--kai); font-size:15px; color:var(--ink); padding:11px 13px;}
   .cv-create .bundle .bin::placeholder {color:var(--faint);}
   .cv-create .bundle .bgo {flex:none; height:44px; padding:0 26px; background:var(--green); color:#f3ead6; display:grid; place-items:center;
-    font-family:var(--serif); font-size:13.5px; letter-spacing:.14em; cursor:pointer; user-select:none;}
-  .cv-create .bundle .bnote {font-family:var(--kai); font-size:12.5px; color:var(--faint); margin:14px 0 0;}
-  .cv-create .bundle .brow .blib {margin-left:auto; flex:none; font-family:var(--serif); font-size:12px; letter-spacing:.06em;
+    font-family:var(--serif); font-size:15px; letter-spacing:.14em; cursor:pointer; user-select:none;}
+  .cv-create .bundle .bnote {font-family:var(--kai); font-size:15px; color:var(--faint); margin:14px 0 0;}
+  .cv-create .bundle .brow .blib {margin-left:auto; flex:none; font-family:var(--serif); font-size:15px; letter-spacing:.06em;
     color:var(--gold); cursor:pointer; user-select:none; white-space:nowrap;}
   .cv-create .bundle .brow .blib:hover, .cv-create .bundle .brow .blib.on {color:var(--ink);}
   .cv-create .bundle .blist {display:flex; flex-wrap:wrap; gap:8px; padding:10px 2px 12px; border-bottom:1px solid #ece2cf; background:var(--paper3);}
-  .cv-create .bundle .blist .bli {font-family:var(--kai); font-size:13px; color:var(--ink); border:1px solid var(--line2);
+  .cv-create .bundle .blist .bli {font-family:var(--kai); font-size:15px; color:var(--ink); border:1px solid var(--line2);
     padding:5px 13px; cursor:pointer; user-select:none; background:var(--paper);}
   .cv-create .bundle .blist .bli:hover {border-color:var(--gold2); color:var(--ink);}
   .cv-create .bundle .blist .bli.dim {color:var(--faint); border:none; cursor:default; background:transparent;}
   .cv-create .composer .box .send {flex:none; width:104px; height:48px; margin-left:14px; background:var(--green); position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; cursor:pointer;}
   .cv-create .composer .box .send::before {content:""; position:absolute; inset:3px; border:1px solid rgba(193,168,111,.45);}
-  .cv-create .composer .box .send .zh {font-family:var(--serif); font-size:13px; letter-spacing:.18em; color:#f3ead6; position:relative; display:flex; align-items:center; gap:6px;}
+  .cv-create .composer .box .send .zh {font-family:var(--serif); font-size:15px; letter-spacing:.18em; color:#f3ead6; position:relative; display:flex; align-items:center; gap:6px;}
   .cv-create .composer .box .send .en {font-family:var(--serifen); font-size:7px; letter-spacing:.26em; color:rgba(243,234,214,.65); position:relative;}
   .cv-create .composer .up {display:flex; align-items:center; gap:8px; margin-top:11px; padding-left:2px;}
   .cv-create .composer .up .ic {color:var(--gold); display:grid; place-items:center;}
