@@ -2243,6 +2243,26 @@ function ReconChatLive({ presets, onNav, mobile, uid }) {
   const [ocs, setOcs] = React.useState([]);
   const [myCards, setMyCards] = React.useState([]); // 用户自己建的角色卡(创作桌入库的)也能聊——闭环建卡→使用
   const [activeKey, setActiveKey] = React.useState("");
+  // 角色栏白名单:默认只摆店里两位(糖沐/萍狗),其余靠「添加角色」从卡库挑(选过的记本机,按账号隔离)。
+  // roster 存完整条目(name/persona/avatar/card),不依赖每次拉库;同名再添加会覆盖刷新。
+  const DEFAULT_ROSTER = ["糖沐", "萍狗"];
+  const ROSTER_KEY = "ais_chat_roster_v1" + (uid ? "_u_" + uid : "");
+  const [roster, setRoster] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem(ROSTER_KEY)) || []; } catch (e) { return []; }
+  });
+  function rosterAdd(item) {
+    const d = (item && item.data && item.data.data) || (item && item.data) || {};
+    const nm = d.name || (item && item.name);
+    if (!nm) return;
+    const entry = { name: nm, persona: d.persona || d.personality, description: d.description, avatar: d.avatar || d.image || undefined, card: item.data };
+    setRoster((rs) => {
+      const next = [...rs.filter((r) => r.name !== nm), entry];
+      try { localStorage.setItem(ROSTER_KEY, JSON.stringify(next)); } catch (e) {}
+      return next;
+    });
+    setActiveKey(nm);
+  }
+  function libChars() { return fetch("/api/library/characters").then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }); }
   // 会话持久化:对话与会话 id 落 localStorage(按账号隔离),切走/刷新回来接着聊,
   // 「近期聊天」终于名实相符;「新建对话」才重开。每角色只留最近 60 条防爆容量。
   const CHAT_KEY = "ais_chat_hist_v1" + (uid ? "_u_" + uid : "");
@@ -2296,8 +2316,12 @@ function ReconChatLive({ presets, onNav, mobile, uid }) {
       const d = c.data || {};
       if (nm && !seen.has(nm)) { seen.add(nm); out.push({ name: nm, persona: d.persona, description: d.description, avatar: d.avatar || d.image || undefined, card: c }); }
     });
-    return out;
-  }, [ocs, myCards, presetCards]);
+    // 从卡库添加的角色(三个默认源没有的)补进来
+    roster.forEach((r) => { if (r && r.name && !seen.has(r.name)) { seen.add(r.name); out.push(r); } });
+    // 白名单过滤:默认两位 + 用户自己添加的;其余角色的数据和历史都还在,只是不上栏
+    const allow = new Set([...DEFAULT_ROSTER, ...roster.map((r) => r.name)]);
+    return out.filter((x) => allow.has(x.name));
+  }, [ocs, myCards, presetCards, roster]);
   const activeName = activeKey || (list[0] && list[0].name) || "";
   const activeItem = list.find((x) => x.name === activeName) || null;
   const messages = byKey[activeName] || [];
@@ -2380,6 +2404,7 @@ function ReconChatLive({ presets, onNav, mobile, uid }) {
       onChange={setInput} onSend={send} onNav={onNav}
       busy={busy} canChat={!!(activeItem && activeItem.card)} onNewChat={newChat}
       restored={!!(restoredRef.current[activeName] && messages.length)}
+      onLibChars={libChars} onRosterAdd={rosterAdd}
       onPick={(nm) => setActiveKey(nm)} />
   );
 }

@@ -47,6 +47,14 @@ function ReconChat(props) {
     const el = chatRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length, busy]);
+  // 添加角色弹窗:从卡库挑(列表由控制器 onLibChars 拉,选中走 onRosterAdd)
+  const [pickOpen, setPickOpen] = React.useState(false);
+  const [pickItems, setPickItems] = React.useState(null); // null=读取中
+  const openPick = () => {
+    setPickOpen(true); setPickItems(null);
+    if (P.onLibChars) P.onLibChars().then((rows) => setPickItems(rows || [])).catch(() => setPickItems([]));
+  };
+  const pickAvatar = (it) => { const d = (it.data && it.data.data) || it.data || {}; return d.avatar || d.image || ""; };
 
   // 左栏主导航 → onNav(view)。view 键对齐 app.jsx 路由（home/game/build/mine/chat）。
   const nav = [
@@ -284,6 +292,28 @@ function ReconChat(props) {
     display:flex; align-items:center; justify-content:center; gap:9px; cursor:pointer;
     font-family:var(--serif); font-size:13px; letter-spacing:.12em; color:var(--soft);}
   .cv-chat .rcard .gift .ic {color:var(--gold);}
+  /* 添加角色:列表底部入口 + 卡库选择弹窗 */
+  .cv-chat .rlist .addrc .av.sv {display:grid; place-items:center; font-size:20px; color:var(--gold); border-style:dashed;}
+  .cv-chat .rlist .addrc .nm {color:var(--soft);}
+  .cv-chat .pickwrap {position:fixed; inset:0; z-index:60; background:rgba(34,29,22,.46); display:grid; place-items:center;}
+  .cv-chat .pickpanel {width:640px; max-width:calc(100vw - 48px); max-height:74vh; display:flex; flex-direction:column;
+    background:var(--paper); border:1px solid var(--line2); padding:24px 28px; position:relative;}
+  .cv-chat .pickpanel::before {content:""; position:absolute; inset:7px; border:1px solid rgba(196,179,132,.4); pointer-events:none;}
+  .cv-chat .pickhead {display:flex; align-items:center; gap:11px; padding-bottom:14px; border-bottom:1px solid var(--line);}
+  .cv-chat .pickhead b {font-family:var(--serif); font-size:17px; font-weight:700; letter-spacing:.08em; color:var(--ink);}
+  .cv-chat .pickhead .en {font-family:var(--serifen); font-size:8px; letter-spacing:.22em; color:var(--gold);}
+  .cv-chat .pickhead .x {margin-left:auto; cursor:pointer; color:var(--soft); padding:2px 8px; font-size:15px; position:relative; z-index:2;}
+  .cv-chat .pickbody {flex:1; min-height:0; overflow-y:auto; display:flex; flex-wrap:wrap; gap:14px; padding:18px 2px 6px; align-content:flex-start;}
+  .cv-chat .pickbody::-webkit-scrollbar {width:6px;} .cv-chat .pickbody::-webkit-scrollbar-thumb {background:var(--line2);}
+  .cv-chat .pickdim {font-family:var(--kai); font-size:15px; color:var(--faint); padding:26px 0; width:100%; text-align:center;}
+  .cv-chat .pkc {width:104px; display:flex; flex-direction:column; align-items:center; gap:7px; padding:13px 6px 11px;
+    border:1px solid var(--line); background:var(--paper2); cursor:pointer; position:relative;}
+  .cv-chat .pkc:hover {border-color:var(--gold2);}
+  .cv-chat .pkc .av {width:54px; height:54px; border-radius:50%; object-fit:cover; border:1px solid var(--line2);}
+  .cv-chat .pkc .av.sv {display:grid; place-items:center; background:var(--paper); font-family:var(--serif); font-size:20px; color:var(--gold);}
+  .cv-chat .pkc .nm {font-family:var(--serif); font-size:15px; color:var(--ink); max-width:96px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .cv-chat .pkc .tag {font-family:var(--kai); font-size:12px; color:var(--faint);}
+  .cv-chat .pkc.got {opacity:.55; cursor:default;}
 `}</style>
 
       {/* 左侧引擎竖栏(全站统一 ReconRail;近期聊天/新建对话作为底部插槽) */}
@@ -297,6 +327,13 @@ function ReconChat(props) {
               <div className="bd"><div className="nm">{c.name}</div><div className="ms">{c.persona || ""}</div></div>
             </div>
           ))}
+          {/* 添加角色:从卡库挑一位进栏 */}
+          {P.onLibChars && (
+            <div className="rc addrc" style={{ cursor: "pointer" }} onClick={openPick}>
+              <span className="av sv">+</span>
+              <div className="bd"><div className="nm">添加角色</div><div className="ms">从卡库挑一位来聊</div></div>
+            </div>
+          )}
         </div>
         {/* 新建对话 = 与当前角色重开一段全新会话(此前误跳创作桌) */}
         {onNewChat && (
@@ -413,6 +450,34 @@ function ReconChat(props) {
           <p>{(active && (active.description || active.persona)) || "选择左侧角色，查看其设定与简介。"}</p>
         </div>
       </div>
+
+      {/* 添加角色弹窗:卡库角色网格,点选入栏(点遮罩或 ✕ 关闭) */}
+      {pickOpen && (
+        <div className="pickwrap" onClick={(e) => { if (e.target.classList && e.target.classList.contains("pickwrap")) setPickOpen(false); }}>
+          <div className="pickpanel">
+            <div className="pickhead">
+              <b>添加角色</b><span className="en">FROM LIBRARY</span>
+              <span className="x" onClick={() => setPickOpen(false)}>✕</span>
+            </div>
+            <div className="pickbody">
+              {pickItems === null && <div className="pickdim">卡库读取中…</div>}
+              {pickItems !== null && !pickItems.length && <div className="pickdim">卡库里还没有角色卡。</div>}
+              {(pickItems || []).map((it, i) => {
+                const inBar = characters.some((c) => c && c.name === it.name);
+                const av = pickAvatar(it);
+                return (
+                  <div className={"pkc" + (inBar ? " got" : "")} key={i}
+                    onClick={() => { if (!inBar && P.onRosterAdd) { P.onRosterAdd(it); setPickOpen(false); } }}>
+                    {av ? <img className="av" src={av} alt="" /> : <span className="av sv">{(it.name || "?").trim().charAt(0)}</span>}
+                    <div className="nm">{it.name || "未命名"}</div>
+                    {inBar && <div className="tag">已在栏中</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
