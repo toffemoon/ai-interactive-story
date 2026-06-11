@@ -120,6 +120,9 @@ function ReconProfile(props) {
     } catch (e) { alert("删除失败:" + (e.message || e)); }
   }
   const _libDesc = (it) => { const d = (it.data && it.data.data) || it.data || {}; return d.anchor || d.description || d.persona || d.premise || (d.entries ? d.entries.length + " 条目" : "") || ""; };
+  const _libImg = (it) => { const d = (it.data && it.data.data) || it.data || {}; return d.image || d.avatar || d.cover || ""; };
+  const _libTags = (it) => { const d = (it.data && it.data.data) || it.data || {}; return (d.tags || []).slice(0, 4).join(" · "); };
+  const LIB_LABEL = { characters: "角色卡", players: "演出卡", worlds: "世界书", stories: "故事书" };
 
   // ---- 派生：我的资产（用户自己的卡;无 prop 时回退 presets 推导）----
   const assets = [
@@ -299,42 +302,52 @@ function ReconProfile(props) {
   .cv-profile .rcard .rdel {position:absolute; right:8px; top:8px; z-index:3; width:22px; height:22px; display:grid; place-items:center;
     background:rgba(250,244,234,.9); border:1px solid var(--line2); color:var(--soft); font-size:12px; cursor:pointer;}
   .cv-profile .rcard .rdel:hover {color:#9a4a3a; border-color:#d8a99e;}
-  /* 我的预设列表(对照旧版「我建的预设」) */
-  .cv-profile .plist {margin-top:12px; display:flex; flex-direction:column; gap:10px;}
-  .cv-profile .pempty {font-family:var(--kai); font-size:15px; color:var(--faint); padding:18px 4px;}
-  .cv-profile .prow {display:flex; align-items:center; gap:14px; background:var(--paper); border:1px solid var(--line); padding:12px 14px;}
-  .cv-profile .prow .pth {width:58px; height:76px; flex:none; object-fit:cover; border:1px solid var(--line2);}
-  .cv-profile .prow .pthn {display:grid; place-items:center; background:linear-gradient(160deg,#efe6d2,#ddd0b2);}
-  .cv-profile .prow .pthn b {font-family:var(--serif); font-size:14px; color:#6f6757; writing-mode:vertical-rl; letter-spacing:.2em;}
-  .cv-profile .prow .pinfo {flex:1; min-width:0;}
-  .cv-profile .prow .pnm b {font-family:var(--serif); font-size:15px; font-weight:700; color:var(--ink); letter-spacing:.04em;}
-  .cv-profile .prow .pnm .pau {margin-left:10px; font-family:var(--kai); font-size:13px; color:var(--faint);}
-  .cv-profile .prow .psyn {font-family:var(--kai); font-size:15px; color:var(--soft); margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .cv-profile .prow .ptags {margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;}
-  .cv-profile .prow .ptags span {font-family:var(--kai); font-size:12px; color:var(--gold); border:1px solid var(--line2); padding:1px 8px;}
-  .cv-profile .prow .pacts {flex:none; display:flex; gap:8px;}
-  .cv-profile .prow .pb {height:30px; padding:0 16px; display:grid; place-items:center; border:1px solid var(--line2); background:var(--paper2);
-    font-family:var(--serif); font-size:13.5px; letter-spacing:.08em; color:var(--soft); cursor:pointer; user-select:none;}
-  .cv-profile .prow .pb:hover {color:var(--ink); border-color:var(--gold2);}
-  .cv-profile .prow .pb.pri {background:var(--green); color:#f3ead6; border-color:#283831;}
-  /* 我的卡库(右栏紧凑版,对照旧版 VaultView) */
-  .cv-profile .vault {background:var(--paper); border:1px solid var(--line); padding:12px 14px 8px; margin-top:12px;}
-  .cv-profile .vtabs {display:flex; gap:6px; border-bottom:1px solid var(--line); padding-bottom:10px;}
-  .cv-profile .vtab {flex:1; text-align:center; padding:6px 0; font-family:var(--serif); font-size:13.5px; letter-spacing:.08em;
-    color:var(--soft); cursor:pointer; border:1px solid transparent; user-select:none;}
-  .cv-profile .vtab.on {color:var(--ink); font-weight:700; border-color:var(--line2); background:var(--paper2);}
-  .cv-profile .vlist {max-height:330px; overflow-y:auto;}
-  .cv-profile .vlist::-webkit-scrollbar {width:5px;} .cv-profile .vlist::-webkit-scrollbar-thumb {background:var(--line2);}
-  .cv-profile .vdim {font-family:var(--kai); font-size:14px; color:var(--faint); padding:18px 2px; text-align:center;}
-  .cv-profile .vrow {display:flex; align-items:center; gap:10px; padding:9px 2px; border-bottom:1px solid rgba(221,208,180,.5);}
-  .cv-profile .vrow:last-child {border-bottom:none;}
-  .cv-profile .vrow .vbd {flex:1; min-width:0;}
-  .cv-profile .vrow .vnm {font-family:var(--serif); font-size:15px; color:var(--ink); letter-spacing:.03em;}
-  .cv-profile .vrow .vnm .vmine {font-style:normal; font-family:var(--kai); font-size:11px; color:var(--gold); margin-left:8px; border:1px solid var(--line2); padding:0 6px;}
-  .cv-profile .vrow .vds {font-family:var(--kai); font-size:13px; color:var(--faint); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .cv-profile .vrow .vdel {flex:none; width:22px; height:22px; display:grid; place-items:center; border:1px solid var(--line2);
-    color:var(--soft); font-size:12px; cursor:pointer; background:var(--paper2);}
-  .cv-profile .vrow .vdel:hover {color:#9a4a3a; border-color:#d8a99e;}
+  /* 卡库分类签(整宽区) */
+  .cv-profile .vtabs {display:flex; gap:8px; margin-top:12px;}
+  .cv-profile .vtab {padding:7px 26px; font-family:var(--serif); font-size:15px; letter-spacing:.08em;
+    color:var(--soft); cursor:pointer; border:1px solid var(--line); background:var(--paper); user-select:none;}
+  .cv-profile .vtab.on {color:var(--ink); font-weight:700; border-color:var(--gold2); background:var(--paper2);}
+  .cv-profile .vdim {font-family:var(--kai); font-size:15px; color:var(--faint); padding:26px 2px; text-align:center;}
+  /* 市集翻转卡(与卡市集同款,RxMarketTile 在本页域内的样式) */
+  @keyframes rcp-in { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+  .cv-profile .mgrid {display:grid; grid-template-columns:repeat(auto-fill, minmax(290px, 1fr)); gap:18px; margin-top:18px;}
+  .cv-profile .mcard {position:relative; height:236px; perspective:1000px; animation:rcp-in .38s cubic-bezier(.22,1,.36,1) both;
+    transition:transform .3s cubic-bezier(.22,1,.36,1);}
+  .cv-profile .mcard:hover {transform:translateY(-4px);}
+  .cv-profile .mc-in {position:absolute; inset:0; transform-style:preserve-3d; transition:transform .45s cubic-bezier(.3,.8,.3,1);}
+  .cv-profile .mcard.flip .mc-in {transform:rotateY(180deg);}
+  .cv-profile .mc-f, .cv-profile .mc-b {position:absolute; inset:0; -webkit-backface-visibility:hidden; backface-visibility:hidden;
+    background:var(--paper); border:1px solid var(--line);}
+  .cv-profile .mcard:hover .mc-f, .cv-profile .mcard:hover .mc-b {box-shadow:0 14px 26px -16px rgba(43,38,32,.38);}
+  .cv-profile .mc-f {padding:16px 18px 13px; display:flex; flex-direction:column;}
+  .cv-profile .mc-f::after {content:""; position:absolute; inset:5px; border:1px solid rgba(196,179,132,.3); pointer-events:none;}
+  .cv-profile .mc-b {transform:rotateY(180deg); overflow:hidden;}
+  .cv-profile .mc-b .bimg {position:absolute; inset:0; background:center/cover no-repeat;}
+  .cv-profile .mc-b .bnm {position:absolute; left:0; right:0; bottom:0; padding:28px 16px 11px;
+    background:linear-gradient(180deg, rgba(34,29,22,0), rgba(34,29,22,.62)); color:#f5efe3;
+    font-family:var(--serif); font-size:15px; letter-spacing:.06em;}
+  .cv-profile .fbtn {width:30px; height:30px; flex:none; border-radius:50%; border:1px solid var(--line2); background:rgba(250,244,234,.92);
+    color:var(--soft); display:grid; place-items:center; cursor:pointer; min-height:0; padding:0; font-size:14px; line-height:1;}
+  .cv-profile .fbtn:hover {background:rgba(193,168,111,.25); color:var(--ink);}
+  .cv-profile .mc-b .fbtn {position:absolute; right:9px; bottom:9px; background:rgba(34,29,22,.45); color:#f0e8d4; border-color:rgba(240,232,212,.55); z-index:3;}
+  .cv-profile .mc-b .fbtn:hover {background:rgba(34,29,22,.65); color:#fff;}
+  .cv-profile .mcard .mh {display:flex; align-items:center; gap:8px;}
+  .cv-profile .badge {font-family:var(--serif); font-size:11.5px; letter-spacing:.08em; color:#8a6f49;
+    border:1px solid var(--gold2); background:rgba(193,168,111,.12); padding:2px 9px; flex:none;}
+  .cv-profile .minebdg {font-family:var(--kai); font-size:11px; color:#b5402e; border:1px solid rgba(181,64,46,.4); padding:2px 7px; flex:none;}
+  .cv-profile .mcard b.nm {display:block; font-family:var(--serif); font-size:17px; font-weight:700; letter-spacing:.04em; margin-top:10px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .cv-profile .mcard .ds {font-family:var(--kai); font-size:15px; line-height:1.65; color:var(--soft); margin-top:7px; height:50px;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+  .cv-profile .mcard .tgs {font-family:var(--kai); font-size:12px; color:var(--gold); margin-top:7px; letter-spacing:.04em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:17px;}
+  .cv-profile .mcard .ft {display:flex; align-items:center; gap:9px; margin-top:auto; border-top:1px solid var(--line); padding-top:10px;}
+  .cv-profile .mbtn {height:31px; padding:0 15px; border:1px solid var(--navy-line); background:transparent; color:var(--navy);
+    font-family:var(--serif); font-size:13.5px; letter-spacing:.08em; cursor:pointer; border-radius:0; min-height:0;}
+  .cv-profile .mbtn:hover:not(:disabled) {background:rgba(185,154,89,.12); color:var(--navy);}
+  .cv-profile .mbtn.pri {background:var(--green); color:#eef0e2; border-color:#283831;}
+  .cv-profile .mbtn.pri:hover:not(:disabled) {background:#2c3a32; color:#eef0e2;}
+  .cv-profile .mnote {font-family:var(--kai); font-size:12.5px; color:var(--faint); margin-left:auto;}
+  .cv-profile .msp {flex:1;}
 `}</style>
 
       {/* ============ 左竖栏 ============ */}
@@ -435,28 +448,6 @@ function ReconProfile(props) {
               </div>
             )}
 
-            {/* 我的预设(对照旧版「我建的预设」:开始 / 删除) */}
-            <div className="sec-h" style={{ marginTop: "24px" }}><b>我的预设</b><span className="en">MY PRESETS</span><span className="all" style={{ cursor: "pointer" }} onClick={() => onNav("build")}>去创作打包 ›</span></div>
-            <div className="plist">
-              {!myPresets.length && <div className="pempty">还没有预设。在创作桌的「汇总」打包一个,会出现在这里。</div>}
-              {myPresets.map((p, i) => (
-                <div className="prow" key={i}>
-                  {p.cover
-                    ? <img className="pth" src={p.cover} alt="" />
-                    : <div className="pth pthn"><b>{p.nm.slice(0, 4)}</b></div>}
-                  <div className="pinfo">
-                    <div className="pnm"><b>{p.nm}</b>{p.author ? <span className="pau">by {p.author}</span> : null}</div>
-                    <div className="psyn">{p.syn}</div>
-                    {p.tags.length ? <div className="ptags">{p.tags.map((t, j) => <span key={j}>{t}</span>)}</div> : null}
-                  </div>
-                  <div className="pacts">
-                    {P.onOpenStory && <span className="pb pri" onClick={() => P.onOpenStory(p.raw)}>开始</span>}
-                    {P.onDeletePreset && <span className="pb" onClick={() => P.onDeletePreset(p.raw)}>删除</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-
             <div className="sec-h" style={{ marginTop: "24px" }}><b>我的资产</b><span className="en">MY ASSETS</span><span className="all" style={{ cursor: "pointer" }} onClick={() => onNav("build")}>去创作 ›</span></div>
             <div className="assets" style={{ marginTop: "0" }}>
               {[
@@ -470,31 +461,9 @@ function ReconProfile(props) {
             </div>
           </div>
 
-          {/* 右栏 —— 我的卡库(对照旧版 VaultView)+ 成就占位 */}
+          {/* 右栏 —— 成就占位 */}
           <div className="colR">
-            <div className="sec-h"><b>我的卡库</b><span className="en">CARD VAULT</span></div>
-            <div className="vault">
-              <div className="vtabs">
-                {LIB_KINDS.map(([k, zh]) => (
-                  <span key={k} className={"vtab" + (libKind === k ? " on" : "")} onClick={() => setLibKind(k)}>{zh}</span>
-                ))}
-              </div>
-              <div className="vlist">
-                {libItems === null && <div className="vdim">读取中…</div>}
-                {libItems !== null && !libItems.length && <div className="vdim">这一类还没有卡。</div>}
-                {(libItems || []).map((it, i) => (
-                  <div className="vrow" key={i}>
-                    <div className="vbd">
-                      <div className="vnm">{it.name || "未命名"}{it.official === false ? <i className="vmine">我建的</i> : null}</div>
-                      <div className="vds">{_libDesc(it)}</div>
-                    </div>
-                    <span className="vdel" title="删除这张卡" onClick={() => delLibCard(it)}>✕</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="sec-h" style={{ marginTop: "24px" }}><b>我的成就</b><span className="en">ACHIEVEMENT</span></div>
+            <div className="sec-h"><b>我的成就</b><span className="en">ACHIEVEMENT</span></div>
             <div className="panel ach">
               <div className="row">
                 <span className="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 4h12v16l-6-3-6 3z"/></svg></span>
@@ -503,6 +472,42 @@ function ReconProfile(props) {
             </div>
           </div>
         </div>
+
+        {/* ===== 我的预设(整宽卡片网格,沿用卡市集翻转卡效果) ===== */}
+        <div className="sec-h" style={{ marginTop: "26px" }}><b>我的预设</b><span className="en">MY PRESETS</span><span className="all" style={{ cursor: "pointer" }} onClick={() => onNav("build")}>去创作打包 ›</span></div>
+        {myPresets.length ? (
+          <div className="mgrid">
+            {myPresets.map((p, i) => (
+              <window.RxMarketTile key={i} label="预设" name={p.nm} desc={p.syn}
+                tags={p.tags.join(" · ")} img={p.cover}
+                style={{ animationDelay: (Math.min(i, 10) * 40) + "ms" }}
+                onPrimary={P.onOpenStory ? () => P.onOpenStory(p.raw) : undefined} primaryLabel="开始"
+                onDelete={P.onDeletePreset ? () => P.onDeletePreset(p.raw) : undefined} />
+            ))}
+          </div>
+        ) : (
+          <div className="vdim">还没有预设。在创作桌的「汇总」打包一个,会出现在这里。</div>
+        )}
+
+        {/* ===== 我的卡库(整宽卡片网格,对照旧版 VaultView) ===== */}
+        <div className="sec-h" style={{ marginTop: "26px" }}><b>我的卡库</b><span className="en">CARD VAULT</span></div>
+        <div className="vtabs">
+          {LIB_KINDS.map(([k, zh]) => (
+            <span key={k} className={"vtab" + (libKind === k ? " on" : "")} onClick={() => setLibKind(k)}>{zh}</span>
+          ))}
+        </div>
+        {libItems === null && <div className="vdim">读取中…</div>}
+        {libItems !== null && !libItems.length && <div className="vdim">这一类还没有卡。</div>}
+        {libItems !== null && libItems.length > 0 && (
+          <div className="mgrid">
+            {libItems.map((it, i) => (
+              <window.RxMarketTile key={(it.name || "") + i} label={LIB_LABEL[libKind]} mine={it.official === false}
+                name={it.name || "未命名"} desc={_libDesc(it)} tags={_libTags(it)} img={_libImg(it)}
+                style={{ animationDelay: (Math.min(i, 10) * 40) + "ms" }}
+                onDelete={() => delLibCard(it)} />
+            ))}
+          </div>
+        )}
 
       </div>
     </div>

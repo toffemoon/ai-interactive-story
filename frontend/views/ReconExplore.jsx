@@ -1,6 +1,7 @@
 // 市集翻转卡:正面 信息+操作,背面 图片;右下 ↻/↺ 翻面,有图才出按钮
 // (卡库角色卡现普遍无 image 字段——内容侧补图后自动生效;故事书/事件卡回退用所属预设封面)。
-function RxMarketTile({ label, mine, name, desc, tags, img, isEvent, got, style, onPeek, onCollect }) {
+// 个人中心复用:onPrimary/primaryLabel 自定义主按钮(替代「收进我的库」),onDelete 加删除;不传时卡市集行为不变。
+function RxMarketTile({ label, mine, name, desc, tags, img, isEvent, got, style, onPeek, onCollect, onPrimary, primaryLabel, onDelete }) {
   const [flip, setFlip] = React.useState(false);
   return (
     <div className={"mcard" + (flip ? " flip" : "")} style={style}>
@@ -16,14 +17,19 @@ function RxMarketTile({ label, mine, name, desc, tags, img, isEvent, got, style,
           <div className="ft">
             {!isEvent ? (
               <React.Fragment>
-                <button className="mbtn" onClick={onPeek}>速览</button>
+                {onPeek && <button className="mbtn" onClick={onPeek}>速览</button>}
                 <span className="msp"></span>
-                {got ? <span className="mnote">已在我的库</span> : <button className="mbtn pri" onClick={onCollect}>收进我的库</button>}
+                {onPrimary
+                  ? <button className="mbtn pri" onClick={onPrimary}>{primaryLabel || "开始"}</button>
+                  : got ? <span className="mnote">已在我的库</span>
+                  : onCollect ? <button className="mbtn pri" onClick={onCollect}>收进我的库</button> : null}
+                {onDelete && <button className="mbtn" onClick={onDelete}>删除</button>}
               </React.Fragment>
             ) : (
               <React.Fragment>
                 <span className="mnote" style={{ marginLeft: 0 }}>隐藏事件 · 入局后揭晓</span>
                 <span className="msp"></span>
+                {onDelete && <button className="mbtn" onClick={onDelete}>删除</button>}
               </React.Fragment>
             )}
             {img ? <button className="fbtn" title="翻面看图" onClick={() => setFlip(true)}>↻</button> : null}
