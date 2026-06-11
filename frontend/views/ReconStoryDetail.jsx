@@ -658,3 +658,4 @@ function ReconStoryDetail(props) {
 }
 
 window.ReconStoryDetail = ReconStoryDetail;
+window.RxCarousel = RxCarousel;   // 个人中心「我的预设」复用(横排轮播:箭头/渐隐/圆点,≤3 张退静态)
