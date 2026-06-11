@@ -2394,28 +2394,34 @@ function ReconCreateLive({ onNav, refreshHome, mobile }) {
     { zh: "故事书", en: "STORY", k: "stories" },
   ];
   const [ki, setKi] = React.useState(0);
-  const [messages, setMessages] = React.useState([{ who: "坊", text: "想造哪张卡？说一个画面、一句话都行——聊着聊着，卡就长出来了。" }]);
-  const [draft, setDraft] = React.useState({});
-  const [filled, setFilled] = React.useState([]);
-  const [input, setInput] = React.useState("");
+  // 四个卡种各一张独立工作台(对话/草稿/已填字段/输入框):切 tab 互不污染,切回来还在。
+  // 此前共用一份 state,角色卡聊一半切去故事书,草稿和对话会原样带过去按新 kind 解析,字段错乱。
+  const _blankDesk = () => ({ messages: [{ who: "坊", text: "想造哪张卡？说一个画面、一句话都行——聊着聊着，卡就长出来了。" }], draft: {}, filled: [], input: "" });
+  const [desks, setDesks] = React.useState(() => ({ characters: _blankDesk(), players: _blankDesk(), worlds: _blankDesk(), stories: _blankDesk() }));
+  const desk = desks[KINDS[ki].k];
+  const patchDesk = (kk, p) => setDesks((ds) => ({ ...ds, [kk]: { ...ds[kk], ...(typeof p === "function" ? p(ds[kk]) : p) } }));
   const [busy, setBusy] = React.useState(false);
   async function send() {
-    const text = input.trim(); if (!text || busy) return;
+    const kk = KINDS[ki].k;                 // 捕获发出时的卡种:请求在飞时切 tab,回包仍写回原工作台
+    const cur = desks[kk];
+    const text = cur.input.trim(); if (!text || busy) return;
     setBusy(true);
-    const apiMsgs = [...messages, { who: "你", text }].map((m) => ({ role: m.who === "你" ? "user" : "assistant", content: m.text }));
-    setMessages((m) => [...m, { who: "你", text }]); setInput("");
+    const apiMsgs = [...cur.messages, { who: "你", text }].map((m) => ({ role: m.who === "你" ? "user" : "assistant", content: m.text }));
+    patchDesk(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text }], input: "" }));
     try {
-      const r = await postJSON("/api/build_card", { kind: KINDS[ki].k, messages: apiMsgs, draft, seed: "" });
+      const r = await postJSON("/api/build_card", { kind: kk, messages: apiMsgs, draft: cur.draft, seed: "" });
       const ask = [r.reply, r.next_question].filter(Boolean).join(" ");
-      if (ask) setMessages((m) => [...m, { who: "坊", text: ask }]);
-      if (r.draft) setDraft(r.draft);
-      setFilled(r.filled || (r.draft ? Object.keys(r.draft) : []));
+      patchDesk(kk, (d0) => ({
+        messages: ask ? [...d0.messages, { who: "坊", text: ask }] : d0.messages,
+        draft: r.draft || d0.draft,
+        filled: r.filled || (r.draft ? Object.keys(r.draft) : d0.filled),
+      }));
     } catch (e) {
-      setMessages((m) => [...m, { who: "坊", text: "（建卡出错：" + e.message + "）" }]);
+      patchDesk(kk, (d0) => ({ messages: [...d0.messages, { who: "坊", text: "（建卡出错：" + e.message + "）" }] }));
     } finally { setBusy(false); }
   }
   async function saveCard() {
-    const d = draft || {};
+    const d = desk.draft || {};
     if (!Object.keys(d).length) { alert("还没有可入库的卡，先聊几句让它长出来。"); return; }
     const k = KINDS[ki].k;
     try {
@@ -2429,18 +2435,18 @@ function ReconCreateLive({ onNav, refreshHome, mobile }) {
       }
     } catch (e) { alert("入库失败：" + e.message); }
   }
-  const d = draft || {};
+  const d = desk.draft || {};
   const dname = d.name || (d.data && d.data.name) || "未命名";
   const LABELS = { description: "简述", personality: "性格", scenario: "情境设定", first_mes: "开场白", mes_example: "对话示例", speech_rules: "说话规则", appearance: "外貌", persona: "人设", goals: "目标", secret: "隐藏真相", background: "背景", voice: "口癖", premise: "前提", title: "标题", entries: "条目" };
   const fields = Object.keys(d).filter((k) => !["name", "character_id", "id"].includes(k)).map((k) => {
     const v = d[k];
-    return { k: LABELS[k] || k, v: typeof v === "string" ? v : (Array.isArray(v) ? v.join("、") : JSON.stringify(v)), fresh: (filled || []).includes(k), hidden: /secret|隐藏|真相/i.test(k) };
+    return { k: LABELS[k] || k, v: typeof v === "string" ? v : (Array.isArray(v) ? v.join("、") : JSON.stringify(v)), fresh: (desk.filled || []).includes(k), hidden: /secret|隐藏|真相/i.test(k) };
   });
   const CreateC = (mobile && window.MCreate) ? window.MCreate : window.ReconCreate;
   return (
     <CreateC
       cardKind={ki} kinds={KINDS} onKind={setKi}
-      messages={messages} value={input} onChange={setInput} onSend={send} busy={busy}
+      messages={desk.messages} value={desk.input} onChange={(v) => patchDesk(KINDS[ki].k, { input: v })} onSend={send} busy={busy}
       draft={{ name: dname, kind: KINDS[ki].zh, fields }}
       onSaveCard={saveCard} onNav={onNav} />
   );
