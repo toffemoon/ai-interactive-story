@@ -130,15 +130,15 @@ function ReconPlay(props) {
   .cv-play .loghead .x {cursor:pointer; color:var(--soft); padding:2px 8px; font-size:14px;}
   .cv-play .logbody {flex:1; min-height:0; overflow-y:auto; padding:14px 22px 20px;}
   .cv-play .logbody::-webkit-scrollbar {width:6px;} .cv-play .logbody::-webkit-scrollbar-thumb {background:var(--line2);}
-  .cv-play .lg-me {margin:14px 0 10px; padding:9px 13px; background:rgba(52,70,61,.07); border-left:2px solid var(--green); font-family:var(--kai); font-size:12.5px; color:var(--ink);}
+  .cv-play .lg-me {margin:14px 0 10px; padding:9px 13px; background:rgba(52,70,61,.07); border-left:2px solid var(--green); font-family:var(--kai); font-size:15px; color:var(--ink);}
   .cv-play .lg-me span {font-family:var(--serif); font-size:10.5px; color:var(--green); margin-right:8px; font-weight:700;}
   .cv-play .lg-turn {padding:4px 0 10px; border-bottom:1px solid #ece2cf;}
   .cv-play .lg-rd {font-family:var(--serifen); font-size:9px; letter-spacing:.18em; color:var(--gold); margin:8px 0 6px;}
-  .cv-play .lg-nar {font-family:var(--kai); font-size:12.5px; line-height:1.95; color:#5b5346; margin:0 0 6px; white-space:pre-wrap;}
-  .cv-play .lg-line {display:flex; gap:8px; margin:4px 0; font-size:12.5px;}
+  .cv-play .lg-nar {font-family:var(--kai); font-size:15px; line-height:1.95; color:#5b5346; margin:0 0 6px; white-space:pre-wrap;}
+  .cv-play .lg-line {display:flex; gap:8px; margin:4px 0; font-size:15px;}
   .cv-play .lg-line b {flex:none; font-family:var(--serif); color:var(--ink);}
   .cv-play .lg-line span {font-family:var(--kai); color:var(--soft); line-height:1.8;}
-  .cv-play .lg-ev {font-family:var(--kai); font-size:10.5px; color:#8a6f49; margin-top:5px;}
+  .cv-play .lg-ev {font-family:var(--kai); font-size:15px; color:#8a6f49; margin-top:5px;}
   /* 一次性轻引导:看过即消失 */
   .cv-play .freehint {display:flex; align-items:center; gap:8px; margin-top:14px; font-family:var(--kai); font-size:11.5px; color:#8a6f49;}
   .cv-play .freehint .x {cursor:pointer; color:var(--faint); margin-left:auto; padding:0 4px;}
@@ -246,8 +246,8 @@ function ReconPlay(props) {
   .cv-play .sub-h .en {font-family:var(--serifen); font-size:7.5px; letter-spacing:.2em; color:var(--faint);}
 
   .cv-play .sceneinfo {display:flex; align-items:center; justify-content:space-between; margin-top:9px;}
-  .cv-play .sceneinfo p {font-family:var(--kai); font-size:12px; color:var(--ink); margin:0;}
-  .cv-play .sceneinfo p.amb {font-size:10.5px; color:var(--soft); margin-top:6px;}
+  .cv-play .sceneinfo p {font-family:var(--kai); font-size:15px; color:var(--ink); margin:0;}
+  .cv-play .sceneinfo p.amb {font-size:15px; color:var(--soft); margin-top:6px;}
   .cv-play .sceneinfo img {width:50px; height:36px; object-fit:cover; border:1px solid var(--line2); flex:none;}
 
   .cv-play .minis {display:flex; align-items:center; gap:14px; margin-top:11px; padding-left:2px;}
@@ -266,15 +266,15 @@ function ReconPlay(props) {
   .cv-play .rel {margin-top:9px;}
   .cv-play .rel .r {display:flex; align-items:center; gap:9px; padding:7px 0; border-bottom:1px solid #ece2cf;}
   .cv-play .rel .r .ht {color:#b6614c; font-size:13px;}
-  .cv-play .rel .r .nm {font-family:var(--serif); font-size:13px; color:var(--ink);}
-  .cv-play .rel .r .ty {flex:1; font-family:var(--kai); font-size:10.5px; color:var(--faint);}
+  .cv-play .rel .r .nm {font-family:var(--serif); font-size:15px; color:var(--ink);}
+  .cv-play .rel .r .ty {flex:1; font-family:var(--kai); font-size:15px; color:var(--faint);}
   .cv-play .rel .r .up {display:inline-flex; align-items:center; gap:1px; font-family:var(--serifen); font-size:11px; color:#5a7a55; font-weight:700;}
   .cv-play .rel .r .up svg {margin-left:0;}
 
   .cv-play .evs {margin-top:9px;}
   .cv-play .evs .r {display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid #ece2cf;}
   .cv-play .evs .r .bd {width:5px; height:5px; border-radius:50%; background:var(--gold); flex:none;}
-  .cv-play .evs .r .tx {flex:1; font-family:var(--kai); font-size:11.5px; color:var(--soft);}
+  .cv-play .evs .r .tx {flex:1; font-family:var(--kai); font-size:15px; color:var(--soft);}
   .cv-play .evs .r .nw {font-family:var(--serifen); font-size:8px; letter-spacing:.1em; color:#b5402e; border:1px solid #d8a99e; padding:1px 4px;}
 
   .cv-play .rtabs {display:flex; gap:9px; margin-top:13px;}
@@ -289,7 +289,7 @@ function ReconPlay(props) {
   .cv-play .tips .th svg {color:var(--gold);}
   .cv-play .tips .th b {font-family:var(--serif); font-size:12px; font-weight:700; color:var(--soft); letter-spacing:.06em;}
   .cv-play .tips .th .en {font-family:var(--serifen); font-size:7.5px; letter-spacing:.2em; color:var(--faint);}
-  .cv-play .tips p {font-family:var(--kai); font-size:12.5px; line-height:1.85; color:var(--soft); margin:9px 0 0;}
+  .cv-play .tips p {font-family:var(--kai); font-size:15px; line-height:1.85; color:var(--soft); margin:9px 0 0;}
 `}</style>
 
       {/* 左 引擎竖栏(全站统一 ReconRail;onNav 直连,logo 可回 landing) */}
