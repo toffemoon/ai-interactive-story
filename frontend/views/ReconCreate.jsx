@@ -34,6 +34,17 @@ function ReconCreate(props) {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [(P.messages || []).length, busy]);
+  // 上传文档(解析填草稿)+ 汇总面板的预设名/简介 + 从库补卡的展开态
+  const fileRef = React.useRef(null);
+  const [bname, setBname] = React.useState("");
+  const [bsyn, setBsyn] = React.useState("");
+  const [libFor, setLibFor] = React.useState("");      // 当前展开「从库选」的卡种 key
+  const [libItems, setLibItems] = React.useState(null); // null=读取中
+  const openLib = (k) => {
+    if (libFor === k) { setLibFor(""); return; }
+    setLibFor(k); setLibItems(null);
+    if (P.onLibList) P.onLibList(k).then((rows) => setLibItems(rows || [])).catch(() => setLibItems([]));
+  };
 
   // 顶部卡分类签：kinds 数组，选中 = cardKind 索引
   const KINDS = (P.kinds && P.kinds.length ? P.kinds : SAMPLE_KINDS);
@@ -68,7 +79,7 @@ function ReconCreate(props) {
   }
   .cv-create * {box-sizing:border-box;}
   .cv-create {
-    position:relative; width:1536px; height:1024px; overflow:hidden;
+    position:relative; width:100%; height:100vh; min-height:640px; overflow:hidden;
     background:
       repeating-linear-gradient(90deg, rgba(169,138,99,.028) 0 1px, transparent 1px 46px),
       var(--bg);
@@ -108,7 +119,7 @@ function ReconCreate(props) {
   .cv-create .pcard .insp .vl {display:flex; align-items:center; gap:6px; font-family:var(--serifen); font-size:16px; font-weight:700; color:var(--navy);}
   .cv-create .pcard .insp .vl svg {color:var(--gold2);}
 
-  .cv-create .top {position:absolute; left:188px; right:0; top:0; height:84px; z-index:20; display:flex; align-items:center;}
+  .cv-create .top {position:absolute; left:216px; right:0; top:0; height:84px; z-index:20; display:flex; align-items:center;}
   .cv-create .top::after {content:""; position:absolute; left:24px; right:24px; bottom:0; height:1px; background:linear-gradient(90deg,transparent,var(--line2) 6%,var(--line2) 94%,transparent);}
   .cv-create .crumb {display:flex; align-items:baseline; gap:14px; margin-left:32px;}
   .cv-create .crumb .ti {font-family:var(--serif); font-size:30px; font-weight:700; letter-spacing:.06em; color:var(--ink);}
@@ -123,28 +134,28 @@ function ReconCreate(props) {
   .cv-create .tdiv {width:1px; height:30px; background:var(--line2); opacity:.7;}
   .cv-create .tgear {color:var(--faint); cursor:pointer; display:grid; place-items:center; width:22px; height:22px;}
 
-  .cv-create .tabs {position:absolute; left:212px; right:24px; top:96px; height:46px; display:flex; align-items:flex-end; gap:0; z-index:10;}
+  .cv-create .tabs {position:absolute; left:240px; right:24px; top:96px; height:46px; display:flex; align-items:flex-end; gap:0; z-index:10;}
   .cv-create .tabs::after {content:""; position:absolute; left:0; right:0; bottom:0; height:1px; background:var(--line2);}
   .cv-create .tab {display:flex; flex-direction:column; align-items:center; gap:3px; padding:0 22px 11px; cursor:pointer; position:relative;}
-  .cv-create .tab .zh {font-family:var(--serif); font-size:14.5px; letter-spacing:.08em; color:var(--faint);}
+  .cv-create .tab .zh {font-family:var(--serif); font-size:15px; letter-spacing:.08em; color:var(--faint);}
   .cv-create .tab .en {font-family:var(--serifen); font-size:7px; letter-spacing:.22em; color:var(--faint); opacity:.75;}
   .cv-create .tab.on .zh {color:var(--ink); font-weight:700;}
   .cv-create .tab.on .en {color:var(--gold);}
   .cv-create .tab.on::after {content:""; position:absolute; left:14px; right:14px; bottom:0; height:2px; background:var(--gold); z-index:2;}
   .cv-create .tab + .tab::before {content:""; position:absolute; left:0; top:7px; bottom:14px; width:1px; background:var(--line);}
 
-  .cv-create .deck {position:absolute; left:212px; right:24px; top:160px; bottom:24px; display:flex; gap:22px;}
+  .cv-create .deck {position:absolute; left:240px; right:24px; top:160px; bottom:24px; display:flex; gap:22px;}
 
   .cv-create .talk {flex:1; min-width:0; background:var(--paper); border:1px solid var(--line); display:flex; flex-direction:column; position:relative;}
   .cv-create .talk .th {display:flex; align-items:center; gap:10px; padding:15px 22px 13px; border-bottom:1px solid var(--line);}
   .cv-create .talk .th .badge {width:22px; height:22px; border:1px solid var(--line2); display:grid; place-items:center; color:var(--gold); flex:none;}
   .cv-create .talk .th b {font-family:var(--serif); font-size:15px; font-weight:700; letter-spacing:.1em; color:var(--ink);}
   .cv-create .talk .th .en {font-family:var(--serifen); font-size:8px; letter-spacing:.24em; color:var(--gold); align-self:flex-end; margin-bottom:2px;}
-  .cv-create .talk .th .hint {margin-left:auto; font-family:var(--kai); font-size:10.5px; color:var(--faint); letter-spacing:.02em;}
+  .cv-create .talk .th .hint {margin-left:auto; font-family:var(--kai); font-size:12px; color:var(--faint); letter-spacing:.02em;}
 
   .cv-create .scroll {flex:1; min-height:0; overflow-y:auto; padding:8px 26px 4px;}
   .cv-create .scroll::-webkit-scrollbar {width:5px;} .cv-create .scroll::-webkit-scrollbar-thumb {background:var(--line2);}
-  .cv-create .syscue {text-align:center; font-family:var(--kai); font-size:11px; color:var(--faint); letter-spacing:.08em; margin:12px 0 20px;}
+  .cv-create .syscue {text-align:center; font-family:var(--kai); font-size:12px; color:var(--faint); letter-spacing:.08em; margin:12px 0 20px;}
   .cv-create .syscue span {display:inline-block; padding:0 14px; position:relative;}
   .cv-create .syscue span::before, .cv-create .syscue span::after {content:""; position:absolute; top:50%; width:54px; height:1px; background:var(--line);}
   .cv-create .syscue span::before {right:100%;} .cv-create .syscue span::after {left:100%;}
@@ -152,32 +163,64 @@ function ReconCreate(props) {
   .cv-create .line {padding:13px 0 14px; border-bottom:1px solid #ece2cf;}
   .cv-create .line .lh {display:flex; align-items:center; gap:9px; margin-bottom:7px;}
   .cv-create .line .lh .dot {width:6px; height:6px; transform:rotate(45deg); flex:none;}
-  .cv-create .line .lh .who {font-family:var(--serif); font-size:12.5px; font-weight:700; letter-spacing:.06em; color:var(--ink);}
+  .cv-create .line .lh .who {font-family:var(--serif); font-size:13.5px; font-weight:700; letter-spacing:.06em; color:var(--ink); white-space:nowrap;}
   .cv-create .line .lh .en {font-family:var(--serifen); font-size:7.5px; letter-spacing:.2em; color:var(--faint);}
   .cv-create .line .lh .ln {flex:1; height:1px; background:linear-gradient(90deg,var(--line),transparent);}
-  .cv-create .line .bd {font-family:var(--kai); font-size:13.5px; line-height:1.95; letter-spacing:.01em; padding-left:15px;}
+  .cv-create .line .bd {font-family:var(--kai); font-size:15px; line-height:1.95; letter-spacing:.01em; padding-left:15px;}
   .cv-create .line.ai .lh .dot {background:var(--gold);}
   .cv-create .line.ai .bd {color:var(--ink); border-left:2px solid var(--gold2);}
   .cv-create .line.me .lh .dot {background:var(--green);}
   .cv-create .line.me .lh .who {color:var(--soft);}
   .cv-create .line.me .bd {color:var(--soft); font-style:italic; border-left:2px solid #9fb09a;}
 
-  .cv-create .composer {flex:none; border-top:1px solid var(--line); padding:14px 22px 16px; background:var(--paper2);}
+  /* display:block 压掉 styles.css 全局 .composer 的 grid 泄漏(两列模板会把 box 挤进第一列,右侧空出幽灵列) */
+  .cv-create .composer {flex:none; display:block; border-top:1px solid var(--line); padding:14px 26px 16px; background:var(--paper2);}
   .cv-create .composer .box {position:relative; height:62px; background:var(--paper); border:1px solid var(--line2); display:flex; align-items:center; padding:0 18px;}
   .cv-create .composer .box::before {content:""; position:absolute; inset:4px; border:1px solid rgba(169,138,99,.22); pointer-events:none;}
   .cv-create .composer .box .phin {flex:1; min-width:0; border:none; outline:none; background:transparent; box-shadow:none; border-radius:0; padding:0;
-    font-family:var(--kai); font-size:13.5px; color:var(--ink);}
+    font-family:var(--kai); font-size:15px; color:var(--ink);}
   .cv-create .composer .box .phin::placeholder {color:var(--faint);}
   .cv-create .composer .box .phin:focus {border:none; box-shadow:none;}
+  .cv-create .composer .box .upbtn {flex:none; display:flex; align-items:center; gap:6px; height:36px; padding:0 14px; margin-right:14px;
+    border:1px solid var(--line2); background:var(--paper2); color:var(--soft); user-select:none;
+    font-family:var(--serif); font-size:15px; letter-spacing:.08em; white-space:nowrap;}
+  .cv-create .composer .box .upbtn:hover {color:var(--ink); border-color:var(--gold2);}
+  .cv-create .composer .box .upbtn svg {color:var(--gold);}
   .cv-create .blink {display:inline-block; font-style:normal; animation:rcr-blink 1s steps(2) infinite;}
   @keyframes rcr-blink {50% {opacity:0;}}
+  /* 汇总面板:四张台子草稿一览 + 打包成预设 */
+  .cv-create .bundle {flex:1; min-width:0; background:var(--paper); border:1px solid var(--line); padding:22px 30px; overflow-y:auto;}
+  .cv-create .bundle .bh {display:flex; align-items:center; gap:10px; padding-bottom:13px; border-bottom:1px solid var(--line);}
+  .cv-create .bundle .bh b {font-family:var(--serif); font-size:15px; font-weight:700; letter-spacing:.1em; color:var(--ink);}
+  .cv-create .bundle .bh .en {font-family:var(--serifen); font-size:8px; letter-spacing:.24em; color:var(--gold);}
+  .cv-create .bundle .bh .hint {margin-left:auto; font-family:var(--kai); font-size:15px; color:var(--faint);}
+  .cv-create .bundle .brow {display:flex; align-items:baseline; gap:14px; padding:13px 2px; border-bottom:1px solid #ece2cf;}
+  .cv-create .bundle .brow .bk {flex:none; width:110px; font-family:var(--serif); font-size:15px; font-weight:700; color:var(--ink); letter-spacing:.06em;}
+  .cv-create .bundle .brow .bv {font-family:var(--kai); font-size:15px; color:var(--ink);}
+  .cv-create .bundle .brow .bv i {font-style:normal; font-family:var(--serifen); font-size:13px; color:var(--faint); margin-left:10px;}
+  .cv-create .bundle .brow .bv.empty {color:var(--faint);}
+  .cv-create .bundle .bform {display:flex; gap:12px; margin-top:20px; align-items:center;}
+  .cv-create .bundle .bin {flex:1; min-width:0; background:var(--paper2); border:1px solid var(--line2); border-radius:0; box-shadow:none; outline:none;
+    font-family:var(--kai); font-size:15px; color:var(--ink); padding:11px 13px;}
+  .cv-create .bundle .bin::placeholder {color:var(--faint);}
+  .cv-create .bundle .bgo {flex:none; height:44px; padding:0 26px; background:var(--green); color:#f3ead6; display:grid; place-items:center;
+    font-family:var(--serif); font-size:15px; letter-spacing:.14em; cursor:pointer; user-select:none;}
+  .cv-create .bundle .bnote {font-family:var(--kai); font-size:15px; color:var(--faint); margin:14px 0 0;}
+  .cv-create .bundle .brow .blib {margin-left:auto; flex:none; font-family:var(--serif); font-size:15px; letter-spacing:.06em;
+    color:var(--gold); cursor:pointer; user-select:none; white-space:nowrap;}
+  .cv-create .bundle .brow .blib:hover, .cv-create .bundle .brow .blib.on {color:var(--ink);}
+  .cv-create .bundle .blist {display:flex; flex-wrap:wrap; gap:8px; padding:10px 2px 12px; border-bottom:1px solid #ece2cf; background:var(--paper3);}
+  .cv-create .bundle .blist .bli {font-family:var(--kai); font-size:15px; color:var(--ink); border:1px solid var(--line2);
+    padding:5px 13px; cursor:pointer; user-select:none; background:var(--paper);}
+  .cv-create .bundle .blist .bli:hover {border-color:var(--gold2); color:var(--ink);}
+  .cv-create .bundle .blist .bli.dim {color:var(--faint); border:none; cursor:default; background:transparent;}
   .cv-create .composer .box .send {flex:none; width:104px; height:48px; margin-left:14px; background:var(--green); position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; cursor:pointer;}
   .cv-create .composer .box .send::before {content:""; position:absolute; inset:3px; border:1px solid rgba(193,168,111,.45);}
-  .cv-create .composer .box .send .zh {font-family:var(--serif); font-size:13px; letter-spacing:.18em; color:#f3ead6; position:relative; display:flex; align-items:center; gap:6px;}
+  .cv-create .composer .box .send .zh {font-family:var(--serif); font-size:15px; letter-spacing:.18em; color:#f3ead6; position:relative; display:flex; align-items:center; gap:6px;}
   .cv-create .composer .box .send .en {font-family:var(--serifen); font-size:7px; letter-spacing:.26em; color:rgba(243,234,214,.65); position:relative;}
   .cv-create .composer .up {display:flex; align-items:center; gap:8px; margin-top:11px; padding-left:2px;}
   .cv-create .composer .up .ic {color:var(--gold); display:grid; place-items:center;}
-  .cv-create .composer .up .tx {font-family:var(--kai); font-size:11px; color:var(--soft); letter-spacing:.02em;}
+  .cv-create .composer .up .tx {font-family:var(--kai); font-size:12.5px; color:var(--soft); letter-spacing:.02em;}
   .cv-create .composer .up .tx b {color:var(--ink); font-weight:700;}
 
   .cv-create .preview {width:472px; flex:none; display:flex; flex-direction:column;}
@@ -207,11 +250,11 @@ function ReconCreate(props) {
   .cv-create .card .fields::-webkit-scrollbar {width:5px;} .cv-create .card .fields::-webkit-scrollbar-thumb {background:var(--line2);}
   .cv-create .card .frow {padding:11px 0 12px; border-bottom:1px solid #ece2cf; position:relative;}
   .cv-create .card .frow .fk {display:flex; align-items:center; gap:8px; margin-bottom:6px;}
-  .cv-create .card .frow .fk .k {font-family:var(--serif); font-size:13px; font-weight:700; letter-spacing:.1em; color:var(--ink);}
+  .cv-create .card .frow .fk .k {font-family:var(--serif); font-size:14px; font-weight:700; letter-spacing:.1em; color:var(--ink);}
   .cv-create .card .frow .fk .en {font-family:var(--serifen); font-size:7px; letter-spacing:.2em; color:var(--faint);}
   .cv-create .card .frow .fk .lock {margin-left:6px; color:var(--gold); display:grid; place-items:center;}
   .cv-create .card .frow .fk .new {margin-left:auto; font-family:var(--serifen); font-size:7.5px; letter-spacing:.12em; padding:1px 5px;}
-  .cv-create .card .frow .fv {font-family:var(--kai); font-size:12.5px; line-height:1.85; color:var(--soft); letter-spacing:.01em;}
+  .cv-create .card .frow .fv {font-family:var(--kai); font-size:15px; line-height:1.85; color:var(--soft); letter-spacing:.01em;}
   .cv-create .card .frow.hl-gold {margin:0 -10px; padding-left:10px; padding-right:10px; background:linear-gradient(90deg,rgba(193,168,111,.10),transparent);}
   .cv-create .card .frow.hl-gold::before {content:""; position:absolute; left:0; top:6px; bottom:6px; width:2px; background:var(--gold2);}
   .cv-create .card .frow.hl-gold .new {color:#8a6f49; border:1px solid var(--line2);}
@@ -254,18 +297,67 @@ function ReconCreate(props) {
         {/* 存草稿/撤销/重做/齿轮均未实现 → 隐藏,不摆死按钮;实现后再恢复 */}
       </div>
 
-      {/* 卡分类索引签 */}
+      {/* 卡分类索引签(+ 汇总:四张台子草稿打包成预设) */}
       <div className="tabs">
         {KINDS.map((t, i) => (
-          <div key={i} className={"tab" + (i === cardKind ? " on" : "")} onClick={() => onKind(i)}>
+          <div key={i} className={"tab" + (i === cardKind && !P.summaryOn ? " on" : "")} onClick={() => onKind(i)}>
             <span className="zh">{t.zh}</span>
             <span className="en">{t.en}</span>
           </div>
         ))}
+        {P.onSummary && (
+          <div className={"tab" + (P.summaryOn ? " on" : "")} onClick={() => P.onSummary()}>
+            <span className="zh">汇总</span>
+            <span className="en">BUNDLE</span>
+          </div>
+        )}
       </div>
 
-      {/* 主体两栏 */}
+      {/* 主体两栏(汇总态:整块换成打包面板) */}
       <div className="deck">
+        {P.summaryOn ? (
+        <div className="bundle">
+          <div className="bh"><b>汇总</b><span className="en">BUNDLE</span><span className="hint">把四张台子上的草稿打包成一个可玩预设</span></div>
+          {(P.desksInfo || []).map((d, i) => {
+            const parts = [...(d.builtNames || [])];
+            if (d.fields) parts.push((d.name || "未命名") + "(草稿)");
+            return (
+              <React.Fragment key={i}>
+                <div className="brow">
+                  <span className="bk">{d.zh}</span>
+                  {parts.length
+                    ? <span className="bv">{parts.join("、")}<i>{parts.length} 张</i></span>
+                    : <span className="bv empty">还空着</span>}
+                  {P.onLibList && (
+                    <span className={"blib" + (libFor === d.k ? " on" : "")} onClick={() => openLib(d.k)}>
+                      {libFor === d.k ? "收起" : "+ 从库选"}
+                    </span>
+                  )}
+                </div>
+                {libFor === d.k && (
+                  <div className="blist">
+                    {libItems === null && <span className="bli dim">读取中…</span>}
+                    {libItems !== null && !libItems.length && <span className="bli dim">库里还没有这种卡。</span>}
+                    {(libItems || []).map((it, j) => (
+                      <span className="bli" key={j} onClick={() => { if (P.onLibAdd) P.onLibAdd(d.k, it); setLibFor(""); }}>
+                        {(it && it.name) || "未命名"}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          })}
+          <div className="bform">
+            <input className="bin" placeholder="预设名(必填)" value={bname} onChange={(e) => setBname(e.target.value)} />
+            <input className="bin" placeholder="一句话简介(可空)" value={bsyn} onChange={(e) => setBsyn(e.target.value)} />
+            <div className="bgo" onClick={() => !busy && P.onBundle && P.onBundle(bname, bsyn)}
+              style={{ opacity: busy ? 0.55 : 1, cursor: busy ? "default" : "pointer" }}>{busy ? "打包中…" : "打包成预设"}</div>
+          </div>
+          <p className="bnote">至少要有一张角色卡草稿;打包后去「探索」页就能看到,点开即玩。空着的台子不会进预设。</p>
+        </div>
+        ) : (
+        <React.Fragment>
         {/* 左：与 AI 对谈 */}
         <div className="talk">
           <div className="th">
@@ -281,7 +373,7 @@ function ReconCreate(props) {
                 <div key={i} className={"line " + (mine ? "me" : "ai")}>
                   <div className="lh">
                     <span className="dot"></span>
-                    <span className="who">{mine ? "你 · 口述" : "执笔 · 坊"}</span>
+                    <span className="who">{mine ? (P.userName || "你") : "执笔人"}</span>
                     <span className="en">{mine ? "YOU" : "THE PEN"}</span>
                     <span className="ln"></span>
                   </div>
@@ -292,7 +384,7 @@ function ReconCreate(props) {
             {/* 等待反馈:LLM 推演 5-30s,给一行动效占位 */}
             {busy && (
               <div className="line ai">
-                <div className="lh"><span className="dot"></span><span className="who">执笔 · 坊</span><span className="en">THE PEN</span><span className="ln"></span></div>
+                <div className="lh"><span className="dot"></span><span className="who">执笔人</span><span className="en">THE PEN</span><span className="ln"></span></div>
                 <div className="bd" style={{ color: "var(--faint)", fontStyle: "italic" }}>执笔人推演中<i className="blink">▋</i></div>
               </div>
             )}
@@ -300,6 +392,16 @@ function ReconCreate(props) {
           {/* 输入框换真 input:此前的 contentEditable 提示语是真实 DOM 文本,会和用户输入混在一起发给 AI */}
           <div className="composer">
             <div className="box">
+              {/* 上传:文档按当前卡种解析填进草稿(行内紧凑款,不另占一行) */}
+              {P.onUpload && (
+                <div className="upbtn" onClick={() => { if (!busy && fileRef.current) fileRef.current.click(); }}
+                  style={{ cursor: busy ? "default" : "pointer", opacity: busy ? 0.55 : 1 }} title={"上传文档,解析成" + dKind + "填进草稿"}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 20h16" /></svg>
+                  <span>上传</span>
+                  <input type="file" ref={fileRef} accept=".txt,.md,.json" style={{ display: "none" }}
+                    onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f && P.onUpload) P.onUpload(f); }} />
+                </div>
+              )}
               <input
                 className="phin"
                 value={value}
@@ -349,12 +451,19 @@ function ReconCreate(props) {
                 </div>
               ))}
             </div>
-            {/* 「存草稿」未实现(此前只弹 alert 假装存了)→ 移除;入库是唯一真实出口 */}
+            {/* 下一张 = 当前草稿收进台子接着建(同种卡可多张,汇总一起打包);收入卡库 = 存进我的库 */}
             <div className="cardfoot">
+              {P.onNext && (
+                <div className="b ghost" onClick={() => !busy && P.onNext()} style={{ opacity: busy ? 0.55 : 1 }}>
+                  <span className="zh">下一张</span><span className="en">NEXT CARD{draft.builtCount ? " · 已收 " + draft.builtCount : ""}</span>
+                </div>
+              )}
               <div className="b solid" onClick={() => onSaveCard()}><span className="zh">收入卡库</span><span className="en">ADD TO LIBRARY</span></div>
             </div>
           </div>
         </div>
+        </React.Fragment>
+        )}
       </div>
 
     </div>

@@ -2155,12 +2155,14 @@ const COACH = {
 
 
 
-// recon 1:1 视图外壳:全屏 fill——按视口高定缩放,画布宽跟随视口(左右零留白;recon 页内部
-// 左右锚定自适应)。视口比设计稿更窄时退回 scale-to-fit(小留白,不裁内容)。导航点击委托保留。
-function ReconShell({ designW, designH, bg, onNav, onPrimary, children }) {
+// recon 视图外壳。两种模式:
+// - fluid(响应式,B 路线目标态):不缩放,正常文档流 + 页面滚动,文字按真实尺寸渲染(清晰,浏览器缩放可用)。
+// - 旧 fill(过渡期):固定设计稿画布按视口缩放(transform: scale,文字会位图发糊)。逐页转 fluid 后退役。
+function ReconShell({ designW, designH, bg, fluid, onNav, onPrimary, children }) {
   const ref = React.useRef(null);
   const [dim, setDim] = React.useState({ scale: 1, w: designW, ox: 0, oy: 0 });
   React.useEffect(() => {
+    if (fluid) return;
     function fit() {
       const el = ref.current; if (!el) return;
       const vw = el.clientWidth, vh = el.clientHeight;
@@ -2175,7 +2177,7 @@ function ReconShell({ designW, designH, bg, onNav, onPrimary, children }) {
     fit();
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
-  }, [designW, designH]);
+  }, [designW, designH, fluid]);
   function onClick(e) {
     const navEl = e.target.closest && e.target.closest("a, .nav a, .menu a, .lbar .nav a");
     if (navEl) {
@@ -2191,6 +2193,21 @@ function ReconShell({ designW, designH, bg, onNav, onPrimary, children }) {
         e.preventDefault(); onPrimary();
       }
     }
+  }
+  if (fluid) {
+    return (
+      <div ref={ref} className="recon-shell recon-fluid" onClick={onClick} style={bg ? { background: bg } : undefined}>
+        <style>{`
+          html, body { overflow:hidden !important; scrollbar-gutter:auto !important; }
+          .recon-shell.recon-fluid{position:fixed; inset:0; z-index:40; background:#ece4d2; overflow-y:auto; overflow-x:hidden;}
+          /* 入场只动 opacity——transform(哪怕 identity)会让 fixed 竖栏失去视口锚定(跟内容一起滚走) */
+          @keyframes rc-fluid-in { from { opacity:0; } to { opacity:1; } }
+          .recon-fluid .recon-fade{width:100%; min-height:100%; animation: rc-fluid-in .32s ease-out both;}
+          @media (prefers-reduced-motion: reduce){ .recon-fluid .recon-fade{animation-duration:1ms;} }
+        `}</style>
+        <div className="recon-fade">{children}</div>
+      </div>
+    );
   }
   return (
     <div ref={ref} className="recon-shell" onClick={onClick} style={bg ? { background: bg } : undefined}>
@@ -2226,6 +2243,26 @@ function ReconChatLive({ presets, onNav, mobile, uid }) {
   const [ocs, setOcs] = React.useState([]);
   const [myCards, setMyCards] = React.useState([]); // 用户自己建的角色卡(创作桌入库的)也能聊——闭环建卡→使用
   const [activeKey, setActiveKey] = React.useState("");
+  // 角色栏白名单:默认只摆店里两位(糖沐/萍狗),其余靠「添加角色」从卡库挑(选过的记本机,按账号隔离)。
+  // roster 存完整条目(name/persona/avatar/card),不依赖每次拉库;同名再添加会覆盖刷新。
+  const DEFAULT_ROSTER = ["糖沐", "萍狗"];
+  const ROSTER_KEY = "ais_chat_roster_v1" + (uid ? "_u_" + uid : "");
+  const [roster, setRoster] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem(ROSTER_KEY)) || []; } catch (e) { return []; }
+  });
+  function rosterAdd(item) {
+    const d = (item && item.data && item.data.data) || (item && item.data) || {};
+    const nm = d.name || (item && item.name);
+    if (!nm) return;
+    const entry = { name: nm, persona: d.persona || d.personality, description: d.description, avatar: d.avatar || d.image || undefined, card: item.data };
+    setRoster((rs) => {
+      const next = [...rs.filter((r) => r.name !== nm), entry];
+      try { localStorage.setItem(ROSTER_KEY, JSON.stringify(next)); } catch (e) {}
+      return next;
+    });
+    setActiveKey(nm);
+  }
+  function libChars() { return fetch("/api/library/characters").then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }); }
   // 会话持久化:对话与会话 id 落 localStorage(按账号隔离),切走/刷新回来接着聊,
   // 「近期聊天」终于名实相符;「新建对话」才重开。每角色只留最近 60 条防爆容量。
   const CHAT_KEY = "ais_chat_hist_v1" + (uid ? "_u_" + uid : "");
@@ -2272,14 +2309,19 @@ function ReconChatLive({ presets, onNav, mobile, uid }) {
     (myCards || []).forEach((c) => {
       const d = (c.data && c.data.data) || c.data || {};
       const nm = d.name || c.name;
-      if (nm && !seen.has(nm)) { seen.add(nm); out.push({ name: nm, persona: d.persona || d.personality, description: d.description, card: c.data }); }
+      if (nm && !seen.has(nm)) { seen.add(nm); out.push({ name: nm, persona: d.persona || d.personality, description: d.description, avatar: d.avatar || d.image || undefined, card: c.data }); }
     });
     presetCards.forEach((c) => {
       const nm = (c.data && c.data.name) || c.name;
-      if (nm && !seen.has(nm)) { seen.add(nm); out.push({ name: nm, persona: c.data && c.data.persona, description: c.data && c.data.description, card: c }); }
+      const d = c.data || {};
+      if (nm && !seen.has(nm)) { seen.add(nm); out.push({ name: nm, persona: d.persona, description: d.description, avatar: d.avatar || d.image || undefined, card: c }); }
     });
-    return out;
-  }, [ocs, myCards, presetCards]);
+    // 从卡库添加的角色(三个默认源没有的)补进来
+    roster.forEach((r) => { if (r && r.name && !seen.has(r.name)) { seen.add(r.name); out.push(r); } });
+    // 白名单过滤:默认两位 + 用户自己添加的;其余角色的数据和历史都还在,只是不上栏
+    const allow = new Set([...DEFAULT_ROSTER, ...roster.map((r) => r.name)]);
+    return out.filter((x) => allow.has(x.name));
+  }, [ocs, myCards, presetCards, roster]);
   const activeName = activeKey || (list[0] && list[0].name) || "";
   const activeItem = list.find((x) => x.name === activeName) || null;
   const messages = byKey[activeName] || [];
@@ -2362,12 +2404,13 @@ function ReconChatLive({ presets, onNav, mobile, uid }) {
       onChange={setInput} onSend={send} onNav={onNav}
       busy={busy} canChat={!!(activeItem && activeItem.card)} onNewChat={newChat}
       restored={!!(restoredRef.current[activeName] && messages.length)}
+      onLibChars={libChars} onRosterAdd={rosterAdd}
       onPick={(nm) => setActiveKey(nm)} />
   );
 }
 
 // 创作桌控制器:对话式建卡(/api/build_card,前端维护对话+草稿),入库走 /api/library/save。
-function ReconCreateLive({ onNav, refreshHome, mobile }) {
+function ReconCreateLive({ onNav, refreshHome, mobile, user }) {
   // 「事件卡」tab 暂不提供:此前误映射到 characters(AI 按角色卡引导、产物存错库),
   // 事件应随故事书创建;待接 EventStep 表单后再恢复。
   const KINDS = [
@@ -2377,28 +2420,100 @@ function ReconCreateLive({ onNav, refreshHome, mobile }) {
     { zh: "故事书", en: "STORY", k: "stories" },
   ];
   const [ki, setKi] = React.useState(0);
-  const [messages, setMessages] = React.useState([{ who: "坊", text: "想造哪张卡？说一个画面、一句话都行——聊着聊着，卡就长出来了。" }]);
-  const [draft, setDraft] = React.useState({});
-  const [filled, setFilled] = React.useState([]);
-  const [input, setInput] = React.useState("");
+  // 四个卡种各一张独立工作台(对话/草稿/已填字段/输入框 + built 已完成卡列表):切 tab 互不污染,切回来还在。
+  // 此前共用一份 state,角色卡聊一半切去故事书,草稿和对话会原样带过去按新 kind 解析,字段错乱。
+  // built:同一卡种可以建多张(对照旧步骤式创作「完成一张清空 builder 建下一张」),汇总打包时全带上。
+  const _blankDesk = () => ({ messages: [{ who: "坊", text: "想造哪张卡？说一个画面、一句话都行——聊着聊着，卡就长出来了。" }], draft: {}, filled: [], input: "", built: [] });
+  const [desks, setDesks] = React.useState(() => ({ characters: _blankDesk(), players: _blankDesk(), worlds: _blankDesk(), stories: _blankDesk() }));
+  const desk = desks[KINDS[ki].k];
+  const patchDesk = (kk, p) => setDesks((ds) => ({ ...ds, [kk]: { ...ds[kk], ...(typeof p === "function" ? p(ds[kk]) : p) } }));
   const [busy, setBusy] = React.useState(false);
   async function send() {
-    const text = input.trim(); if (!text || busy) return;
+    const kk = KINDS[ki].k;                 // 捕获发出时的卡种:请求在飞时切 tab,回包仍写回原工作台
+    const cur = desks[kk];
+    const text = cur.input.trim(); if (!text || busy) return;
     setBusy(true);
-    const apiMsgs = [...messages, { who: "你", text }].map((m) => ({ role: m.who === "你" ? "user" : "assistant", content: m.text }));
-    setMessages((m) => [...m, { who: "你", text }]); setInput("");
+    const apiMsgs = [...cur.messages, { who: "你", text }].map((m) => ({ role: m.who === "你" ? "user" : "assistant", content: m.text }));
+    patchDesk(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text }], input: "" }));
     try {
-      const r = await postJSON("/api/build_card", { kind: KINDS[ki].k, messages: apiMsgs, draft, seed: "" });
+      const r = await postJSON("/api/build_card", { kind: kk, messages: apiMsgs, draft: cur.draft, seed: "" });
       const ask = [r.reply, r.next_question].filter(Boolean).join(" ");
-      if (ask) setMessages((m) => [...m, { who: "坊", text: ask }]);
-      if (r.draft) setDraft(r.draft);
-      setFilled(r.filled || (r.draft ? Object.keys(r.draft) : []));
+      patchDesk(kk, (d0) => ({
+        messages: ask ? [...d0.messages, { who: "坊", text: ask }] : d0.messages,
+        draft: r.draft || d0.draft,
+        filled: r.filled || (r.draft ? Object.keys(r.draft) : d0.filled),
+      }));
     } catch (e) {
-      setMessages((m) => [...m, { who: "坊", text: "（建卡出错：" + e.message + "）" }]);
+      patchDesk(kk, (d0) => ({ messages: [...d0.messages, { who: "坊", text: "（建卡出错：" + e.message + "）" }] }));
     } finally { setBusy(false); }
   }
+  // 上传文档 → 按当前卡种解析(identify 系端点,解析即自动入库)→ 填进当前台子的草稿,继续聊着完善。
+  async function handleUpload(file) {
+    if (!file || busy) return;
+    const kk = KINDS[ki].k;
+    const kz = KINDS[ki].zh;
+    setBusy(true);
+    patchDesk(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text: "(上传了《" + file.name + "》)" }] }));
+    try {
+      const text = await uploadFile(file);
+      const EP = { characters: "/api/identify", worlds: "/api/identify_world", stories: "/api/identify_story", players: "/api/identify_player" };
+      const out = await postJSON(EP[kk], { text });
+      const draft = kk === "characters" ? (out.data || out) : out;
+      const nm = draft.name || draft.title || "未命名";
+      patchDesk(kk, (d0) => ({
+        draft,
+        filled: Object.keys(draft),
+        messages: [...d0.messages, { who: "坊", text: "《" + nm + "》解析好了——已按" + kz + "填进右边的草稿,顺手也收进了你的卡库。哪里不对,聊着改。" }],
+      }));
+    } catch (e) {
+      patchDesk(kk, (d0) => ({ messages: [...d0.messages, { who: "坊", text: "(解析失败:" + e.message + ")" }] }));
+    } finally { setBusy(false); }
+  }
+  // 下一张:当前草稿收进台子的 built 列表,清空对话和草稿接着建(对照旧 onCardComplete 语义)。
+  function nextCard() {
+    const kk = KINDS[ki].k;
+    const cur = desks[kk];
+    if (!cur.draft || !Object.keys(cur.draft).length) { alert("草稿还空着,先聊出一张再收。"); return; }
+    const nm = cur.draft.name || cur.draft.title || "未命名";
+    setDesks((ds) => ({ ...ds, [kk]: { ..._blankDesk(),
+      built: [...ds[kk].built, ds[kk].draft],
+      messages: [{ who: "坊", text: "《" + nm + "》放进台子了(本台第 " + (ds[kk].built.length + 1) + " 张)。说说下一张?" }] } }));
+  }
+  // 汇总:四张台子的成品 + 草稿打包成一个可玩预设(对齐旧步骤式创作「汇总」步的语义;空台子不进预设)。
+  // 多张规则:角色全带;演出卡全部进 playables(第一张兼默认主角);世界书合并条目;故事书取最新一张。
+  const [summaryOn, setSummaryOn] = React.useState(false);
+  const _deskCards = (k) => { const d = desks[k]; const cur = d.draft && Object.keys(d.draft).length ? [d.draft] : []; return [...d.built, ...cur]; };
+  async function bundlePreset(name, synopsis) {
+    if (busy) return;
+    const chars = _deskCards("characters"), worlds = _deskCards("worlds"), stories = _deskCards("stories"), players = _deskCards("players");
+    if (!chars.length) { alert("至少要有一张角色卡才能打包。先去「角色卡」台子聊一张出来。"); return; }
+    if (!name || !name.trim()) { alert("给这个预设起个名字。"); return; }
+    const st = stories.length ? stories[stories.length - 1] : null;
+    const tags = [...new Set([...chars.flatMap((c) => c.tags || []), ...((st || {}).tags || [])])].filter(Boolean).slice(0, 5);
+    setBusy(true);
+    try {
+      await postJSON("/api/presets", {
+        name: name.trim(), characters: chars.map(wrapCard), world: worlds.length ? mergeWorldBooks(worlds) : null,
+        story: st, player: players[0] || null, playables: players,
+        mode: "standard", synopsis: (synopsis || "").trim(),
+        author: (user && (user.display_name || user.username)) || "", cover: "", tags,
+      });
+      if (refreshHome) refreshHome();
+      alert("已打包成预设。去「探索」页就能看到它,点开即玩。");
+    } catch (e) { alert("打包失败:" + e.message); }
+    finally { setBusy(false); }
+  }
+  // 汇总-从我的库补卡:列库(GET /api/library/{kind})→ 挑一张推进对应台子的 built。
+  function libList(k) { return fetch("/api/library/" + k).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }); }
+  function libAdd(k, item) {
+    // characters 库存的是完整 Card V2({spec, data:{...}}),其余 kind 是裸结构。
+    const raw = item && item.data ? item.data : item;
+    const card = k === "characters" ? (raw.data || raw) : raw;
+    if (!card || !Object.keys(card).length) { alert("这张卡读不出内容。"); return; }
+    setDesks((ds) => ({ ...ds, [k]: { ...ds[k], built: [...ds[k].built, card] } }));
+  }
   async function saveCard() {
-    const d = draft || {};
+    const d = desk.draft || {};
     if (!Object.keys(d).length) { alert("还没有可入库的卡，先聊几句让它长出来。"); return; }
     const k = KINDS[ki].k;
     try {
@@ -2412,19 +2527,28 @@ function ReconCreateLive({ onNav, refreshHome, mobile }) {
       }
     } catch (e) { alert("入库失败：" + e.message); }
   }
-  const d = draft || {};
+  const d = desk.draft || {};
   const dname = d.name || (d.data && d.data.name) || "未命名";
   const LABELS = { description: "简述", personality: "性格", scenario: "情境设定", first_mes: "开场白", mes_example: "对话示例", speech_rules: "说话规则", appearance: "外貌", persona: "人设", goals: "目标", secret: "隐藏真相", background: "背景", voice: "口癖", premise: "前提", title: "标题", entries: "条目" };
   const fields = Object.keys(d).filter((k) => !["name", "character_id", "id"].includes(k)).map((k) => {
     const v = d[k];
-    return { k: LABELS[k] || k, v: typeof v === "string" ? v : (Array.isArray(v) ? v.join("、") : JSON.stringify(v)), fresh: (filled || []).includes(k), hidden: /secret|隐藏|真相/i.test(k) };
+    return { k: LABELS[k] || k, v: typeof v === "string" ? v : (Array.isArray(v) ? v.join("、") : JSON.stringify(v)), fresh: (desk.filled || []).includes(k), hidden: /secret|隐藏|真相/i.test(k) };
+  });
+  const desksInfo = KINDS.map(({ zh, k }) => {
+    const dd = desks[k].draft || {};
+    const builtNames = desks[k].built.map((b) => b.name || b.title || "未命名");
+    return { zh, k, name: dd.name || dd.title || "", fields: Object.keys(dd).length, builtNames };
   });
   const CreateC = (mobile && window.MCreate) ? window.MCreate : window.ReconCreate;
   return (
     <CreateC
-      cardKind={ki} kinds={KINDS} onKind={setKi}
-      messages={messages} value={input} onChange={setInput} onSend={send} busy={busy}
-      draft={{ name: dname, kind: KINDS[ki].zh, fields }}
+      cardKind={ki} kinds={KINDS} onKind={(i) => { setKi(i); setSummaryOn(false); }}
+      messages={desk.messages} value={desk.input} onChange={(v) => patchDesk(KINDS[ki].k, { input: v })} onSend={send} busy={busy}
+      userName={(user && (user.display_name || user.username)) || ""}
+      draft={{ name: dname, kind: KINDS[ki].zh, fields, builtCount: desk.built.length }}
+      onUpload={handleUpload} onNext={nextCard}
+      summaryOn={summaryOn} onSummary={() => setSummaryOn(true)} desksInfo={desksInfo} onBundle={bundlePreset}
+      onLibList={libList} onLibAdd={libAdd}
       onSaveCard={saveCard} onNav={onNav} />
   );
 }
@@ -2910,7 +3034,7 @@ function App() {
       {view === "landing" && (isMobile ? (
         <window.MLanding presets={presets} onNav={navTo} onOpenStory={openStoryModal} onNew={onNew} />
       ) : (
-        <ReconShell designW={1672} designH={941}>
+        <ReconShell fluid>
           <window.ReconHome presets={presets} user={auth.user}
             onNav={navTo} onOpenStory={openStoryModal} onNew={onNew}
             onLogin={() => setView("mine")} />
@@ -2922,7 +3046,7 @@ function App() {
         <window.MExplore presets={presets} loadErr={presetsErr} onRetry={refreshHome}
           onOpenStory={openStoryModal} onNew={onNew} onNav={navTo} />
       ) : (
-        <ReconShell designW={1536} designH={1024}>
+        <ReconShell fluid>
           <window.ReconExplore presets={presets} user={auth.user} loadErr={presetsErr} onRetry={refreshHome}
             onOpenStory={openStoryModal} onNew={onNew} onNav={navTo} />
         </ReconShell>
@@ -2931,7 +3055,7 @@ function App() {
       {view === "chat" && (isMobile ? (
         <ReconChatLive presets={presets} onNav={navTo} uid={auth.user ? auth.user.id : ""} mobile />
       ) : (
-        <ReconShell designW={1536} designH={1024}>
+        <ReconShell fluid>
           <ReconChatLive presets={presets} onNav={navTo} uid={auth.user ? auth.user.id : ""} />
         </ReconShell>
       ))}
@@ -2949,9 +3073,10 @@ function App() {
             savesErr={savesErr} onRetrySaves={retrySaves}
             onNav={navTo} onResume={resumeSave} onNew={onNew} onLogout={onLogout} onAvatar={onAvatarUp} />
         ) : (
-          <ReconShell designW={1536} designH={1024}>
+          <ReconShell fluid>
             <window.ReconProfile user={auth.user} presets={presets} saves={mineSaves} assets={myAssets}
               savesErr={savesErr} onRetrySaves={retrySaves}
+              onOpenStory={openStoryModal} onDeletePreset={deletePreset} onDeleteSave={deleteSaveHandler}
               onNav={navTo} onResume={resumeSave} onNew={onNew} onLogout={onLogout} onAvatar={onAvatarUp} />
           </ReconShell>
         );
@@ -2968,7 +3093,7 @@ function App() {
             onTurn={() => { setTurnSeq((s) => s + 1); setSaves(loadSaves()); }} />
         );
         return isMobile ? panel : (
-          <ReconShell designW={1536} designH={1024} onNav={navTo}>{panel}</ReconShell>
+          <ReconShell fluid onNav={navTo}>{panel}</ReconShell>
         );
       })()}
 
@@ -2976,13 +3101,13 @@ function App() {
       {view === "game" && !(started && characters.length > 0) && (isMobile ? (
         <window.MEmpty onNav={navTo} onNew={onNew} />
       ) : (
-        <ReconShell designW={1536} designH={1024}>
+        <ReconShell fluid>
           <div className="cv-gempty">
             <style>{`
-              .cv-gempty {position:relative; width:1536px; height:1024px; overflow:hidden;
+              .cv-gempty {position:relative; width:100%; height:100vh; min-height:640px; overflow:hidden;
                 background:repeating-linear-gradient(90deg, rgba(169,138,99,.028) 0 1px, transparent 1px 46px), #f3ece0;
                 color:#2c2820; font-family:"Kaiti SC","STKaiti","KaiTi",serif;}
-              .cv-gempty .mid {position:absolute; left:188px; right:0; top:0; bottom:0; display:grid; place-items:center;}
+              .cv-gempty .mid {position:absolute; left:216px; right:0; top:0; bottom:0; display:grid; place-items:center;}
               .cv-gempty .panel {width:520px; text-align:center; background:#faf4ea; border:1px solid #ddd0b4; padding:54px 48px; position:relative;}
               .cv-gempty .panel::before {content:""; position:absolute; inset:6px; border:1px solid rgba(196,179,132,.4); pointer-events:none;}
               .cv-gempty .panel .ic {color:#a98a63; margin-bottom:18px;}
@@ -3012,10 +3137,10 @@ function App() {
       ))}
 
       {view === "build" && (isMobile ? (
-        <ReconCreateLive onNav={navTo} refreshHome={refreshHome} mobile />
+        <ReconCreateLive onNav={navTo} refreshHome={refreshHome} user={auth.user} mobile />
       ) : (
-        <ReconShell designW={1536} designH={1024}>
-          <ReconCreateLive onNav={navTo} refreshHome={refreshHome} />
+        <ReconShell fluid>
+          <ReconCreateLive onNav={navTo} refreshHome={refreshHome} user={auth.user} />
         </ReconShell>
       ))}
 
@@ -3025,7 +3150,7 @@ function App() {
           onEnter={(role) => startFromModal(role)}
           onClose={() => setStoryModal(null)} />
       ) : (
-        <ReconShell designW={1672} designH={941}>
+        <ReconShell fluid>
           <window.ReconStoryDetail preset={storyModal.preset}
             onNav={(v) => { setStoryModal(null); navTo(v); }}
             onEnter={(role) => startFromModal(role)}
