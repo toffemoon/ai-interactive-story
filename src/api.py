@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -47,6 +48,29 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 log = logging.getLogger("api")
+
+
+# YOR-13:输出层清理 —— 去掉返回给前端的 facts 里的 Obsidian wikilink([[A|B]]→B、[[X]]→X)。
+# 只清返回前端的拷贝(out.model_dump() / 读出的 state),不动内部 state、不影响结局判定(required_facts 比对用内部 revealed)。
+_WIKILINK_RE = re.compile(r"\[\[(?:[^\[\]|]*\|)?([^\[\]]+)\]\]")
+
+
+def _strip_wikilinks(x):
+    return _WIKILINK_RE.sub(lambda m: m.group(1), x) if isinstance(x, str) else x
+
+
+def _display_clean(obj):
+    """返回前端前清掉玩家可见 facts 里的 [[wikilink]](YOR-13)。obj 可为 turn dict(含 state)或 state dict。"""
+    if not isinstance(obj, dict):
+        return obj
+    st = obj.get("state") if isinstance(obj.get("state"), dict) else obj
+    fb = st.get("facts") if isinstance(st, dict) else None
+    if isinstance(fb, dict):
+        for k in ("canon", "revealed", "uncertain"):
+            v = fb.get(k)
+            if isinstance(v, list):
+                fb[k] = [_strip_wikilinks(i) for i in v]
+    return obj
 
 
 @asynccontextmanager
@@ -628,7 +652,7 @@ async def api_story_turn(req: StoryTurnReq, request: Request,
         await asyncio.to_thread(costguard.record, res, {})  # 保底回合≈零成本,退回预扣
         return _fallback_turn_dict(req, e)
     await asyncio.to_thread(costguard.record, res, out.usage)
-    return out.model_dump()
+    return _display_clean(out.model_dump())
 
 
 @app.post("/api/story_turn_stream")
@@ -668,7 +692,7 @@ async def api_story_turn_stream(req: StoryTurnReq, request: Request,
                     on_delta=on_delta,
                 )
                 usage_for_record = out.usage
-                await q.put({"type": "done", "turn": out.model_dump()})
+                await q.put({"type": "done", "turn": _display_clean(out.model_dump())})
             except Exception as e:
                 log.exception("story_turn(stream) failed (session=%s)", req.session_id)
                 await q.put({"type": "error", "turn": _fallback_turn_dict(req, e)})
@@ -736,7 +760,7 @@ async def api_reroll(req: ReRollReq, request: Request,
         await asyncio.to_thread(costguard.record, res, {})
         raise HTTPException(500, "重新生成失败,请稍后再试")
     await asyncio.to_thread(costguard.record, res, out.usage)
-    return out.model_dump()
+    return _display_clean(out.model_dump())
 
 
 @app.post("/api/undo_last")
@@ -761,7 +785,7 @@ async def api_undo_last(req: ReRollReq, user: dict | None = Depends(current_user
         "turn_count": len(turns),
         "undone_input": reroll.get("user") or reroll.get("choice") or "",
         "last_turn": last,
-        "state": snap.get("state"),
+        "state": _display_clean(snap.get("state")),
     }
 
 
@@ -798,7 +822,7 @@ def api_session_tail(session_id: str, after: int = 0, user: dict | None = Depend
     n = len(turns)
     after = max(0, after)
     new_turns = turns[after:] if after < n else []
-    return {"turn_count": n, "new_turns": new_turns, "state": d.get("state")}
+    return {"turn_count": n, "new_turns": new_turns, "state": _display_clean(d.get("state"))}
 
 
 _LIB_KINDS = {"characters", "worlds", "stories", "players"}
