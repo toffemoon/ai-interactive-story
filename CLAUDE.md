@@ -58,7 +58,7 @@ updated: 2026-06-04
 - 本 repo 的**更新**（commit / PR）→ 算 YoRHa-A2 团队的进展，会推到 Slack `#yorha-a2-team`
 - 本 repo 的**决策**：引擎工程决策放本地 `decisions/`；任何"这个引擎跟 YoRHa-A2 战略关系"的决策放父 repo `decisions/`
 - 本 repo 的**assets**（成品 / 截图 / demo / 数据洞察）→ 算团队 asset，sediment-worthy 的写父 repo team-log 留痕
-- 本 repo 的**任务 / bug / UI 问题（截图）/ 客户需求** → 走团队 **Linear**（2026-06-15 起,见父 repo `decisions/2026-06-15-tooling-linear.md`）;PR 用 `Fixes YOR-NN` 自动联动关 issue。**截图/反馈发 issue 或评论,别发 project update(Claude 读不到 update)。**(团队 2026-06-15 舍弃 Excalidraw、暂缓 LibTV。)
+- 本 repo 的**任务 / bug / UI 问题（截图）/ 客户需求** → 走团队 **Linear**（2026-06-15 起,见父 repo `decisions/2026-06-15-tooling-linear.md`）;PR 用 `Fixes YOR-NN` 自动联动关 issue。**截图/反馈发 issue 或评论,别发 project update(Claude 读不到 update)。修某个 issue 时把所用 branch 名(分支约定不变=每人一条固定 branch,如 `yufei`)贴进该 issue 评论做追溯。**(团队 2026-06-15 舍弃 Excalidraw、暂缓 LibTV。)
 
 ## 3. 你（Claude）在本 repo 的姿势
 
