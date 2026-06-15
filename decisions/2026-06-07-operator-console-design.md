@@ -7,6 +7,8 @@ owner: Gengyue
 
 # 后台导演控制台 — 完整功能设计
 
+> **【2026-06-15 更新】** 文中的 `OPERATOR_TOKEN` token 闸**已废**(2026-06-10):鉴权改为 `require_role`(admin/superadmin 账号登录),`/operator` 页面在 `AUTH_ENABLED` 下按角色显隐,不再用 X-Operator-Token。下文描述以设计当时为准。
+
 运营者(导演)在后台对**正在玩的某一局**实时施加影响。一个 token 闸(`OPERATOR_TOKEN`),无账号系统;玩家拿不到 token、前端无入口,只有开发者能用。
 
 ## 一、注入模式(mode)—— 内容是什么 / 怎么呈现给玩家

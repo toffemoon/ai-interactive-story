@@ -926,7 +926,7 @@ async def _operator_advance(session_id: str, user: str = "（场景继续）") -
 
 @app.post("/api/operator/inject")
 async def api_operator_inject(req: OperatorInjectReq, _actor: dict = Depends(require_role("superadmin"))):
-    """后台对某局施加影响,三种模式(需 X-Operator-Token):
+    """后台对某局施加影响,三种模式(需 operator 权限(admin/superadmin 登录)):
     - director(默认):幕后指令进队列,AI 下回合织进剧情;sticky=持续每回合,now=立即跑一回合。
     - direct:指定 target 角色【逐字】说出 content —— 引擎直插一条回合,不走 AI、即时、保证原样。
     - narration:把 content 作为旁白【逐字】写进剧情 —— 引擎直插,不走 AI、即时。
@@ -968,13 +968,13 @@ async def api_operator_inject(req: OperatorInjectReq, _actor: dict = Depends(req
 
 @app.get("/api/operator/inject/{session_id}")
 def api_operator_inject_list(session_id: str, _actor: dict = Depends(require_role("superadmin"))):
-    """看某局当前待注入(还没被消费)的内容。需 X-Operator-Token。"""
+    """看某局当前待注入(还没被消费)的内容。需 operator 权限(admin/superadmin 登录)。"""
     return {"operator_inject": storage.load_session(session_id).get("operator_inject") or []}
 
 
 @app.delete("/api/operator/inject/{session_id}")
 def api_operator_inject_clear(session_id: str, _actor: dict = Depends(require_role("superadmin"))):
-    """清空某局的待注入队列(once + sticky 全清)。需 X-Operator-Token。"""
+    """清空某局的待注入队列(once + sticky 全清)。需 operator 权限(admin/superadmin 登录)。"""
     data = storage.load_session(session_id)
     data["operator_inject"] = []
     storage.save_session(session_id, data)
@@ -983,13 +983,13 @@ def api_operator_inject_clear(session_id: str, _actor: dict = Depends(require_ro
 
 @app.get("/api/operator/sessions")
 def api_operator_sessions(_actor: dict = Depends(require_role("superadmin"))):
-    """列出所有 session(控制台左栏点选用)。需 X-Operator-Token。"""
+    """列出所有 session(控制台左栏点选用)。需 operator 权限(admin/superadmin 登录)。"""
     return {"sessions": storage.list_sessions()}
 
 
 @app.get("/api/operator/session/{session_id}")
 def api_operator_session(session_id: str, _actor: dict = Depends(require_role("superadmin"))):
-    """看某局完整上下文:回合记录(玩家输入 + 叙事 + 角色发言)+ 当前状态 + 注入队列。需 X-Operator-Token。"""
+    """看某局完整上下文:回合记录(玩家输入 + 叙事 + 角色发言)+ 当前状态 + 注入队列。需 operator 权限(admin/superadmin 登录)。"""
     d = storage.load_session(session_id)
     return {
         "session_id": session_id,
@@ -1002,7 +1002,7 @@ def api_operator_session(session_id: str, _actor: dict = Depends(require_role("s
 
 @app.get("/api/operator/oc")
 def api_operator_oc(_actor: dict = Depends(require_role("admin"))):
-    """OC 集:列出各用户的 OC(角色设定 + 世界观 + 立绘 + 地图)。需 X-Operator-Token。
+    """OC 集:列出各用户的 OC(角色设定 + 世界观 + 立绘 + 地图)。需 operator 权限(admin/superadmin 登录)。
     数据读 oc/index.json + 它引用的 .md;图走 /oc-assets 静态路由(<img> 直接取)。"""
     idx = OC_DIR / "index.json"
     if not idx.is_file():
@@ -1037,7 +1037,7 @@ class OCStartReq(BaseModel):
 
 @app.post("/api/operator/oc/start")
 async def api_operator_oc_start(req: OCStartReq, _actor: dict = Depends(require_role("superadmin"))):
-    """用某个 OC 的引擎角色卡直接开一局测试会话(跑开场回合)。需 X-Operator-Token。
+    """用某个 OC 的引擎角色卡直接开一局测试会话(跑开场回合)。需 operator 权限(admin/superadmin 登录)。
     返回 {session_id, character, turn};该会话即普通 session,可在「对局」里继续(/api/operator/say)+ 导演注入。"""
     idx_file = OC_DIR / "index.json"
     if not idx_file.is_file():
@@ -1062,7 +1062,7 @@ class OperatorSayReq(BaseModel):
 
 @app.post("/api/operator/say")
 async def api_operator_say(req: OperatorSayReq, _actor: dict = Depends(require_role("superadmin"))):
-    """以【玩家】身份给某局发一句、推进一回合(用该局存档卡组)。需 X-Operator-Token。
+    """以【玩家】身份给某局发一句、推进一回合(用该局存档卡组)。需 operator 权限(admin/superadmin 登录)。
     给运营者在控制台直接测试对话用;与导演注入(/inject)互补:say=玩家行动,inject=幕后导演。"""
     if not req.user.strip():
         raise HTTPException(400, "玩家输入不能为空")
@@ -1076,13 +1076,13 @@ class KillReq(BaseModel):
 
 @app.get("/api/operator/usage")
 def api_operator_usage(_actor: dict = Depends(require_role("superadmin"))):
-    """看今日全局花费 / 是否熔断 / Top 来源用量。需 X-Operator-Token。"""
+    """看今日全局花费 / 是否熔断 / Top 来源用量。需 operator 权限(admin/superadmin 登录)。"""
     return costguard.stats()
 
 
 @app.post("/api/operator/usage/kill")
 def api_operator_usage_kill(req: KillReq, _actor: dict = Depends(require_role("superadmin"))):
-    """手动急停/恢复:翻今天的全局熔断开关。需 X-Operator-Token。"""
+    """手动急停/恢复:翻今天的全局熔断开关。需 operator 权限(admin/superadmin 登录)。"""
     return costguard.set_tripped(req.tripped)
 
 
@@ -1105,13 +1105,13 @@ class AssignPresetReq(BaseModel):
 
 @app.get("/api/operator/users")
 def api_operator_users(_actor: dict = Depends(require_role("admin"))):
-    """列出所有用户(迁移时查 user_id 用)。需 X-Operator-Token。"""
+    """列出所有用户(迁移时查 user_id 用)。需 operator 权限(admin/superadmin 登录)。"""
     return {"users": auth.list_users()}
 
 
 @app.post("/api/operator/assign_session")
 def api_operator_assign_session(req: AssignSessionReq, _actor: dict = Depends(require_role("superadmin"))):
-    """把某局存档归到某用户(账户系统迁移老存档)。需 X-Operator-Token。"""
+    """把某局存档归到某用户(账户系统迁移老存档)。需 operator 权限(admin/superadmin 登录)。"""
     uid = auth.find_user_id(req.user)
     if not uid:
         raise HTTPException(404, f"找不到用户:{req.user}")
@@ -1120,7 +1120,7 @@ def api_operator_assign_session(req: AssignSessionReq, _actor: dict = Depends(re
 
 @app.post("/api/operator/assign_card")
 def api_operator_assign_card(req: AssignCardReq, _actor: dict = Depends(require_role("admin"))):
-    """把某张(原全局/官方)卡归到某用户;user 留空=设回官方公共。需 X-Operator-Token。"""
+    """把某张(原全局/官方)卡归到某用户;user 留空=设回官方公共。需 operator 权限(admin/superadmin 登录)。"""
     uid = auth.find_user_id(req.user) if req.user.strip() else None
     if req.user.strip() and not uid:
         raise HTTPException(404, f"找不到用户:{req.user}")

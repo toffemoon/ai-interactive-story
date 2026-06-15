@@ -79,5 +79,6 @@ data/             运行时临时数据(gitignore)
 
 - **[进行中] 记忆可靠性硬化 Phase 1**(召回条件化 + abstention 认忘 + 不回写 + 发言者门)—— 去风险 fixture 已达标，全 IP 对照矩阵跑中(见 `docs/design/2026-06-03-phase1-status.md`)。
 - [ ] **Phase 2 · deep 记忆结构核心**：实体活档(结构化 delta + versioned 人格) + 三层 consolidation + bi-temporal 失效(见 `docs/design/2026-06-02-deep-memory-architecture.md`)。
-- [ ] 鉴权 / 限流 / 内容安全(公开给别人玩前要做)。
+- [x] 鉴权 / 限流 / 成本熔断:账户系统已上线(prod `AUTH_ENABLED=1`)+ costguard 按 IP 限流/熔断在 prod 生效。
+- [ ] 内容安全审核 + per-user 配额 / 积分(公开规模化前要做)。
 - [ ] 建卡后自检质检、对话建卡联网搜索增强、预设元数据 UI 内编辑、多角色发言权调度。
