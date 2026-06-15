@@ -58,7 +58,7 @@ updated: 2026-06-04
 - 本 repo 的**更新**（commit / PR）→ 算 YoRHa-A2 团队的进展，会推到 Slack `#yorha-a2-team`
 - 本 repo 的**决策**：引擎工程决策放本地 `decisions/`；任何"这个引擎跟 YoRHa-A2 战略关系"的决策放父 repo `decisions/`
 - 本 repo 的**assets**（成品 / 截图 / demo / 数据洞察）→ 算团队 asset，sediment-worthy 的写父 repo team-log 留痕
-- 本 repo 的**任务 / bug / UI 问题（截图）/ 客户需求** → 走团队 **Linear**（2026-06-15 起,见父 repo `decisions/2026-06-15-tooling-linear.md`）;PR 用 `Fixes YOR-NN` 自动联动关 issue。**截图/反馈发 issue 或评论,别发 project update(Claude 读不到 update)。修某个 issue 时把所用 branch 名(分支约定不变=每人一条固定 branch,如 `yufei`)贴进该 issue 评论做追溯。**(团队 2026-06-15 舍弃 Excalidraw、暂缓 LibTV。)
+- 本 repo 的**任务 / bug / UI 问题（截图）/ 客户需求** → 走团队 **Linear**（2026-06-15 起,见父 repo `decisions/2026-06-15-tooling-linear.md`）;**每个 issue 一条独立 branch(A · Linear 建议名 `<name>/yor-NN-…`)→ 1 issue = 1 PR(不多不少),PR 用 `Fixes YOR-NN` 自动挂回该 issue**。截图/反馈发 issue 或评论,别发 project update(Claude 读不到 update)。(团队 2026-06-15 舍弃 Excalidraw、暂缓 LibTV、改 per-issue 分支取代 name-only-branch。)
 
 ## 3. 你（Claude）在本 repo 的姿势
 
@@ -115,10 +115,10 @@ team-log 格式见父 repo `~/Desktop/yorha-a2-team/CLAUDE.md §4` + `team-logs/
 
 ## 6. Git workflow（本 repo）
 
-镜像团队 PR-only：
+镜像团队 PR-only。**2026-06-15 改 per-issue 分支(A,见父 repo `decisions/2026-06-15-tooling-linear.md`):每个 issue 一条 `<name>/yor-NN-<slug>`(Linear 建议名,复制即用)→ 1 issue = 1 PR,PR `Fixes YOR-NN` 自动挂回;下面示例的 `yufei` 单分支按此改成 per-issue branch。**
 
 ```bash
-git checkout yufei                # 你的长期 branch (没有就 git checkout -b yufei && git push -u origin yufei)
+git checkout -b <name>/yor-NN-<slug> origin/main   # 每个 issue 一条(Linear 详情页复制建议名);旧的 git checkout yufei 单分支已废
 git pull origin main --rebase
 # 写代码 + commit
 git add <files>
