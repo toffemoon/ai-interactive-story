@@ -3,10 +3,12 @@
 --     psql "$DATABASE_URL" -f schema.sql
 --   或  python _init_schema.py   (读 DATABASE_URL,执行本文件)
 --
--- 对齐策略(2026-06-09,见 decisions/2026-06-09-schema线上分歧-对齐方向-提案.md):
---   **本文件以线上 PROD 结构为准**。核心表用自然键主键(sessions=id、messages=(session_id,seq)、
---   memory_vec=(session_id,scope,ext_id))、cards/presets 不用代理 id(app 的 storage.py 全走自然键)。
---   早先这里声明的 `id` 代理列 / `created_at` 是 PROD 没有的,已删除以消除"按 schema.sql 建的新库 ≠ PROD"的坑。
+-- 对齐策略(2026-06-09;2026-06-15 核线上更新,见 decisions/2026-06-09-schema线上分歧-对齐方向-提案.md):
+--   **本文件以线上 PROD 结构为准**。sessions=id(text)、messages=(session_id,seq)、memory_vec=(session_id,scope,ext_id)。
+--   cards/presets:batch4(2026-06-11)已给 PROD 加了代理 `id bigint identity` 主键;唯一性仍走部分唯一索引,
+--     storage.py 仍按自然键(kind,name)/(name)做 on conflict upsert、不依赖 id。
+--   注:PROD 另有 user_id 外键(sessions/cards/presets/memory_vec → users,on delete set null,batch4 加);
+--     因本文件建表顺序 cards/presets 在 users 之前,FK 未内联(fresh build 如需,在 users 建表后补 ALTER)。
 
 create extension if not exists vector;
 
@@ -27,14 +29,15 @@ create table if not exists messages (
   primary key (session_id, seq)
 );
 
--- 卡库(角色/世界书/故事书/玩家卡)。自然键、无代理 id。
+-- 卡库(角色/世界书/故事书/玩家卡)。代理 id 主键(batch4 2026-06-11);唯一性仍靠部分唯一索引。
 -- user_id NULL=官方公共卡(只读可见);非 NULL=用户私有卡。唯一性走部分唯一索引(无全局 unique)。
 create table if not exists cards (
   kind        text        not null,
   name        text        not null,
   data        jsonb       not null default '{}'::jsonb,
   updated_at  timestamptz not null default now(),
-  user_id     uuid
+  user_id     uuid,
+  id          bigint      generated always as identity primary key   -- 代理 PK(batch4);app 不依赖,仍按自然键 upsert
 );
 create index if not exists cards_kind_idx on cards (kind);
 create unique index if not exists uq_cards_official on cards (kind, name)          where user_id is null;
@@ -45,7 +48,8 @@ create table if not exists presets (
   name        text        not null,
   data        jsonb       not null default '{}'::jsonb,
   updated_at  timestamptz not null default now(),
-  user_id     uuid
+  user_id     uuid,
+  id          bigint      generated always as identity primary key   -- 代理 PK(batch4)
 );
 create unique index if not exists uq_presets_official on presets (name)          where user_id is null;
 create unique index if not exists uq_presets_user     on presets (user_id, name)  where user_id is not null;
@@ -67,7 +71,7 @@ create index if not exists idx_memory_vec_lookup on memory_vec (session_id, scop
 create index if not exists idx_memory_vec_ann    on memory_vec using hnsw (embedding vector_cosine_ops);
 
 -- ── 账户系统(账户系统路线图 Phase 1;见 decisions/2026-06-09-账户系统路线图-*)── PROD 已建。
--- 默认关闭(.env AUTH_ENABLED=0);建表只是前置,翻开关才按 user 隔离。
+-- fresh build 默认 .env AUTH_ENABLED=0;PROD 已开 AUTH_ENABLED=1(账户系统已上线)。翻开关才按 user 隔离。
 -- email = 已验证主身份(注册走邮箱验证码);username 可选登录名;role = user/admin/superadmin。
 -- superadmin 由 .env SUPERADMIN_EMAIL 钉(不存进 role 列也算 super)。
 create table if not exists users (
@@ -80,7 +84,8 @@ create table if not exists users (
   email_verified_at timestamptz,
   status            text          not null default 'active',  -- active / blocked
   created_at        timestamptz   not null default now(),
-  last_seen_at      timestamptz
+  last_seen_at      timestamptz,
+  avatar            text                                       -- data URI jpeg/png/webp <=200KB(见 migrations/2026-06-10-users-avatar.sql;PROD 已建)
 );
 
 -- 不透明 token 会话(登出/吊销=UPDATE;库里只存 sha256(token+pepper))
@@ -108,8 +113,9 @@ create table if not exists email_otp (
 create index if not exists idx_email_otp_lookup on email_otp (email, purpose, created_at desc);
 
 -- ── Phase 0 成本熔断 + 限流(账户系统路线图 Phase 0;见 decisions/2026-06-09-phase0-*)──
--- 注意:此功能已搁置,**PROD 暂未建这三张表**;本文件保留 DDL,供 fresh build / 将来启用时一键就位。
--- 默认关闭(.env COST_GUARD_ENABLED=0)。
+-- 状态(2026-06-15 核线上 prod):三张表已在 PROD 建好且有数据,render.yaml COST_GUARD_ENABLED=1,
+--   熔断 + 限流在生产已生效(subject 现为 'ip:<addr>');fresh build 默认仍 .env COST_GUARD_ENABLED=0。
+--   per-user('user:<uuid>')配额待 Phase 1。
 create table if not exists rate_limits (
   key           text        primary key,
   count         integer     not null default 0,

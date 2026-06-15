@@ -1749,7 +1749,7 @@ async def _story_turn_impl(
         f"当前:{_fmt_clock(state.clock_minutes)}(累计 {state.clock_minutes} 故事分钟);"
         f"主线静默 {state.idle_minutes} 故事分钟。本轮在 state_update.time_advance 给出经过的故事分钟数。"
     )
-    # 后台注入:运营者经 /api/operator/inject(需 OPERATOR_TOKEN)发的内容,本回合放进 AI 上下文。
+    # 后台注入:运营者经 /api/operator/inject(需 operator 权限/require_role)发的内容,本回合放进 AI 上下文。
     # 每条可选 sticky:once(默认,送达即清)/ sticky(持续到手动 DELETE 清)。兼容旧的纯字符串=once。
     _oi = data.get("operator_inject") or []
     def _oi_text(x):
