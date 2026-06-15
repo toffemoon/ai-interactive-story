@@ -2809,12 +2809,14 @@ function App() {
   }, [pendingStory, presets]);
 
   const mineSaves = useMemo(() => {
-    const server = (serverSaves || []).map((s) => ({
+    // 服务器存档同样过滤 0 回合占位 session(开了局但没玩第一回合)——与本机条目同口径。
+    // 否则「最近游玩」刷出一长串「未命名故事·第 0 回合」、统计「进行中 N 局」也虚高。
+    const server = (serverSaves || []).filter((s) => (s.turns || 0) > 0).map((s) => ({
       id: s.id, name: s.story || (s.player ? s.player + " 的一局" : "未命名故事"),
       turns: s.turns || 0,
       updated: s.updated_at ? String(s.updated_at).replace("T", " ").slice(0, 16) : "",
     }));
-    const ids = new Set(server.map((s) => s.id));
+    const ids = new Set((serverSaves || []).map((s) => s.id));
     // 仅本机条目:标 local 给 UI 加「仅本机」角标;过滤 0 回合占位残留(老版本登记的空档)。
     const localOnly = (saves || []).filter((s) => s && s.id && !ids.has(s.id) && (s.turns || 0) > 0)
       .map((s) => ({ ...s, local: true }));
