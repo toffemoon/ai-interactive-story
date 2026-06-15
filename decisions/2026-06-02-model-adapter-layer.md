@@ -1,7 +1,7 @@
 ---
 date: 2026-06-02
-updated: 2026-06-02
-status: planned
+updated: 2026-06-10
+status: shipped
 type: engineering
 ---
 

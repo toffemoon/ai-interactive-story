@@ -1,7 +1,7 @@
 ---
 type: decisions-index
 project: ai-interactive-story
-updated: 2026-05-31
+updated: 2026-06-10
 ---
 
 # decisions/ — 本 repo 工程决策
