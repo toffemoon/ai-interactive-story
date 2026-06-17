@@ -595,7 +595,7 @@ const KIND_META = {
   characters: { label: "角色卡", title: "角色卡草稿", ph: "说说这个角色……", canFinish: (d) => !!d.name },
   players: { label: "演出卡", title: "演出卡草稿", ph: "说说你要扮演的主角……", canFinish: (d) => !!d.name },
   worlds: { label: "设定卡", title: "设定卡草稿", ph: "说说这个世界 / 组织 / 设定……", canFinish: (d) => !!d.name },
-  stories: { label: "故事卡", title: "故事书草稿", ph: "说说这个故事的前提、主线、结局……", canFinish: (d) => !!d.title },
+  stories: { label: "故事卡", title: "故事书草稿", ph: "说说这个故事的前提、主线、结局……", canFinish: (d) => !!d.title && !!d.premise },
 };
 
 function DraftPreview({ kind, draft }) {
@@ -657,7 +657,7 @@ function CardBuilder({ kind = "characters", seed, initialDraft, onComplete, onCl
   const [error, setError] = useState("");
   const chatRef = useRef(null);
 
-  const combineAsk = (out) => [out.reply, out.next_question].filter(Boolean).join("\n");
+  const combineAsk = (out) => [out.reply, out.next_question].filter(Boolean).join("\n") || "（这轮没接住——换个说法,或把内容分短一点再说一次）";
 
   useEffect(() => {
     let alive = true;
@@ -2439,7 +2439,7 @@ function ReconCreateLive({ onNav, refreshHome, mobile, user }) {
       const r = await postJSON("/api/build_card", { kind: kk, messages: apiMsgs, draft: cur.draft, seed: "" });
       const ask = [r.reply, r.next_question].filter(Boolean).join(" ");
       patchDesk(kk, (d0) => ({
-        messages: ask ? [...d0.messages, { who: "坊", text: ask }] : d0.messages,
+        messages: [...d0.messages, { who: "坊", text: ask || "（这轮没接住——换个说法,或把内容分短一点再说一次）" }],
         draft: r.draft || d0.draft,
         filled: r.filled || (r.draft ? Object.keys(r.draft) : d0.filled),
       }));
@@ -2869,7 +2869,7 @@ function App() {
     const tagSet = new Set([...((bStory && bStory.tags) || []), ...bChars.flatMap((c) => (c.data.tags || []))]);
     const tags = [...tagSet].filter(Boolean).slice(0, 5);
     try {
-      await postJSON("/api/presets", { name: name.trim(), characters: bChars, world: mergeWorldBooks(bWorlds), story: bStory, player: bPlayer, mode, synopsis, author, cover, tags });
+      await postJSON("/api/presets", { name: name.trim(), characters: bChars, world: mergeWorldBooks(bWorlds), story: bStory, player: bPlayer, playables: bPlayer ? [bPlayer] : [], mode, synopsis, author, cover, tags });
       refreshHome();
       alert("已保存为故事预设。");
     } catch (e) { alert("保存失败:" + e.message); }
