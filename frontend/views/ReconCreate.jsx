@@ -106,19 +106,6 @@ function ReconCreate(props) {
   .cv-create .nav a.on .en {color:rgba(238,240,226,.6);}
   .cv-create .nav a.on::before {content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--gold2);}
 
-  .cv-create .pcard {position:absolute; left:0; right:0; bottom:0; padding:14px 18px 18px; border-top:1px solid var(--line);}
-  .cv-create .pcard .ttl {font-family:var(--serif); font-size:12px; letter-spacing:.12em; color:var(--soft);}
-  .cv-create .pcard .ttl span {font-family:var(--serifen); font-size:8px; letter-spacing:.26em; color:var(--faint); margin-left:6px;}
-  .cv-create .pcard .draft {margin-top:10px; border:1px solid var(--line); background:var(--paper3); padding:11px 12px; position:relative;}
-  .cv-create .pcard .draft::before {content:""; position:absolute; left:5px; top:5px; width:8px; height:8px; border-left:1px solid var(--line2); border-top:1px solid var(--line2); opacity:.6;}
-  .cv-create .pcard .draft .dk {font-family:var(--serif); font-size:11.5px; color:var(--ink); letter-spacing:.06em;}
-  .cv-create .pcard .draft .dn {font-family:var(--kai); font-size:10px; color:var(--faint); margin-top:5px;}
-  .cv-create .pcard .insp {display:flex; align-items:center; justify-content:space-between; margin-top:13px; padding-top:11px; border-top:1px solid var(--line);}
-  .cv-create .pcard .insp .lb {font-family:var(--serif); font-size:11px; color:var(--soft);}
-  .cv-create .pcard .insp .lb i {display:block; font-family:var(--serifen); font-size:7.5px; letter-spacing:.2em; color:var(--faint);}
-  .cv-create .pcard .insp .vl {display:flex; align-items:center; gap:6px; font-family:var(--serifen); font-size:16px; font-weight:700; color:var(--navy);}
-  .cv-create .pcard .insp .vl svg {color:var(--gold2);}
-
   .cv-create .top {position:absolute; left:216px; right:0; top:0; height:84px; z-index:20; display:flex; align-items:center;}
   .cv-create .top::after {content:""; position:absolute; left:24px; right:24px; bottom:0; height:1px; background:linear-gradient(90deg,transparent,var(--line2) 6%,var(--line2) 94%,transparent);}
   .cv-create .crumb {display:flex; align-items:baseline; gap:14px; margin-left:32px;}
@@ -276,17 +263,8 @@ function ReconCreate(props) {
   .cv-create .card .cardfoot .b.solid .en {color:rgba(243,234,214,.66);}
       `}</style>
 
-      {/* 左 引擎竖栏 */}
-      {/* 左侧引擎竖栏(全站统一 ReconRail;本次创作摘要作底部插槽) */}
-      <window.ReconRail active="build" onNav={onNav}>
-        <div className="pcard">
-          <div className="ttl">本次创作<span>DRAFT</span></div>
-          <div className="draft">
-            <div className="dk">{dKind} · {dName}</div>
-            <div className="dn">{dFields.length} 个字段</div>
-          </div>
-        </div>
-      </window.ReconRail>
+      {/* 左侧引擎竖栏(全站统一 ReconRail) */}
+      <window.ReconRail active="build" onNav={onNav} />
 
       {/* 顶 标题栏 */}
       <div className="top">
