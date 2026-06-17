@@ -1319,6 +1319,7 @@ function LoginView({ onAuthed, onBack, initialTab }) {
   const [username, setUsername] = useState("");       // 注册:可选登录名
   const [code, setCode] = useState("");               // 注册/重置:邮箱验证码
   const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);     // 密码显隐(YOR-27)
   const [err, setErr] = useState("");
   const [ok, setOk] = useState("");                   // 成功提示(重置完成后引导回登录)
   const [busy, setBusy] = useState(false);
@@ -1347,6 +1348,12 @@ function LoginView({ onAuthed, onBack, initialTab }) {
 
   async function submit() {
     if (busy) return;
+    // 注册/重置前端校验提示(YOR-27)
+    if (!resetMode && tab === "register") {
+      if (!email.trim() || email.indexOf("@") < 0) { setErr("邮箱格式不对,先填对邮箱"); return; }
+      if (!code.trim()) { setErr("先填邮箱验证码(没收到可点「发送验证码」)"); return; }
+    }
+    if ((resetMode || tab === "register") && password.length < 6) { setErr("密码至少 6 位"); return; }
     setBusy(true); setErr(""); setOk("");
     try {
       if (resetMode) {
@@ -1367,6 +1374,9 @@ function LoginView({ onAuthed, onBack, initialTab }) {
     } catch (e) { setErr(e.message || "失败"); }
     finally { setBusy(false); }
   }
+
+  // 回车提交(YOR-27):任意输入框按回车即提交(输入法组合态不触发)
+  const onEnter = (e) => { if (e.key === "Enter" && !(e.nativeEvent || e).isComposing) submit(); };
 
   return (
     <div className="cv-login">
@@ -1408,6 +1418,11 @@ function LoginView({ onAuthed, onBack, initialTab }) {
         .cv-login .back {position:absolute; left:42px; top:-34px; font-family:Georgia,serif; font-size:12px; letter-spacing:.2em; color:rgba(240,234,222,.75); cursor:pointer;}
         .cv-login .forgot {margin-top:14px; text-align:center; font-size:12.5px; color:#6f6757; cursor:pointer; letter-spacing:.06em;}
         .cv-login .forgot:hover {color:#2b2620; text-decoration:underline;}
+        .cv-login .pwdrow {position:relative; margin-bottom:12px;}
+        .cv-login .pwdrow input {margin-bottom:0; padding-right:54px;}
+        .cv-login .pwdtog {position:absolute; right:0; top:0; bottom:0; appearance:none; min-height:0; border:none; border-radius:0;
+          background:none; color:#a98a63; font-family:"Songti SC","SimSun",serif; font-size:12px; letter-spacing:.1em; padding:0 12px; cursor:pointer;}
+        .cv-login .pwdtog:hover {color:#34463d; background:none;}
       `}</style>
       <div className="card">
         {onBack && <span className="back" onClick={onBack}>‹ BACK</span>}
@@ -1420,10 +1435,10 @@ function LoginView({ onAuthed, onBack, initialTab }) {
         {resetMode ? (
           <>
             <input type="email" placeholder="注册时用的邮箱" value={email}
-                   onChange={(e) => setEmail(e.target.value)} />
+                   onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter} />
             <div className="coderow">
               <input placeholder="邮箱验证码" value={code}
-                     onChange={(e) => setCode(e.target.value)} />
+                     onChange={(e) => setCode(e.target.value)} onKeyDown={onEnter} />
               <button disabled={sending || cooldown > 0} onClick={sendCode}>
                 {cooldown > 0 ? `${cooldown}s` : (sending ? "…" : "发送验证码")}
               </button>
@@ -1436,21 +1451,25 @@ function LoginView({ onAuthed, onBack, initialTab }) {
         ) : (
           <>
             <input type="email" placeholder="邮箱(用来收验证码)" value={email}
-                   onChange={(e) => setEmail(e.target.value)} />
+                   onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter} />
             <div className="coderow">
               <input placeholder="邮箱验证码" value={code}
-                     onChange={(e) => setCode(e.target.value)} />
+                     onChange={(e) => setCode(e.target.value)} onKeyDown={onEnter} />
               <button disabled={sending || cooldown > 0} onClick={sendCode}>
                 {cooldown > 0 ? `${cooldown}s` : (sending ? "…" : "发送验证码")}
               </button>
             </div>
             {sentHint && <div className="hint">{sentHint}</div>}
             <input placeholder="用户名(可选,用于登录)" value={username}
-                   onChange={(e) => setUsername(e.target.value)} />
+                   onChange={(e) => setUsername(e.target.value)} onKeyDown={onEnter} />
           </>
         )}
-        <input type="password" placeholder={resetMode ? "新密码(至少 6 位)" : "密码"} value={password}
-               onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !(e.nativeEvent || e).isComposing && submit()} />
+        <div className="pwdrow">
+          <input type={showPwd ? "text" : "password"} placeholder={resetMode ? "新密码(至少 6 位)" : "密码"} value={password}
+                 onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter} />
+          <button type="button" className="pwdtog" onClick={() => setShowPwd((v) => !v)}
+                  title={showPwd ? "隐藏密码" : "显示密码"}>{showPwd ? "隐藏" : "显示"}</button>
+        </div>
         {ok && <div className="hint">{ok}</div>}
         {err && <div className="err">{err}</div>}
         <button className="go" disabled={busy} onClick={submit}>
