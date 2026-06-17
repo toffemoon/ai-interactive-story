@@ -287,8 +287,8 @@ function ReconProfile(props) {
   .cv-profile .sec-h .all:hover {opacity:1;}
 
   
-  .cv-profile .recent {display:flex; gap:14px;}
-  .cv-profile .rcard {flex:1; background:var(--paper); border:1px solid var(--line); padding:7px;}
+  .cv-profile .recent {display:grid; grid-template-columns:repeat(auto-fill, minmax(124px, 1fr)); gap:14px; align-items:start;}
+  .cv-profile .rcard {background:var(--paper); border:1px solid var(--line); padding:7px;}
   .cv-profile .rcard .loc {position:absolute; left:10px; top:10px; z-index:2; font-family:var(--serif); font-size:9px; letter-spacing:.1em;
     color:#6f6757; background:rgba(250,244,234,.92); border:1px solid var(--line2); padding:1px 6px;}
   .cv-profile .rcard .th {width:100%; height:100px; object-fit:cover; border:1px solid rgba(169,138,99,.3); display:block;}
@@ -514,13 +514,13 @@ function ReconProfile(props) {
             <div className="sec-h"><b>最近游玩</b><span className="en">RECENT PLAYED</span><span className="all" style={{ cursor: "pointer" }} onClick={() => onNav("home")}>去故事库 ›</span></div>
             <div className="recent">
               {P.savesErr && (
-                <div className="rcard" style={{ flex: "1 0 100%", textAlign: "center", padding: "16px 14px", cursor: "pointer" }} onClick={() => P.onRetrySaves && P.onRetrySaves()}>
+                <div className="rcard" style={{ gridColumn: "1 / -1", textAlign: "center", padding: "16px 14px", cursor: "pointer" }} onClick={() => P.onRetrySaves && P.onRetrySaves()}>
                   <div className="nm">云端存档加载失败</div>
                   <div className="rd" style={{ marginTop: 8 }}>点击重试(本机存档不受影响)</div>
                 </div>
               )}
               {!recent.length && !P.savesErr && (
-                <div className="rcard" style={{ flex: "1 0 100%", textAlign: "center", padding: "22px 14px", cursor: "pointer" }} onClick={onNew}>
+                <div className="rcard" style={{ gridColumn: "1 / -1", textAlign: "center", padding: "22px 14px", cursor: "pointer" }} onClick={onNew}>
                   <div className="nm">还没有进行中的故事</div>
                   <div className="rd" style={{ marginTop: 8 }}>去「创作」开局,写下你的第一回合 ›</div>
                 </div>
