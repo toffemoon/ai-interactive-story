@@ -210,6 +210,7 @@ _RL_LOGIN_IP = int(os.getenv("RL_LOGIN_PER_IP_15MIN", "30"))
 _RL_LOGIN_ID = int(os.getenv("RL_LOGIN_PER_ID_15MIN", "10"))
 _RL_CODE_IP = int(os.getenv("RL_SENDCODE_PER_IP_HOUR", "10"))
 _RL_CODE_EM = int(os.getenv("RL_SENDCODE_PER_EMAIL_DAY", "10"))
+_RL_UPLOAD_IP = int(os.getenv("RL_UPLOAD_PER_IP_HOUR", "60"))   # YOR-14:上传按 IP 每小时上限,防匿名 parser-DoS
 
 
 @app.post("/api/auth/email/send_code")
@@ -568,8 +569,14 @@ _UPLOAD_MAX_BYTES = int(os.getenv("UPLOAD_MAX_BYTES", "2000000"))  # 2MB:正常 
 
 
 @app.post("/api/upload")
-async def api_upload(request: Request, filename: str = "upload.txt"):
-    """上传 .txt/.md/.docx,返回纯文本(前端再填进设定框走识别)。带体积上限防内存型 DoS(P2-8)。"""
+async def api_upload(request: Request, filename: str = "upload.txt",
+                     user: dict | None = Depends(current_user_dep)):
+    """上传 .txt/.md/.docx,返回纯文本(前端再填进设定框走识别)。带体积上限防内存型 DoS(P2-8)。
+    YOR-14:AUTH 开时拒匿名 + 按 IP 限流,堵未授权 parser-DoS(此前 /upload 无鉴权无限流)。"""
+    _require_login_when_auth(user)   # AUTH_ENABLED=1 时匿名 401;关时 no-op
+    ip = costguard.client_ip(request)
+    if not costguard.hit_rate(f"upload:ip:{ip}", 3600, _RL_UPLOAD_IP):
+        raise HTTPException(429, "上传过于频繁,请稍后再试")
     cl = request.headers.get("content-length")
     if cl and cl.isdigit() and int(cl) > _UPLOAD_MAX_BYTES:
         raise HTTPException(413, "文件过大(上限 2MB)")
