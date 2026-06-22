@@ -18,6 +18,10 @@ export default defineConfig({
           });
         },
       },
+      // 卡片封面有些存成后端相对路径 /covers/xx.jpg(老前端 static mount),dev 期一并代理到后端,
+      // 真封面才显示(否则只剩书脊占位)。/assets 同理(recon 立绘)。dev-only,不影响构建产物。
+      "/covers": { target: "http://localhost:8000", changeOrigin: true },
+      "/assets": { target: "http://localhost:8000", changeOrigin: true },
     },
   },
 });

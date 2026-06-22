@@ -14,10 +14,17 @@ import { Tag } from "./Tag";
 // actions: [{ label, variant, onClick, full?, isDetail? }] —— 由用处传(探索 = 去玩/纯聊,库 = 编辑/删除…)。
 // onOpen: 进完整详情;若 actions 里没有 isDetail 项,卡背自动补一个「详情」按钮(spec 硬要求)。
 
+// 书脊占位色永远做底色,封面图叠在上面 —— 封面缺失 / 加载失败都优雅退回书脊,不露白底。
+function coverStyle(kind, cover) {
+  const s = { backgroundColor: `var(--spine-${kind}, var(--spine-character))` };
+  if (cover) s.backgroundImage = `url("${cover}")`;
+  return s;
+}
+
 function CoverFront({ model }) {
   const { kind, cover, title, badge } = model;
   const noCoverFrame = !cover && (kind === "world" || kind === "player");
-  const style = cover ? { backgroundImage: `url(${cover})` } : { background: `var(--spine-${kind}, var(--spine-character))` };
+  const style = coverStyle(kind, cover);
   return (
     <div className={["card-front", cover ? "has-cover" : "no-cover"].join(" ")} style={style}>
       {noCoverFrame && <span className="card-spine-frame" aria-hidden="true" />}
@@ -99,10 +106,9 @@ function ShelfCard({ model, flipped, onToggleFlip, actions, onOpen }) {
 
 function RowCard({ model, actions, onOpen }) {
   const { kind, title, cover, blurb, tags } = model;
-  const coverStyle = cover ? { backgroundImage: `url(${cover})` } : { background: `var(--spine-${kind}, var(--spine-character))` };
   return (
     <div className={["card", "card--row", "kind-" + kind].join(" ")}>
-      <div className="card-row-cover" style={coverStyle}>
+      <div className="card-row-cover" style={coverStyle(kind, cover)}>
         {!cover && <span className="card-row-spine t-kai">{title.slice(0, 1)}</span>}
       </div>
       <div className="card-row-body" onClick={onOpen} role={onOpen ? "button" : undefined}>
@@ -124,7 +130,6 @@ function RowCard({ model, actions, onOpen }) {
 
 function ThumbCard({ model, onOpen, selected }) {
   const { kind, title, cover } = model;
-  const coverStyle = cover ? { backgroundImage: `url(${cover})` } : { background: `var(--spine-${kind}, var(--spine-character))` };
   return (
     <div
       className={["card", "card--thumb", "kind-" + kind, selected ? "is-selected" : ""].join(" ")}
@@ -132,7 +137,7 @@ function ThumbCard({ model, onOpen, selected }) {
       role={onOpen ? "button" : undefined}
       tabIndex={onOpen ? 0 : undefined}
     >
-      <div className="card-thumb-cover" style={coverStyle}>
+      <div className="card-thumb-cover" style={coverStyle(kind, cover)}>
         {!cover && <span className="card-thumb-spine t-kai">{title.slice(0, 2)}</span>}
       </div>
       <div className="card-thumb-title t-ui-sm">{title}</div>
