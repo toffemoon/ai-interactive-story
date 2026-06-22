@@ -1,0 +1,127 @@
+/* —————————————————————————————————————————————————————————————
+   沐言设计系统 · tokens (YOR-92)
+   两层:raw 色板 / scale(不可变) → 语义层(按 [data-theme] 映射)。
+   组件只吃语义层(--bg / --fg / --accent …),换主题 = 换 data-theme。
+   值来自 spec「设计系统与地基」二·色值/字/间距。
+   ————————————————————————————————————————————————————————————— */
+:root {
+  /* —— raw 色板(不可变)—— */
+  /* 纸 Paper */
+  --paper-bg: #f3f1ec;
+  --paper-sunk: #eae2cf;
+  --paper-panel: #fffdfa;
+  --ink: #20201d;
+  --ink-muted: #6f706b;
+  --paper-line: #d8d2c7;
+  --cinnabar: #8f3c32;
+  --cinnabar-bright: #b5402e;
+  --pine: #315d4f;
+  --gilt: #ad7a24;
+  /* 台 Stage(暖夜 · 朱金 · 去绿)*/
+  --stage-bg: #221c16;
+  --stage-panel: #2c241c;
+  --stage-line: #3a3127;
+  --moon: #ece3d2;
+  --moon-muted: #b3a890;
+  --stage-cinnabar: #d15a40;
+  --stage-gilt: #c79a4e;
+
+  /* —— 卡片书脊占位底色(无立绘类)+ 角标色,来自 卡片-翻转手感.html —— */
+  --spine-story: #2e4b44;
+  --spine-character: #3a3127;
+  --spine-world: #4a4137;
+  --spine-player: #2f3a3a;
+  --spine-library: #3a3127;
+
+  /* —— scale —— */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --r-card: 13px; /* 书本卡圆角,来自 卡片-翻转手感.html */
+  --r-pill: 999px;
+
+  --font-serif: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --font-kai: "LXGW WenKai TC", "LXGW WenKai", "Kaiti SC", "STKaiti", serif;
+  --font-sans: "Aptos", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", ui-monospace, Consolas, monospace;
+
+  --fs-meta: 12px;
+  --fs-ui-sm: 13px;
+  --fs-ui: 14px;
+  --fs-body: 16px;
+  --fs-read: 16px;
+  --fs-h3: 19px;
+  --fs-h2: 22px;
+  --fs-h1: 26px;
+  --fs-display: 30px;
+  --fs-display-lg: 38px;
+
+  --lh-tight: 1.05;
+  --lh-snug: 1.2;
+  --lh-body: 1.6;
+  --lh-read: 1.75;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-snap: cubic-bezier(0.7, 0, 0.2, 1);
+  --dur-fast: 180ms;
+  --dur-mid: 420ms;
+  --dur-slow: 760ms;
+}
+
+/* —— 语义层(themed)—— */
+[data-theme="paper"] {
+  --bg: var(--paper-bg);
+  --sunk: var(--paper-sunk);
+  --panel: var(--paper-panel);
+  --fg: var(--ink);
+  --muted: var(--ink-muted);
+  --line: var(--paper-line);
+  --accent: var(--cinnabar);
+  --accent-bright: var(--cinnabar-bright);
+  --accent-2: var(--pine);
+  --accent-3: var(--gilt);
+  --on-accent: #f6efe6;
+  /* badge tints(纸面浅底)*/
+  --badge-pine-bg: #e2ebe4;
+  --badge-pine-fg: #274a3f;
+  --badge-gilt-bg: #f0e6cf;
+  --badge-gilt-fg: #6e4f12;
+  --badge-cinnabar-bg: #f1ddd8;
+  --badge-cinnabar-fg: #7a3127;
+  --shadow-card: 0 14px 28px -16px rgba(43, 38, 32, 0.4);
+  --shadow-pop: 0 24px 60px -20px rgba(0, 0, 0, 0.45);
+  --scrim: rgba(34, 29, 22, 0.46);
+}
+
+[data-theme="stage"] {
+  --bg: var(--stage-bg);
+  --sunk: #1b160f;
+  --panel: var(--stage-panel);
+  --fg: var(--moon);
+  --muted: var(--moon-muted);
+  --line: var(--stage-line);
+  --accent: var(--stage-cinnabar);
+  --accent-bright: var(--stage-cinnabar);
+  --accent-2: var(--stage-gilt);
+  --accent-3: var(--stage-gilt);
+  --on-accent: #211710;
+  --badge-pine-bg: rgba(199, 154, 78, 0.18);
+  --badge-pine-fg: #dcb878;
+  --badge-gilt-bg: rgba(199, 154, 78, 0.18);
+  --badge-gilt-fg: #dcb878;
+  --badge-cinnabar-bg: rgba(209, 90, 64, 0.18);
+  --badge-cinnabar-fg: #eaa68f;
+  --shadow-card: 0 16px 34px -18px rgba(0, 0, 0, 0.6);
+  --shadow-pop: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
+  --scrim: rgba(10, 8, 5, 0.6);
+}

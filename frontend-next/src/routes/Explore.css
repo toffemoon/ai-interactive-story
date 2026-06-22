@@ -1,0 +1,99 @@
+.explore-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--sp-5);
+}
+.explore-sub {
+  color: var(--muted);
+  margin-top: var(--sp-2);
+}
+.explore-count {
+  color: var(--muted);
+  white-space: nowrap;
+  padding-top: var(--sp-2);
+}
+.explore-count b {
+  font-family: var(--font-serif);
+  font-size: var(--fs-h3);
+  color: var(--accent-2);
+  margin: 0 4px;
+}
+.explore-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-6);
+}
+.explore-bar .search {
+  width: 320px;
+  max-width: 100%;
+}
+.explore-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.explore-empty {
+  text-align: center;
+  padding: var(--sp-8) 0;
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-3);
+}
+
+/* 详情 modal */
+.explore-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--scrim);
+  display: grid;
+  place-items: center;
+  padding: var(--sp-5);
+}
+.explore-modal-card {
+  position: relative;
+  width: min(520px, 92vw);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: var(--sp-6);
+  box-shadow: var(--shadow-pop);
+  animation: login-in 0.32s var(--ease-out) both;
+}
+.explore-modal-x {
+  position: absolute;
+  right: 14px;
+  top: 12px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.explore-modal-title {
+  margin: var(--sp-3) 0 var(--sp-3);
+}
+.explore-modal-blurb {
+  color: var(--fg);
+  margin-bottom: var(--sp-4);
+}
+.explore-modal-meta {
+  color: var(--muted);
+  margin-bottom: var(--sp-3);
+}
+.explore-modal-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--sp-5);
+}
