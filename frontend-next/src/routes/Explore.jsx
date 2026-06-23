@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { TopBar } from "../components/TopBar";
 import { Chip, SearchField, Button, Badge, CardShelf } from "../components/ui";
 import { getJSON } from "../lib/api";
 import { toCardModels } from "../lib/cardModel";
@@ -65,7 +64,6 @@ export default function Explore() {
 
   return (
     <>
-      <TopBar />
       <div className="page explore">
         <div className="explore-head">
           <div>

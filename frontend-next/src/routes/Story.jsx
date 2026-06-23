@@ -53,7 +53,7 @@ function Dialogue({ messages }) {
 }
 
 export default function Story() {
-  const { game, clearGame } = useGame();
+  const { game } = useGame();
   const navigate = useNavigate();
   const [turns, setTurns] = useState([]);
   const [choices, setChoices] = useState([]);
@@ -135,10 +135,7 @@ export default function Story() {
       <header className="story-top">
         <button
           className="story-back"
-          onClick={() => {
-            clearGame();
-            navigate("/explore");
-          }}
+          onClick={() => navigate("/explore")}
         >
           ← 离开
         </button>

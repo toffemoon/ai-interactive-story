@@ -13,67 +13,6 @@
   letter-spacing: 0.1em;
 }
 
-/* 顶栏 */
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-5);
-  padding: 0 var(--sp-6);
-  height: 60px;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--line);
-}
-.topbar-brand {
-  font-family: var(--font-kai);
-  font-size: 24px;
-  color: var(--accent);
-  letter-spacing: 0.08em;
-}
-.topbar-nav {
-  display: flex;
-  gap: var(--sp-2);
-  align-items: center;
-}
-.topbar-nav a,
-.topbar-nav button.navlink {
-  font-family: var(--font-sans);
-  font-size: var(--fs-ui);
-  color: var(--muted);
-  padding: 6px 12px;
-  border: none;
-  background: transparent;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-}
-.topbar-nav a.is-active {
-  color: var(--fg);
-  font-weight: 500;
-}
-.topbar-nav a:hover:not(.is-active),
-.topbar-nav button.navlink:hover:not(:disabled) {
-  color: var(--fg);
-  background: color-mix(in srgb, var(--fg) 5%, transparent);
-}
-.topbar-nav button.navlink:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.topbar-right {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-}
-.topbar-user {
-  font-family: var(--font-sans);
-  font-size: var(--fs-ui-sm);
-  color: var(--muted);
-}
-
 .page {
   max-width: 1080px;
   margin: 0 auto;

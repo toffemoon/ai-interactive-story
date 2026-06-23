@@ -1,8 +1,13 @@
 import { useEffect } from "react";
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "./state/auth";
+import AppShell from "./components/shell/AppShell";
 import Login from "./routes/Login";
 import Explore from "./routes/Explore";
+import Chat from "./routes/Chat";
+import Create from "./routes/Create";
+import Mine from "./routes/Mine";
+import Forum from "./routes/Forum";
 import Story from "./routes/Story";
 import Styleguide from "./routes/Styleguide";
 import "./App.css";
@@ -23,6 +28,15 @@ function RequireAuth({ children }) {
   return children;
 }
 
+// 登录后 app 页统一挂导航壳;壳负责 Rail/tab + 浮动续玩入口,各页只放内容。
+function ShellLayout() {
+  return (
+    <AppShell>
+      <Outlet />
+    </AppShell>
+  );
+}
+
 export default function App() {
   const { ready, enabled, user } = useAuth();
   const loc = useLocation();
@@ -41,22 +55,23 @@ export default function App() {
       <Route path="/" element={<Navigate to={home} replace />} />
       <Route path="/login" element={<Login />} />
       <Route path="/styleguide" element={<Styleguide />} />
+
+      {/* 登录后 app 壳(桌面 Rail / 移动 tab) */}
       <Route
-        path="/explore"
         element={
           <RequireAuth>
-            <Explore />
+            <ShellLayout />
           </RequireAuth>
         }
-      />
-      <Route
-        path="/play"
-        element={
-          <RequireAuth>
-            <Story />
-          </RequireAuth>
-        }
-      />
+      >
+        <Route path="/explore" element={<Explore />} />
+        <Route path="/chat" element={<Chat />} />
+        <Route path="/create" element={<Create />} />
+        <Route path="/mine" element={<Mine />} />
+        <Route path="/forum" element={<Forum />} />
+        <Route path="/play" element={<Story />} />
+      </Route>
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
