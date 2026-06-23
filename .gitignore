@@ -37,3 +37,5 @@ _hsr_mid.txt
 _libnames.txt
 _setcheck.txt
 _seed_originals_report.json
+# dev server 运行时产物(.err / .pid)
+_server_current.*
