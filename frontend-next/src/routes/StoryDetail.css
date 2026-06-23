@@ -1,0 +1,278 @@
+/* 故事详情(YOR-44/45/48/23):做减法的介绍页 + 选主角 + 固定底部涟漪入局。吃语义 token。 */
+
+.detail {
+  padding-bottom: calc(var(--sp-8) + 40px); /* 给固定底部入局条留位 */
+}
+.detail-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin-bottom: var(--sp-4);
+}
+.detail-back:hover {
+  color: var(--fg);
+}
+
+/* 头 */
+.detail-head {
+  display: flex;
+  gap: var(--sp-6);
+  align-items: flex-start;
+}
+.detail-cover {
+  flex: none;
+  width: 190px;
+  height: 286px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--line);
+  background-color: var(--spine-story);
+  background-size: cover;
+  background-position: center;
+  box-shadow: var(--shadow-card);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.detail-cover-spine {
+  writing-mode: vertical-rl;
+  font-family: var(--font-kai);
+  font-size: 22px;
+  letter-spacing: 0.18em;
+  color: var(--on-accent);
+  opacity: 0.92;
+}
+.detail-headmain {
+  flex: 1;
+  min-width: 0;
+}
+.detail-title {
+  margin: var(--sp-3) 0 var(--sp-3);
+}
+.detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--sp-2);
+}
+.detail-author {
+  color: var(--muted);
+  margin-bottom: var(--sp-4);
+}
+.detail-sec {
+  letter-spacing: 0.06em;
+  margin-bottom: var(--sp-2);
+}
+.detail-intro-text {
+  color: var(--fg);
+  max-width: 60ch;
+}
+
+/* 通用块 */
+.detail-block {
+  margin-top: var(--sp-7);
+}
+
+/* 角色:固定高度横向滚动(YOR-23) */
+.detail-chars {
+  display: flex;
+  gap: var(--sp-3);
+  overflow-x: auto;
+  padding-bottom: var(--sp-2);
+}
+.detail-char {
+  flex: none;
+  width: 220px;
+  height: 120px;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  overflow: hidden;
+}
+.detail-char-name {
+  font-family: var(--font-kai);
+  font-size: var(--fs-h3);
+  margin-bottom: var(--sp-2);
+}
+.detail-char-line {
+  color: var(--muted);
+  line-height: var(--lh-body);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 选主角 */
+.detail-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+.detail-role {
+  width: 200px;
+  text-align: left;
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--fg);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.detail-role:hover {
+  border-color: color-mix(in srgb, var(--accent-3) 50%, var(--line));
+}
+.detail-role.is-on {
+  border-color: var(--accent-3);
+  box-shadow: inset 0 0 0 1px var(--accent-3);
+}
+.detail-role-name {
+  font-family: var(--font-kai);
+  font-size: var(--fs-h3);
+}
+.detail-role-line {
+  color: var(--muted);
+  margin: var(--sp-2) 0 var(--sp-3);
+  min-height: 38px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.detail-role-tick {
+  color: var(--accent-2);
+  border-top: 1px solid var(--line);
+  padding-top: var(--sp-2);
+}
+.detail-role.is-on .detail-role-tick {
+  color: var(--accent-3);
+}
+.detail-role--custom {
+  border-style: dashed;
+}
+
+/* 自定义角色 */
+.detail-custom {
+  margin-top: var(--sp-4);
+  max-width: 720px;
+}
+.detail-custom-text {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--fg);
+  font-family: var(--font-kai);
+  font-size: var(--fs-ui);
+  line-height: var(--lh-body);
+  outline: none;
+}
+.detail-custom-text:focus {
+  border-color: var(--accent);
+}
+.detail-custom-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+}
+.detail-upload {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  cursor: pointer;
+}
+.detail-upload:hover {
+  color: var(--fg);
+  border-color: var(--accent);
+}
+.detail-err {
+  color: var(--accent);
+  margin-top: var(--sp-3);
+}
+
+.detail-spacer {
+  height: var(--sp-6);
+}
+
+/* 涟漪入局:固定底部(YOR-48) */
+.detail-enterbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-5) calc(var(--sp-3) + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--line);
+}
+.detail-enter-info {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.detail-enter-label {
+  color: var(--muted);
+  flex: none;
+}
+.detail-enter-role {
+  font-family: var(--font-kai);
+  font-size: var(--fs-h3);
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.detail-enterbar .btn {
+  margin-left: auto;
+  flex: none;
+  letter-spacing: 0.18em;
+}
+
+/* 载入 / 缺失 */
+.detail-loading,
+.detail-missing {
+  min-height: 50vh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--sp-3);
+  color: var(--muted);
+  text-align: center;
+}
+
+/* 移动:头部纵向堆叠 */
+@media (max-width: 720px) {
+  .detail-head {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .detail-headmain {
+    width: 100%;
+  }
+  .detail-tags,
+  .detail-roles {
+    justify-content: center;
+  }
+  .detail-intro-text {
+    text-align: left;
+  }
+}

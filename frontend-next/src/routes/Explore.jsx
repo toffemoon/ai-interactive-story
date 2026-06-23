@@ -109,18 +109,9 @@ export default function Explore() {
   }, [track, q, genre, sort]);
 
   // —— 卡片去向 ——
-  function startStory(m) {
-    const p = m.raw || {};
-    const d = p.data || {};
-    startGame({
-      title: d.name || p.name || m.title,
-      characters: d.characters || [],
-      world: d.world || null,
-      story: d.story || null,
-      player: d.player || null,
-      mode: "standard",
-    });
-    navigate("/play");
+  // 完整故事 → 介绍页(选主角三选一 + 涟漪入局);直接开玩的捷径收敛进详情页。
+  function goDetail(m) {
+    navigate(`/story/${encodeURIComponent(m.id)}`, { state: { preset: m.raw } });
   }
   // 角色卡「开故事」:以该角色起一局自由叙事(无打包故事/世界)。契约不变,仍走 story_turn_stream。
   function startCharacterStory(m) {
@@ -148,7 +139,7 @@ export default function Explore() {
         { label: "纯聊", variant: "line", onClick: () => chatWith(m) },
       ];
     }
-    return [{ label: "去玩", variant: "primary", onClick: () => startStory(m) }];
+    return [{ label: "查看故事", variant: "primary", isDetail: true, onClick: () => goDetail(m) }];
   }
 
   const totalCount = storyModels.length + charModels.length;
@@ -236,7 +227,11 @@ export default function Explore() {
           </div>
         ) : (
           <>
-            <CardShelf models={shown} actionsFor={actionsFor} onOpen={(m) => setDetail(m)} />
+            <CardShelf
+              models={shown}
+              actionsFor={actionsFor}
+              onOpen={(m) => (m.kind === "story" ? goDetail(m) : setDetail(m))}
+            />
             {pageCount > 1 && (
               <div className="explore-pager">
                 <Button variant="line" disabled={curPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
@@ -263,11 +258,6 @@ export default function Explore() {
             <Badge tone={detail.badge.tone}>{detail.badge.label}</Badge>
             <h2 className="t-h1 explore-modal-title">{detail.title}</h2>
             <p className="t-read explore-modal-blurb">{detail.blurb}</p>
-            {detail.kind === "story" && (
-              <div className="explore-modal-meta t-ui-sm">
-                {detail.meta.characters ? `${detail.meta.characters} 角色` : "群像"} · {detail.meta.author || "店内收录"}
-              </div>
-            )}
             {(detail.tags || []).length > 0 && (
               <div className="explore-modal-tags">
                 {(detail.tags || []).map((t, i) => (
@@ -275,41 +265,27 @@ export default function Explore() {
                 ))}
               </div>
             )}
-            {detail.kind === "character" ? (
-              <div className="explore-modal-actions">
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    const m = detail;
-                    setDetail(null);
-                    startCharacterStory(m);
-                  }}
-                >
-                  以这个角色开故事
-                </Button>
-                <Button
-                  variant="line"
-                  onClick={() => {
-                    setDetail(null);
-                    chatWith();
-                  }}
-                >
-                  纯聊
-                </Button>
-              </div>
-            ) : (
+            <div className="explore-modal-actions">
               <Button
                 variant="primary"
-                full
                 onClick={() => {
                   const m = detail;
                   setDetail(null);
-                  startStory(m);
+                  startCharacterStory(m);
                 }}
               >
-                取下这本书 · 开始游玩
+                以这个角色开故事
               </Button>
-            )}
+              <Button
+                variant="line"
+                onClick={() => {
+                  setDetail(null);
+                  chatWith();
+                }}
+              >
+                纯聊
+              </Button>
+            </div>
           </div>
         </div>
       )}

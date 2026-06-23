@@ -4,6 +4,7 @@ import { useAuth } from "./state/auth";
 import AppShell from "./components/shell/AppShell";
 import Login from "./routes/Login";
 import Explore from "./routes/Explore";
+import StoryDetail from "./routes/StoryDetail";
 import Chat from "./routes/Chat";
 import Create from "./routes/Create";
 import Mine from "./routes/Mine";
@@ -65,6 +66,7 @@ export default function App() {
         }
       >
         <Route path="/explore" element={<Explore />} />
+        <Route path="/story/:name" element={<StoryDetail />} />
         <Route path="/chat" element={<Chat />} />
         <Route path="/create" element={<Create />} />
         <Route path="/mine" element={<Mine />} />
