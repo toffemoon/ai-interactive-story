@@ -1,10 +1,17 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { fileURLToPath, URL } from "node:url";
 
 // 前端重构地基 (YOR-92)。dev 期所有 /api/* 走代理打到本地后端(假设1:本地 uvicorn :8000),
 // 避免直连 prod / 烧 DeepSeek key。流式端点(story_turn_stream / SSE)关掉代理缓冲,逐字才出得来。
 export default defineConfig({
   plugins: [react()],
+  // React Bits 组件用 @/ 导入(shadcn 别名);映射到 src。
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
   server: {
     port: 5182,
     proxy: {
