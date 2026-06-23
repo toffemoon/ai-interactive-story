@@ -7,6 +7,21 @@
 .create-head {
   margin-bottom: var(--sp-4);
 }
+/* 页标题前置朱砂竖纹 motif(细节⑦,跨页一致)*/
+.create-head h1 {
+  position: relative;
+  padding-left: 16px;
+}
+.create-head h1::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.12em;
+  bottom: 0.12em;
+  width: 4px;
+  border-radius: var(--r-pill);
+  background: linear-gradient(180deg, var(--accent), var(--accent-3));
+}
 .create-sub {
   color: var(--muted);
   margin-top: var(--sp-2);
@@ -31,10 +46,14 @@
   font-family: var(--font-kai);
   font-size: var(--fs-ui);
   cursor: pointer;
-  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
 .create-kind:hover {
   color: var(--fg);
+}
+.create-kind:active {
+  transform: scale(0.96);
 }
 .create-kind.is-on {
   color: var(--on-accent);

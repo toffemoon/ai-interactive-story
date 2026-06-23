@@ -89,7 +89,11 @@
   color: var(--muted);
   position: relative;
   transition: color var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out);
+    background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.shell-navitem:active {
+  transform: scale(0.97);
 }
 .shell-navitem-ico {
   display: grid;

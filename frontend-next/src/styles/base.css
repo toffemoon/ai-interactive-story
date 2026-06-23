@@ -18,14 +18,20 @@ body,
 
 body {
   margin: 0;
-  background: var(--bg);
+  /* 装饰(细节⑦):底色之上叠两道极淡的角落晕染(赭金 / 松绿),宣纸不再死平;随主题换色。
+     background-attachment: fixed 让晕染像环境光,不随内容滚动。 */
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(115% 80% at 8% -8%, color-mix(in srgb, var(--accent-3) 8%, transparent), transparent 58%),
+    radial-gradient(120% 85% at 100% 0%, color-mix(in srgb, var(--accent-2) 6%, transparent), transparent 54%);
+  background-attachment: fixed;
   color: var(--fg);
   font-family: var(--font-serif);
   font-size: var(--fs-body);
   line-height: var(--lh-body);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  transition: background var(--dur-mid) var(--ease-out),
+  transition: background-color var(--dur-mid) var(--ease-out),
     color var(--dur-mid) var(--ease-out);
 }
 

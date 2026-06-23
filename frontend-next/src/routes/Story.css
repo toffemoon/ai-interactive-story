@@ -282,11 +282,15 @@
   border-radius: var(--r-md);
   padding: 10px 14px;
   cursor: pointer;
-  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
 }
 .story-choice:hover {
   border-color: var(--accent-2);
   background: color-mix(in srgb, var(--accent-2) 8%, var(--panel));
+}
+.story-choice:active {
+  transform: scale(0.99);
 }
 .story-choice-label {
   display: block;

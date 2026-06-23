@@ -20,11 +20,15 @@
   white-space: nowrap;
   transition: background var(--dur-fast) var(--ease-out),
     color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out),
-    filter var(--dur-fast) var(--ease-out);
+    filter var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
 .btn:disabled {
   opacity: 0.5;
   cursor: default;
+}
+/* 按压微动效(细节⑧:每次交互都有流畅反馈)*/
+.btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.975);
 }
 .btn--sm {
   font-size: var(--fs-ui-sm);
@@ -83,11 +87,14 @@
   background: transparent;
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
+    border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
 .chip:hover:not(.is-on) {
   color: var(--fg);
   border-color: var(--muted);
+}
+.chip:active {
+  transform: scale(0.95);
 }
 .chip.is-on {
   background: var(--fg);
@@ -230,6 +237,32 @@
   gap: var(--sp-4);
   justify-content: start;
 }
+
+/* 卡片入场:渐起 + 阶梯延时(细节⑧)。翻面 transform 在子面 .card-front/.card-back 上
+   (各自 perspective() 独立),容器这层 translateY 入场不影响 flip 命中。
+   prefers-reduced-motion 由 base.css 全局把时长压到 1ms。 */
+@keyframes mu-card-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.card-shelf > * {
+  animation: mu-card-rise var(--dur-mid) var(--ease-out) both;
+}
+.card-shelf > *:nth-child(2) { animation-delay: 35ms; }
+.card-shelf > *:nth-child(3) { animation-delay: 70ms; }
+.card-shelf > *:nth-child(4) { animation-delay: 105ms; }
+.card-shelf > *:nth-child(5) { animation-delay: 140ms; }
+.card-shelf > *:nth-child(6) { animation-delay: 175ms; }
+.card-shelf > *:nth-child(7) { animation-delay: 210ms; }
+.card-shelf > *:nth-child(8) { animation-delay: 245ms; }
+.card-shelf > *:nth-child(9) { animation-delay: 280ms; }
+.card-shelf > *:nth-child(n + 10) { animation-delay: 300ms; }
 
 /* 横轴滚动模式(故事详情 角色卡 / 选主角:对齐页面边缘、不换行,环形轮播的感觉) */
 .card-shelf.is-scroll {

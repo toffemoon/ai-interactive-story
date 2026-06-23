@@ -7,6 +7,21 @@
   border-bottom: 1px solid var(--line);
   margin-bottom: var(--sp-5);
 }
+/* 页标题前置朱砂竖纹 motif(细节⑦,与故事详情章节标记一致)*/
+.explore-head h1 {
+  position: relative;
+  padding-left: 16px;
+}
+.explore-head h1::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.12em;
+  bottom: 0.12em;
+  width: 4px;
+  border-radius: var(--r-pill);
+  background: linear-gradient(180deg, var(--accent), var(--accent-3));
+}
 .explore-sub {
   color: var(--muted);
   margin-top: var(--sp-2);

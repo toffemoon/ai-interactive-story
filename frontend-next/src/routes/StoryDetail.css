@@ -102,9 +102,22 @@
   margin-right: var(--sp-3);
   color: var(--line);
 }
+/* 章节标签:前置朱砂竖纹 motif(细节⑦装饰,贴国风印记感)*/
 .detail-sec {
+  position: relative;
+  padding-left: 14px;
   letter-spacing: 0.06em;
   margin-bottom: var(--sp-2);
+}
+.detail-sec::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.18em;
+  bottom: 0.18em;
+  width: 3px;
+  border-radius: var(--r-pill);
+  background: linear-gradient(180deg, var(--accent), var(--accent-3));
 }
 .detail-intro-text {
   color: var(--fg);
