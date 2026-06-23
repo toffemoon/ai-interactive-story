@@ -351,9 +351,15 @@
   gap: var(--sp-3);
 }
 .create-built-name {
+  flex: 1;
+  min-width: 0;
   font-family: var(--font-kai);
   font-size: var(--fs-h3);
   color: var(--fg);
+}
+.create-built-count {
+  flex: none;
+  color: var(--accent-2);
 }
 .create-built-x {
   flex: none;
@@ -390,6 +396,36 @@
   min-width: 0;
 }
 
+/* 设定卡 / 世界书:条目列表(细节⑤修复 [object Object]) */
+.create-built-entries {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+.create-built-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-2) var(--sp-3);
+  border-left: 2px solid color-mix(in srgb, var(--accent-2) 55%, transparent);
+  background: color-mix(in srgb, var(--accent-2) 6%, transparent);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+.create-built-entry-k {
+  color: var(--fg);
+  font-family: var(--font-kai);
+}
+.create-built-entry-v {
+  color: var(--muted);
+  line-height: var(--lh-body);
+}
+.create-built-more {
+  color: var(--muted);
+  text-align: center;
+  padding-top: var(--sp-1);
+}
+
 .create-pub-label {
   display: block;
   color: var(--muted);
@@ -411,6 +447,25 @@
 }
 .create-pub-syn:focus {
   border-color: var(--accent);
+}
+
+/* 桌面:右侧实时卡 + 操作区固定(细节④「把右侧的按键固定」)。
+   sticky 钉在视口顶,卡片内容长则内部滚动,5 个操作按钮常驻可见、不随对话滚走。 */
+@media (min-width: 861px) {
+  .create-preview {
+    position: sticky;
+    top: var(--sp-4);
+    align-self: start;
+    max-height: calc(100dvh - var(--sp-6));
+  }
+  .create-preview .create-card {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .create-actions {
+    flex: none;
+  }
 }
 
 /* 移动:两区堆叠 */

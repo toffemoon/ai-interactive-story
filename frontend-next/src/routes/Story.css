@@ -12,8 +12,10 @@
 /* 顶栏 */
 .story-top {
   flex: none;
+  position: relative; /* 标题绝对居中的定位上下文(细节③) */
   display: flex;
   align-items: center;
+  justify-content: space-between; /* 左离开 / 右工具组分两端,中间让给绝对居中的标题 */
   gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-5);
   border-bottom: 1px solid var(--line);
@@ -32,14 +34,26 @@
   color: var(--fg);
   border-color: var(--muted);
 }
+/* 标题钉在页面正中,不随两侧按钮宽度漂移(细节③);pointer-events:none 保证不挡按钮点击 */
 .story-title {
-  flex: 1;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 44%;
   text-align: center;
+  pointer-events: none;
   font-size: 20px;
   color: var(--fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+@media (max-width: 720px) {
+  .story-title {
+    max-width: 38%;
+    font-size: 17px;
+  }
 }
 .story-top-right {
   display: flex;
@@ -229,6 +243,8 @@
   font-size: var(--fs-read);
   line-height: var(--lh-read);
   color: var(--fg);
+  text-align: justify;
+  text-justify: inter-ideograph;
 }
 .dlg-text p.dlg-q {
   color: var(--fg);
@@ -247,15 +263,17 @@
   color: var(--accent);
 }
 
+/* 选项并入叙事流(细节③):作为 .story-feed 末尾的一项,随内容滚动;
+   宽度/居中沿用 .story-feed > * 的 680px 容器,不再是固定底栏。 */
 .story-choices {
-  flex: none;
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
-  padding: 0 var(--sp-5) var(--sp-3);
-  max-width: 720px;
-  width: 100%;
-  margin: 0 auto;
+}
+.story-choices-hint {
+  color: var(--muted);
+  margin-bottom: var(--sp-1);
+  font-family: var(--font-sans);
 }
 .story-choice {
   text-align: left;

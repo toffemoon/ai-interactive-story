@@ -17,22 +17,49 @@
   color: var(--fg);
 }
 
-/* 头 */
+/* 头 · hero:封面底纹铺底,治"单调"(细节②)。整块在内容列里满铺(负边距吃掉 .page 左右内边距)。 */
+.detail-hero {
+  position: relative;
+  margin: 0 calc(-1 * clamp(20px, 4vw, 40px)) var(--sp-6);
+  padding: var(--sp-6) clamp(20px, 4vw, 40px) var(--sp-6);
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+}
+.detail-hero-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  filter: blur(38px) saturate(1.15);
+  transform: scale(1.18);
+  opacity: 0.4;
+  pointer-events: none;
+}
+/* 渐隐到页面底色,封面只剩柔光,不抢正文可读性 */
+.detail-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 28%, transparent), var(--bg) 94%);
+  pointer-events: none;
+}
 .detail-head {
+  position: relative;
+  z-index: 1;
   display: flex;
   gap: var(--sp-6);
   align-items: flex-start;
 }
 .detail-cover {
   flex: none;
-  width: 190px;
-  height: 286px;
+  width: 240px;
+  height: 360px;
   border-radius: var(--r-card);
   border: 1px solid var(--line);
   background-color: var(--spine-story);
   background-size: cover;
   background-position: center;
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-pop);
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -40,8 +67,8 @@
 .detail-cover-spine {
   writing-mode: vertical-rl;
   font-family: var(--font-kai);
-  font-size: 22px;
-  letter-spacing: 0.18em;
+  font-size: 28px;
+  letter-spacing: 0.2em;
   color: var(--on-accent);
   opacity: 0.92;
 }
@@ -58,9 +85,22 @@
   gap: 6px;
   margin-bottom: var(--sp-2);
 }
-.detail-author {
-  color: var(--muted);
+/* 元信息条:作者 · 角色数 · 即玩(以 · 分隔的小标,治单调、补信息密度,细节②) */
+.detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
   margin-bottom: var(--sp-4);
+}
+.detail-meta-i {
+  color: var(--muted);
+  position: relative;
+}
+.detail-meta-i + .detail-meta-i::before {
+  content: "·";
+  margin-right: var(--sp-3);
+  color: var(--line);
 }
 .detail-sec {
   letter-spacing: 0.06em;

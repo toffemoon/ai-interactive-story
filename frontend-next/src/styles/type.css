@@ -35,11 +35,14 @@
   font-weight: 500;
 }
 
-/* 叙事阅读轨:宋 16 / 行距 1.75(治「字太小」YOR-46)*/
+/* 叙事阅读轨:宋 16 / 行距 1.75(治「字太小」YOR-46)。
+   两端对齐(细节①):正文左右齐边,CJK 用 inter-ideograph 调字距,书卷感更整齐。 */
 .t-read {
   font-family: var(--font-serif);
   font-size: var(--fs-read);
   line-height: var(--lh-read);
+  text-align: justify;
+  text-justify: inter-ideograph;
 }
 .t-body {
   font-family: var(--font-serif);

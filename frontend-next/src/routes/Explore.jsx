@@ -24,7 +24,7 @@ const SORTS = [
   { key: "clicks", label: "点击", live: false },
 ];
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 15;
 
 export default function Explore() {
   const navigate = useNavigate();

@@ -168,25 +168,34 @@ export default function StoryDetail() {
           ← 放回书架
         </button>
 
-        {/* 头:封面 + 标题/标签/作者 + 简介(只留简介,删背景) */}
-        <div className="detail-head">
-          <div className="detail-cover" style={d.cover ? { backgroundImage: `url("${d.cover}")` } : undefined}>
-            {!d.cover && <span className="detail-cover-spine t-kai">{bookName.slice(0, 8)}</span>}
-          </div>
-          <div className="detail-headmain">
-            <Badge tone="pine">完整故事 · 可直接玩</Badge>
-            <h1 className="t-display detail-title">{bookName}</h1>
-            {tags.length > 0 && (
-              <div className="detail-tags">
-                {tags.map((t, i) => (
-                  <Tag key={i}>{t}</Tag>
-                ))}
+        {/* 头:大封面 + 柔化封面底纹(治单调)+ 标题/标签/元信息 + 简介(只留简介,删背景 YOR-45,细节②) */}
+        <div className="detail-hero">
+          {d.cover && (
+            <div className="detail-hero-bg" style={{ backgroundImage: `url("${d.cover}")` }} aria-hidden="true" />
+          )}
+          <div className="detail-head">
+            <div className="detail-cover" style={d.cover ? { backgroundImage: `url("${d.cover}")` } : undefined}>
+              {!d.cover && <span className="detail-cover-spine t-kai">{bookName.slice(0, 8)}</span>}
+            </div>
+            <div className="detail-headmain">
+              <Badge tone="pine">完整故事 · 可直接玩</Badge>
+              <h1 className="t-display detail-title">{bookName}</h1>
+              {tags.length > 0 && (
+                <div className="detail-tags">
+                  {tags.map((t, i) => (
+                    <Tag key={i}>{t}</Tag>
+                  ))}
+                </div>
+              )}
+              <div className="detail-meta">
+                {author && <span className="detail-meta-i t-meta">作者 · {author}</span>}
+                {charModels.length > 0 && <span className="detail-meta-i t-meta">{charModels.length} 位角色</span>}
+                <span className="detail-meta-i t-meta">打开即玩</span>
               </div>
-            )}
-            {author && <div className="detail-author t-meta">作者 · {author}</div>}
-            <div className="detail-intro">
-              <h2 className="t-h3 detail-sec">简介</h2>
-              <p className="t-read detail-intro-text">{synopsis || "暂无简介。"}</p>
+              <div className="detail-intro">
+                <h2 className="t-h3 detail-sec">简介</h2>
+                <p className="t-read detail-intro-text">{synopsis || "暂无简介。"}</p>
+              </div>
             </div>
           </div>
         </div>

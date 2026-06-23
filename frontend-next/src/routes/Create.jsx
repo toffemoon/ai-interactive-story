@@ -24,8 +24,45 @@ const LABELS = {
   mes_example: "对话示例", speech_rules: "说话规则", appearance: "外貌", look: "外貌",
   persona: "人设", goals: "目标", secret: "隐藏真相", background: "背景", voice: "口癖",
   premise: "前提", title: "标题", entries: "条目", role: "身份", tags: "标签",
+  content: "内容", comment: "条目", keys: "关键词", source: "来源",
+  timeline: "时间线", events: "事件节点", main: "主线", anchor: "锚点", tension: "矛盾",
 };
 const STORE_KEY = "ais_create_desks_v1";
+
+// 把任意卡字段值渲染成可读文本。根治世界书 entries / 故事书 timeline 这类"对象数组"
+// 被 v.join("、") 渲染成「[object Object]、[object Object]…」的 bug(细节⑤)。
+function fmtVal(v) {
+  if (v == null) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (Array.isArray(v)) {
+    if (!v.length) return "";
+    if (v.every((x) => typeof x === "string" || typeof x === "number")) return v.join("、");
+    const lines = v.slice(0, 8).map((x, i) => {
+      if (x && typeof x === "object") {
+        const label =
+          x.comment || (Array.isArray(x.keys) ? x.keys.join("/") : x.keys) || x.name || x.title || `条目${i + 1}`;
+        const body = x.content || x.description || x.summary || "";
+        return body ? `${label}:${body}` : String(label);
+      }
+      return String(x);
+    });
+    if (v.length > 8) lines.push(`…(共 ${v.length} 条)`);
+    return lines.join("\n");
+  }
+  if (typeof v === "object") {
+    return Object.entries(v)
+      .map(([k, val]) => `${LABELS[k] || k}:${typeof val === "string" ? val : Array.isArray(val) ? val.join("、") : JSON.stringify(val)}`)
+      .join("；");
+  }
+  return String(v);
+}
+
+// 取世界书条目数组(设定卡 / 世界书查看用);非世界书返回 null。
+function worldEntries(card) {
+  const c = (card && card.data) || card || {};
+  return Array.isArray(c.entries) ? c.entries : null;
+}
 
 function blankDesk() {
   return {
@@ -173,10 +210,7 @@ export default function Create() {
     const c = (card && card.data) || card || {};
     return Object.keys(c)
       .filter((k) => !["name", "character_id", "id", "title"].includes(k))
-      .map((k) => {
-        const v = c[k];
-        return { k: LABELS[k] || k, v: typeof v === "string" ? v : Array.isArray(v) ? v.join("、") : JSON.stringify(v) };
-      })
+      .map((k) => ({ k: LABELS[k] || k, v: fmtVal(c[k]) }))
       .filter((f) => f.v && f.v.trim());
   }
 
@@ -269,19 +303,19 @@ export default function Create() {
   }
 
   const draftName = desk.draft.name || (desk.draft.data && desk.draft.data.name) || desk.draft.title || "未命名";
+  // 按钮可用性(细节④:不可用置灰、可用才亮)。
+  const hasDraft = Object.keys(desk.draft || {}).length > 0;
+  const hasChars = deskCards("characters").length > 0;
   const fields = useMemo(() => {
     const d = desk.draft || {};
     return Object.keys(d)
       .filter((k) => !["name", "character_id", "id", "title"].includes(k))
-      .map((k) => {
-        const v = d[k];
-        return {
-          k: LABELS[k] || k,
-          v: typeof v === "string" ? v : Array.isArray(v) ? v.join("、") : JSON.stringify(v),
-          fresh: (desk.filled || []).includes(k),
-          hidden: /secret|隐藏|真相/i.test(k),
-        };
-      });
+      .map((k) => ({
+        k: LABELS[k] || k,
+        v: fmtVal(d[k]),
+        fresh: (desk.filled || []).includes(k),
+        hidden: /secret|隐藏|真相/i.test(k),
+      }));
   }, [desk.draft, desk.filled]);
 
   return (
@@ -368,8 +402,12 @@ export default function Create() {
           </div>
 
           <div className="create-actions">
-            <Button variant="line" onClick={saveCard}>收入卡库 · 私密</Button>
-            <Button variant="line" onClick={nextCard}>收进本台 · 再建一张</Button>
+            <Button variant="line" onClick={saveCard} disabled={!hasDraft} title={hasDraft ? undefined : "先聊出一张卡再收入卡库"}>
+              收入卡库 · 私密
+            </Button>
+            <Button variant="line" onClick={nextCard} disabled={!hasDraft} title={hasDraft ? undefined : "先聊出一张卡再收进本台"}>
+              收进本台 · 再建一张
+            </Button>
             {desk.built.length > 0 && (
               <Button variant="line" onClick={() => setBuiltView(true)}>查看本台已建({desk.built.length})</Button>
             )}
@@ -377,6 +415,8 @@ export default function Create() {
             <Button
               variant="primary"
               full
+              disabled={!hasChars}
+              title={hasChars ? undefined : "至少要一张角色卡才能打包发布"}
               onClick={() => {
                 setPub((p) => ({ ...p, name: p.name || (draftName !== "未命名" ? draftName : "") }));
                 setPubModal(true);
@@ -437,20 +477,43 @@ export default function Create() {
                 desk.built.map((card, i) => {
                   const c = (card && card.data) || card || {};
                   const nm = c.name || c.title || "未命名";
+                  const entries = worldEntries(card);
                   return (
                     <div className="create-built-card" key={i}>
                       <div className="create-built-head">
                         <span className="create-built-name t-kai">{nm}</span>
+                        {entries && <span className="create-built-count t-meta">{entries.length} 条条目</span>}
                         <button className="create-built-x" onClick={() => removeBuilt(i)}>移除</button>
                       </div>
-                      <div className="create-built-fields">
-                        {cardFields(card).slice(0, 6).map((f, j) => (
-                          <div className="create-built-field" key={j}>
-                            <span className="create-built-field-k t-meta">{f.k}</span>
-                            <span className="create-built-field-v t-ui-sm">{f.v.slice(0, 80)}</span>
-                          </div>
-                        ))}
-                      </div>
+                      {entries ? (
+                        // 设定卡 / 世界书:逐条列「条目名(关键词) · 内容摘要」,不再挤进单个字段(细节⑤修复)
+                        <div className="create-built-entries">
+                          {entries.slice(0, 12).map((e, j) => {
+                            const label =
+                              e.comment || (Array.isArray(e.keys) ? e.keys.join(" / ") : e.keys) || `条目 ${j + 1}`;
+                            return (
+                              <div className="create-built-entry" key={j}>
+                                <span className="create-built-entry-k t-ui-sm">{label}</span>
+                                {e.content && (
+                                  <span className="create-built-entry-v t-meta">{String(e.content).slice(0, 120)}</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                          {entries.length > 12 && (
+                            <div className="create-built-more t-meta">…… 还有 {entries.length - 12} 条</div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="create-built-fields">
+                          {cardFields(card).slice(0, 6).map((f, j) => (
+                            <div className="create-built-field" key={j}>
+                              <span className="create-built-field-k t-meta">{f.k}</span>
+                              <span className="create-built-field-v t-ui-sm">{f.v.slice(0, 80)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 })

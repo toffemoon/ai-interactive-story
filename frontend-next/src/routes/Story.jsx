@@ -343,25 +343,27 @@ export default function Story() {
               <div className="story-pending t-ui-sm">推演中…</div>
             ) : null}
 
+            {/* 选项并入叙事流、随内容滚动(细节③:不再单独固定底栏占空间) */}
+            {choices.length > 0 && !loading && (
+              <div className="story-choices">
+                <span className="story-choices-hint t-meta">接下来,你可以——(点一个填进下方输入框,可改可直接发送)</span>
+                {choices.map((c, i) => (
+                  <button
+                    key={c.id || i}
+                    className="story-choice"
+                    onClick={() => setInput(c.label)}
+                    title="填入下方输入框,可改可直接执行"
+                  >
+                    <span className="story-choice-label t-ui">{c.label}</span>
+                    {c.description && <span className="story-choice-desc t-meta">{c.description}</span>}
+                    {/* 选项后果预览留位(YOR-21,待引擎 emit consequence) */}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {error && <div className="story-error t-ui-sm">{error}</div>}
           </div>
-
-          {choices.length > 0 && !loading && (
-            <div className="story-choices">
-              {choices.map((c, i) => (
-                <button
-                  key={c.id || i}
-                  className="story-choice"
-                  onClick={() => setInput(c.label)}
-                  title="填入下方输入框,可改可直接执行"
-                >
-                  <span className="story-choice-label t-ui">{c.label}</span>
-                  {c.description && <span className="story-choice-desc t-meta">{c.description}</span>}
-                  {/* 选项后果预览留位(YOR-21,待引擎 emit consequence) */}
-                </button>
-              ))}
-            </div>
-          )}
 
           <div className="story-composer">
             <textarea
