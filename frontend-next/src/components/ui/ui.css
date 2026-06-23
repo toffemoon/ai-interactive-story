@@ -235,7 +235,6 @@
 .card--shelf {
   width: 190px;
   height: 286px;
-  perspective: 1300px;
   cursor: pointer;
   outline: none;
 }
@@ -243,12 +242,10 @@
   position: relative;
   width: 100%;
   height: 100%;
-  transition: transform 0.6s var(--ease-out);
-  transform-style: preserve-3d;
 }
-.card--shelf.is-flipped .card-inner {
-  transform: rotateY(180deg);
-}
+/* 翻转用「两面各自独立 rotateY + perspective() 函数」,不用父级 preserve-3d:
+   活动面落定在 0°/360°(平面正向),Chromium 命中测试正常 —— 根治翻面后背面按钮真机点不动
+   (preserve-3d + 父 perspective + 背面 rotateY(180) 会让背面内容命中失效,Playwright 真点实测过)。 */
 .card--shelf .card-face,
 .card--shelf .card-front {
   position: absolute;
@@ -258,6 +255,19 @@
   border-radius: var(--r-card);
   overflow: hidden;
   border: 1px solid var(--line);
+  transition: transform 0.6s var(--ease-out);
+}
+.card--shelf .card-front {
+  transform: perspective(1300px) rotateY(0deg);
+}
+.card--shelf .card-back {
+  transform: perspective(1300px) rotateY(180deg);
+}
+.card--shelf.is-flipped .card-front {
+  transform: perspective(1300px) rotateY(180deg);
+}
+.card--shelf.is-flipped .card-back {
+  transform: perspective(1300px) rotateY(360deg);
 }
 
 /* 正面:封面(立绘)或书脊底色 + 左上角标 + 底部楷书名 */
@@ -317,7 +327,6 @@
 
 /* 背面:书名 + 一句话简介 + 标签 + 操作 */
 .card-back {
-  transform: rotateY(180deg);
   background: var(--panel);
   display: flex;
   flex-direction: column;
