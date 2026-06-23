@@ -44,18 +44,24 @@ export default function StoryDetail() {
   const tags = d.tags || [];
   const author = d.author || "";
 
-  // 角色:用统一 Card · 横轴滚动(环形轮播的感觉);背面放完整介绍,长内容滚动(细节②)。
+  // 角色:用统一 Card · 横轴滚动(环形轮播的感觉);背面 + 查看详情看完整介绍(细节②)。
+  // 简介细化:取公开层多字段(锚点/外貌/性格/矛盾/设定/情境/公开已知),不进剧透层(known_hidden/versions)。
   const charModels = useMemo(
     () => (d.characters || []).map((c, i) => {
       const cd = (c && c.data) || c || {};
+      const sec = (label, v) => (v && String(v).trim() ? (label ? label + " · " + v : String(v)) : "");
       const intro =
         [
-          cd.look ? "外貌 · " + cd.look : "",
-          cd.personality ? "性格 · " + cd.personality : "",
-          cd.description || cd.persona || "",
+          sec("", cd.anchor),
+          sec("外貌", cd.look),
+          sec("性格", cd.personality),
+          sec("矛盾", cd.tension),
+          sec("", cd.description || cd.persona),
+          sec("情境", cd.scenario),
+          (cd.known_public || []).length ? "已知 · " + cd.known_public.join(";") : "",
         ]
           .filter(Boolean)
-          .join("\n\n") || "入局后逐渐揭晓。";
+          .join("\n\n") || "这个角色还没写简介,入局后逐渐揭晓。";
       return {
         id: (cd.name || "char") + "#" + i,
         kind: "character",
@@ -79,6 +85,7 @@ export default function StoryDetail() {
   }, [preset]);
 
   const [selIdx, setSelIdx] = useState(0);
+  const [charDetail, setCharDetail] = useState(null); // 角色「查看详情」弹层(细节②)
   const [castMode, setCastMode] = useState("list"); // list | custom
   const [customText, setCustomText] = useState("");
   const [identifying, setIdentifying] = useState(false);
@@ -188,8 +195,8 @@ export default function StoryDetail() {
         {charModels.length > 0 && (
           <section className="detail-block">
             <h2 className="t-h3 detail-sec">角色</h2>
-            <p className="detail-hint t-meta">点卡片翻面看角色介绍</p>
-            <CardShelf scroll models={charModels} />
+            <p className="detail-hint t-meta">点卡片翻面速览,或「详情」看完整介绍</p>
+            <CardShelf scroll models={charModels} onOpen={(m) => setCharDetail(m)} />
           </section>
         )}
 
@@ -275,6 +282,25 @@ export default function StoryDetail() {
           </Button>
         )}
       </div>
+
+      {/* 角色「查看详情」:完整介绍,长则滚动(细节②) */}
+      {charDetail && (
+        <div className="detail-charmodal" onClick={() => setCharDetail(null)}>
+          <div className="detail-charmodal-card" onClick={(e) => e.stopPropagation()}>
+            <button className="detail-charmodal-x" onClick={() => setCharDetail(null)} aria-label="关闭">×</button>
+            <Badge tone="gilt">角色</Badge>
+            <h2 className="t-h1 detail-charmodal-name">{charDetail.title}</h2>
+            {(charDetail.tags || []).length > 0 && (
+              <div className="detail-tags">
+                {charDetail.tags.map((t, i) => (
+                  <Tag key={i}>{t}</Tag>
+                ))}
+              </div>
+            )}
+            <div className="detail-charmodal-body t-read">{charDetail.blurb}</div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

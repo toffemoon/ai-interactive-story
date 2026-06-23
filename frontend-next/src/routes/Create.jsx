@@ -65,6 +65,7 @@ export default function Create() {
   const [toast, setToast] = useState("");
   const [libModal, setLibModal] = useState(null); // {items} | null
   const [libQ, setLibQ] = useState(""); // 补素材搜索
+  const [builtView, setBuiltView] = useState(false); // 查看本台已建的卡(细节③)
   const [pubModal, setPubModal] = useState(false);
   const [pub, setPub] = useState({ name: "", synopsis: "" });
   const fileRef = useRef(null);
@@ -162,6 +163,21 @@ export default function Create() {
       },
     }));
     flash("已收进本台(" + nm + ")");
+  }
+  function removeBuilt(idx) {
+    setDesks((ds) => ({ ...ds, [kind]: { ...ds[kind], built: ds[kind].built.filter((_, i) => i !== idx) } }));
+    flash("已从本台移除");
+  }
+  // 取一张卡的可读字段(查看本台已建用)。
+  function cardFields(card) {
+    const c = (card && card.data) || card || {};
+    return Object.keys(c)
+      .filter((k) => !["name", "character_id", "id", "title"].includes(k))
+      .map((k) => {
+        const v = c[k];
+        return { k: LABELS[k] || k, v: typeof v === "string" ? v : Array.isArray(v) ? v.join("、") : JSON.stringify(v) };
+      })
+      .filter((f) => f.v && f.v.trim());
   }
 
   async function saveCard() {
@@ -354,6 +370,9 @@ export default function Create() {
           <div className="create-actions">
             <Button variant="line" onClick={saveCard}>收入卡库 · 私密</Button>
             <Button variant="line" onClick={nextCard}>收进本台 · 再建一张</Button>
+            {desk.built.length > 0 && (
+              <Button variant="line" onClick={() => setBuiltView(true)}>查看本台已建({desk.built.length})</Button>
+            )}
             <Button variant="line" onClick={openLib}>从卡库补素材</Button>
             <Button
               variant="primary"
@@ -402,6 +421,42 @@ export default function Create() {
                   </button>
                 ));
               })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 查看本台已建的卡(细节③) */}
+      {builtView && (
+        <div className="create-modal" onClick={() => setBuiltView(false)}>
+          <div className="create-modal-card" onClick={(e) => e.stopPropagation()}>
+            <button className="create-modal-x" onClick={() => setBuiltView(false)} aria-label="关闭">×</button>
+            <h2 className="t-h2">本台已建的「{KINDS[ki].zh}」({desk.built.length})</h2>
+            <div className="create-built-list">
+              {desk.built.length ? (
+                desk.built.map((card, i) => {
+                  const c = (card && card.data) || card || {};
+                  const nm = c.name || c.title || "未命名";
+                  return (
+                    <div className="create-built-card" key={i}>
+                      <div className="create-built-head">
+                        <span className="create-built-name t-kai">{nm}</span>
+                        <button className="create-built-x" onClick={() => removeBuilt(i)}>移除</button>
+                      </div>
+                      <div className="create-built-fields">
+                        {cardFields(card).slice(0, 6).map((f, j) => (
+                          <div className="create-built-field" key={j}>
+                            <span className="create-built-field-k t-meta">{f.k}</span>
+                            <span className="create-built-field-v t-ui-sm">{f.v.slice(0, 80)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="t-ui create-sub">本台还没有已建的卡。聊出一张后点「收进本台」。</p>
+              )}
             </div>
           </div>
         </div>

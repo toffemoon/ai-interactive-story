@@ -329,6 +329,67 @@
 .create-lib-item .t-meta {
   color: var(--accent-2);
 }
+/* 查看本台已建的卡(细节③) */
+.create-built-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+  max-height: 56vh;
+  overflow-y: auto;
+}
+.create-built-card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  padding: var(--sp-3) var(--sp-4);
+}
+.create-built-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.create-built-name {
+  font-family: var(--font-kai);
+  font-size: var(--fs-h3);
+  color: var(--fg);
+}
+.create-built-x {
+  flex: none;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: var(--fs-meta);
+  padding: 3px 9px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.create-built-x:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.create-built-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: var(--sp-2);
+}
+.create-built-field {
+  display: flex;
+  gap: var(--sp-2);
+}
+.create-built-field-k {
+  flex: none;
+  width: 56px;
+  color: var(--muted);
+  font-family: var(--font-kai);
+}
+.create-built-field-v {
+  color: var(--fg);
+  min-width: 0;
+}
+
 .create-pub-label {
   display: block;
   color: var(--muted);

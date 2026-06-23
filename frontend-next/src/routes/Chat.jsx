@@ -156,6 +156,20 @@ export default function Chat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeName]);
 
+  // 从探索「纯聊」带来的角色:进页即加进联系人并选中(探索卡去向)。
+  useEffect(() => {
+    let raw;
+    try {
+      raw = JSON.parse(sessionStorage.getItem("ais_chat_preload") || "null");
+    } catch (e) {}
+    if (!raw) return;
+    try {
+      sessionStorage.removeItem("ais_chat_preload");
+    } catch (e) {}
+    rosterAdd(raw);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function send() {
     const text = input.trim();
     if (!text || !active || busy) return;
@@ -184,10 +198,17 @@ export default function Chat() {
     });
   }
 
+  function itemName(it) {
+    const d = (it && it.data && it.data.data) || (it && it.data) || {};
+    return d.name || (it && it.name) || "未命名";
+  }
   async function openAdd() {
     try {
       const items = await getJSON("/api/library/characters");
-      setAddModal({ items: Array.isArray(items) ? items : [] });
+      const list = Array.isArray(items) ? items : [];
+      // 按首字母(拼音)排序(细节①)。
+      list.sort((a, b) => itemName(a).localeCompare(itemName(b), "zh"));
+      setAddModal({ items: list });
     } catch (e) {
       setAddModal({ items: [], err: e.message });
     }

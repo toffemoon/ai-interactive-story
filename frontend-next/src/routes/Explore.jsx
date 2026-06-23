@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { Chip, SearchField, Button, Badge, Tag, CardShelf } from "../components/ui";
 import { getJSON } from "../lib/api";
 import { toCardModel, toCardModels } from "../lib/cardModel";
-import { useGame } from "../state/game";
 import "./Explore.css";
 
 const FAV_KEY = "ais_favorites_v1";
@@ -29,7 +28,6 @@ const PAGE_SIZE = 12;
 
 export default function Explore() {
   const navigate = useNavigate();
-  const { startGame } = useGame();
   const [presets, setPresets] = useState([]);
   const [chars, setChars] = useState([]);
   const [loadErr, setLoadErr] = useState(false);
@@ -123,22 +121,11 @@ export default function Explore() {
   function goDetail(m) {
     navigate(`/story/${encodeURIComponent(m.id)}`, { state: { preset: m.raw } });
   }
-  // 角色卡「开故事」:以该角色起一局自由叙事(无打包故事/世界)。契约不变,仍走 story_turn_stream。
-  function startCharacterStory(m) {
-    const it = m.raw || {};
-    const card = it.data || {}; // 库项里的 CharacterCard
-    startGame({
-      title: m.title,
-      characters: [card],
-      world: null,
-      story: null,
-      player: null,
-      mode: "standard",
-    });
-    navigate("/play");
-  }
-  // 角色卡「纯聊」:进微信式轻聊(模块⑥)。当前先导航到 /chat;预载该角色留待 ⑥ 接。
-  function chatWith() {
+  // 角色卡「纯聊」:进微信式轻聊。预载该角色 → sessionStorage,纯聊页读后自动加联系人并选中。
+  function chatWith(m) {
+    try {
+      if (m && m.raw) sessionStorage.setItem("ais_chat_preload", JSON.stringify(m.raw));
+    } catch (e) {}
     navigate("/chat");
   }
 
@@ -168,9 +155,9 @@ export default function Explore() {
   function actionsFor(m) {
     const fav = { label: isFav(m) ? "已收藏" : "收藏", variant: isFav(m) ? "secondary" : "line", onClick: () => toggleFav(m) };
     if (m.kind === "character") {
+      // 角色卡反面:纯聊为主功能(标红),不再有「开故事」(细节⑤)。
       return [
-        { label: "开故事", variant: "primary", onClick: () => startCharacterStory(m) },
-        { label: "纯聊", variant: "line", onClick: () => chatWith(m) },
+        { label: "纯聊", variant: "primary", onClick: () => chatWith(m) },
         fav,
       ];
     }
@@ -185,7 +172,6 @@ export default function Explore() {
         {/* 继续游玩改由全局悬浮 ResumeBar 负责(只在探索悬浮,细节①),此处不再内联 rail */}
         <div className="explore-head">
           <div>
-            <p className="u-eyebrow">Story Library</p>
             <h1 className="t-display">探索</h1>
             <p className="t-ui explore-sub">取下一本书,或挑一张角色卡,走进会回应你的故事世界。</p>
           </div>
@@ -294,22 +280,13 @@ export default function Explore() {
             <div className="explore-modal-actions">
               <Button
                 variant="primary"
-                onClick={() => {
-                  const m = detail;
-                  setDetail(null);
-                  startCharacterStory(m);
-                }}
-              >
-                以这个角色开故事
-              </Button>
-              <Button
-                variant="line"
+                full
                 onClick={() => {
                   setDetail(null);
                   chatWith();
                 }}
               >
-                纯聊
+                和 TA 纯聊
               </Button>
             </div>
           </div>

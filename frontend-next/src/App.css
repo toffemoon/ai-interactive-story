@@ -13,8 +13,9 @@
   letter-spacing: 0.1em;
 }
 
+/* 内容页(除纯聊全屏外共用)。拓宽 + 收顶,减少两侧空白、让首屏内容上提(细节④)。 */
 .page {
-  max-width: 1080px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: var(--sp-6) var(--sp-6) var(--sp-8);
+  padding: var(--sp-4) clamp(20px, 4vw, 40px) var(--sp-8);
 }

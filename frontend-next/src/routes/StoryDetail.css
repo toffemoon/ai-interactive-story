@@ -275,6 +275,52 @@
   }
 }
 
+/* 角色「查看详情」弹层(细节②) */
+.detail-charmodal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--scrim);
+  display: grid;
+  place-items: center;
+  padding: var(--sp-5);
+}
+.detail-charmodal-card {
+  position: relative;
+  width: min(560px, 92vw);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: var(--sp-6);
+  box-shadow: var(--shadow-pop);
+}
+.detail-charmodal-x {
+  position: absolute;
+  right: 14px;
+  top: 12px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.detail-charmodal-name {
+  margin: var(--sp-3) 0 var(--sp-2);
+}
+.detail-charmodal-body {
+  margin-top: var(--sp-4);
+  color: var(--fg);
+  white-space: pre-wrap;
+  overflow-y: auto;
+  line-height: var(--lh-read);
+}
+
 /* 载入 / 缺失 */
 .detail-loading,
 .detail-missing {
