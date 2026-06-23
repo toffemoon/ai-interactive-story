@@ -27,7 +27,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: var(--sp-3);
-  margin-bottom: var(--sp-6);
+  margin-bottom: var(--sp-4);
 }
 .explore-bar .search {
   width: 320px;
@@ -37,6 +37,103 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-2);
+}
+
+/* 双轨切换 */
+.explore-tracks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+
+/* 排序 */
+.explore-sorts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-left: auto;
+}
+.explore-sorts .chip.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 标签筛选 */
+.explore-genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-6);
+}
+
+/* 继续游玩 rail */
+.explore-resume {
+  margin-bottom: var(--sp-5);
+}
+.explore-resume-head {
+  color: var(--muted);
+  margin-bottom: var(--sp-2);
+}
+.explore-resume-card {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  max-width: 100%;
+  padding: 12px 18px;
+  border: 1px solid color-mix(in srgb, var(--accent-2) 45%, var(--line));
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--fg);
+  box-shadow: var(--shadow-card);
+  transition: transform var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.explore-resume-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-2);
+}
+.explore-resume-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: var(--r-pill);
+  background: var(--accent-2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-2) 22%, transparent);
+}
+.explore-resume-title {
+  font-family: var(--font-kai);
+  font-size: var(--fs-h3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.explore-resume-go {
+  color: var(--accent-2);
+  white-space: nowrap;
+}
+
+/* 分页 */
+.explore-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  margin-top: var(--sp-6);
+}
+.explore-pager-info {
+  color: var(--muted);
+  min-width: 56px;
+  text-align: center;
+}
+
+/* 角色卡详情双动作 */
+.explore-modal-actions {
+  display: flex;
+  gap: var(--sp-3);
+}
+.explore-modal-actions .btn {
+  flex: 1;
 }
 
 .explore-empty {
