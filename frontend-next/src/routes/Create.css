@@ -1,0 +1,332 @@
+/* 创作 · 对话式建卡(YOR-50/51/54/55)。去中二英文,三区:卡分类 / 对话 / 实时卡。吃语义 token。 */
+.create {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 52px);
+}
+.create-head {
+  margin-bottom: var(--sp-4);
+}
+.create-sub {
+  color: var(--muted);
+  margin-top: var(--sp-2);
+}
+
+/* 卡分类(去英文副标) */
+.create-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+.create-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-kai);
+  font-size: var(--fs-ui);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+.create-kind:hover {
+  color: var(--fg);
+}
+.create-kind.is-on {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.create-kind-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--accent-2) 30%, var(--panel));
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.create-kind.is-on .create-kind-badge {
+  background: color-mix(in srgb, #fff 28%, transparent);
+  color: var(--on-accent);
+}
+
+/* 两区主体 */
+.create-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: var(--sp-5);
+  min-height: 0;
+}
+
+/* 对话区 */
+.create-chat {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--panel);
+  overflow: hidden;
+  min-height: 420px;
+}
+.create-msgs {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.create-msg {
+  max-width: 90%;
+}
+.create-msg.is-me {
+  align-self: flex-end;
+  text-align: right;
+}
+.create-msg-who {
+  color: var(--muted);
+  display: block;
+  margin-bottom: 3px;
+}
+.create-msg-text {
+  display: inline-block;
+  text-align: left;
+  padding: 9px 13px;
+  border-radius: var(--r-md);
+  background: var(--sunk);
+  color: var(--fg);
+  line-height: var(--lh-body);
+}
+.create-msg.is-me .create-msg-text {
+  background: color-mix(in srgb, var(--accent-2) 18%, var(--panel));
+}
+.create-msg-typing {
+  color: var(--muted);
+  font-style: italic;
+}
+.create-composer {
+  flex: none;
+  border-top: 1px solid var(--line);
+  padding: var(--sp-3);
+}
+.create-composer textarea {
+  width: 100%;
+  resize: none;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 9px 12px;
+  font-family: var(--font-kai);
+  font-size: var(--fs-ui);
+  line-height: var(--lh-body);
+  color: var(--fg);
+  outline: none;
+}
+.create-composer textarea:focus {
+  border-color: var(--accent);
+}
+.create-composer-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+}
+.create-upload {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui-sm);
+  padding: 8px 14px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.create-upload:hover:not(:disabled) {
+  color: var(--fg);
+  border-color: var(--accent-2);
+}
+.create-composer-actions .btn {
+  margin-left: auto;
+}
+
+/* 实时卡预览 */
+.create-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.create-card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--panel);
+  padding: var(--sp-4);
+  box-shadow: var(--shadow-card);
+}
+.create-card-kind {
+  color: var(--accent-3);
+}
+.create-card-name {
+  font-family: var(--font-kai);
+  font-size: var(--fs-h1);
+  color: var(--fg);
+  margin: var(--sp-1) 0 var(--sp-3);
+}
+.create-card-fields {
+  display: flex;
+  flex-direction: column;
+}
+.create-field {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+  border-top: 1px dashed var(--line);
+}
+.create-field-k {
+  flex: none;
+  width: 60px;
+  color: var(--muted);
+  font-family: var(--font-kai);
+}
+.create-field-v {
+  color: var(--fg);
+  line-height: var(--lh-body);
+  min-width: 0;
+}
+.create-field.is-fresh .create-field-k {
+  color: var(--accent-2);
+}
+.create-field-empty {
+  color: var(--muted);
+  padding: var(--sp-3) 0;
+}
+.create-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+/* toast(按钮反馈 YOR-54) */
+.create-toast {
+  position: fixed;
+  left: 50%;
+  bottom: var(--sp-6);
+  transform: translateX(-50%);
+  z-index: 80;
+  padding: 10px 18px;
+  border-radius: var(--r-pill);
+  background: var(--fg);
+  color: var(--bg);
+  box-shadow: var(--shadow-pop);
+  animation: create-toast-in 0.2s var(--ease-out) both;
+}
+@keyframes create-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* modal(补素材 / 发布) */
+.create-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: var(--scrim);
+  display: grid;
+  place-items: center;
+  padding: var(--sp-5);
+}
+.create-modal-card {
+  position: relative;
+  width: min(520px, 92vw);
+  max-height: 84vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: var(--sp-6);
+  box-shadow: var(--shadow-pop);
+}
+.create-modal-x {
+  position: absolute;
+  right: 14px;
+  top: 12px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.create-lib-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+.create-lib-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+  text-align: left;
+}
+.create-lib-item:hover {
+  border-color: var(--accent-2);
+}
+.create-lib-item .t-meta {
+  color: var(--accent-2);
+}
+.create-pub-label {
+  display: block;
+  color: var(--muted);
+  margin: var(--sp-4) 0 var(--sp-2);
+}
+.create-pub-syn {
+  width: 100%;
+  resize: vertical;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 9px 12px;
+  font-family: var(--font-kai);
+  font-size: var(--fs-ui);
+  line-height: var(--lh-body);
+  color: var(--fg);
+  outline: none;
+  margin-bottom: var(--sp-4);
+}
+.create-pub-syn:focus {
+  border-color: var(--accent);
+}
+
+/* 移动:两区堆叠 */
+@media (max-width: 860px) {
+  .create-body {
+    grid-template-columns: 1fr;
+  }
+  .create-preview {
+    order: -1; /* 移动端把实时卡放对话上方,边聊边看 */
+  }
+}
