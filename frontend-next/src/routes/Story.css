@@ -3,7 +3,9 @@
 .story {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: 100dvh; /* 定高 → 输入框固定底部,中间 feed 独立滚动(细节⑤) */
+  max-height: 100dvh;
+  overflow: hidden;
   background: var(--bg);
 }
 
@@ -73,7 +75,7 @@
   border-color: var(--accent);
 }
 .story-statusbtn {
-  display: none; /* 桌面右栏常驻,状态按钮仅移动端出 */
+  display: inline-block; /* 桌面也出:可收起右状态栏(细节⑥) */
 }
 
 /* 三栏主体 */
@@ -281,8 +283,8 @@
   flex: none;
   display: flex;
   gap: var(--sp-3);
-  align-items: flex-end;
-  padding: var(--sp-3) var(--sp-5) var(--sp-5);
+  align-items: stretch; /* 输入框与发送等高,不一高一低(细节⑦) */
+  padding: var(--sp-3) var(--sp-5) calc(var(--sp-5) + env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
   max-width: 760px;
   width: 100%;
@@ -305,7 +307,8 @@
   border-color: var(--accent);
 }
 .story-composer .btn {
-  height: 44px;
+  align-self: stretch;
+  min-height: 44px;
 }
 
 /* 右:世界状态(8 栏目) */
@@ -317,6 +320,10 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+}
+/* 桌面:收起 = 整列隐藏(细节⑥),叙事区随之拉宽 */
+.story:not(.status-open) .story-status {
+  display: none;
 }
 .story-status-h {
   flex: none;
@@ -550,7 +557,10 @@
   .story-deck {
     display: none; /* dev 卡组栏在窄屏隐藏(dev 视图以桌面为主) */
   }
-  .story-status {
+  /* 移动:始终作为抽屉渲染(覆盖桌面收起的 display:none),靠 translateX 显隐 */
+  .story-status,
+  .story:not(.status-open) .story-status {
+    display: flex;
     position: fixed;
     top: 0;
     right: 0;
@@ -561,7 +571,7 @@
     transition: transform var(--dur-mid) var(--ease-out);
     box-shadow: var(--shadow-pop);
   }
-  .story-status.is-open {
+  .story.status-open .story-status {
     transform: translateX(0);
   }
   .story-status-x {

@@ -10,7 +10,8 @@ export default function ResumeBar() {
   const navigate = useNavigate();
 
   if (!game) return null;
-  if (loc.pathname.startsWith("/play")) return null;
+  // 只在探索界面悬浮;其他界面不显(本批细节①)。
+  if (loc.pathname !== "/explore") return null;
 
   return (
     <button className="resume-bar" onClick={() => navigate("/play")} aria-label="继续游玩当前故事">

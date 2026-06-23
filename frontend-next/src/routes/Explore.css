@@ -64,7 +64,14 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-2);
-  margin-bottom: var(--sp-6);
+  margin-bottom: var(--sp-4);
+}
+
+/* 分割线(做减法后页面偏空,用细金线分段) */
+.explore-rule {
+  height: 1px;
+  margin: var(--sp-3) 0 var(--sp-6);
+  background: linear-gradient(90deg, transparent, var(--line) 8%, var(--line) 92%, transparent);
 }
 
 /* 继续游玩 rail */

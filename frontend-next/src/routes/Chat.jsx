@@ -16,6 +16,18 @@ function avatarChar(name) {
   return (name || "?").trim().charAt(0) || "?";
 }
 
+// 微信式时间标:同日 HH:MM,跨日加月-日。
+function fmtTime(t) {
+  if (!t) return "";
+  const d = new Date(t);
+  const pad = (n) => String(n).padStart(2, "0");
+  const hm = pad(d.getHours()) + ":" + pad(d.getMinutes());
+  const today = new Date();
+  const sameDay = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
+  return sameDay ? hm : pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + " " + hm;
+}
+const TIME_GAP = 5 * 60 * 1000; // 间隔 > 5 分钟才再插一条时间(类微信)
+
 export default function Chat() {
   const { user } = useAuth();
   const uid = user ? user.id : "";
@@ -46,6 +58,7 @@ export default function Chat() {
   const [busy, setBusy] = useState(false);
   const [addModal, setAddModal] = useState(null); // {items} | null
   const [profileOpen, setProfileOpen] = useState(false);
+  const [lightbox, setLightbox] = useState(null); // 头像放大照片(细节⑩)
   const [mobileView, setMobileView] = useState("list"); // list | chat(窄屏单栏切换)
 
   const sidsRef = useRef(null);
@@ -98,6 +111,8 @@ export default function Chat() {
       persona: d.persona || d.personality || "",
       description: d.description || "",
       avatar: d.avatar || d.image || undefined,
+      image: d.image || d.avatar || undefined, // 立绘(详情顶部用,细节⑨)
+      anim: d.anim || undefined, // 布偶/待机动画(有则优先)
       card: item.data,
     };
     setRoster((rs) => {
@@ -132,7 +147,7 @@ export default function Chat() {
       world: null,
       user: "（这是一次全新的相遇。请你以「" + hint + "」为引子主动开启对话:先一两句动作或场景描写,再说出第一句话,把话头交给我。不要提及这条指令。）",
     })
-      .then((r) => setByKey((m) => ({ ...m, [nm]: [{ who: nm, text: (r && r.reply) || "（无回应）" }] })))
+      .then((r) => setByKey((m) => ({ ...m, [nm]: [{ who: nm, text: (r && r.reply) || "（无回应）", t: Date.now() }] })))
       .catch((e) => {
         openedRef.current[nm] = false;
         setByKey((m) => ({ ...m, [nm]: [{ who: nm, text: "（开场失败:" + e.message + "）" }] }));
@@ -145,11 +160,11 @@ export default function Chat() {
     const text = input.trim();
     if (!text || !active || busy) return;
     setBusy(true);
-    setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: "me", text }] }));
+    setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: "me", text, t: Date.now() }] }));
     setInput("");
     try {
       const r = await postJSON("/api/chat", { card: active.card, session_id: sidFor(activeName), user: text, world: null });
-      setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: (r && r.reply) || "（无回应）" }] }));
+      setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: (r && r.reply) || "（无回应）", t: Date.now() }] }));
     } catch (e) {
       setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: "（连接出错:" + e.message + "）" }] }));
     } finally {
@@ -238,16 +253,28 @@ export default function Chat() {
             </header>
 
             <div className="chat-feed" ref={feedRef}>
-              {messages.map((m, i) => (
-                <div key={i} className={"chat-bubble-row" + (m.who === "me" ? " is-me" : "")}>
-                  {m.who !== "me" && (
-                    <span className="chat-avatar sm" style={active.avatar ? { backgroundImage: `url("${active.avatar}")` } : undefined}>
-                      {!active.avatar && avatarChar(activeName)}
-                    </span>
-                  )}
-                  <span className="chat-bubble t-ui">{m.text}</span>
-                </div>
-              ))}
+              {messages.map((m, i) => {
+                const prev = messages[i - 1];
+                const showTime = m.t && (i === 0 || !prev || !prev.t || m.t - prev.t > TIME_GAP);
+                return (
+                  <div key={i} className="chat-msg-wrap">
+                    {showTime && <div className="chat-time t-meta">{fmtTime(m.t)}</div>}
+                    <div className={"chat-bubble-row" + (m.who === "me" ? " is-me" : "")}>
+                      {m.who !== "me" && (
+                        <span
+                          className={"chat-avatar sm" + (active.avatar ? " is-photo" : "")}
+                          style={active.avatar ? { backgroundImage: `url("${active.avatar}")` } : undefined}
+                          onClick={() => active.avatar && setLightbox(active.avatar)}
+                          title={active.avatar ? "看大图" : undefined}
+                        >
+                          {!active.avatar && avatarChar(activeName)}
+                        </span>
+                      )}
+                      <span className="chat-bubble t-ui">{m.text}</span>
+                    </div>
+                  </div>
+                );
+              })}
               {busy && messages.length > 0 && messages[messages.length - 1].who === "me" && (
                 <div className="chat-bubble-row">
                   <span className="chat-avatar sm">{avatarChar(activeName)}</span>
@@ -279,13 +306,27 @@ export default function Chat() {
               <div className="chat-profile" onClick={() => setProfileOpen(false)}>
                 <div className="chat-profile-card" onClick={(e) => e.stopPropagation()}>
                   <button className="chat-profile-x" onClick={() => setProfileOpen(false)} aria-label="收起">×</button>
-                  <span className="chat-avatar lg" style={active.avatar ? { backgroundImage: `url("${active.avatar}")` } : undefined}>
-                    {!active.avatar && avatarChar(activeName)}
-                  </span>
+                  {/* 顶部放立绘 / 布偶动画,而非头像(细节⑨) */}
+                  <div className="chat-profile-art">
+                    {active.anim ? (
+                      <video src={active.anim} autoPlay loop muted playsInline />
+                    ) : active.image ? (
+                      <img src={active.image} alt={activeName} />
+                    ) : (
+                      <span className="chat-profile-art-ph t-kai">{avatarChar(activeName)}</span>
+                    )}
+                  </div>
                   <h2 className="t-h2 chat-profile-name">{activeName}</h2>
                   {active.persona && <p className="t-ui chat-profile-line">{active.persona}</p>}
                   {active.description && <p className="t-ui-sm chat-profile-desc">{active.description}</p>}
                 </div>
+              </div>
+            )}
+
+            {/* 头像放大照片(周围压暗,细节⑩) */}
+            {lightbox && (
+              <div className="chat-lightbox" onClick={() => setLightbox(null)}>
+                <img src={lightbox} alt="" onClick={(e) => e.stopPropagation()} />
               </div>
             )}
           </>

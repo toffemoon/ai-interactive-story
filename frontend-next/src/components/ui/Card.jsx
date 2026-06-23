@@ -154,11 +154,11 @@ export function Card({ model, variant = "shelf", flipped, onToggleFlip, actions,
 
 // CardShelf — 货架容器:auto-fill 190px 列(约 3 列),受控 flip(单张翻 + 点别处收)。
 // 一次只翻一张:flippedKey 唯一;点 shelf 空白处收起当前翻面的卡(YOR-47 根治)。
-export function CardShelf({ models, variant = "shelf", actionsFor, onOpen, className = "" }) {
+export function CardShelf({ models, variant = "shelf", actionsFor, onOpen, className = "", scroll = false }) {
   const [flippedKey, setFlippedKey] = useState(null);
   const keyOf = (m) => m.kind + ":" + m.id;
   return (
-    <div className={["card-shelf", className].filter(Boolean).join(" ")} onClick={() => setFlippedKey(null)}>
+    <div className={["card-shelf", scroll ? "is-scroll" : "", className].filter(Boolean).join(" ")} onClick={() => setFlippedKey(null)}>
       {(models || []).map((m) => {
         const k = keyOf(m);
         return (

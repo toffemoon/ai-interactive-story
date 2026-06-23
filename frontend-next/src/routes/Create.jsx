@@ -64,6 +64,7 @@ export default function Create() {
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState("");
   const [libModal, setLibModal] = useState(null); // {items} | null
+  const [libQ, setLibQ] = useState(""); // 补素材搜索
   const [pubModal, setPubModal] = useState(false);
   const [pub, setPub] = useState({ name: "", synopsis: "" });
   const fileRef = useRef(null);
@@ -177,14 +178,23 @@ export default function Create() {
     }
   }
 
-  // 素材复用:列我的库 → 挑一张推进对应台子的 built。
+  // 素材复用:列我的库 → 搜索/挑一张推进对应台子的 built。
   async function openLib() {
+    setLibQ("");
     try {
       const items = await getJSON("/api/library/" + kind);
       setLibModal({ items: Array.isArray(items) ? items : [] });
     } catch (e) {
       flash("读库失败:" + e.message);
     }
+  }
+  function libName(it) {
+    const raw = (it && it.data && it.data.data) || (it && it.data) || {};
+    return raw.name || raw.title || it.name || "未命名";
+  }
+  function libDesc(it) {
+    const raw = (it && it.data && it.data.data) || (it && it.data) || {};
+    return raw.persona || raw.description || raw.premise || ((raw.entries || []).length ? `${raw.entries.length} 条条目` : "");
   }
   function libAdd(item) {
     const raw = item && item.data ? item.data : item;
@@ -367,22 +377,31 @@ export default function Create() {
           <div className="create-modal-card" onClick={(e) => e.stopPropagation()}>
             <button className="create-modal-x" onClick={() => setLibModal(null)} aria-label="关闭">×</button>
             <h2 className="t-h2">从卡库补「{KINDS[ki].zh}」素材</h2>
+            <input
+              className="create-lib-search"
+              value={libQ}
+              onChange={(e) => setLibQ(e.target.value)}
+              placeholder="搜卡库:名字 / 简介…"
+              autoFocus
+            />
             <div className="create-lib-list">
-              {libModal.items.length ? (
-                libModal.items.map((it, i) => {
-                  const raw = it && it.data ? it.data : it;
-                  const card = kind === "characters" ? raw.data || raw : raw;
-                  const nm = (card && (card.name || card.title)) || it.name || "未命名";
-                  return (
-                    <button className="create-lib-item" key={i} onClick={() => libAdd(it)}>
-                      <span className="t-ui-sm">{nm}</span>
-                      <span className="t-meta">加入本次创作 →</span>
-                    </button>
-                  );
-                })
-              ) : (
-                <p className="t-ui create-sub">这个分类的卡库还空着。</p>
-              )}
+              {(() => {
+                const s = libQ.trim().toLowerCase();
+                const list = libModal.items.filter(
+                  (it) => !s || (libName(it) + " " + libDesc(it)).toLowerCase().includes(s)
+                );
+                if (!libModal.items.length) return <p className="t-ui create-sub">这个分类的卡库还空着。</p>;
+                if (!list.length) return <p className="t-ui create-sub">没有匹配的卡。换个关键词。</p>;
+                return list.map((it, i) => (
+                  <button className="create-lib-item" key={i} onClick={() => libAdd(it)}>
+                    <span className="create-lib-item-tx">
+                      <span className="t-ui-sm">{libName(it)}</span>
+                      <span className="t-meta">{libDesc(it).slice(0, 40)}</span>
+                    </span>
+                    <span className="t-meta">加入 →</span>
+                  </button>
+                ));
+              })()}
             </div>
           </div>
         </div>

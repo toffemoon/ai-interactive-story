@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Chip, SearchField, Button, Badge, Tag, CardShelf } from "../components/ui";
 import { getJSON } from "../lib/api";
-import { toCardModels } from "../lib/cardModel";
+import { toCardModel, toCardModels } from "../lib/cardModel";
 import { useGame } from "../state/game";
 import "./Explore.css";
+
+const FAV_KEY = "ais_favorites_v1";
 
 // 探索 = 玩家入场货架(默认首屏)。本批决策:拿掉「卡市集」,只留双轨 ——
 //   完整故事(/api/presets · 可直接玩) + 角色卡(/api/library/characters · 选/扮演角色)。
@@ -27,7 +29,7 @@ const PAGE_SIZE = 12;
 
 export default function Explore() {
   const navigate = useNavigate();
-  const { game, startGame } = useGame();
+  const { startGame } = useGame();
   const [presets, setPresets] = useState([]);
   const [chars, setChars] = useState([]);
   const [loadErr, setLoadErr] = useState(false);
@@ -37,6 +39,14 @@ export default function Explore() {
   const [sort, setSort] = useState("composite");
   const [page, setPage] = useState(1);
   const [detail, setDetail] = useState(null); // CardModel | null
+  // 收藏(本机;个人中心「收藏」读同一份)。存原始项,按归一化 id 去重。
+  const [favs, setFavs] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(FAV_KEY)) || { stories: [], characters: [] };
+    } catch (e) {
+      return { stories: [], characters: [] };
+    }
+  });
 
   function refresh() {
     setLoadErr(false);
@@ -132,14 +142,39 @@ export default function Explore() {
     navigate("/chat");
   }
 
+  // 收藏:按归一化 id 判定 + 增删,写回 localStorage(细节⑭)。
+  const favIds = useMemo(
+    () => ({
+      story: new Set(toCardModels("story", favs.stories || []).map((x) => x.id)),
+      character: new Set(toCardModels("character", favs.characters || []).map((x) => x.id)),
+    }),
+    [favs]
+  );
+  const isFav = (m) => favIds[m.kind] && favIds[m.kind].has(m.id);
+  function toggleFav(m) {
+    setFavs((prev) => {
+      const bucket = m.kind === "story" ? "stories" : "characters";
+      const arr = prev[bucket] || [];
+      const has = favIds[m.kind] && favIds[m.kind].has(m.id);
+      const next = has ? arr.filter((raw) => toCardModel(m.kind, raw).id !== m.id) : [...arr, m.raw];
+      const updated = { ...prev, [bucket]: next };
+      try {
+        localStorage.setItem(FAV_KEY, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  }
+
   function actionsFor(m) {
+    const fav = { label: isFav(m) ? "已收藏" : "收藏", variant: isFav(m) ? "secondary" : "line", onClick: () => toggleFav(m) };
     if (m.kind === "character") {
       return [
         { label: "开故事", variant: "primary", onClick: () => startCharacterStory(m) },
         { label: "纯聊", variant: "line", onClick: () => chatWith(m) },
+        fav,
       ];
     }
-    return [{ label: "查看故事", variant: "primary", isDetail: true, onClick: () => goDetail(m) }];
+    return [{ label: "查看故事", variant: "primary", isDetail: true, onClick: () => goDetail(m) }, fav];
   }
 
   const totalCount = storyModels.length + charModels.length;
@@ -147,18 +182,7 @@ export default function Explore() {
   return (
     <>
       <div className="page explore">
-        {/* 继续游玩 rail:有进行中故事才显,不占位(完整存档列表见个人中心) */}
-        {game && (
-          <div className="explore-resume">
-            <div className="explore-resume-head t-meta">继续游玩</div>
-            <button className="explore-resume-card" onClick={() => navigate("/play")}>
-              <span className="explore-resume-dot" aria-hidden="true" />
-              <span className="explore-resume-title t-kai">{game.title || "当前故事"}</span>
-              <span className="explore-resume-go t-ui-sm">回到故事 →</span>
-            </button>
-          </div>
-        )}
-
+        {/* 继续游玩改由全局悬浮 ResumeBar 负责(只在探索悬浮,细节①),此处不再内联 rail */}
         <div className="explore-head">
           <div>
             <p className="u-eyebrow">Story Library</p>
@@ -211,6 +235,8 @@ export default function Explore() {
             ))}
           </div>
         )}
+
+        <div className="explore-rule" aria-hidden="true" />
 
         {loadErr && !presets.length ? (
           <div className="explore-empty">

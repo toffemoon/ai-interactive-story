@@ -231,6 +231,29 @@
   justify-content: start;
 }
 
+/* 横轴滚动模式(故事详情 角色卡 / 选主角:对齐页面边缘、不换行,环形轮播的感觉) */
+.card-shelf.is-scroll {
+  display: flex;
+  grid-template-columns: none;
+  overflow-x: auto;
+  overflow-y: visible;
+  padding-bottom: var(--sp-3);
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+.card-shelf.is-scroll > * {
+  flex: none;
+  scroll-snap-align: start;
+}
+/* 滚动模式下背面简介不再 4 行截断,改满高滚动(太长内容用滚动条,YOR 细节② 要求) */
+.card-shelf.is-scroll .card-back-blurb {
+  display: block;
+  -webkit-line-clamp: unset;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 /* ── shelf 竖卡:190×286 / 2:3,受控 3D 翻面 ── */
 .card--shelf {
   width: 190px;

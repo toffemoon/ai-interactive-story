@@ -273,11 +273,28 @@
   border-radius: var(--r-sm);
   cursor: pointer;
 }
+.create-lib-search {
+  width: 100%;
+  margin-top: var(--sp-4);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 9px 12px;
+  font-family: var(--font-kai);
+  font-size: var(--fs-ui);
+  color: var(--fg);
+  outline: none;
+}
+.create-lib-search:focus {
+  border-color: var(--accent);
+}
 .create-lib-list {
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
-  margin-top: var(--sp-4);
+  margin-top: var(--sp-3);
+  max-height: 52vh;
+  overflow-y: auto;
 }
 .create-lib-item {
   display: flex;
@@ -291,6 +308,20 @@
   color: var(--fg);
   cursor: pointer;
   text-align: left;
+}
+.create-lib-item-tx {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.create-lib-item-tx .t-ui-sm {
+  color: var(--fg);
+}
+.create-lib-item-tx .t-meta {
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .create-lib-item:hover {
   border-color: var(--accent-2);

@@ -268,15 +268,88 @@
   font-size: 18px;
   cursor: pointer;
 }
-.chat-profile-name {
-  margin-top: var(--sp-2);
+/* 详情顶部立绘 / 布偶动画(细节⑨):矩形大图,非圆头像 */
+.chat-profile-art {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  max-height: 280px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--sunk);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
 }
+.chat-profile-art img,
+.chat-profile-art video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.chat-profile-art-ph {
+  font-family: var(--font-kai);
+  font-size: 64px;
+  color: var(--accent-3);
+}
+.chat-profile-name {
+  margin-top: var(--sp-3);
+}
+/* 档案文字两端对齐(细节⑧) */
 .chat-profile-line {
   color: var(--fg);
+  align-self: stretch;
+  text-align: justify;
 }
 .chat-profile-desc {
   color: var(--muted);
   line-height: var(--lh-read);
+  align-self: stretch;
+  text-align: justify;
+}
+
+/* 每条消息(可含时间标)外层:flex 列,让气泡右对齐 + 时间居中都生效 */
+.chat-msg-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 聊天时间标(细节⑪) */
+.chat-time {
+  align-self: center;
+  color: var(--muted);
+  margin: var(--sp-2) 0;
+  padding: 2px 10px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
+}
+
+/* 头像可点放大 + lightbox(细节⑩) */
+.chat-avatar.is-photo {
+  cursor: pointer;
+}
+.chat-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(8, 6, 4, 0.82);
+  display: grid;
+  place-items: center;
+  padding: var(--sp-6);
+  animation: chat-lb-in 0.18s var(--ease-out) both;
+}
+@keyframes chat-lb-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.chat-lightbox img {
+  max-width: min(86vw, 520px);
+  max-height: 86vh;
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-pop);
 }
 
 /* 添加联系人 modal */

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Button, Tag, Badge } from "../components/ui";
+import { Button, Tag, Badge, CardShelf } from "../components/ui";
 import { getJSON, postJSON, uploadFile } from "../lib/api";
 import { useGame } from "../state/game";
 import "./StoryDetail.css";
@@ -44,12 +44,30 @@ export default function StoryDetail() {
   const tags = d.tags || [];
   const author = d.author || "";
 
-  // 角色(公开层:名 + 外貌/性格/设定;固定高度容器内滚动)。
-  const characters = useMemo(
-    () => (d.characters || []).map((c) => {
+  // 角色:用统一 Card · 横轴滚动(环形轮播的感觉);背面放完整介绍,长内容滚动(细节②)。
+  const charModels = useMemo(
+    () => (d.characters || []).map((c, i) => {
       const cd = (c && c.data) || c || {};
-      return { name: cd.name || "角色", line: cd.look || cd.personality || cd.persona || cd.description || "" };
-    }).filter((c) => c.name),
+      const intro =
+        [
+          cd.look ? "外貌 · " + cd.look : "",
+          cd.personality ? "性格 · " + cd.personality : "",
+          cd.description || cd.persona || "",
+        ]
+          .filter(Boolean)
+          .join("\n\n") || "入局后逐渐揭晓。";
+      return {
+        id: (cd.name || "char") + "#" + i,
+        kind: "character",
+        title: cd.name || "角色",
+        cover: cd.image || cd.avatar || "",
+        blurb: intro,
+        badge: { label: "角色", tone: "gilt" },
+        tags: (cd.tags || []).slice(0, 3),
+        meta: {},
+        raw: c,
+      };
+    }),
     [preset]
   );
 
@@ -166,22 +184,18 @@ export default function StoryDetail() {
           </div>
         </div>
 
-        {/* 角色(固定高度横向滚动,YOR-23) */}
-        {characters.length > 0 && (
+        {/* 角色:统一 Card 横轴滚动,翻面看完整介绍(细节②/YOR-23) */}
+        {charModels.length > 0 && (
           <section className="detail-block">
             <h2 className="t-h3 detail-sec">角色</h2>
-            <div className="detail-chars">
-              {characters.map((c, i) => (
-                <div className="detail-char" key={i}>
-                  <div className="detail-char-name t-kai">{c.name}</div>
-                  <div className="detail-char-line t-ui-sm">{c.line || "入局后逐渐揭晓。"}</div>
-                </div>
-              ))}
-            </div>
+            <p className="detail-hint t-meta">点卡片翻面看角色介绍</p>
+            <CardShelf scroll models={charModels} />
           </section>
         )}
 
-        {/* 选主角三选一:选作者卡 / 上传 / 现场描述 */}
+        <div className="detail-rule" aria-hidden="true" />
+
+        {/* 选主角三选一:选作者卡 / 上传 / 现场描述(横轴滚动 · 对齐边缘,细节③) */}
         <section className="detail-block">
           <h2 className="t-h3 detail-sec">选择你扮演谁</h2>
           <div className="detail-roles">
@@ -252,11 +266,11 @@ export default function StoryDetail() {
           <span className="detail-enter-label t-meta">进入</span>
         </div>
         {castMode === "custom" ? (
-          <Button variant="primary" disabled={identifying || !customText.trim()} onClick={startCustom}>
+          <Button className="detail-enter-go" variant="primary" disabled={identifying || !customText.trim()} onClick={startCustom}>
             {identifying ? "识别中…" : "涟漪入局"}
           </Button>
         ) : (
-          <Button variant="primary" onClick={() => enterStory(enterRole)}>
+          <Button className="detail-enter-go" variant="primary" onClick={() => enterStory(enterRole)}>
             涟漪入局
           </Button>
         )}

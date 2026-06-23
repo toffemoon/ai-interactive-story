@@ -107,14 +107,31 @@
   overflow: hidden;
 }
 
-/* 选主角 */
+/* 提示 + 分割线 */
+.detail-hint {
+  color: var(--muted);
+  margin-bottom: var(--sp-3);
+}
+.detail-rule {
+  height: 1px;
+  margin: var(--sp-6) 0;
+  background: linear-gradient(90deg, transparent, var(--line) 8%, var(--line) 92%, transparent);
+}
+
+/* 选主角:横轴滚动 · 不换行(细节③),与「角色」一致的横向手感 */
 .detail-roles {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: var(--sp-3);
+  overflow-x: auto;
+  padding-bottom: var(--sp-3);
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
 }
 .detail-role {
-  width: 200px;
+  flex: none;
+  scroll-snap-align: start;
+  width: 190px;
   text-align: left;
   padding: var(--sp-4);
   border: 1px solid var(--line);
@@ -244,6 +261,18 @@
   margin-left: auto;
   flex: none;
   letter-spacing: 0.18em;
+}
+/* 涟漪入局放大(细节④) */
+.detail-enter-go {
+  padding: 14px 34px;
+  font-size: var(--fs-h3);
+  border-radius: var(--r-md);
+}
+@media (max-width: 720px) {
+  .detail-enter-go {
+    padding: 13px 24px;
+    font-size: var(--fs-ui);
+  }
 }
 
 /* 载入 / 缺失 */

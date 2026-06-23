@@ -79,7 +79,14 @@ export default function Story() {
   const [error, setError] = useState("");
   const [canUndo, setCanUndo] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
-  const [statusOpen, setStatusOpen] = useState(false); // 移动端:右状态栏抽屉
+  // 右状态栏:桌面默认展开(可收起),移动默认收起(抽屉)。state 同驱两端(细节⑥)。
+  const [statusOpen, setStatusOpen] = useState(() => {
+    try {
+      return window.matchMedia("(min-width: 961px)").matches;
+    } catch (e) {
+      return true;
+    }
+  });
   const [dev, setDev] = useState(() => {
     try {
       return localStorage.getItem("ais_dev") === "1";
@@ -242,6 +249,8 @@ export default function Story() {
   const ps = (state && state.player) || {};
   const rels = (state && state.relationships) || [];
   const timeline = (state && state.timeline) || [];
+  // 时间线只列已发生 / 进行中,不写未发生(pending)的(细节⑥)。
+  const timelineShown = timeline.filter((e) => e.status && e.status !== "pending");
   const usageBlock = storyTurns.length ? storyTurns[storyTurns.length - 1].data.usage || {} : {};
 
   const memLong = memWrites.filter((m) => (m.importance || 0) >= 4);
@@ -249,7 +258,7 @@ export default function Story() {
   const historyEvents = timeline.filter((e) => e.status === "resolved");
 
   return (
-    <div className={"story" + (dev ? " is-dev" : "")}>
+    <div className={"story" + (dev ? " is-dev" : "") + (statusOpen ? " status-open" : "")}>
       {/* 顶栏:离开(保留进行中故事)/ 标题 / token / 撤回·重生成·记录·dev */}
       <header className="story-top">
         <button className="story-back" onClick={() => navigate("/explore")}>
@@ -267,8 +276,8 @@ export default function Story() {
           <button className="story-toolbtn" disabled={!turns.length} onClick={() => setLogOpen(true)} title="故事记录">
             记录
           </button>
-          <button className="story-statusbtn" onClick={() => setStatusOpen((v) => !v)} title="世界状态">
-            状态
+          <button className={"story-statusbtn" + (statusOpen ? " is-on" : "")} onClick={() => setStatusOpen((v) => !v)} title="世界状态(可收起)">
+            {statusOpen ? "收起状态" : "世界状态"}
           </button>
           <button className={"story-toolbtn" + (dev ? " is-on" : "")} onClick={toggleDev} title="玩家仪表盘 / 开发者视图">
             dev
@@ -375,7 +384,7 @@ export default function Story() {
         </main>
 
         {/* 右:世界状态(8 栏目,默认收起;移动端为抽屉) */}
-        <aside className={"story-status" + (statusOpen ? " is-open" : "")}>
+        <aside className="story-status">
           <div className="story-status-h">
             <span className="t-kai">世界状态</span>
             <button className="story-status-x" onClick={() => setStatusOpen(false)} aria-label="收起">
@@ -472,10 +481,10 @@ export default function Story() {
               )}
             </StatusSection>
 
-            <StatusSection title="时间线" count={timeline.length || null}>
-              {timeline.length ? (
+            <StatusSection title="时间线" count={timelineShown.length || null}>
+              {timelineShown.length ? (
                 <div className="status-tl">
-                  {timeline.map((e, i) => (
+                  {timelineShown.map((e, i) => (
                     <div className="status-tl-i" key={i}>
                       <span className={"status-tl-dot status-tl-" + e.status} />
                       <span className="t-meta">{e.title || e.event_id}{e.due_hint ? ` · ${e.due_hint}` : ""}</span>
