@@ -30,7 +30,7 @@ export default function AppShell({ children }) {
         position="left"
         brandText="沐言"
         items={[
-          { label: "首页", ariaLabel: "回到首页", link: "/home" },
+          { label: "看板", ariaLabel: "回到看板", link: "/home" },
           ...NAV.map((it) => ({ label: it.zh, ariaLabel: it.zh, link: it.to })),
         ]}
         displaySocials={false}
