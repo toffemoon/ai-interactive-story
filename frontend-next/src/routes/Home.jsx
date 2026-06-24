@@ -215,18 +215,6 @@ export default function Home() {
       {/* 前景 UI(全屏态隐藏) */}
       {!fullscreen && (
         <div className="home-ui">
-          {/* 换角色(图标,无文字 · 右上) */}
-          <button className="home-switch" onClick={openSwitcher} title="换个人聊" aria-label="换个人聊">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="9" cy="8" r="3" />
-              <path d="M3.5 19c0-3 2.5-4.5 5.5-4.5" />
-              <path d="M16 6l3 0 0 3" />
-              <path d="M19 6l-4 4" />
-              <circle cx="16.5" cy="16" r="3" />
-              <path d="M21 19c0-2-1.8-3-4.5-3" />
-            </svg>
-          </button>
-
           {/* 底部交互坞:主按钮行(贴对话框上方右对齐)+ 对话框聚成一组,不再悬空 */}
           <div className="home-dock">
             <div className="home-actions">
@@ -245,6 +233,16 @@ export default function Home() {
             <div className="home-dlg-head">
               <span className="home-dlg-name t-kai">{displayName}</span>
               <div className="home-dlg-tools">
+                <button className="home-tool" onClick={openSwitcher} title="换个人聊" aria-label="换个人聊">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="9" cy="8" r="3" />
+                    <path d="M3.5 19c0-3 2.5-4.5 5.5-4.5" />
+                    <path d="M16 6l3 0 0 3" />
+                    <path d="M19 6l-4 4" />
+                    <circle cx="16.5" cy="16" r="3" />
+                    <path d="M21 19c0-2-1.8-3-4.5-3" />
+                  </svg>
+                </button>
                 <button className="home-tool" onClick={restart} disabled={busy} title="重开(清空这段对话)" aria-label="重开">⟳</button>
                 <button className="home-tool" onClick={() => setLogOpen(true)} disabled={!messages.length} title="查看记录" aria-label="查看记录">≡</button>
                 <button className="home-tool" onClick={() => setFullscreen(true)} title="全屏(只留背景+立绘,方便截图)" aria-label="全屏">⛶</button>

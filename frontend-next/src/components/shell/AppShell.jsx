@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { NAV } from "./nav";
 import { useAuth } from "../../state/auth";
 import ResumeBar from "./ResumeBar";
+import StaggeredMenu from "../StaggeredMenu";
 import "./shell.css";
 
 // 内联图标(描边风,吃 currentColor),按 nav.js 的 icon 名映射。视觉沿用 ReconRail 的细描边语言。
@@ -80,6 +81,30 @@ export default function AppShell({ children }) {
   // 沉浸态:不挂任何导航 chrome,整屏交给故事界面。
   if (immersive) {
     return <main className="shell-main shell-main--immersive">{children}</main>;
+  }
+
+  // 立绘主页(家)试点:菜单用 React Bits StaggeredMenu(错层滑入),替掉「沐言 ☰」+ 抽屉。
+  // 只在 /home 生效(其它页仍走下面的常规壳);满意后再推全局。
+  if (atHome) {
+    return (
+      <div className="shell shell--home">
+        <StaggeredMenu
+          isFixed
+          position="right"
+          brandText="沐言"
+          items={NAV.map((it) => ({ label: it.zh, ariaLabel: it.zh, link: it.to }))}
+          displaySocials={false}
+          displayItemNumbering
+          colors={["#c79a4e", "#8f3c32"]}
+          accentColor="#8f3c32"
+          menuButtonColor="#ece3d2"
+          openMenuButtonColor="#20201d"
+          onItemClick={(it) => navigate(it.link)}
+        />
+        <main className="shell-main shell-main--home">{children}</main>
+        <ResumeBar />
+      </div>
+    );
   }
 
   return (
