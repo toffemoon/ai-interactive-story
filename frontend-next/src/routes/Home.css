@@ -249,7 +249,15 @@
   min-height: 44px;
 }
 
-/* 全屏退出角标(截图态唯一可点) */
+/* 全屏:整屏点击捕获层(点任意处退出);z 在立绘之上、退出角标之下 */
+.home-fs-catcher {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  cursor: zoom-out;
+}
+
+/* 全屏退出角标(截图态可点) */
 .home-exitfs {
   position: absolute;
   z-index: 5;

@@ -125,11 +125,22 @@ export default function Home() {
   }, [card, isTangmu, sessionId, messages]);
 
   // 全屏(截图态):隐藏一切 UI(含全局唤出钮),只留背景+立绘。
+  // 退出方式:点击任意处 / 按 Esc / 角落按钮(细节⑧)。
   useEffect(() => {
     const el = document.documentElement;
-    if (fullscreen) el.classList.add("ais-home-fullscreen");
-    else el.classList.remove("ais-home-fullscreen");
-    return () => el.classList.remove("ais-home-fullscreen");
+    if (!fullscreen) {
+      el.classList.remove("ais-home-fullscreen");
+      return undefined;
+    }
+    el.classList.add("ais-home-fullscreen");
+    const onKey = (e) => {
+      if (e.key === "Escape") setFullscreen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      el.classList.remove("ais-home-fullscreen");
+      window.removeEventListener("keydown", onKey);
+    };
   }, [fullscreen]);
 
   async function send() {
@@ -205,7 +216,9 @@ export default function Home() {
         )}
       </motion.div>
 
-      {/* 全屏退出(截图态唯一可点) */}
+      {/* 全屏:整屏点击捕获层(点任意处退出);只在全屏存在,不干扰常态交互、无冒泡竞态 */}
+      {fullscreen && <div className="home-fs-catcher" onClick={() => setFullscreen(false)} aria-hidden="true" />}
+      {/* 全屏退出角标(Esc / 点任意处 / 点这里 都可退) */}
       {fullscreen && (
         <button className="home-exitfs t-meta" onClick={() => setFullscreen(false)} aria-label="退出全屏">
           ✕ 退出全屏
