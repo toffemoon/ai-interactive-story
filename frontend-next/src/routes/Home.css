@@ -30,7 +30,7 @@
     radial-gradient(120% 80% at 50% 120%, rgba(209, 90, 64, 0.12), transparent 60%);
 }
 
-/* 立绘层:居中 + 放大 + 底部出血(galgame 单角色立人) */
+/* 立绘层:顶部锚定 + 放大,只露上半身(下半身没入对话框/视口外,galgame 半身特写) */
 .home-portrait {
   position: absolute;
   z-index: 2;
@@ -39,17 +39,18 @@
   top: 0;
   bottom: 0;
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: center;
+  padding-top: clamp(10px, 3vh, 32px); /* 头顶留白,不顶到屏幕边 */
   pointer-events: none;
 }
 .home-portrait img {
-  height: 100%;
+  height: 170%;
   width: auto;
-  max-width: 92vw;
+  max-width: none;
   object-fit: contain;
-  object-position: bottom center;
-  filter: drop-shadow(0 14px 44px rgba(0, 0, 0, 0.52));
+  object-position: top center;
+  filter: drop-shadow(0 14px 44px rgba(0, 0, 0, 0.5));
 }
 .home-portrait-ph {
   align-self: center;
@@ -421,8 +422,8 @@
     padding: 11px 14px;
   }
   .home-portrait img {
-    height: 86%;
-    max-width: 98vw;
+    height: 150%;
+    max-width: none;
   }
   .home-dialogue {
     width: calc(100% - 2 * 12px);
