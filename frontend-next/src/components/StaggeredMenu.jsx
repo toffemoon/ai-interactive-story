@@ -71,10 +71,10 @@ export const StaggeredMenu = ({
       gsap.set(plusV, { transformOrigin: "50% 50%", rotate: 90 });
       gsap.set(icon, { rotate: 0, transformOrigin: "50% 50%" });
       gsap.set(textInner, { yPercent: 0 });
-      if (toggleBtnRef.current) gsap.set(toggleBtnRef.current, { color: menuButtonColor });
+      // 开关颜色不在这里写(改由 CSS 驱动,见下方说明),避免内联色覆盖主题色。
     });
     return () => ctx.revert();
-  }, [menuButtonColor, position]);
+  }, [position]);
 
   const buildOpenTimeline = useCallback(() => {
     const panel = panelRef.current;
@@ -224,31 +224,9 @@ export const StaggeredMenu = ({
     }
   }, []);
 
-  const animateColor = useCallback(
-    (opening) => {
-      const btn = toggleBtnRef.current;
-      if (!btn) return;
-      colorTweenRef.current?.kill();
-      if (changeMenuColorOnOpen) {
-        const targetColor = opening ? openMenuButtonColor : menuButtonColor;
-        colorTweenRef.current = gsap.to(btn, { color: targetColor, delay: 0.18, duration: 0.3, ease: "power2.out" });
-      } else {
-        gsap.set(btn, { color: menuButtonColor });
-      }
-    },
-    [openMenuButtonColor, menuButtonColor, changeMenuColorOnOpen]
-  );
-
-  React.useEffect(() => {
-    if (toggleBtnRef.current) {
-      if (changeMenuColorOnOpen) {
-        const targetColor = openRef.current ? openMenuButtonColor : menuButtonColor;
-        gsap.set(toggleBtnRef.current, { color: targetColor });
-      } else {
-        gsap.set(toggleBtnRef.current, { color: menuButtonColor });
-      }
-    }
-  }, [changeMenuColorOnOpen, menuButtonColor, openMenuButtonColor]);
+  // 开关颜色改由 CSS 按主题([data-theme])+ 开合([data-open])驱动:
+  // 切页时残留的、带 0.18s 延迟的 gsap color tween 会把颜色写成上一页的(切到 home 还是黑),故不再用 gsap 写内联色。
+  const animateColor = useCallback(() => {}, []);
 
   const animateText = useCallback((opening) => {
     const inner = textInnerRef.current;

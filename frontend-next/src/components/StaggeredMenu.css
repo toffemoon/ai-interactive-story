@@ -77,6 +77,19 @@
   line-height: 1;
   letter-spacing: 0.1em;
   overflow: visible;
+  transition: color var(--dur-mid) var(--ease-out);
+}
+
+/* 开关颜色按主题/开合用 CSS 驱动(不用 gsap,根治切页时残留 tween 写错色):
+   纸页=墨色;立绘主页(暖夜)=月白;菜单开(面板在左、压在开关之下)=墨色。 */
+[data-theme="paper"] .sm-toggle {
+  color: #20201d;
+}
+[data-theme="stage"] .sm-toggle {
+  color: #ece3d2;
+}
+.staggered-menu-wrapper[data-open] .sm-toggle {
+  color: #20201d;
 }
 
 .sm-toggle:focus-visible {
