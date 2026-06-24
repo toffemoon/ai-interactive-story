@@ -133,36 +133,6 @@
   color: var(--cinnabar);
 }
 
-/* 换角色图标钮:右上 */
-.home-switch {
-  position: absolute;
-  top: clamp(14px, 3vh, 24px);
-  right: clamp(14px, 3vw, 28px);
-  width: 44px;
-  height: 44px;
-  display: grid;
-  place-items: center;
-  border: 1px solid color-mix(in srgb, var(--accent-2) 50%, var(--line));
-  border-radius: var(--r-pill);
-  background: color-mix(in srgb, var(--panel) 82%, transparent);
-  color: var(--fg);
-  cursor: pointer;
-  box-shadow: var(--shadow-card);
-  transition: border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out);
-}
-.home-switch svg {
-  width: 22px;
-  height: 22px;
-}
-.home-switch:hover {
-  border-color: var(--accent-2);
-  background: var(--panel);
-}
-.home-switch:active {
-  transform: scale(0.94);
-}
-
 /* 对话框:坞内静态(在按钮行下方);浅色卡 + 深色字(YOR-136 反馈) */
 .home-dialogue {
   width: 100%;
@@ -275,9 +245,16 @@
 .home-exitfs:hover {
   opacity: 1;
 }
+.home-exitfs:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
 
-/* 全屏态:隐藏全局唤出钮(只留背景+立绘) */
-.ais-home-fullscreen .shell-toggle {
+/* 全屏态:隐藏全局菜单(「沐言」开关 + 固定面板层),只留背景+立绘。
+   注:菜单已换 StaggeredMenu(开关类名 .sm-toggle,整体在 .staggered-menu-wrapper);
+   旧 .shell-toggle 选择器已失效,改隐藏整个 wrapper——否则其 fixed z-index:40 的「沐言」仍可见、还会拦截左上角点击。 */
+.ais-home-fullscreen .staggered-menu-wrapper {
   display: none !important;
 }
 

@@ -35,27 +35,7 @@
   pointer-events: auto;
 }
 
-.sm-logo {
-  display: flex;
-  align-items: center;
-  user-select: none;
-}
-
-/* 文字 logo「沐言」(无图;月白楷书,深场景上可读) */
-.sm-logo-text {
-  font-family: var(--font-kai);
-  font-size: 22px;
-  letter-spacing: 0.12em;
-  color: #f0e6d2;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
-}
-/* 纸页(paper):隐藏浮动 logo,免与页面左上标题撞;只留唤出开关。
-   立绘主页(stage):显「沐言」logo(月白,暖夜场景上可读)。 */
-[data-theme="paper"] .sm-logo {
-  display: none;
-}
-
-/* position=left:开关(+logo)靠左对齐(默认 space-between 会把开关推到右)。 */
+/* position=left:开关靠左对齐(默认 space-between 会把开关推到右)。 */
 .staggered-menu-wrapper[data-position="left"] .staggered-menu-header {
   justify-content: flex-start;
   gap: var(--sp-4);
@@ -96,10 +76,6 @@
   outline: 2px solid #ffffffaa;
   outline-offset: 4px;
   border-radius: 4px;
-}
-
-.sm-line:last-of-type {
-  margin-top: 6px;
 }
 
 .sm-toggle-textWrap {
@@ -151,10 +127,6 @@
   border-radius: 2px;
   transform: translate(-50%, -50%);
   will-change: transform;
-}
-
-.sm-line {
-  display: none !important;
 }
 
 .staggered-menu-panel {

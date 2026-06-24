@@ -8,6 +8,14 @@
   color: var(--stage-gilt);
 }
 
+/* curtain 退场偶发残片(r3 老问题:右上残块 / 偶尔挡点击)的兜底:
+   curtain 纯被动遮罩——加载期 app 内容已 .preloader-content-hidden(visibility:hidden)不可点,
+   遮罩本就不需要吃指针事件。强制 pointer-events:none,即便 AnimatePresence 退场留下视觉残片,也永远挡不住点击。
+   只关掉指针拦截(唯一有害症状),不动退场动画本身。 */
+.preloader-stairs {
+  pointer-events: none;
+}
+
 /* 内容页(除纯聊全屏外共用)。拓宽 + 收顶,减少两侧空白、让首屏内容上提(细节④)。 */
 .page {
   max-width: 1200px;

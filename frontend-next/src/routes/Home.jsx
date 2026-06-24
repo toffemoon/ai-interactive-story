@@ -55,6 +55,7 @@ export default function Home() {
   const [logOpen, setLogOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const restoredRef = useRef(false);
+  const sessionIdRef = useRef(sessionId); // 镜像最新 sessionId,供 send 异步回调判定回来时是否已切会话
 
   const displayName = cardName(card) || (isTangmu ? "糖沐" : "角色");
   const image = isTangmu ? TANGMU_IMG : cardImageOf(card);
@@ -124,6 +125,11 @@ export default function Home() {
     } catch (e) {}
   }, [card, isTangmu, sessionId, messages]);
 
+  // sessionId 同步到 ref:send 的异步回调据此判断回来时是否已切角色/重开,过期则丢弃回复。
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
+
   // 全屏(截图态):隐藏一切 UI(含全局唤出钮),只留背景+立绘。
   // 退出方式:点击任意处 / 按 Esc / 角落按钮(细节⑧)。
   useEffect(() => {
@@ -143,17 +149,37 @@ export default function Home() {
     };
   }, [fullscreen]);
 
+  // 三个弹层(换角色 / 存档 / 记录)支持 Esc 关闭(镜像全屏的 Esc;同一时刻至多开一个)。
+  useEffect(() => {
+    if (!switcher && !savesModal && !logOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        setSwitcher(null);
+        setSavesModal(false);
+        setLogOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [switcher, savesModal, logOpen]);
+
   async function send() {
     const text = input.trim();
     if (!text || busy || !card) return;
+    const sid = sessionId; // 锁定本次发送所属会话
     setBusy(true);
     setMessages((m) => [...m, { who: "me", text, t: Date.now() }]);
     setInput("");
     try {
-      const r = await postJSON("/api/chat", { card, session_id: sessionId, user: text, world: null });
-      setMessages((m) => [...m, { who: displayName, text: (r && r.reply) || "(无回应)", t: Date.now() }]);
+      const r = await postJSON("/api/chat", { card, session_id: sid, user: text, world: null });
+      // 回来时若已切角色/重开(sessionId 变了),丢弃这条回复,避免旧回复落进新对话。
+      if (sessionIdRef.current === sid) {
+        setMessages((m) => [...m, { who: displayName, text: (r && r.reply) || "(无回应)", t: Date.now() }]);
+      }
     } catch (e) {
-      setMessages((m) => [...m, { who: displayName, text: "(连接出错:" + e.message + ")", t: Date.now() }]);
+      if (sessionIdRef.current === sid) {
+        setMessages((m) => [...m, { who: displayName, text: "(连接出错:" + e.message + ")", t: Date.now() }]);
+      }
     } finally {
       setBusy(false);
     }
@@ -210,9 +236,9 @@ export default function Home() {
         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
       >
         {image ? (
-          <img src={image} alt={displayName} draggable="false" />
+          <img src={image} alt={displayName + "(立绘)"} draggable="false" />
         ) : (
-          <span className="home-portrait-ph t-kai">{displayName.slice(0, 2)}</span>
+          <span className="home-portrait-ph t-kai" aria-hidden="true">{displayName.slice(0, 2)}</span>
         )}
       </motion.div>
 
@@ -265,6 +291,7 @@ export default function Home() {
             <div className="home-composer">
               <input
                 className="home-input"
+                aria-label={"和 " + displayName + " 对话,输入消息"}
                 value={input}
                 disabled={busy || !card}
                 placeholder={card ? "和 " + displayName + " 说点什么…" : "正在把糖沐请出来…"}
@@ -288,7 +315,7 @@ export default function Home() {
       {/* 换角色 picker */}
       {switcher && (
         <div className="home-modal" onClick={() => setSwitcher(null)}>
-          <div className="home-modal-card" onClick={(e) => e.stopPropagation()}>
+          <div className="home-modal-card" role="dialog" aria-modal="true" aria-label="换个人聊" onClick={(e) => e.stopPropagation()}>
             <button className="home-modal-x" onClick={() => setSwitcher(null)} aria-label="关闭">×</button>
             <h2 className="t-h2">换个人聊</h2>
             <p className="t-meta home-modal-sub">挑一张你的角色卡,沿用 TA 自己的设定。</p>
@@ -321,7 +348,7 @@ export default function Home() {
       {/* 存档窗口(继续故事) */}
       {savesModal && (
         <div className="home-modal" onClick={() => setSavesModal(false)}>
-          <div className="home-modal-card" onClick={(e) => e.stopPropagation()}>
+          <div className="home-modal-card" role="dialog" aria-modal="true" aria-label="继续故事" onClick={(e) => e.stopPropagation()}>
             <button className="home-modal-x" onClick={() => setSavesModal(false)} aria-label="关闭">×</button>
             <h2 className="t-h2">继续故事</h2>
             <div className="home-saves">
@@ -355,7 +382,7 @@ export default function Home() {
       {/* 查看记录 */}
       {logOpen && (
         <div className="home-modal" onClick={() => setLogOpen(false)}>
-          <div className="home-modal-card" onClick={(e) => e.stopPropagation()}>
+          <div className="home-modal-card" role="dialog" aria-modal="true" aria-label={"和 " + displayName + " 的记录"} onClick={(e) => e.stopPropagation()}>
             <button className="home-modal-x" onClick={() => setLogOpen(false)} aria-label="关闭">×</button>
             <h2 className="t-h2">和 {displayName} 的记录</h2>
             <div className="home-log">
