@@ -14,3 +14,25 @@
   margin: 0 auto;
   padding: var(--sp-4) clamp(20px, 4vw, 40px) var(--sp-8);
 }
+
+/* 页面切换 = 涟漪圆形揭示(切路由 key 变 → 重跑)。
+   circle(75%) ≈ 全覆盖任意尺寸/可滚动页;动画无 fill,结束回退到无裁切 → 对页内 fixed 弹层安全。
+   用 clip-path 不用 transform(transform 会成 fixed 后代包含块);动画跑不跑页面都可见(基态无裁切)。 */
+@keyframes mu-ripple-in {
+  from {
+    clip-path: circle(0% at 50% 50%);
+    opacity: 0.55;
+  }
+  to {
+    clip-path: circle(75% at 50% 50%);
+    opacity: 1;
+  }
+}
+.page-reveal {
+  animation: mu-ripple-in 0.55s var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-reveal {
+    animation: none;
+  }
+}

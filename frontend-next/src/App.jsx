@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
-import { motion } from "motion/react";
 import { useAuth } from "./state/auth";
 import AppShell from "./components/shell/AppShell";
 import Login from "./routes/Login";
@@ -23,21 +22,18 @@ function RequireAuth({ children }) {
   return children;
 }
 
-// 登录后 app 页统一挂导航壳;壳负责 Rail/tab + 浮动续玩入口,各页只放内容。
-// 页面过渡用 motion 淡入(React Bits 带入的 motion):只动 opacity,不用 transform ——
-// transform 会成为 fixed 后代的包含块,让页面里的 modal/入局条/ResumeBar/状态抽屉/lightbox 全部错位。
+// 登录后 app 页统一挂导航壳;壳负责菜单 + 浮动续玩入口,各页只放内容。
+// 页面过渡 = 涟漪圆形揭示(motion 动 clip-path: circle(0%→75%) + 轻 opacity)。
+// 用 clip-path 不用 transform:transform 会成为 fixed 后代的包含块、让页面里的 modal/入局条/状态抽屉错位;
+// clip-path 不建包含块(只是过渡中视觉裁切,导航时无浮层打开),且 circle(75%) ≈ 全覆盖任意尺寸/可滚动页,过渡后不残留裁切。
 function ShellLayout() {
   const loc = useLocation();
   return (
     <AppShell>
-      <motion.div
-        key={loc.pathname.startsWith("/story/") ? "story-detail" : loc.pathname}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-      >
+      {/* key 变(切路由)→ 重挂 → 重跑 CSS 涟漪揭示动画。动画无 fill,结束回退到无裁切,fixed 弹层安全。 */}
+      <div key={loc.pathname.startsWith("/story/") ? "story-detail" : loc.pathname} className="page-reveal">
         <Outlet />
-      </motion.div>
+      </div>
     </AppShell>
   );
 }
