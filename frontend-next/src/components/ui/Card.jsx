@@ -22,14 +22,27 @@ function coverStyle(kind, cover) {
 }
 
 function CoverFront({ model }) {
-  const { kind, cover, title, badge } = model;
+  const { kind, cover, title, badge, meta = {} } = model;
   const noCoverFrame = !cover && (kind === "world" || kind === "player");
   const style = coverStyle(kind, cover);
+  // 上传者 / 被使用次数:有真数据才显(use-count 等 YOR-95,现多为空 → 留位)。
+  const sub = [
+    meta.uploader ? "上传者 " + meta.uploader : "",
+    meta.useCount != null ? "被 " + meta.useCount + " 人借用" : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <div className={["card-front", cover ? "has-cover" : "no-cover"].join(" ")} style={style}>
       {noCoverFrame && <span className="card-spine-frame" aria-hidden="true" />}
-      {badge && <span className="card-badge">{badge.label}</span>}
-      <span className="card-spine-title t-kai">{title}</span>
+      <div className="card-front-top">
+        {badge && <span className="card-badge">{badge.label}</span>}
+        {meta.typeLabel ? <span className="card-type">{meta.typeLabel}</span> : null}
+      </div>
+      <div className="card-front-foot">
+        <span className="card-spine-title t-kai">{title}</span>
+        {sub ? <span className="card-front-meta t-meta">{sub}</span> : null}
+      </div>
     </div>
   );
 }

@@ -331,11 +331,12 @@
   transform: perspective(1300px) rotateY(360deg);
 }
 
-/* 正面:封面(立绘)或书脊底色 + 左上角标 + 底部楷书名 */
+/* 正面:封面(立绘)或书脊底色;顶行 = 类型角标,底部 = 名 + 上传者/使用次数 */
 .card-front {
   display: flex;
-  align-items: flex-end;
-  padding: 14px;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 12px;
   background-size: cover;
   background-position: center;
 }
@@ -359,21 +360,52 @@
   border-radius: 8px;
   pointer-events: none;
 }
+/* 顶行:kind 角标(左)+ 类型标(右,如「官方」);use-count/uploader 走底部 */
+.card-front-top {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+}
 .card-badge {
-  position: absolute;
-  top: 10px;
-  left: 10px;
   font-family: var(--font-sans);
   font-size: 11px;
   padding: 3px 9px;
   border-radius: var(--r-sm);
   background: rgba(20, 18, 14, 0.7);
   color: #e0cfa4;
-  z-index: 1;
+  white-space: nowrap;
 }
 .kind-story .card-badge {
   background: rgba(20, 25, 26, 0.72);
   color: #cfe3d8;
+}
+.card-type {
+  flex: none;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--cinnabar) 88%, transparent);
+  color: #fff;
+  white-space: nowrap;
+}
+/* 底部:名 + 上传者/使用次数(有真数据才显,留位) */
+.card-front-foot {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.card-front-meta {
+  color: rgba(236, 227, 210, 0.84);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .card-spine-title {
   position: relative;
