@@ -1,0 +1,218 @@
+.explore-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--sp-5);
+}
+/* 页标题前置朱砂竖纹 motif(细节⑦,与故事详情章节标记一致)*/
+.explore-head h1 {
+  position: relative;
+  padding-left: 16px;
+}
+.explore-head h1::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.12em;
+  bottom: 0.12em;
+  width: 4px;
+  border-radius: var(--r-pill);
+  background: linear-gradient(180deg, var(--accent), var(--accent-3));
+}
+.explore-sub {
+  color: var(--muted);
+  margin-top: var(--sp-2);
+}
+.explore-count {
+  color: var(--muted);
+  white-space: nowrap;
+  padding-top: var(--sp-2);
+}
+.explore-count b {
+  font-family: var(--font-serif);
+  font-size: var(--fs-h3);
+  color: var(--accent-2);
+  margin: 0 4px;
+}
+.explore-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+.explore-bar .search {
+  width: 320px;
+  max-width: 100%;
+}
+.explore-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+/* 双轨切换 */
+.explore-tracks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+
+/* 排序 */
+.explore-sorts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-left: auto;
+}
+.explore-sorts .chip.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 标签筛选 */
+.explore-genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+
+/* 分割线(做减法后页面偏空,用细金线分段) */
+.explore-rule {
+  height: 1px;
+  margin: var(--sp-3) 0 var(--sp-6);
+  background: linear-gradient(90deg, transparent, var(--line) 8%, var(--line) 92%, transparent);
+}
+
+/* 继续游玩 rail */
+.explore-resume {
+  margin-bottom: var(--sp-5);
+}
+.explore-resume-head {
+  color: var(--muted);
+  margin-bottom: var(--sp-2);
+}
+.explore-resume-card {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  max-width: 100%;
+  padding: 12px 18px;
+  border: 1px solid color-mix(in srgb, var(--accent-2) 45%, var(--line));
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--fg);
+  box-shadow: var(--shadow-card);
+  transition: transform var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.explore-resume-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-2);
+}
+.explore-resume-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: var(--r-pill);
+  background: var(--accent-2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-2) 22%, transparent);
+}
+.explore-resume-title {
+  font-family: var(--font-kai);
+  font-size: var(--fs-h3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.explore-resume-go {
+  color: var(--accent-2);
+  white-space: nowrap;
+}
+
+/* 分页 */
+.explore-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  margin-top: var(--sp-6);
+}
+.explore-pager-info {
+  color: var(--muted);
+  min-width: 56px;
+  text-align: center;
+}
+
+/* 角色卡详情双动作 */
+.explore-modal-actions {
+  display: flex;
+  gap: var(--sp-3);
+}
+.explore-modal-actions .btn {
+  flex: 1;
+}
+
+.explore-empty {
+  text-align: center;
+  padding: var(--sp-8) 0;
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-3);
+}
+
+/* 详情 modal */
+.explore-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--scrim);
+  display: grid;
+  place-items: center;
+  padding: var(--sp-5);
+}
+.explore-modal-card {
+  position: relative;
+  width: min(520px, 92vw);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: var(--sp-6);
+  box-shadow: var(--shadow-pop);
+  animation: login-in 0.32s var(--ease-out) both;
+}
+.explore-modal-x {
+  position: absolute;
+  right: 14px;
+  top: 12px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.explore-modal-title {
+  margin: var(--sp-3) 0 var(--sp-3);
+}
+.explore-modal-blurb {
+  color: var(--fg);
+  margin-bottom: var(--sp-4);
+}
+.explore-modal-meta {
+  color: var(--muted);
+  margin-bottom: var(--sp-3);
+}
+.explore-modal-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--sp-5);
+}

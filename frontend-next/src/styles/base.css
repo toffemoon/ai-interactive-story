@@ -1,0 +1,90 @@
+/* —————————————————————————————————————————————————————————————
+   沐言设计系统 · base reset + 全局壳 (YOR-92)
+   ————————————————————————————————————————————————————————————— */
+@import "./tokens.css";
+@import "./type.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  /* 装饰(细节⑦):底色之上叠两道极淡的角落晕染(赭金 / 松绿),宣纸不再死平;随主题换色。
+     background-attachment: fixed 让晕染像环境光,不随内容滚动。 */
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(115% 80% at 8% -8%, color-mix(in srgb, var(--accent-3) 8%, transparent), transparent 58%),
+    radial-gradient(120% 85% at 100% 0%, color-mix(in srgb, var(--accent-2) 6%, transparent), transparent 54%);
+  background-attachment: fixed;
+  color: var(--fg);
+  font-family: var(--font-serif);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  transition: background-color var(--dur-mid) var(--ease-out),
+    color var(--dur-mid) var(--ease-out);
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* 按钮裸态:语义由 .btn / 组件类给 */
+button {
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+
+/* 细滚动条,跟随主题 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: var(--r-pill);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+  }
+}

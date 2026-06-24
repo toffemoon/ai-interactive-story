@@ -1,0 +1,602 @@
+/* 当前故事 · 台 stage 沉浸层(theme 由 App 在 /play 挂 data-theme=stage)。
+   三栏:卡组栏(仅 dev/作者)/ 叙事区 / 右状态栏 8 栏目。 */
+.story {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh; /* 定高 → 输入框固定底部,中间 feed 独立滚动(细节⑤) */
+  max-height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* 顶栏 */
+.story-top {
+  flex: none;
+  position: relative; /* 标题绝对居中的定位上下文(细节③) */
+  display: flex;
+  align-items: center;
+  justify-content: space-between; /* 左离开 / 右工具组分两端,中间让给绝对居中的标题 */
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-5);
+  border-bottom: 1px solid var(--line);
+}
+.story-back {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui-sm);
+  padding: 6px 12px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.story-back:hover {
+  color: var(--fg);
+  border-color: var(--muted);
+}
+/* 标题钉在页面正中,不随两侧按钮宽度漂移(细节③);pointer-events:none 保证不挡按钮点击 */
+.story-title {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 44%;
+  text-align: center;
+  pointer-events: none;
+  font-size: 20px;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 720px) {
+  .story-title {
+    max-width: 38%;
+    font-size: 17px;
+  }
+}
+.story-top-right {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.story-usage {
+  color: var(--muted);
+  margin-right: var(--sp-2);
+}
+.story-toolbtn,
+.story-statusbtn {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui-sm);
+  padding: 6px 10px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.story-toolbtn:hover:not(:disabled),
+.story-statusbtn:hover {
+  color: var(--fg);
+  border-color: var(--accent-2);
+}
+.story-toolbtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.story-toolbtn.is-on {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.story-statusbtn {
+  display: inline-block; /* 桌面也出:可收起右状态栏(细节⑥) */
+}
+
+/* 三栏主体 */
+.story-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* 左:卡组栏 */
+.story-deck {
+  flex: none;
+  width: 220px;
+  border-right: 1px solid var(--line);
+  padding: var(--sp-4);
+  overflow-y: auto;
+}
+.story-deck-h {
+  font-family: var(--font-kai);
+  font-size: var(--fs-h3);
+  color: var(--fg);
+}
+.story-deck-note {
+  color: var(--muted);
+  margin: var(--sp-2) 0 var(--sp-3);
+}
+.story-deck-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.story-deck-card {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--panel);
+}
+.story-deck-card-name {
+  flex: 1;
+  min-width: 0;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.story-deck-x {
+  flex: none;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: var(--fs-meta);
+  cursor: pointer;
+}
+.story-deck-x:hover {
+  color: var(--accent);
+}
+
+/* 中:叙事区 */
+.story-stage {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.story-scene-head {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-5) 0;
+}
+.story-round {
+  color: var(--muted);
+}
+.story-scene-loc {
+  font-family: var(--font-kai);
+  font-size: var(--fs-h3);
+  color: var(--accent-2);
+}
+.story-scene-time {
+  color: var(--muted);
+}
+
+.story-feed {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+.story-feed > * {
+  width: 100%;
+  max-width: 680px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.story-player {
+  display: flex;
+  justify-content: flex-end;
+}
+.story-player-bubble {
+  max-width: 78%;
+  background: color-mix(in srgb, var(--accent-2) 22%, var(--panel));
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui);
+  line-height: 1.5;
+  padding: 9px 13px;
+  border-radius: 14px 4px 14px 14px;
+}
+
+.story-turn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.story-turn.is-streaming {
+  opacity: 0.92;
+}
+.story-narration p {
+  margin: 0 0 var(--sp-3);
+  color: var(--fg);
+}
+.story-narration p:last-child {
+  margin-bottom: 0;
+}
+
+.story-dialogue {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.dlg {
+  border-left: 2px solid color-mix(in srgb, var(--accent-2) 60%, transparent);
+  padding-left: var(--sp-3);
+}
+.dlg-name {
+  display: block;
+  font-size: 16px;
+  color: var(--accent-2);
+  margin-bottom: 2px;
+}
+.dlg-text p {
+  margin: 0 0 2px;
+  font-family: var(--font-serif);
+  font-size: var(--fs-read);
+  line-height: var(--lh-read);
+  color: var(--fg);
+  text-align: justify;
+  text-justify: inter-ideograph;
+}
+.dlg-text p.dlg-q {
+  color: var(--fg);
+}
+.dlg-text p.dlg-a {
+  color: var(--muted);
+  font-size: var(--fs-body);
+}
+
+.story-pending,
+.story-error {
+  color: var(--muted);
+  font-family: var(--font-sans);
+}
+.story-error {
+  color: var(--accent);
+}
+
+/* 选项并入叙事流(细节③):作为 .story-feed 末尾的一项,随内容滚动;
+   宽度/居中沿用 .story-feed > * 的 680px 容器,不再是固定底栏。 */
+.story-choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.story-choices-hint {
+  color: var(--muted);
+  margin-bottom: var(--sp-1);
+  font-family: var(--font-sans);
+}
+.story-choice {
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.story-choice:hover {
+  border-color: var(--accent-2);
+  background: color-mix(in srgb, var(--accent-2) 8%, var(--panel));
+}
+.story-choice:active {
+  transform: scale(0.99);
+}
+.story-choice-label {
+  display: block;
+  color: var(--fg);
+}
+.story-choice-desc {
+  display: block;
+  margin-top: 2px;
+}
+
+.story-composer {
+  flex: none;
+  display: flex;
+  gap: var(--sp-3);
+  align-items: stretch; /* 输入框与发送等高,不一高一低(细节⑦) */
+  padding: var(--sp-3) var(--sp-5) calc(var(--sp-5) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+}
+.story-composer textarea {
+  flex: 1;
+  resize: none;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 10px 13px;
+  font-family: var(--font-serif);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  color: var(--fg);
+  outline: none;
+}
+.story-composer textarea:focus {
+  border-color: var(--accent);
+}
+.story-composer .btn {
+  align-self: stretch;
+  min-height: 44px;
+}
+
+/* 右:世界状态(8 栏目) */
+.story-status {
+  flex: none;
+  width: 320px;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+/* 桌面:收起 = 整列隐藏(细节⑥),叙事区随之拉宽 */
+.story:not(.status-open) .story-status {
+  display: none;
+}
+.story-status-h {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-4) var(--sp-4) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-kai);
+  font-size: var(--fs-h3);
+  color: var(--fg);
+}
+.story-status-x {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+  display: none; /* 仅移动端抽屉显示 */
+}
+.story-status-list {
+  flex: 1;
+}
+
+.status-sec {
+  border-bottom: 1px solid var(--line);
+}
+.status-sec-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.status-sec-head::-webkit-details-marker {
+  display: none;
+}
+.status-sec-head::after {
+  content: "＋";
+  margin-left: auto;
+  color: var(--muted);
+  font-size: var(--fs-ui-sm);
+}
+.status-sec[open] > .status-sec-head::after {
+  content: "－";
+}
+.status-sec-title {
+  font-family: var(--font-kai);
+  font-size: var(--fs-ui);
+  color: var(--fg);
+}
+.status-sec-count {
+  color: var(--accent-2);
+}
+.status-sec-body {
+  padding: 0 var(--sp-4) var(--sp-3);
+}
+.status-empty {
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+/* 键值 / 列表 */
+.status-kv {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  font-size: var(--fs-ui-sm);
+  color: var(--fg);
+  line-height: var(--lh-body);
+}
+.status-k {
+  display: inline-block;
+  min-width: 44px;
+  margin-right: var(--sp-2);
+  color: var(--accent-3);
+  font-family: var(--font-kai);
+}
+.status-rels,
+.status-mem,
+.status-hist,
+.status-tl,
+.status-map {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.status-rel {
+  display: flex;
+  flex-direction: column;
+}
+.status-rel-nm {
+  color: var(--fg);
+}
+.status-rel-v {
+  color: var(--muted);
+}
+.status-mem-grp {
+  margin-bottom: var(--sp-2);
+}
+.status-mem-i,
+.status-hist-i {
+  color: var(--muted);
+  line-height: var(--lh-body);
+}
+.status-tl-i {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+.status-tl-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: var(--r-pill);
+  background: var(--muted);
+  transform: translateY(1px);
+}
+.status-tl-resolved {
+  background: var(--accent-2);
+}
+.status-tl-active {
+  background: var(--accent);
+}
+.status-tl-pending {
+  background: var(--line);
+}
+.status-map-here {
+  font-family: var(--font-kai);
+  font-size: var(--fs-h3);
+  color: var(--accent-2);
+}
+.status-map-exits {
+  color: var(--muted);
+  margin: var(--sp-1) 0;
+}
+
+/* 故事记录抽屉 */
+.story-log {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--scrim);
+  display: flex;
+  justify-content: flex-end;
+}
+.story-log-panel {
+  width: min(560px, 92vw);
+  height: 100%;
+  background: var(--bg);
+  border-left: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-pop);
+  animation: storylog-in 0.28s var(--ease-out) both;
+}
+@keyframes storylog-in {
+  from {
+    transform: translateX(30px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.story-log-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-kai);
+  font-size: var(--fs-h3);
+  color: var(--fg);
+}
+.story-log-head .t-meta {
+  color: var(--muted);
+}
+.story-log-x {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+}
+.story-log-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.story-log-me {
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--accent-2) 10%, transparent);
+  border-left: 2px solid var(--accent-2);
+  color: var(--fg);
+  font-size: var(--fs-ui);
+}
+.story-log-me-tag {
+  color: var(--accent-2);
+  margin-right: var(--sp-2);
+}
+.story-log-turn {
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.story-log-rd {
+  color: var(--accent-3);
+  letter-spacing: 0.16em;
+}
+.story-log-ev {
+  color: var(--accent-3);
+}
+
+/* ———— 移动:三栏收成单列,右状态栏转抽屉 ———— */
+@media (max-width: 960px) {
+  .story-statusbtn {
+    display: inline-block;
+  }
+  .story-deck {
+    display: none; /* dev 卡组栏在窄屏隐藏(dev 视图以桌面为主) */
+  }
+  /* 移动:始终作为抽屉渲染(覆盖桌面收起的 display:none),靠 translateX 显隐 */
+  .story-status,
+  .story:not(.status-open) .story-status {
+    display: flex;
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(320px, 86vw);
+    z-index: 50;
+    transform: translateX(100%);
+    transition: transform var(--dur-mid) var(--ease-out);
+    box-shadow: var(--shadow-pop);
+  }
+  .story.status-open .story-status {
+    transform: translateX(0);
+  }
+  .story-status-x {
+    display: block;
+  }
+}

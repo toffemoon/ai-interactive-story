@@ -1,0 +1,38 @@
+/* React Bits Preloader · 冷启动开屏(curtain):暖夜底 + 楷书「沐言」金字,贴沐言气质。
+   preloader.css 用了 shadcn 的 --background/--foreground 变量(本项目没有),这里只用到 curtain 面板(bgColor)
+   + 居中 loading 文字,文字色在此覆盖,不依赖那些缺失变量。 */
+.preloader-loading-text-word {
+  font-family: var(--font-kai);
+  font-size: 48px;
+  letter-spacing: 0.2em;
+  color: var(--stage-gilt);
+}
+
+/* 内容页(除纯聊全屏外共用)。拓宽 + 收顶,减少两侧空白、让首屏内容上提(细节④)。 */
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--sp-4) clamp(20px, 4vw, 40px) var(--sp-8);
+}
+
+/* 页面切换 = 涟漪圆形揭示(切路由 key 变 → 重跑)。
+   circle(75%) ≈ 全覆盖任意尺寸/可滚动页;动画无 fill,结束回退到无裁切 → 对页内 fixed 弹层安全。
+   用 clip-path 不用 transform(transform 会成 fixed 后代包含块);动画跑不跑页面都可见(基态无裁切)。 */
+@keyframes mu-ripple-in {
+  from {
+    clip-path: circle(0% at 50% 50%);
+    opacity: 0.55;
+  }
+  to {
+    clip-path: circle(75% at 50% 50%);
+    opacity: 1;
+  }
+}
+.page-reveal {
+  animation: mu-ripple-in 0.55s var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-reveal {
+    animation: none;
+  }
+}

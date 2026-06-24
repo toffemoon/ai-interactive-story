@@ -1,0 +1,406 @@
+/* —————————————————————————————————————————————————————————————
+   沐言 · 全局导航壳 AppShell(YOR-96 / 模块①)
+   桌面左竖栏 Rail / 移动底部 tab 二合一(响应式单组件,断点 ≤720)。
+   菜单默认隐藏 + 唤出按钮;过渡先用纯 CSS(transform/opacity),
+   待 React Bits license 接入后替换为其组件动效。
+   全程吃语义 token(纸 paper / 台 stage 两层),不写死颜色。
+   ————————————————————————————————————————————————————————————— */
+
+.shell {
+  min-height: 100%;
+}
+/* 顶部留出固定唤出按钮的高度,避免压住页面首屏内容 */
+.shell-main {
+  min-height: 100%;
+  padding-top: 52px;
+}
+.shell-main--immersive {
+  min-height: 100%;
+  padding-top: 0;
+}
+/* 立绘主页(家):满铺,无纸页顶留白;浮动唤出钮仍在(它 position:fixed) */
+.shell-main--home {
+  padding-top: 0;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* —— 唤出/收起按钮(全局常驻,折叠态兼品牌标)—— */
+.shell-toggle {
+  position: fixed;
+  top: var(--sp-3);
+  left: var(--sp-3);
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  backdrop-filter: blur(8px);
+  color: var(--fg);
+  box-shadow: var(--shadow-card);
+  transition: background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.shell-toggle:hover {
+  background: var(--panel);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+}
+.shell-toggle-mark {
+  font-family: var(--font-kai);
+  font-size: 18px;
+  line-height: 1;
+  color: var(--accent);
+  letter-spacing: 0.08em;
+}
+.shell-toggle-ico {
+  display: inline-flex;
+  color: var(--muted);
+}
+
+/* 立绘主页(stage 暖夜)上,唤出钮换成清爽白胶囊:深场景上更利落,
+   ☰ 图标用深色不再发灰/像被禁用(YOR-136 反馈)。stage 非沉浸页只有 /home,故只影响首页。 */
+[data-theme="stage"] .shell-toggle {
+  background: rgba(250, 247, 242, 0.94);
+  border-color: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 8px 22px -8px rgba(0, 0, 0, 0.6);
+}
+[data-theme="stage"] .shell-toggle:hover {
+  background: #fffdfa;
+  border-color: var(--accent-2);
+}
+[data-theme="stage"] .shell-toggle .shell-toggle-mark {
+  color: var(--cinnabar);
+}
+[data-theme="stage"] .shell-toggle-ico {
+  color: #5a4a38;
+}
+
+/* —— 抓背景 scrim —— */
+.shell-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--scrim);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-mid) var(--ease-out);
+}
+.shell[data-open="true"] .shell-scrim {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* —— 导航(共通)—— */
+.shell-nav {
+  position: fixed;
+  z-index: 55;
+  display: flex;
+  background: var(--panel);
+  transition: transform var(--dur-mid) var(--ease-out);
+}
+.shell-navlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+}
+.shell-navitem {
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+  position: relative;
+  transition: color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.shell-navitem:active {
+  transform: scale(0.97);
+}
+.shell-navitem-ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.shell-navitem-ico svg {
+  width: 22px;
+  height: 22px;
+}
+.shell-navitem-plus {
+  color: var(--accent);
+  font-weight: 600;
+}
+.shell-navitem.is-active {
+  color: var(--fg);
+}
+.shell-navitem:hover:not(.is-active) {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
+}
+
+.shell-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+}
+.shell-logo-box {
+  width: 34px;
+  height: 34px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-sm);
+  flex: none;
+}
+.shell-brand-name {
+  font-family: var(--font-kai);
+  font-size: 22px;
+  color: var(--accent);
+  letter-spacing: 0.1em;
+}
+
+.shell-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.shell-user {
+  color: var(--muted);
+}
+.shell-foot-btn {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  padding: 4px 10px;
+  border-radius: var(--r-sm);
+  transition: color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.shell-foot-btn:hover {
+  color: var(--fg);
+  border-color: var(--accent);
+}
+.shell-foot-link {
+  color: var(--muted);
+  opacity: 0.7;
+}
+.shell-foot-link:hover {
+  color: var(--fg);
+  opacity: 1;
+}
+
+/* ———————————————— 桌面:左竖栏 Rail(>720)———————————————— */
+@media (min-width: 721px) {
+  .shell-nav {
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 240px;
+    flex-direction: column;
+    border-right: 1px solid var(--line);
+    padding: calc(var(--sp-3) + 46px) var(--sp-4) var(--sp-4);
+    transform: translateX(-100%);
+    box-shadow: var(--shadow-pop);
+  }
+  .shell[data-open="true"] .shell-nav {
+    transform: translateX(0);
+  }
+  .shell-brand {
+    padding: 0 var(--sp-2) var(--sp-4);
+    margin-bottom: var(--sp-2);
+    border-bottom: 1px solid var(--line);
+  }
+  .shell-navlist {
+    flex-direction: column;
+    gap: 2px;
+    margin-top: var(--sp-3);
+  }
+  .shell-navitem {
+    gap: var(--sp-3);
+    height: 52px;
+    padding: 0 var(--sp-3);
+    border-radius: var(--r-sm);
+  }
+  .shell-navitem-zh {
+    font-family: var(--font-serif);
+    font-size: 17px;
+    letter-spacing: 0.1em;
+  }
+  .shell-navitem-plus {
+    margin-left: auto;
+    font-size: 18px;
+  }
+  .shell-navitem.is-active {
+    background: color-mix(in srgb, var(--accent-2) 16%, transparent);
+  }
+  .shell-navitem.is-active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    border-radius: var(--r-pill);
+    background: var(--accent-3);
+  }
+  .shell-foot {
+    margin-top: auto;
+    padding-top: var(--sp-3);
+    border-top: 1px solid var(--line);
+    flex-wrap: wrap;
+    row-gap: var(--sp-2);
+  }
+  .shell-foot-link {
+    margin-left: auto;
+  }
+}
+
+/* ———————————————— 移动:底部 tab(≤720)———————————————— */
+@media (max-width: 720px) {
+  /* 移动底 tab 只放 5 格;品牌/账号脚位收到「我的」页 */
+  .shell-brand,
+  .shell-foot {
+    display: none;
+  }
+  .shell-nav {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    flex-direction: column;
+    border-top: 1px solid var(--line);
+    padding-bottom: env(safe-area-inset-bottom);
+    transform: translateY(100%);
+    box-shadow: var(--shadow-pop);
+  }
+  .shell[data-open="true"] .shell-nav {
+    transform: translateY(0);
+  }
+  .shell-navlist {
+    flex-direction: row;
+  }
+  .shell-navli {
+    flex: 1;
+  }
+  .shell-navitem {
+    flex-direction: column;
+    gap: 3px;
+    padding: 9px 0 8px;
+    justify-content: center;
+  }
+  .shell-navitem-ico svg {
+    width: 20px;
+    height: 20px;
+  }
+  .shell-navitem-zh {
+    font-family: var(--font-serif);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+  }
+  /* 移动端创作 [+] 不单列加号,合进图标语义即可 */
+  .shell-navitem-plus {
+    display: none;
+  }
+  .shell-navitem.is-active {
+    color: var(--accent);
+  }
+  .shell-navitem.is-active::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 28%;
+    right: 28%;
+    height: 2px;
+    border-radius: var(--r-pill);
+    background: var(--accent-3);
+  }
+}
+
+/* —————————————— 「继续游玩」浮动入口 ResumeBar —————————————— */
+.resume-bar {
+  position: fixed;
+  right: var(--sp-4);
+  bottom: var(--sp-5);
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  max-width: min(78vw, 320px);
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent-2) 50%, var(--line));
+  border-radius: var(--r-pill);
+  background: var(--panel);
+  color: var(--fg);
+  box-shadow: var(--shadow-pop);
+  transition: transform var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.resume-bar:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-2);
+}
+/* 菜单展开时收起浮动入口(移动端底 tab 与之同处底栏,避免重叠挡点击) */
+.shell[data-open="true"] .resume-bar {
+  display: none;
+}
+.resume-bar-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: var(--r-pill);
+  background: var(--accent-2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-2) 22%, transparent);
+}
+.resume-bar-tx {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+.resume-bar-label {
+  color: var(--muted);
+}
+.resume-bar-title {
+  font-family: var(--font-kai);
+  font-size: 16px;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.resume-bar-arrow {
+  color: var(--accent-2);
+  font-size: 16px;
+  flex: none;
+}
+@media (max-width: 720px) {
+  .resume-bar {
+    bottom: calc(var(--sp-4) + env(safe-area-inset-bottom));
+  }
+}
+
+/* —————————————— 占位页(stub:开发中的 tab)—————————————— */
+.stub {
+  min-height: 60vh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--sp-3);
+  text-align: center;
+}
+.stub-sub {
+  color: var(--muted);
+  max-width: 40ch;
+}
+.stub-links {
+  display: flex;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+  color: var(--muted);
+  font-size: var(--fs-ui-sm);
+}

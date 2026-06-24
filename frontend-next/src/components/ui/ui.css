@@ -1,0 +1,534 @@
+/* —————————————————————————————————————————————————————————————
+   沐言 · primitives 样式 (YOR-92)
+   只吃语义 token(--bg/--fg/--accent…),换主题 = 换 [data-theme]。
+   视觉对齐:组件预览-v0.html + 卡片-翻转手感.html。
+   ————————————————————————————————————————————————————————————— */
+
+/* ───── Button ───── */
+.btn {
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui);
+  line-height: 1;
+  border-radius: var(--r-md);
+  padding: 9px 18px;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out),
+    filter var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* 按压微动效(细节⑧:每次交互都有流畅反馈)*/
+.btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.975);
+}
+.btn--sm {
+  font-size: var(--fs-ui-sm);
+  padding: 8px 14px;
+  border-radius: 9px;
+}
+.btn--full {
+  flex-basis: 100%;
+  width: 100%;
+}
+
+.btn--primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.btn--primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+.btn--secondary {
+  background: transparent;
+  border-color: var(--accent-2);
+  color: var(--accent-2);
+}
+.btn--secondary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-2) 12%, transparent);
+}
+.btn--ghost {
+  background: transparent;
+  color: var(--muted);
+}
+.btn--ghost:hover:not(:disabled) {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+.btn--line {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--muted);
+}
+.btn--line:hover:not(:disabled) {
+  border-color: var(--muted);
+  color: var(--fg);
+}
+
+/* ───── Chip ───── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui-sm);
+  padding: 6px 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.chip:hover:not(.is-on) {
+  color: var(--fg);
+  border-color: var(--muted);
+}
+.chip:active {
+  transform: scale(0.95);
+}
+.chip.is-on {
+  background: var(--fg);
+  color: var(--bg);
+  border-color: var(--fg);
+}
+
+/* ───── Badge(类型角标)───── */
+.badge {
+  display: inline-block;
+  font-family: var(--font-sans);
+  font-size: var(--fs-meta);
+  padding: 3px 9px;
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+}
+.badge.tone-pine {
+  background: var(--badge-pine-bg);
+  color: var(--badge-pine-fg);
+}
+.badge.tone-gilt {
+  background: var(--badge-gilt-bg);
+  color: var(--badge-gilt-fg);
+}
+.badge.tone-cinnabar {
+  background: var(--badge-cinnabar-bg);
+  color: var(--badge-cinnabar-fg);
+}
+
+/* ───── Tag(状态/元信息小标)───── */
+.tag {
+  display: inline-block;
+  font-family: var(--font-sans);
+  font-size: var(--fs-meta);
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.tag--scene {
+  background: var(--badge-gilt-bg);
+  color: var(--badge-gilt-fg);
+  border-color: transparent;
+}
+.tag--relation {
+  background: var(--badge-cinnabar-bg);
+  color: var(--badge-cinnabar-fg);
+  border-color: transparent;
+}
+
+/* ───── Input / Search ───── */
+.input {
+  width: 100%;
+  height: 40px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 0 14px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui);
+  color: var(--fg);
+  outline: none;
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.input::placeholder {
+  color: var(--muted);
+}
+.input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 0 12px;
+  height: 40px;
+}
+.search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.search-icon {
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui);
+}
+.search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui);
+  color: var(--fg);
+  min-width: 0;
+}
+.search-input::placeholder {
+  color: var(--muted);
+}
+
+/* ───── ChatBubble(微信式)───── */
+.bubble-row {
+  display: flex;
+  margin-bottom: 8px;
+}
+.bubble-row--sent {
+  justify-content: flex-end;
+}
+.bubble {
+  max-width: 75%;
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui);
+  line-height: 1.5;
+  padding: 8px 12px;
+}
+.bubble--received {
+  background: var(--sunk);
+  color: var(--fg);
+  border-radius: 4px 14px 14px 14px;
+}
+.bubble--sent {
+  background: var(--accent-2);
+  color: #f1efe6;
+  border-radius: 14px 4px 14px 14px;
+}
+
+/* ═════════════════════════════════════════════════════════════
+   统一 Card
+   ════════════════════════════════════════════════════════════ */
+
+/* 货架:列 minmax(190,1fr) 铺满整行(两端对齐);卡片填满各列、固定间距,末行左对齐不散 */
+.card-shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--sp-4);
+}
+/* 网格(非横滚)模式下卡片填满列宽,保 2:3 书形比例 → 整行齐到两端 */
+.card-shelf:not(.is-scroll) > .card--shelf {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 190 / 286;
+}
+
+/* 卡片入场:渐起 + 阶梯延时(细节⑧)。翻面 transform 在子面 .card-front/.card-back 上
+   (各自 perspective() 独立),容器这层 translateY 入场不影响 flip 命中。
+   prefers-reduced-motion 由 base.css 全局把时长压到 1ms。 */
+@keyframes mu-card-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.card-shelf > * {
+  animation: mu-card-rise var(--dur-mid) var(--ease-out) both;
+}
+.card-shelf > *:nth-child(2) { animation-delay: 35ms; }
+.card-shelf > *:nth-child(3) { animation-delay: 70ms; }
+.card-shelf > *:nth-child(4) { animation-delay: 105ms; }
+.card-shelf > *:nth-child(5) { animation-delay: 140ms; }
+.card-shelf > *:nth-child(6) { animation-delay: 175ms; }
+.card-shelf > *:nth-child(7) { animation-delay: 210ms; }
+.card-shelf > *:nth-child(8) { animation-delay: 245ms; }
+.card-shelf > *:nth-child(9) { animation-delay: 280ms; }
+.card-shelf > *:nth-child(n + 10) { animation-delay: 300ms; }
+
+/* 横轴滚动模式(故事详情 角色卡 / 选主角:对齐页面边缘、不换行,环形轮播的感觉) */
+.card-shelf.is-scroll {
+  display: flex;
+  grid-template-columns: none;
+  overflow-x: auto;
+  overflow-y: visible;
+  padding-bottom: var(--sp-3);
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+.card-shelf.is-scroll > * {
+  flex: none;
+  scroll-snap-align: start;
+}
+/* 滚动模式下背面简介不再 4 行截断,改满高滚动(太长内容用滚动条,YOR 细节② 要求) */
+.card-shelf.is-scroll .card-back-blurb {
+  display: block;
+  -webkit-line-clamp: unset;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ── shelf 竖卡:190×286 / 2:3,受控 3D 翻面 ── */
+.card--shelf {
+  width: 190px;
+  height: 286px;
+  cursor: pointer;
+  outline: none;
+}
+.card--shelf .card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+/* 翻转用「两面各自独立 rotateY + perspective() 函数」,不用父级 preserve-3d:
+   活动面落定在 0°/360°(平面正向),Chromium 命中测试正常 —— 根治翻面后背面按钮真机点不动
+   (preserve-3d + 父 perspective + 背面 rotateY(180) 会让背面内容命中失效,Playwright 真点实测过)。 */
+.card--shelf .card-face,
+.card--shelf .card-front {
+  position: absolute;
+  inset: 0;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  border-radius: var(--r-card);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  transition: transform 0.6s var(--ease-out);
+}
+.card--shelf .card-front {
+  transform: perspective(1300px) rotateY(0deg);
+}
+.card--shelf .card-back {
+  transform: perspective(1300px) rotateY(180deg);
+}
+.card--shelf.is-flipped .card-front {
+  transform: perspective(1300px) rotateY(180deg);
+}
+.card--shelf.is-flipped .card-back {
+  transform: perspective(1300px) rotateY(360deg);
+}
+
+/* 正面:封面(立绘)或书脊底色 + 左上角标 + 底部楷书名 */
+.card-front {
+  display: flex;
+  align-items: flex-end;
+  padding: 14px;
+  background-size: cover;
+  background-position: center;
+}
+.card-front::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 52%;
+  background: linear-gradient(180deg, transparent, rgba(15, 12, 8, 0.55));
+  pointer-events: none;
+}
+.card-front.no-cover::before {
+  opacity: 0.5;
+}
+.card-spine-frame {
+  position: absolute;
+  inset: 11px;
+  border: 1px solid rgba(224, 207, 164, 0.28);
+  border-radius: 8px;
+  pointer-events: none;
+}
+.card-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: var(--r-sm);
+  background: rgba(20, 18, 14, 0.7);
+  color: #e0cfa4;
+  z-index: 1;
+}
+.kind-story .card-badge {
+  background: rgba(20, 25, 26, 0.72);
+  color: #cfe3d8;
+}
+.card-spine-title {
+  position: relative;
+  font-size: 34px;
+  line-height: 1.04;
+  color: #ece3d2;
+  z-index: 1;
+  word-break: break-word;
+  max-height: 4.2em;
+  overflow: hidden;
+}
+
+/* 背面:书名 + 一句话简介 + 标签 + 操作 */
+.card-back {
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+}
+.card-back-title {
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--fg);
+}
+.card-back-blurb {
+  color: var(--muted);
+  line-height: 1.62;
+  margin: 8px 0 11px;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: auto;
+}
+.card-heat {
+  color: var(--accent);
+  margin: 10px 0 0;
+}
+.card-note {
+  margin: 10px 0 0;
+}
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 11px;
+}
+.card-actions .btn {
+  flex: 1 1 auto;
+}
+.card-actions .btn--full {
+  flex-basis: 100%;
+}
+
+/* ── row 横排 ── */
+.card--row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+}
+.card-row-cover {
+  width: 46px;
+  height: 64px;
+  flex: none;
+  border-radius: var(--r-sm);
+  background-size: cover;
+  background-position: center;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.card-row-spine {
+  font-size: 22px;
+  color: #ece3d2;
+}
+.card-row-body {
+  flex: 1;
+  min-width: 0;
+}
+.card-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card-badge-inline {
+  font-family: var(--font-sans);
+  font-size: var(--fs-meta);
+  color: var(--muted);
+}
+.card-row-title {
+  font-family: var(--font-serif);
+  font-size: var(--fs-h3);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-row-blurb {
+  color: var(--muted);
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card--row .card-tags {
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+.card--row .card-actions {
+  margin-top: 0;
+  flex: none;
+}
+.card--row .card-actions .btn {
+  flex: none;
+}
+
+/* ── thumb 缩略(选择器)── */
+.card--thumb {
+  width: 120px;
+  cursor: pointer;
+}
+.card-thumb-cover {
+  width: 120px;
+  height: 160px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background-size: cover;
+  background-position: center;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.card--thumb.is-selected .card-thumb-cover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.card-thumb-spine {
+  font-size: 26px;
+  color: #ece3d2;
+}
+.card-thumb-title {
+  margin-top: 6px;
+  text-align: center;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
