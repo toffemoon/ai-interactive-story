@@ -16,6 +16,17 @@ body,
   height: 100%;
 }
 
+/* 滚动条常驻 gutter:内容多的页会出纵向滚动条、内容少的不会,
+   居中的 .page 在两者之间因可用宽变化而左右跳(探索切轨道整体左移 ~5px 即此)。
+   常驻 gutter → 可用宽恒定 → 不跳。
+   stage(立绘主页 /home、游玩 /play 满铺且不滚动)排除,否则右侧白白留出 8px 缝。 */
+html {
+  scrollbar-gutter: stable;
+}
+html[data-theme="stage"] {
+  scrollbar-gutter: auto;
+}
+
 body {
   margin: 0;
   /* 装饰(细节⑦):底色之上叠两道极淡的角落晕染(赭金 / 松绿),宣纸不再死平;随主题换色。

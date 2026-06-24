@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "./state/auth";
 import AppShell from "./components/shell/AppShell";
@@ -28,10 +28,40 @@ function RequireAuth({ children }) {
 // clip-path 不建包含块(只是过渡中视觉裁切,导航时无浮层打开),且 circle(75%) ≈ 全覆盖任意尺寸/可滚动页,过渡后不残留裁切。
 function ShellLayout() {
   const loc = useLocation();
+  const revealRef = useRef(null);
+  const lastPointer = useRef(null);
+
+  // 记录最近一次指针落点(切页前点的那个按钮/菜单项),供涟漪从该点扩散(细节#5)。
+  useEffect(() => {
+    const onDown = (e) => {
+      lastPointer.current = { x: e.clientX, y: e.clientY };
+    };
+    document.addEventListener("pointerdown", onDown, true);
+    return () => document.removeEventListener("pointerdown", onDown, true);
+  }, []);
+
+  const revealKey = loc.pathname.startsWith("/story/") ? "story-detail" : loc.pathname;
+
+  // 新页挂载后、首帧绘制前,把点击坐标(换算到 .page-reveal 自身盒)写进 CSS 变量 → 涟漪从该点起。
+  // 无点击来源(程序跳转/初次载入)则不设,回退默认 50% 50%(居中)。
+  useLayoutEffect(() => {
+    const el = revealRef.current;
+    if (!el) return;
+    const p = lastPointer.current;
+    if (p && p.x != null) {
+      const rect = el.getBoundingClientRect();
+      el.style.setProperty("--ripple-x", p.x - rect.left + "px");
+      el.style.setProperty("--ripple-y", p.y - rect.top + "px");
+    } else {
+      el.style.removeProperty("--ripple-x");
+      el.style.removeProperty("--ripple-y");
+    }
+  }, [revealKey]);
+
   return (
     <AppShell>
       {/* key 变(切路由)→ 重挂 → 重跑 CSS 涟漪揭示动画。动画无 fill,结束回退到无裁切,fixed 弹层安全。 */}
-      <div key={loc.pathname.startsWith("/story/") ? "story-detail" : loc.pathname} className="page-reveal">
+      <div key={revealKey} ref={revealRef} className="page-reveal">
         <Outlet />
       </div>
     </AppShell>
