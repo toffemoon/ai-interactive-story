@@ -60,6 +60,24 @@
   color: var(--muted);
 }
 
+/* 立绘主页(stage 暖夜)上,唤出钮换成清爽白胶囊:深场景上更利落,
+   ☰ 图标用深色不再发灰/像被禁用(YOR-136 反馈)。stage 非沉浸页只有 /home,故只影响首页。 */
+[data-theme="stage"] .shell-toggle {
+  background: rgba(250, 247, 242, 0.94);
+  border-color: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 8px 22px -8px rgba(0, 0, 0, 0.6);
+}
+[data-theme="stage"] .shell-toggle:hover {
+  background: #fffdfa;
+  border-color: var(--accent-2);
+}
+[data-theme="stage"] .shell-toggle .shell-toggle-mark {
+  color: var(--cinnabar);
+}
+[data-theme="stage"] .shell-toggle-ico {
+  color: #5a4a38;
+}
+
 /* —— 抓背景 scrim —— */
 .shell-scrim {
   position: fixed;
