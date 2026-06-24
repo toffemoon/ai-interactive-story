@@ -59,6 +59,8 @@ export default function AppShell({ children }) {
   const [open, setOpen] = useState(false);
 
   const immersive = loc.pathname.startsWith("/play");
+  // 立绘主页(家):背景+立绘满铺(无纸页顶留白),但保留浮动唤出菜单 + 抽屉(第三种壳形态)。
+  const atHome = loc.pathname.startsWith("/home");
 
   // 切路由后收起菜单(「唤出 → 选 → 收起」语义;默认隐藏)。
   useEffect(() => {
@@ -97,11 +99,12 @@ export default function AppShell({ children }) {
       <div className="shell-scrim" onClick={() => setOpen(false)} aria-hidden="true" />
 
       <nav className="shell-nav" aria-label="主导航">
-        <div className="shell-brand">
+        {/* 品牌点击回「家」/home(本批立绘主页) */}
+        <button className="shell-brand" onClick={() => navigate("/home")} aria-label="回到首页">
           {/* logo 先留空:占位框 + 文字「沐言」(资产待 Monika 出) */}
           <span className="shell-logo-box" aria-hidden="true" />
           <span className="shell-brand-name t-kai">沐言</span>
-        </div>
+        </button>
 
         <ul className="shell-navlist">
           {NAV.map((it) => (
@@ -138,7 +141,7 @@ export default function AppShell({ children }) {
         </div>
       </nav>
 
-      <main className="shell-main">{children}</main>
+      <main className={"shell-main" + (atHome ? " shell-main--home" : "")}>{children}</main>
       <ResumeBar />
     </div>
   );

@@ -11,6 +11,7 @@ import Create from "./routes/Create";
 import Mine from "./routes/Mine";
 import Forum from "./routes/Forum";
 import Story from "./routes/Story";
+import Home from "./routes/Home";
 import Styleguide from "./routes/Styleguide";
 import Preloader from "./components/preloader";
 import "./App.css";
@@ -45,12 +46,14 @@ export default function App() {
   const { ready, enabled, user } = useAuth();
   const loc = useLocation();
 
-  // 主题:当前故事 = 台(暖夜沉浸),其余 = 纸。
+  // 主题:当前故事 + 立绘主页 = 台(暖夜沉浸),其余 = 纸。
   useEffect(() => {
-    document.documentElement.dataset.theme = loc.pathname.startsWith("/play") ? "stage" : "paper";
+    const stage = loc.pathname.startsWith("/play") || loc.pathname.startsWith("/home");
+    document.documentElement.dataset.theme = stage ? "stage" : "paper";
   }, [loc.pathname]);
 
-  const home = user || !enabled ? "/explore" : "/login";
+  // 登录后默认落「立绘主页(家)」/home(原落 /explore,本批方案 A 翻案;探索退进菜单 + 首页主按钮直达)。
+  const home = user || !enabled ? "/home" : "/login";
 
   // 冷启动 loading 用 React Bits Preloader(curtain 退出);就绪后渲染路由(YOR-32 + 细节⑥ React Bits)。
   return (
@@ -77,6 +80,7 @@ export default function App() {
               </RequireAuth>
             }
           >
+            <Route path="/home" element={<Home />} />
             <Route path="/explore" element={<Explore />} />
             <Route path="/story/:name" element={<StoryDetail />} />
             <Route path="/chat" element={<Chat />} />

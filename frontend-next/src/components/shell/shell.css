@@ -18,6 +18,12 @@
   min-height: 100%;
   padding-top: 0;
 }
+/* 立绘主页(家):满铺,无纸页顶留白;浮动唤出钮仍在(它 position:fixed) */
+.shell-main--home {
+  padding-top: 0;
+  height: 100dvh;
+  overflow: hidden;
+}
 
 /* —— 唤出/收起按钮(全局常驻,折叠态兼品牌标)—— */
 .shell-toggle {
@@ -120,6 +126,12 @@
   display: flex;
   align-items: center;
   gap: var(--sp-3);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
 }
 .shell-logo-box {
   width: 34px;

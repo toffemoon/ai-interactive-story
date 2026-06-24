@@ -1,0 +1,402 @@
+/* 立绘主页(家)· YOR-136 · galgame 式首屏(挂 stage 暖夜)。
+   满铺背景+立绘,前景 UI 叠在上面;对话卡用高透明度纯色(不用 backdrop-filter,
+   既保证立绘上文字可读、又不触发截图工具因 blur 超时的坑)。 */
+.home {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* 背景层 */
+.home-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  z-index: 0;
+}
+/* 压暗 + 暖夜调:底部更暗给对话框、左侧略暗给按钮,整体压一层暖色让立绘融入 stage */
+.home-bg-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(180deg, rgba(20, 15, 10, 0.28) 0%, transparent 26%, transparent 48%, rgba(18, 13, 8, 0.72) 100%),
+    linear-gradient(90deg, rgba(18, 13, 8, 0.5) 0%, transparent 42%),
+    radial-gradient(120% 80% at 50% 120%, rgba(209, 90, 64, 0.12), transparent 60%);
+}
+
+/* 立绘层:居中偏右,底部出血 */
+.home-portrait {
+  position: absolute;
+  z-index: 2;
+  right: clamp(8px, 6vw, 96px);
+  bottom: 0;
+  height: 94%;
+  display: flex;
+  align-items: flex-end;
+  pointer-events: none;
+}
+.home-portrait img {
+  height: 100%;
+  width: auto;
+  max-width: 48vw;
+  object-fit: contain;
+  object-position: bottom;
+  filter: drop-shadow(0 8px 30px rgba(0, 0, 0, 0.4));
+}
+.home-portrait-ph {
+  align-self: center;
+  font-family: var(--font-kai);
+  font-size: 64px;
+  color: var(--accent-2);
+  opacity: 0.7;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-lg);
+  padding: 48px 36px;
+  background: color-mix(in srgb, var(--panel) 60%, transparent);
+}
+
+/* 前景 UI */
+.home-ui {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none; /* 只让交互元素吃事件,空白处不挡(立绘可被未来扩展点) */
+}
+.home-ui > * {
+  pointer-events: auto;
+}
+
+/* 主按钮:左侧竖排(在固定唤出钮下方) */
+.home-actions {
+  position: absolute;
+  left: clamp(16px, 4vw, 48px);
+  top: clamp(72px, 18vh, 180px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  width: min(240px, 60vw);
+}
+.home-go {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 14px 20px;
+  font-size: var(--fs-h3);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-card);
+}
+
+/* 换角色图标钮:右上 */
+.home-switch {
+  position: absolute;
+  top: clamp(14px, 3vh, 24px);
+  right: clamp(14px, 3vw, 28px);
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent-2) 50%, var(--line));
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  color: var(--fg);
+  cursor: pointer;
+  box-shadow: var(--shadow-card);
+  transition: border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+.home-switch svg {
+  width: 22px;
+  height: 22px;
+}
+.home-switch:hover {
+  border-color: var(--accent-2);
+  background: var(--panel);
+}
+.home-switch:active {
+  transform: scale(0.94);
+}
+
+/* 对话框:底部居中 */
+.home-dialogue {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(16px, 4vh, 40px);
+  transform: translateX(-50%);
+  width: min(920px, calc(100% - 2 * clamp(16px, 4vw, 48px)));
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-2) 28%, var(--line));
+  border-radius: var(--r-lg);
+  padding: var(--sp-4) var(--sp-5) var(--sp-4);
+  box-shadow: var(--shadow-pop);
+}
+.home-dlg-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
+}
+.home-dlg-name {
+  font-family: var(--font-kai);
+  font-size: var(--fs-h2);
+  color: var(--accent-2);
+  letter-spacing: 0.06em;
+}
+.home-dlg-tools {
+  display: flex;
+  gap: var(--sp-2);
+}
+.home-tool {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.home-tool:hover:not(:disabled) {
+  color: var(--fg);
+  border-color: var(--accent-2);
+}
+.home-tool:active:not(:disabled) {
+  transform: scale(0.92);
+}
+.home-tool:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.home-dlg-line {
+  color: var(--fg);
+  min-height: 3.2em;
+  margin: 0 0 var(--sp-3);
+}
+.home-composer {
+  display: flex;
+  gap: var(--sp-3);
+  align-items: stretch;
+}
+.home-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 0 14px;
+  height: 44px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui);
+  color: var(--fg);
+  outline: none;
+}
+.home-input::placeholder {
+  color: var(--muted);
+}
+.home-input:focus {
+  border-color: var(--accent);
+}
+.home-composer .btn {
+  min-height: 44px;
+}
+
+/* 全屏退出角标(截图态唯一可点) */
+.home-exitfs {
+  position: absolute;
+  z-index: 5;
+  top: clamp(14px, 3vh, 24px);
+  right: clamp(14px, 3vw, 28px);
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  padding: 6px 12px;
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.home-exitfs:hover {
+  opacity: 1;
+}
+
+/* 全屏态:隐藏全局唤出钮(只留背景+立绘) */
+.ais-home-fullscreen .shell-toggle {
+  display: none !important;
+}
+
+/* —— modal(换角色 / 存档 / 记录)—— */
+.home-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: var(--scrim);
+  display: grid;
+  place-items: center;
+  padding: var(--sp-5);
+}
+.home-modal-card {
+  position: relative;
+  width: min(480px, 92vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: var(--sp-6);
+  box-shadow: var(--shadow-pop);
+}
+.home-modal-x {
+  position: absolute;
+  right: 14px;
+  top: 12px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.home-modal-sub {
+  color: var(--muted);
+  margin-top: var(--sp-2);
+}
+
+.home-switch-list,
+.home-saves {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-4);
+}
+.home-switch-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.home-switch-item:hover {
+  border-color: var(--accent-2);
+}
+.home-switch-av {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: var(--r-sm);
+  background-size: cover;
+  background-position: center top;
+  background-color: var(--sunk);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-kai);
+  color: var(--accent-2);
+  overflow: hidden;
+}
+
+/* 存档行 */
+.home-save {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  color: var(--fg);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.home-save:hover {
+  border-color: var(--accent-2);
+}
+.home-save--cur {
+  border-color: color-mix(in srgb, var(--accent-2) 50%, var(--line));
+}
+.home-save-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: var(--r-pill);
+  background: var(--accent-2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-2) 22%, transparent);
+}
+.home-save-tx {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.home-save-tx .t-ui-sm {
+  color: var(--fg);
+}
+.home-save-tx .t-meta {
+  color: var(--muted);
+}
+
+/* 记录 */
+.home-log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+}
+.home-log-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.home-log-row.is-me {
+  align-items: flex-end;
+  text-align: right;
+}
+.home-log-who {
+  color: var(--accent-2);
+}
+.home-log-text {
+  color: var(--fg);
+  line-height: var(--lh-body);
+}
+.home-log-row.is-me .home-log-text {
+  color: var(--muted);
+}
+
+/* —— 移动:立绘缩小靠右下,主按钮收窄,对话框贴底 —— */
+@media (max-width: 720px) {
+  .home-actions {
+    top: 64px;
+    width: min(180px, 52vw);
+  }
+  .home-go {
+    font-size: var(--fs-ui);
+    padding: 11px 14px;
+  }
+  .home-portrait img {
+    max-width: 70vw;
+  }
+  .home-dialogue {
+    width: calc(100% - 2 * 12px);
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    padding: var(--sp-3) var(--sp-4);
+  }
+  .home-dlg-name {
+    font-size: var(--fs-h3);
+  }
+}
