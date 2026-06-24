@@ -27,7 +27,7 @@ export default function AppShell({ children }) {
     <div className={"shell" + (atHome ? " shell--home" : "")}>
       <StaggeredMenu
         isFixed
-        position="right"
+        position="left"
         brandText="沐言"
         items={NAV.map((it) => ({ label: it.zh, ariaLabel: it.zh, link: it.to }))}
         displaySocials={false}
