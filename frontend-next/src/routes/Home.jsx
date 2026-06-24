@@ -215,19 +215,7 @@ export default function Home() {
       {/* 前景 UI(全屏态隐藏) */}
       {!fullscreen && (
         <div className="home-ui">
-          {/* 主按钮 */}
-          <div className="home-actions">
-            <Button variant="primary" className="home-go" onClick={() => navigate("/explore")}>
-              {isReturning ? "探索故事" : "开始故事"}
-            </Button>
-            {hasSaves && (
-              <Button variant="secondary" className="home-go" onClick={() => setSavesModal(true)}>
-                继续故事
-              </Button>
-            )}
-          </div>
-
-          {/* 换角色(图标,无文字) */}
+          {/* 换角色(图标,无文字 · 右上) */}
           <button className="home-switch" onClick={openSwitcher} title="换个人聊" aria-label="换个人聊">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="9" cy="8" r="3" />
@@ -239,8 +227,21 @@ export default function Home() {
             </svg>
           </button>
 
-          {/* 对话框 */}
-          <div className="home-dialogue">
+          {/* 底部交互坞:主按钮行(贴对话框上方右对齐)+ 对话框聚成一组,不再悬空 */}
+          <div className="home-dock">
+            <div className="home-actions">
+              <Button variant="primary" className="home-go" onClick={() => navigate("/explore")}>
+                {isReturning ? "探索故事" : "开始故事"}
+              </Button>
+              {hasSaves && (
+                <Button variant="secondary" className="home-go" onClick={() => setSavesModal(true)}>
+                  继续故事
+                </Button>
+              )}
+            </div>
+
+            {/* 对话框 */}
+            <div className="home-dialogue">
             <div className="home-dlg-head">
               <span className="home-dlg-name t-kai">{displayName}</span>
               <div className="home-dlg-tools">
@@ -268,6 +269,7 @@ export default function Home() {
                 发送
               </Button>
             </div>
+          </div>
           </div>
         </div>
       )}
