@@ -85,43 +85,43 @@
   gap: var(--sp-3);
   width: min(240px, 60vw);
 }
-/* 主按钮:朱漆鎏金质感(去塑料平涂橙)。鎏金细边 + 顶高光 + 浮起阴影,贴 stage「朱漆鎏金」调性 */
+/* 主按钮:与菜单唤出钮统一为「白胶囊」样式(YOR-136 反馈:按钮和菜单栏按钮统一) */
 .home-go {
   width: 100%;
   justify-content: center;
-  padding: 14px 22px;
+  padding: 13px 22px;
   font-size: var(--fs-h3);
-  letter-spacing: 0.1em;
-  border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--accent-2) 62%, transparent);
-  box-shadow: 0 14px 28px -12px rgba(0, 0, 0, 0.62), inset 0 1px 0 rgba(255, 240, 220, 0.22);
+  letter-spacing: 0.12em;
+  border-radius: var(--r-pill);
+  background: rgba(250, 247, 242, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  box-shadow: 0 8px 22px -8px rgba(0, 0, 0, 0.6);
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
-/* 朱漆 primary:竖向渐变(顶亮中实底沉)+ 月白字 */
-.home .btn--primary.home-go {
-  background: linear-gradient(
-    177deg,
-    color-mix(in srgb, var(--accent) 80%, #ffd9a8 16%) 0%,
-    var(--accent) 48%,
-    color-mix(in srgb, var(--accent) 76%, #000 22%) 100%
-  );
-  color: #fff5ec;
-  text-shadow: 0 1px 2px rgba(80, 20, 8, 0.45);
-}
-.home .btn--primary.home-go:hover:not(:disabled) {
-  filter: brightness(1.05) saturate(1.03);
-}
-/* 继续故事 secondary:暖夜玻璃 + 鎏金字,与朱漆主按钮成对 */
-.home .btn--secondary.home-go {
-  background: linear-gradient(180deg, rgba(60, 48, 34, 0.5), rgba(34, 27, 18, 0.6));
-  border-color: color-mix(in srgb, var(--accent-2) 72%, transparent);
-  color: var(--accent-2);
-}
-.home .btn--secondary.home-go:hover:not(:disabled) {
-  background: linear-gradient(180deg, rgba(74, 58, 40, 0.6), rgba(40, 32, 22, 0.66));
-  color: #e3c074;
+.home-go:hover:not(:disabled) {
+  background: #fffdfa;
+  border-color: var(--accent-2);
 }
 .home-go:active:not(:disabled) {
   transform: translateY(1px) scale(0.99);
+}
+/* 开始故事(primary):朱砂字,呼应菜单胶囊里「沐言」的朱砂 */
+.home .btn--primary.home-go {
+  background: rgba(250, 247, 242, 0.94);
+  color: var(--cinnabar);
+}
+.home .btn--primary.home-go:hover:not(:disabled) {
+  background: #fffdfa;
+}
+/* 继续故事(secondary):墨字次级,同白胶囊 */
+.home .btn--secondary.home-go {
+  background: rgba(250, 247, 242, 0.88);
+  color: #3a2f24;
+}
+.home .btn--secondary.home-go:hover:not(:disabled) {
+  background: #fffdfa;
+  color: var(--cinnabar);
 }
 
 /* 换角色图标钮:右上 */
