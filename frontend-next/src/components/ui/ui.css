@@ -230,12 +230,17 @@
    统一 Card
    ════════════════════════════════════════════════════════════ */
 
-/* 货架:固定 190px 列,auto-fill 自动换行(约 3 列);窄屏自动收成 2/1 列 */
+/* 货架:列 minmax(190,1fr) 铺满整行(两端对齐);卡片填满各列、固定间距,末行左对齐不散 */
 .card-shelf {
   display: grid;
-  grid-template-columns: repeat(auto-fill, 190px);
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   gap: var(--sp-4);
-  justify-content: start;
+}
+/* 网格(非横滚)模式下卡片填满列宽,保 2:3 书形比例 → 整行齐到两端 */
+.card-shelf:not(.is-scroll) > .card--shelf {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 190 / 286;
 }
 
 /* 卡片入场:渐起 + 阶梯延时(细节⑧)。翻面 transform 在子面 .card-front/.card-back 上
