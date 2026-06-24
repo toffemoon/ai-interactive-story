@@ -49,6 +49,11 @@
   color: #f0e6d2;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
 }
+/* 纸页(paper):隐藏浮动 logo,免与页面左上标题撞;只留右上唤出开关。
+   立绘主页(stage):显「沐言」logo(月白,暖夜场景上可读)。 */
+[data-theme="paper"] .sm-logo {
+  display: none;
+}
 
 .sm-toggle {
   position: relative;
