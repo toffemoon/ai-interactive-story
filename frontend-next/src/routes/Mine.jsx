@@ -14,11 +14,14 @@ const TABS = [
   { key: "saves", label: "存档" },
   { key: "favorites", label: "收藏" },
   { key: "created", label: "我创建的" },
-  { key: "achievements", label: "成就" },
+  { key: "achievements", label: "成就" }, // ⚠️ 暂缓(2026-06-24,YOR-68 已 Backlog)— 先留着不删,别再加东西
 ];
 const PAGE = 8;
 const FAV_KEY = "ais_favorites_v1";
 
+// ⚠️ 暂缓(2026-06-24 主理人决定):成就系统当下=过度开发,先搁置、不再往上加东西。
+//    代码与「成就」tab 先留着不删(不影响线上,前端还没 cutover),后续 cutover 前再议去留。
+//    详见 Linear YOR-68(已移回 Backlog)+ yorha-a2-team `zicheng-assets/.../成就系统.md` 暂缓顶注。
 // 整蛊成就:大多靠本机轻量信号点亮,没有真后端追踪也能玩起来(YOR-68 轻量整蛊向)。
 const ACHIEVEMENTS = [
   { id: "arrive", name: "初来乍到", desc: "你来了。就凭这个。", check: () => true },
