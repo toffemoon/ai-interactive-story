@@ -258,6 +258,111 @@
   display: none !important;
 }
 
+/* —— 立绘编辑(#6:右下角图标 → 拖动 + 调大小)—— */
+.home-edit-btn {
+  position: absolute;
+  z-index: 5;
+  right: clamp(14px, 3vw, 28px);
+  bottom: clamp(14px, 4vh, 36px);
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--r-pill);
+  background: rgba(250, 247, 242, 0.86);
+  color: #5a4a38;
+  cursor: pointer;
+  box-shadow: 0 8px 22px -8px rgba(0, 0, 0, 0.55);
+  opacity: 0.7;
+  transition: opacity var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.home-edit-btn:hover {
+  opacity: 1;
+  border-color: var(--accent-2);
+}
+.home-edit-btn:active {
+  transform: scale(0.94);
+}
+
+/* 编辑态:立绘可拖动 + 虚线提示 */
+.home-portrait.is-editing {
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+.home-portrait.is-editing:active {
+  cursor: grabbing;
+}
+.home-portrait.is-editing img,
+.home-portrait.is-editing .home-portrait-ph {
+  outline: 2px dashed color-mix(in srgb, var(--accent-2) 70%, transparent);
+  outline-offset: -2px;
+}
+/* 编辑时让出底部对话坞,聚焦调立绘 */
+.home.is-editing .home-dock {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 编辑控制条(贴底居中) */
+.home-edit-bar {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: clamp(16px, 4vh, 40px);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: 10px 16px;
+  border: 1px solid rgba(34, 26, 18, 0.16);
+  border-radius: var(--r-pill);
+  background: rgba(250, 247, 241, 0.92);
+  color: #3a2f24;
+  box-shadow: 0 14px 40px -16px rgba(0, 0, 0, 0.6);
+  max-width: calc(100% - 2 * clamp(12px, 4vw, 32px));
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.home-edit-tip {
+  color: #6f706b;
+}
+.home-edit-scale {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: #3a2f24;
+}
+.home-edit-scale input[type="range"] {
+  width: clamp(90px, 26vw, 160px);
+  accent-color: var(--cinnabar);
+  cursor: pointer;
+}
+.home-edit-reset,
+.home-edit-done {
+  border: 1px solid #d8d2c7;
+  border-radius: var(--r-pill);
+  padding: 6px 14px;
+  font-size: var(--fs-ui-sm);
+  background: transparent;
+  color: #3a2f24;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.home-edit-reset:hover {
+  border-color: var(--cinnabar);
+}
+.home-edit-done {
+  background: var(--cinnabar);
+  color: #fff;
+  border-color: var(--cinnabar);
+}
+.home-edit-done:hover {
+  background: color-mix(in srgb, var(--cinnabar) 88%, #000);
+}
+
 /* —— modal(换角色 / 存档 / 记录)—— */
 .home-modal {
   position: fixed;
