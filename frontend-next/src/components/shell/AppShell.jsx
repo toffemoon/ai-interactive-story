@@ -29,7 +29,10 @@ export default function AppShell({ children }) {
         isFixed
         position="left"
         brandText="沐言"
-        items={NAV.map((it) => ({ label: it.zh, ariaLabel: it.zh, link: it.to }))}
+        items={[
+          { label: "首页", ariaLabel: "回到首页", link: "/home" },
+          ...NAV.map((it) => ({ label: it.zh, ariaLabel: it.zh, link: it.to })),
+        ]}
         displaySocials={false}
         displayItemNumbering
         colors={["#c79a4e", "#8f3c32"]}

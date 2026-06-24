@@ -35,7 +35,7 @@ export const StaggeredMenu = ({
   const iconRef = useRef(null);
   const textInnerRef = useRef(null);
   const textWrapRef = useRef(null);
-  const [textLines, setTextLines] = useState(["菜单", "关闭"]);
+  const [textLines, setTextLines] = useState([brandText, "关闭"]);
 
   const openTlRef = useRef(null);
   const closeTweenRef = useRef(null);
@@ -255,13 +255,13 @@ export const StaggeredMenu = ({
     if (!inner) return;
     textCycleAnimRef.current?.kill();
 
-    const currentLabel = opening ? "菜单" : "关闭";
-    const targetLabel = opening ? "关闭" : "菜单";
+    const currentLabel = opening ? brandText : "关闭";
+    const targetLabel = opening ? "关闭" : brandText;
     const cycles = 3;
     const seq = [currentLabel];
     let last = currentLabel;
     for (let i = 0; i < cycles; i++) {
-      last = last === "菜单" ? "关闭" : "菜单";
+      last = last === brandText ? "关闭" : brandText;
       seq.push(last);
     }
     if (last !== targetLabel) seq.push(targetLabel);
@@ -276,7 +276,7 @@ export const StaggeredMenu = ({
       duration: 0.5 + lineCount * 0.07,
       ease: "power4.out",
     });
-  }, []);
+  }, [brandText]);
 
   const toggleMenu = useCallback(() => {
     const target = !openRef.current;
@@ -353,9 +353,7 @@ export const StaggeredMenu = ({
         })()}
       </div>
       <header className="staggered-menu-header" aria-label="Main navigation header">
-        <div className="sm-logo" aria-label="Logo">
-          <span className="sm-logo-text t-kai">{brandText}</span>
-        </div>
+        {/* 「沐言」即开关:不再单独做 logo(YOR-136 反馈) */}
         <button
           ref={toggleBtnRef}
           className="sm-toggle"

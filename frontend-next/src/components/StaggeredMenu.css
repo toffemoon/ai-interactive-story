@@ -61,20 +61,21 @@
   gap: var(--sp-4);
 }
 
+/* 「沐言」即开关:楷书 + 放大,当品牌按钮(不再单独做 logo) */
 .sm-toggle {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.45rem;
   background: transparent;
   border: none;
   cursor: pointer;
   color: #ece3d2;
-  font-family: var(--font-sans);
-  font-size: 15px;
+  font-family: var(--font-kai);
+  font-size: 21px;
   font-weight: 500;
   line-height: 1;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.1em;
   overflow: visible;
 }
 
