@@ -331,6 +331,37 @@
   transform: perspective(1300px) rotateY(360deg);
 }
 
+/* 安全版 depth(卡片#1):hover 抬升 + 内层微放大 + 光斑跟随鼠标。
+   只动高光/阴影/scale,不给翻面卡加 preserve-3d/3D tilt → 不碰背面按钮可点的既定修复。 */
+.card--shelf {
+  --mx: 50%;
+  --my: 0%;
+}
+.card--shelf .card-inner {
+  transition: transform 0.22s var(--ease-out);
+}
+.card--shelf:hover {
+  box-shadow: 0 18px 34px -14px rgba(0, 0, 0, 0.5);
+}
+.card--shelf:hover .card-inner {
+  transform: scale(1.025);
+}
+.card-front::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: radial-gradient(360px circle at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, 0.22), transparent 58%);
+  opacity: 0;
+  transition: opacity 0.25s var(--ease-out);
+  pointer-events: none;
+  mix-blend-mode: soft-light;
+}
+.card--shelf:hover .card-front::after {
+  opacity: 1;
+}
+
 /* 正面:封面(立绘)或书脊底色;顶行 = 类型角标,底部 = 名 + 上传者/使用次数 */
 .card-front {
   display: flex;

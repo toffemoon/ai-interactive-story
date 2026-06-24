@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Tag } from "./Tag";
 
 // ── 统一 Card ───────────────────────────────────────────────────────────────
@@ -81,13 +81,25 @@ function ActionRow({ actions, onOpen }) {
 
 function ShelfCard({ model, flipped, onToggleFlip, actions, onOpen }) {
   const { kind, title, blurb, tags, note, meta } = model;
+  const cardRef = useRef(null);
+  // 安全版 depth(卡片#1):光斑跟随鼠标 + hover 抬升,只动高光/阴影,不动 3D 翻面 ——
+  // 避免给翻面卡加 preserve-3d 导致背面按钮真机点不动的回归(repo 已踩过的坑)。
+  const onMove = (e) => {
+    const el = cardRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty("--mx", (((e.clientX - r.left) / r.width) * 100).toFixed(1) + "%");
+    el.style.setProperty("--my", (((e.clientY - r.top) / r.height) * 100).toFixed(1) + "%");
+  };
   return (
     <div
+      ref={cardRef}
       className={["card", "card--shelf", "kind-" + kind, flipped ? "is-flipped" : ""].join(" ")}
       onClick={(e) => {
         e.stopPropagation();
         onToggleFlip && onToggleFlip();
       }}
+      onMouseMove={onMove}
       role="button"
       tabIndex={0}
       aria-pressed={flipped}
