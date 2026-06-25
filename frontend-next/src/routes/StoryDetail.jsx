@@ -43,6 +43,7 @@ export default function StoryDetail() {
   const synopsis = d.synopsis || (d.story && d.story.premise) || "";
   const tags = d.tags || [];
   const author = d.author || "";
+  const authorNote = d.author_note || "";
 
   // 角色:用统一 Card · 横轴滚动(环形轮播的感觉);背面 + 查看详情看完整介绍(细节②)。
   // 简介细化:取公开层多字段(锚点/外貌/性格/矛盾/设定/情境/公开已知),不进剧透层(known_hidden/versions)。
@@ -196,6 +197,12 @@ export default function StoryDetail() {
                 <h2 className="t-h3 detail-sec">简介</h2>
                 <p className="t-read detail-intro-text">{synopsis || "暂无简介。"}</p>
               </div>
+              {authorNote.trim() && (
+                <div className="detail-intro detail-authornote">
+                  <h2 className="t-h3 detail-sec">作者的话</h2>
+                  <p className="t-read detail-intro-text">{authorNote}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
