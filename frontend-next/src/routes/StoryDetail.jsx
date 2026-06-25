@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Button, Tag, Badge, CardShelf } from "../components/ui";
+import { Button, Tag, Badge, Card } from "../components/ui";
+import CardCarousel from "../components/CardCarousel";
 import { getJSON, postJSON, uploadFile } from "../lib/api";
 import { useGame } from "../state/game";
 import "./StoryDetail.css";
@@ -85,7 +86,11 @@ export default function StoryDetail() {
     return [...cards, { name: "以旁观者开始", persona: "不扮演特定角色,以观察者视角进入故事", spectator: true }];
   }, [preset]);
 
+  // 扮演选择 = roleCards + 末尾「自定义角色」,做成轮播(居中卡 = 选中;居中自定义卡 = 进自定义模式)。
+  const roleItems = useMemo(() => [...roleCards, { custom: true }], [roleCards]);
+
   const [selIdx, setSelIdx] = useState(0);
+  const [charActive, setCharActive] = useState(0); // 角色卡轮播居中索引
   const [charDetail, setCharDetail] = useState(null); // 角色「查看详情」弹层(细节②)
   const [castMode, setCastMode] = useState("list"); // list | custom
   const [customText, setCustomText] = useState("");
@@ -207,12 +212,25 @@ export default function StoryDetail() {
           </div>
         </div>
 
-        {/* 角色:统一 Card 横轴滚动,翻面看完整介绍(细节②/YOR-23) */}
+        {/* 角色:DOM 曲面轮播(coverflow),居中卡点开看完整介绍(方向 B,保留我们的 <Card>) */}
         {charModels.length > 0 && (
           <section className="detail-block">
             <h2 className="t-h3 detail-sec">角色</h2>
-            <p className="detail-hint t-meta">点卡片翻面速览,或「详情」看完整介绍</p>
-            <CardShelf scroll models={charModels} onOpen={(m) => setCharDetail(m)} />
+            <p className="detail-hint t-meta">拖动 / 滚轮浏览角色,点居中卡看完整介绍</p>
+            <CardCarousel
+              items={charModels}
+              activeIndex={charActive}
+              onActiveChange={setCharActive}
+              ariaLabel="角色卡轮播"
+              renderItem={(m, { active }) => (
+                <Card
+                  model={m}
+                  variant="shelf"
+                  onToggleFlip={() => active && setCharDetail(m)}
+                  onOpen={() => setCharDetail(m)}
+                />
+              )}
+            />
           </section>
         )}
 
@@ -221,35 +239,36 @@ export default function StoryDetail() {
         {/* 选主角三选一:选作者卡 / 上传 / 现场描述(横轴滚动 · 对齐边缘,细节③) */}
         <section className="detail-block">
           <h2 className="t-h3 detail-sec">选择你扮演谁</h2>
-          <div className="detail-roles">
-            {roleCards.map((c, i) => {
-              const on = castMode === "list" && i === selIdx;
-              return (
-                <button
-                  key={i}
-                  className={"detail-role" + (on ? " is-on" : "")}
-                  onClick={() => {
-                    setSelIdx(i);
-                    setCastMode("list");
-                  }}
-                >
-                  <div className="detail-role-name t-kai">{c.name}</div>
-                  <div className="detail-role-line t-ui-sm">
-                    {c.persona || (c.spectator ? "观察者视角" : "可扮演")}
-                  </div>
-                  <div className="detail-role-tick t-meta">{on ? "已选择" : "可扮演"}</div>
-                </button>
-              );
-            })}
-            <button
-              className={"detail-role detail-role--custom" + (castMode === "custom" ? " is-on" : "")}
-              onClick={() => setCastMode((m) => (m === "custom" ? "list" : "custom"))}
-            >
-              <div className="detail-role-name t-kai">自定义角色</div>
-              <div className="detail-role-line t-ui-sm">写下你想扮演的身份,AI 识别成演出卡</div>
-              <div className="detail-role-tick t-meta">{castMode === "custom" ? "编辑中" : "自由出演"}</div>
-            </button>
-          </div>
+          <p className="detail-hint t-meta">拖动 / 滚轮把想扮演的那张转到中间(居中即选中)</p>
+          <CardCarousel
+            items={roleItems}
+            activeIndex={castMode === "custom" ? roleItems.length - 1 : selIdx}
+            onActiveChange={(i) => {
+              if (roleItems[i] && roleItems[i].custom) setCastMode("custom");
+              else {
+                setSelIdx(i);
+                setCastMode("list");
+              }
+            }}
+            ariaLabel="扮演角色选择"
+            renderItem={(it, { active }) =>
+              it.custom ? (
+                <div className={"cc-role cc-role--custom" + (active && castMode === "custom" ? " is-on" : "")}>
+                  <div className="cc-role-tag t-meta">自由出演</div>
+                  <div className="cc-role-name t-kai">自定义角色</div>
+                  <div className="cc-role-line t-ui-sm">写下你想扮演的身份,AI 识别成演出卡</div>
+                  <div className="cc-role-tick t-meta">{active && castMode === "custom" ? "编辑中" : "转到中间自定义"}</div>
+                </div>
+              ) : (
+                <div className={"cc-role" + (active && castMode === "list" ? " is-on" : "")}>
+                  <div className="cc-role-tag t-meta">{it.spectator ? "旁观" : "可扮演"}</div>
+                  <div className="cc-role-name t-kai">{it.name}</div>
+                  <div className="cc-role-line t-ui-sm">{it.persona || (it.spectator ? "观察者视角" : "可扮演")}</div>
+                  <div className="cc-role-tick t-meta">{active && castMode === "list" ? "已选择" : "可扮演"}</div>
+                </div>
+              )
+            }
+          />
 
           {castMode === "custom" && (
             <div className="detail-custom">

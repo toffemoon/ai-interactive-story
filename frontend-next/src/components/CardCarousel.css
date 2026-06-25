@@ -1,0 +1,66 @@
+/* DOM 曲面轮播(coverflow)。
+   - perspective 放在 track(items 的直接父),靠 perspective + 子元素 rotateY 出 3D,
+     **不用 transform-style: preserve-3d** —— 避免把可翻面的卡拖进共享 3D 空间、
+     重踩「翻面后背面按钮点不动」的坑(见 ui.css 翻面注释)。
+   - 居中卡停在 rotateY(0)(平的),侧卡才旋转;调用方只让居中卡可交互。 */
+.ccz {
+  position: relative;
+  width: 100%;
+  height: 360px;
+  overflow: hidden;
+  outline: none;
+}
+.ccz-track {
+  position: absolute;
+  inset: 0;
+  perspective: 1200px;
+  cursor: grab;
+  touch-action: pan-y;
+}
+.ccz.is-dragging .ccz-track {
+  cursor: grabbing;
+}
+.ccz-item {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 190px;
+  height: 286px;
+  margin-top: -158px;
+  transform-origin: center center;
+  transition: transform 0.36s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.36s ease;
+  will-change: transform, opacity;
+}
+/* 拖动中关掉过渡,跟手 */
+.ccz.is-dragging .ccz-item {
+  transition: none;
+}
+/* 非居中卡整张可点(用来居中);居中卡把点击透传给卡本体 */
+.ccz-item:not(.is-center) {
+  cursor: pointer;
+}
+
+.ccz-dots {
+  position: absolute;
+  bottom: 4px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  z-index: 200;
+}
+.ccz-dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--line);
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+.ccz-dot.is-on {
+  background: var(--accent);
+  transform: scale(1.25);
+}
