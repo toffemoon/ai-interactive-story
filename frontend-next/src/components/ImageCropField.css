@@ -1,0 +1,110 @@
+/* 头像 / 立绘上传裁剪字段(配合 Create「完善角色卡」弹窗) */
+.icf {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+.icf-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+}
+.icf-label {
+  color: var(--fg);
+}
+.icf-gen {
+  background: none;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-sm);
+  padding: 2px 8px;
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+/* 缩略 / 上传位 —— aspect-ratio 由组件按 1(头像)/ 2:3(立绘)内联传入 */
+.icf-thumb {
+  width: 96px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background-color: var(--sunk);
+  background-size: cover;
+  background-position: center;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  overflow: hidden;
+  padding: 0;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.icf-thumb:hover {
+  border-color: var(--accent);
+}
+.icf-thumb--round {
+  width: 84px;
+  border-radius: var(--r-pill);
+}
+.icf-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.icf-clear {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+.icf-clear:hover {
+  color: var(--accent);
+}
+.icf-hint {
+  color: var(--muted);
+}
+
+/* 全屏裁剪层 —— 盖在「完善角色卡」弹窗之上(z 比弹窗高) */
+.icf-cropper {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: rgba(20, 16, 12, 0.86);
+  display: flex;
+  flex-direction: column;
+}
+.icf-cropper-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.icf-cropper-bar {
+  flex: none;
+  padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+}
+.icf-cropper-tip {
+  color: var(--muted);
+  text-align: center;
+}
+.icf-zoom {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.icf-cropper-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.icf-err {
+  color: var(--accent);
+}

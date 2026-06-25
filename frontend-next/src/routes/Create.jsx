@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button, Input } from "../components/ui";
 import { postJSON, getJSON, uploadFile } from "../lib/api";
 import { fileToCompressedDataURL } from "../lib/image";
+import ImageCropField from "../components/ImageCropField";
 import { useAuth } from "../state/auth";
 import "./Create.css";
 
@@ -115,13 +116,11 @@ export default function Create() {
   const [libModal, setLibModal] = useState(null); // {items} | null
   const [libQ, setLibQ] = useState(""); // 补素材搜索
   const [builtView, setBuiltView] = useState(false); // 查看本台已建的卡(细节③)
-  const [nextModal, setNextModal] = useState(false); // 收进本台前的角色卡详情预览弹窗
+  const [finalize, setFinalize] = useState(null); // 「完善角色卡」弹窗:null | {action:'desk'|'lib'}(收进本台 / 收入卡库)
   const [genBusy, setGenBusy] = useState(false); // 自动生成角色介绍中
   const [pubModal, setPubModal] = useState(false);
   const [pub, setPub] = useState({ name: "", synopsis: "", cover: "", authorNote: "" });
   const fileRef = useRef(null);
-  const avatarRef = useRef(null);
-  const portraitRef = useRef(null);
   const coverRef = useRef(null);
   const chatRef = useRef(null);
   const toastT = useRef(null);
@@ -209,23 +208,8 @@ export default function Create() {
     }
   }
 
-  // 角色卡上传 头像(avatar)/ 立绘(image):压缩成 base64 存进 draft(后端按字段持久化)。
-  async function onPicUpload(ev, field) {
-    const file = ev.target.files && ev.target.files[0];
-    ev.target.value = "";
-    if (!file) return;
-    try {
-      const opts =
-        field === "avatar"
-          ? { maxW: 256, maxH: 256, quality: 0.85 }
-          : { maxW: 768, maxH: 1152, quality: 0.82 };
-      const dataUrl = await fileToCompressedDataURL(file, opts);
-      patch(kind, (d0) => ({ draft: { ...d0.draft, [field]: dataUrl } }));
-      flash(field === "avatar" ? "头像已设置" : "立绘已设置");
-    } catch (e) {
-      flash("图片处理失败:" + e.message);
-    }
-  }
+  // 角色卡 头像/立绘改在「完善角色卡」弹窗里用 ImageCropField(裁剪)上传 → 写进 draft.avatar/draft.image;
+  // 旧的内联 onPicUpload 已移除。
 
   // 发布封面上传(cover,后端按 data-URI 持久)。
   async function onCoverUpload(ev) {
@@ -261,9 +245,9 @@ export default function Create() {
       flash("草稿还空着,先聊出一张再收");
       return;
     }
-    // 角色卡:先弹详情预览(可自动生成角色介绍),确认后再收;其它卡直接收。
+    // 角色卡:先弹「完善角色卡」(上传头像/立绘 + 角色介绍),确认后再收;其它卡直接收。
     if (kind === "characters") {
-      setNextModal(true);
+      setFinalize({ action: "desk" });
       return;
     }
     collectToDesk(cur.draft);
@@ -308,8 +292,9 @@ export default function Create() {
       .filter((f) => f.v && f.v.trim());
   }
 
-  async function saveCard() {
-    const d = desk.draft || {};
+  // 真正入库(复用):收入卡库 · 私密。
+  async function doSaveCard() {
+    const d = desks[kind].draft || {};
     if (!Object.keys(d).length) {
       flash("还没有可入库的卡,先聊几句");
       return;
@@ -320,6 +305,31 @@ export default function Create() {
     } catch (e) {
       flash("入库失败:" + e.message);
     }
+  }
+  // 收入卡库入口:角色卡先走「完善角色卡」弹窗(可传图),其它卡直接入库。
+  function saveCard() {
+    const d = desk.draft || {};
+    if (!Object.keys(d).length) {
+      flash("还没有可入库的卡,先聊几句");
+      return;
+    }
+    if (kind === "characters") {
+      setFinalize({ action: "lib" });
+      return;
+    }
+    doSaveCard();
+  }
+  // 「完善角色卡」弹窗确认:按触发来源执行 收进本台 / 收入卡库。
+  function confirmFinalize() {
+    if (!finalize) return;
+    const action = finalize.action;
+    setFinalize(null);
+    if (action === "desk") collectToDesk(desks[kind].draft);
+    else doSaveCard();
+  }
+  // 弹窗里改头像/立绘 → 写进当前 draft(空串=移除)。
+  function setDraftPic(field, dataUrl) {
+    patch(kind, (d0) => ({ draft: { ...d0.draft, [field]: dataUrl || "" } }));
   }
 
   // 素材复用:列我的库 → 搜索/挑一张推进对应台子的 built。
@@ -482,34 +492,15 @@ export default function Create() {
           <div className="create-card">
             <div className="create-card-kind t-meta">{KINDS[ki].zh}{desk.built.length > 0 && ` · 本台已建 ${desk.built.length}`}</div>
             <div className="create-card-name t-kai">{draftName}</div>
-            {kind === "characters" && (
-              <div className="create-pics">
-                <div className="create-pic">
-                  <button
-                    type="button"
-                    className="create-pic-thumb create-pic-thumb--avatar"
-                    style={desk.draft.avatar ? { backgroundImage: `url("${desk.draft.avatar}")` } : undefined}
-                    onClick={() => avatarRef.current && avatarRef.current.click()}
-                    title="上传头像"
-                  >
-                    {!desk.draft.avatar && <span className="t-meta">+ 头像</span>}
-                  </button>
-                  <input ref={avatarRef} type="file" accept="image/*" hidden onChange={(e) => onPicUpload(e, "avatar")} />
-                  <span className="create-pic-hint t-meta">纯聊里的头像</span>
-                </div>
-                <div className="create-pic">
-                  <button
-                    type="button"
-                    className="create-pic-thumb create-pic-thumb--portrait"
-                    style={desk.draft.image ? { backgroundImage: `url("${desk.draft.image}")` } : undefined}
-                    onClick={() => portraitRef.current && portraitRef.current.click()}
-                    title="上传立绘"
-                  >
-                    {!desk.draft.image && <span className="t-meta">+ 立绘</span>}
-                  </button>
-                  <input ref={portraitRef} type="file" accept="image/*" hidden onChange={(e) => onPicUpload(e, "image")} />
-                  <span className="create-pic-hint t-meta">看板 / 纯聊右侧</span>
-                </div>
+            {kind === "characters" && (desk.draft.avatar || desk.draft.image) && (
+              // 卡预览里头像/立绘只读缩略(上传/裁剪挪进「完善角色卡」弹窗);未设置则不占位。
+              <div className="create-pics-preview">
+                {desk.draft.avatar && (
+                  <span className="create-pics-av" style={{ backgroundImage: `url("${desk.draft.avatar}")` }} aria-label="头像" />
+                )}
+                {desk.draft.image && (
+                  <span className="create-pics-portrait" style={{ backgroundImage: `url("${desk.draft.image}")` }} aria-label="立绘" />
+                )}
               </div>
             )}
             <div className="create-card-fields">
@@ -650,20 +641,31 @@ export default function Create() {
         </div>
       )}
 
-      {/* 收进本台 · 角色卡详情预览(可自动生成角色介绍) */}
-      {nextModal && (
-        <div className="create-modal" onClick={() => setNextModal(false)}>
-          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="角色卡预览" onClick={(e) => e.stopPropagation()}>
-            <button className="create-modal-x" onClick={() => setNextModal(false)} aria-label="关闭">×</button>
-            <h2 className="t-h2">收进本台 · 角色卡预览</h2>
-            <div className="create-preview-top">
-              {desk.draft.avatar && (
-                <span className="create-preview-av" style={{ backgroundImage: `url("${desk.draft.avatar}")` }} aria-hidden="true" />
-              )}
-              {desk.draft.image && (
-                <span className="create-preview-portrait" style={{ backgroundImage: `url("${desk.draft.image}")` }} aria-hidden="true" />
-              )}
-              <span className="create-preview-name t-kai">{draftName}</span>
+      {/* 完善角色卡:上传 头像/立绘(裁剪)+ 角色介绍,确认后 收进本台 / 收入卡库 */}
+      {finalize && (
+        <div className="create-modal" onClick={() => setFinalize(null)}>
+          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="完善角色卡" onClick={(e) => e.stopPropagation()}>
+            <button className="create-modal-x" onClick={() => setFinalize(null)} aria-label="关闭">×</button>
+            <h2 className="t-h2">完善角色卡</h2>
+            <div className="create-finalize-name t-kai">{draftName}</div>
+            <div className="create-finalize-pics">
+              <ImageCropField
+                label="头像"
+                hint="纯聊里的圆头像"
+                value={desk.draft.avatar || ""}
+                aspect={1}
+                round
+                output={{ maxW: 256, maxH: 256, quality: 0.85 }}
+                onChange={(url) => setDraftPic("avatar", url)}
+              />
+              <ImageCropField
+                label="立绘"
+                hint="看板 / 纯聊右侧"
+                value={desk.draft.image || ""}
+                aspect={2 / 3}
+                output={{ maxW: 768, maxH: 1152, quality: 0.82 }}
+                onChange={(url) => setDraftPic("image", url)}
+              />
             </div>
             <div className="create-preview-introhead">
               <span className="t-h3">角色介绍</span>
@@ -676,7 +678,7 @@ export default function Create() {
             </p>
             <div className="create-preview-fields">
               {cardFields({ data: desk.draft })
-                .filter((f) => !["简述", "avatar", "image"].includes(f.k))
+                .filter((f) => f.k !== "简述")
                 .map((f, i) => (
                   <div className="create-built-field" key={i}>
                     <span className="create-built-field-k t-meta">{f.k}</span>
@@ -684,15 +686,8 @@ export default function Create() {
                   </div>
                 ))}
             </div>
-            <Button
-              variant="primary"
-              full
-              onClick={() => {
-                collectToDesk(desks[kind].draft);
-                setNextModal(false);
-              }}
-            >
-              确认收进本台
+            <Button variant="primary" full onClick={confirmFinalize}>
+              {finalize.action === "desk" ? "确认收进本台" : "确认收入卡库 · 私密"}
             </Button>
           </div>
         </div>

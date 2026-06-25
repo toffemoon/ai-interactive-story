@@ -199,45 +199,42 @@
   color: var(--fg);
   margin: var(--sp-1) 0 var(--sp-3);
 }
-/* 角色卡 头像 / 立绘 上传槽 */
-.create-pics {
+/* 卡预览里的头像/立绘只读缩略(上传/裁剪挪进「完善角色卡」弹窗;有图才显) */
+.create-pics-preview {
   display: flex;
-  gap: var(--sp-4);
+  align-items: flex-end;
+  gap: var(--sp-3);
   margin-bottom: var(--sp-3);
 }
-.create-pic {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-.create-pic-thumb {
-  border: 1px dashed var(--line);
-  border-radius: var(--r-md);
+.create-pics-av,
+.create-pics-portrait {
+  display: block;
   background-color: var(--sunk);
   background-size: cover;
   background-position: center top;
-  display: grid;
-  place-items: center;
-  color: var(--muted);
-  cursor: pointer;
-  overflow: hidden;
-  transition: border-color var(--dur-fast) var(--ease-out);
+  border: 1px solid var(--line);
 }
-.create-pic-thumb:hover {
-  border-color: var(--accent-2);
-}
-.create-pic-thumb--avatar {
+.create-pics-av {
   width: 56px;
   height: 56px;
   border-radius: var(--r-pill);
 }
-.create-pic-thumb--portrait {
+.create-pics-portrait {
   width: 72px;
-  height: 96px;
+  height: 108px;
+  border-radius: var(--r-md);
 }
-.create-pic-hint {
-  color: var(--muted);
+
+/* 「完善角色卡」弹窗:两个裁剪字段并排 */
+.create-finalize-name {
+  font-size: var(--fs-h3, 1.1rem);
+  margin: 2px 0 var(--sp-3);
+}
+.create-finalize-pics {
+  display: flex;
+  gap: var(--sp-5, 20px);
+  margin-bottom: var(--sp-4);
+  flex-wrap: wrap;
 }
 
 .create-card-fields {
