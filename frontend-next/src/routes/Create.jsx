@@ -4,6 +4,8 @@ import { Button, Input } from "../components/ui";
 import { postJSON, getJSON, uploadFile } from "../lib/api";
 import { fileToCompressedDataURL } from "../lib/image";
 import ImageCropField from "../components/ImageCropField";
+import StoryHero from "../components/StoryHero";
+import CharDetailModal from "../components/CharDetailModal";
 import { useAuth } from "../state/auth";
 import "./Create.css";
 
@@ -120,6 +122,8 @@ export default function Create() {
   const [genBusy, setGenBusy] = useState(false); // 自动生成角色介绍中
   const [pubModal, setPubModal] = useState(false);
   const [pub, setPub] = useState({ name: "", synopsis: "", cover: "", authorNote: "" });
+  const [previewOpen, setPreviewOpen] = useState(false); // 「预览成故事详情页」覆盖层
+  const [previewChar, setPreviewChar] = useState(null); // 预览里角色「查看详情」
   const fileRef = useRef(null);
   const coverRef = useRef(null);
   const chatRef = useRef(null);
@@ -368,6 +372,30 @@ export default function Create() {
     return [...d.built, ...cur];
   };
 
+  // 组装当前创作 → 故事 preset 形状(给「预览成详情页」用,复用发布那套拼装;不落库、纯本地)。
+  function buildPreviewPreset() {
+    const chars = deskCards("characters"), worlds = deskCards("worlds"), stories = deskCards("stories"), players = deskCards("players");
+    const st = stories.length ? stories[stories.length - 1] : null;
+    const tags = [...new Set([...chars.flatMap((c) => c.tags || []), ...((st || {}).tags || [])])].filter(Boolean).slice(0, 5);
+    const nm = pub.name.trim() || (draftName !== "未命名" ? draftName : "未命名故事");
+    return {
+      name: nm,
+      data: {
+        name: nm,
+        synopsis: pub.synopsis.trim(),
+        author: (user && (user.display_name || user.username)) || "",
+        author_note: pub.authorNote.trim(),
+        cover: pub.cover || "",
+        tags,
+        characters: chars.map(wrapCard),
+        world: worlds.length ? mergeWorldBooks(worlds) : null,
+        story: st,
+        player: players[0] || null,
+        playables: players,
+      },
+    };
+  }
+
   // 打包发布(公开):四台子成品 → 可玩预设落 /api/presets。
   async function publish() {
     if (busy) return;
@@ -528,6 +556,9 @@ export default function Create() {
               <Button variant="line" onClick={() => setBuiltView(true)}>查看本台已建({desk.built.length})</Button>
             )}
             <Button variant="line" onClick={openLib}>从卡库补素材</Button>
+            <Button variant="line" onClick={() => setPreviewOpen(true)} disabled={!hasChars} title={hasChars ? undefined : "至少要一张角色卡才能预览详情页"}>
+              预览详情页
+            </Button>
             <Button
               variant="primary"
               full
@@ -736,10 +767,39 @@ export default function Create() {
               onChange={(e) => setPub((p) => ({ ...p, authorNote: e.target.value }))}
               placeholder="想对玩家说的话、创作初衷、注意事项……"
             />
+            <Button variant="line" full onClick={() => setPreviewOpen(true)}>
+              预览详情页效果
+            </Button>
             <Button variant="primary" full disabled={busy} onClick={publish}>
               {busy ? "发布中…" : "确认发布"}
             </Button>
           </div>
+        </div>
+      )}
+
+      {/* 预览成故事详情页(只读;复用 StoryHero,跟真详情页同一套门面) */}
+      {previewOpen && (
+        <div className="create-preview-overlay">
+          <div className="create-preview-bar">
+            <span className="t-meta">预览 · 发布后在探索点开就是这样</span>
+            <button
+              className="create-preview-close"
+              onClick={() => {
+                setPreviewOpen(false);
+                setPreviewChar(null);
+              }}
+              aria-label="关闭预览"
+            >
+              关闭预览 ×
+            </button>
+          </div>
+          <div className="create-preview-scroll">
+            <div className="page detail">
+              <StoryHero preset={buildPreviewPreset()} onOpenChar={setPreviewChar} />
+              <div className="create-preview-foot t-meta">(发布后玩家在这里选扮演角色、入局)</div>
+            </div>
+          </div>
+          <CharDetailModal model={previewChar} onClose={() => setPreviewChar(null)} />
         </div>
       )}
     </div>

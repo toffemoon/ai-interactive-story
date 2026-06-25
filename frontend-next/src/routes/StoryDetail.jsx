@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Button, Tag, Badge, Card } from "../components/ui";
+import { Button } from "../components/ui";
 import CardCarousel from "../components/CardCarousel";
+import StoryHero from "../components/StoryHero";
+import CharDetailModal from "../components/CharDetailModal";
 import { getJSON, postJSON, uploadFile } from "../lib/api";
 import { useGame } from "../state/game";
 import "./StoryDetail.css";
@@ -41,43 +43,7 @@ export default function StoryDetail() {
 
   const d = (preset && preset.data) || {};
   const bookName = d.name || (preset && preset.name) || "未命名故事";
-  const synopsis = d.synopsis || (d.story && d.story.premise) || "";
-  const tags = d.tags || [];
-  const author = d.author || "";
-  const authorNote = d.author_note || "";
-
-  // 角色:用统一 Card · 横轴滚动(环形轮播的感觉);背面 + 查看详情看完整介绍(细节②)。
-  // 简介细化:取公开层多字段(锚点/外貌/性格/矛盾/设定/情境/公开已知),不进剧透层(known_hidden/versions)。
-  const charModels = useMemo(
-    () => (d.characters || []).map((c, i) => {
-      const cd = (c && c.data) || c || {};
-      const sec = (label, v) => (v && String(v).trim() ? (label ? label + " · " + v : String(v)) : "");
-      const intro =
-        [
-          sec("", cd.anchor),
-          sec("外貌", cd.look),
-          sec("性格", cd.personality),
-          sec("矛盾", cd.tension),
-          sec("", cd.description || cd.persona),
-          sec("情境", cd.scenario),
-          (cd.known_public || []).length ? "已知 · " + cd.known_public.join(";") : "",
-        ]
-          .filter(Boolean)
-          .join("\n\n") || "这个角色还没写简介,入局后逐渐揭晓。";
-      return {
-        id: (cd.name || "char") + "#" + i,
-        kind: "character",
-        title: cd.name || "角色",
-        cover: cd.image || cd.avatar || "",
-        blurb: intro,
-        badge: { label: "角色", tone: "gilt" },
-        tags: (cd.tags || []).slice(0, 3),
-        meta: {},
-        raw: c,
-      };
-    }),
-    [preset]
-  );
+  // 「门面」(封面/标题/简介/作者的话 + 角色卡轮播)抽到 StoryHero 共享组件,创作「预览成详情页」复用同一套。
 
   // 选主角候选:playables 优先,空则 characters;末尾补「以旁观者开始」。
   const roleCards = useMemo(() => {
@@ -90,7 +56,6 @@ export default function StoryDetail() {
   const roleItems = useMemo(() => [...roleCards, { custom: true }], [roleCards]);
 
   const [selIdx, setSelIdx] = useState(0);
-  const [charActive, setCharActive] = useState(0); // 角色卡轮播居中索引
   const [charDetail, setCharDetail] = useState(null); // 角色「查看详情」弹层(细节②)
   const [castMode, setCastMode] = useState("list"); // list | custom
   const [customText, setCustomText] = useState("");
@@ -174,65 +139,8 @@ export default function StoryDetail() {
           ← 放回书架
         </button>
 
-        {/* 头:大封面 + 柔化封面底纹(治单调)+ 标题/标签/元信息 + 简介(只留简介,删背景 YOR-45,细节②) */}
-        <div className="detail-hero">
-          {d.cover && (
-            <div className="detail-hero-bg" style={{ backgroundImage: `url("${d.cover}")` }} aria-hidden="true" />
-          )}
-          <div className="detail-head">
-            <div className="detail-cover" style={d.cover ? { backgroundImage: `url("${d.cover}")` } : undefined}>
-              {!d.cover && <span className="detail-cover-spine t-kai">{bookName.slice(0, 8)}</span>}
-            </div>
-            <div className="detail-headmain">
-              <Badge tone="pine">完整故事 · 可直接玩</Badge>
-              <h1 className="t-display detail-title">{bookName}</h1>
-              {tags.length > 0 && (
-                <div className="detail-tags">
-                  {tags.map((t, i) => (
-                    <Tag key={i}>{t}</Tag>
-                  ))}
-                </div>
-              )}
-              <div className="detail-meta">
-                {author && <span className="detail-meta-i t-meta">作者 · {author}</span>}
-                {charModels.length > 0 && <span className="detail-meta-i t-meta">{charModels.length} 位角色</span>}
-                <span className="detail-meta-i t-meta">打开即玩</span>
-              </div>
-              <div className="detail-intro">
-                <h2 className="t-h3 detail-sec">简介</h2>
-                <p className="t-read detail-intro-text">{synopsis || "暂无简介。"}</p>
-              </div>
-              {authorNote.trim() && (
-                <div className="detail-intro detail-authornote">
-                  <h2 className="t-h3 detail-sec">作者的话</h2>
-                  <p className="t-read detail-intro-text">{authorNote}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* 角色:DOM 曲面轮播(coverflow),居中卡点开看完整介绍(方向 B,保留我们的 <Card>) */}
-        {charModels.length > 0 && (
-          <section className="detail-block">
-            <h2 className="t-h3 detail-sec">角色</h2>
-            <p className="detail-hint t-meta">拖动 / 滚轮浏览角色,点居中卡看完整介绍</p>
-            <CardCarousel
-              items={charModels}
-              activeIndex={charActive}
-              onActiveChange={setCharActive}
-              ariaLabel="角色卡轮播"
-              renderItem={(m, { active }) => (
-                <Card
-                  model={m}
-                  variant="shelf"
-                  onToggleFlip={() => active && setCharDetail(m)}
-                  onOpen={() => setCharDetail(m)}
-                />
-              )}
-            />
-          </section>
-        )}
+        {/* 门面(封面/标题/简介/作者的话 + 角色卡轮播)= 共享组件,跟创作「预览成详情页」同一套 */}
+        <StoryHero preset={preset} onOpenChar={setCharDetail} />
 
         <div className="detail-rule" aria-hidden="true" />
 
@@ -318,24 +226,8 @@ export default function StoryDetail() {
         )}
       </div>
 
-      {/* 角色「查看详情」:完整介绍,长则滚动(细节②) */}
-      {charDetail && (
-        <div className="detail-charmodal" onClick={() => setCharDetail(null)}>
-          <div className="detail-charmodal-card" onClick={(e) => e.stopPropagation()}>
-            <button className="detail-charmodal-x" onClick={() => setCharDetail(null)} aria-label="关闭">×</button>
-            <Badge tone="gilt">角色</Badge>
-            <h2 className="t-h1 detail-charmodal-name">{charDetail.title}</h2>
-            {(charDetail.tags || []).length > 0 && (
-              <div className="detail-tags">
-                {charDetail.tags.map((t, i) => (
-                  <Tag key={i}>{t}</Tag>
-                ))}
-              </div>
-            )}
-            <div className="detail-charmodal-body t-read">{charDetail.blurb}</div>
-          </div>
-        </div>
-      )}
+      {/* 角色「查看详情」= 共享组件 */}
+      <CharDetailModal model={charDetail} onClose={() => setCharDetail(null)} />
     </>
   );
 }
