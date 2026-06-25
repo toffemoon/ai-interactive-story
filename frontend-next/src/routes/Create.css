@@ -613,6 +613,48 @@
   overflow-y: auto;
 }
 
+/* 「预览成故事详情页」覆盖层(z 比发布弹窗 z-80 高;内部复用 detail-* 渲染) */
+.create-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+.create-preview-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 18px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.create-preview-close {
+  flex: none;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  padding: 4px 14px;
+  color: var(--fg);
+  cursor: pointer;
+}
+.create-preview-close:hover {
+  border-color: var(--accent);
+}
+.create-preview-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.create-preview-foot {
+  text-align: center;
+  padding: 24px 16px 48px;
+  color: var(--muted);
+}
+
 /* 桌面:右侧实时卡 + 操作区固定(细节④「把右侧的按键固定」)。
    sticky 钉在视口顶,卡片内容长则内部滚动,5 个操作按钮常驻可见、不随对话滚走。 */
 @media (min-width: 861px) {
