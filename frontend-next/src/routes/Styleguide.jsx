@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, Chip, Badge, Tag, Input, SearchField, ChatBubble, Card, CardShelf } from "../components/ui";
+import Stepper, { Step } from "../components/Stepper";
 import { getJSON } from "../lib/api";
 import { toCardModel } from "../lib/cardModel";
 import "./Styleguide.css";
@@ -64,6 +65,8 @@ const ACTIONS = {
 export default function Styleguide() {
   const [cards, setCards] = useState([]);
   const [err, setErr] = useState("");
+  const [sgName, setSgName] = useState("");
+  const [sgDone, setSgDone] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -238,6 +241,40 @@ export default function Styleguide() {
             <Card key={"thumb-" + m.kind} model={m} variant="thumb" />
           ))}
         </div>
+      </section>
+
+      {/* React Bits Stepper · 暖夜配色 demo(评估用,未接创作流程) */}
+      <section className="sg-section">
+        <h2 className="t-h2 sg-label">Stepper · 分步向导(暖夜配色 demo)</h2>
+        <p className="t-ui-sm sg-sub">React Bits Stepper,配色已换暖夜 token(朱砂进度 + 纸面板)。仅 demo 看效果,未接创作主流程。</p>
+        <Stepper
+          backButtonText="上一步"
+          nextButtonText="下一步"
+          completeText="发布"
+          onFinalStepCompleted={() => setSgDone(true)}
+          onStepChange={() => setSgDone(false)}
+        >
+          <Step>
+            <h2>先选个主角</h2>
+            <p>造一张角色卡当主角——聊几句,卡就长出来了。这一步是必需的。</p>
+          </Step>
+          <Step>
+            <h2>给故事一个世界(可选)</h2>
+            <p>想要世界观 / 设定就加一张设定卡;不想加,直接下一步也行。</p>
+          </Step>
+          <Step>
+            <h2>起名,发布</h2>
+            <p>给故事起个名字,就能发到探索让人玩。</p>
+            <div style={{ marginTop: "var(--sp-3)" }}>
+              <Input value={sgName} onChange={(e) => setSgName(e.target.value)} placeholder="故事名…" />
+            </div>
+          </Step>
+        </Stepper>
+        {sgDone && (
+          <p className="t-ui sg-sub" style={{ marginTop: "var(--sp-3)", color: "var(--accent)" }}>
+            走到「发布」了{sgName ? " ·《" + sgName + "》" : ""}(demo,未真发布)
+          </p>
+        )}
       </section>
 
       <p className="sg-foot t-meta">沐言设计系统 v0 · YOR-92 · frontend-next</p>

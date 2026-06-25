@@ -232,10 +232,12 @@
   background: var(--scrim);
   display: flex;
   justify-content: flex-end;
+  animation: chat-lb-in 0.28s var(--ease-out) both; /* scrim 淡入,配合卡片划出更丝滑 */
 }
 .chat-profile-card {
   width: min(320px, 86%);
   height: 100%;
+  overflow-y: auto; /* 立绘放全后可能超高,抽屉内可滚 */
   background: var(--panel);
   border-left: 1px solid var(--line);
   padding: var(--sp-6) var(--sp-5);
@@ -245,17 +247,15 @@
   text-align: center;
   gap: var(--sp-2);
   box-shadow: var(--shadow-pop);
-  animation: chat-prof-in 0.24s var(--ease-out) both;
+  animation: chat-prof-in 0.34s var(--ease-out) both; /* 从右边缘整段划出 */
   position: relative;
 }
 @keyframes chat-prof-in {
   from {
-    transform: translateX(20px);
-    opacity: 0;
+    transform: translateX(100%);
   }
   to {
-    transform: none;
-    opacity: 1;
+    transform: translateX(0);
   }
 }
 .chat-profile-x {
@@ -268,25 +268,25 @@
   font-size: 18px;
   cursor: pointer;
 }
-/* 详情顶部立绘 / 布偶动画(细节⑨):矩形大图,非圆头像 */
+/* 详情顶部立绘 / 布偶动画(细节⑨):放全不裁(去掉 max-height 与 cover 裁切)。 */
 .chat-profile-art {
   width: 100%;
-  aspect-ratio: 3 / 4;
-  max-height: 280px;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   background: var(--sunk);
   overflow: hidden;
-  display: grid;
-  place-items: center;
 }
 .chat-profile-art img,
 .chat-profile-art video {
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  height: auto; /* 按宽缩放、全身可见,不裁 */
+  display: block;
 }
 .chat-profile-art-ph {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 3 / 4; /* 无图占位仍给一个矩形 */
   font-family: var(--font-kai);
   font-size: 64px;
   color: var(--accent-3);

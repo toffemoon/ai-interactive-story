@@ -486,6 +486,37 @@
   margin: var(--sp-1) 0;
 }
 
+/* 桌面:卡组栏(dev)与世界状态栏出现时丝滑划入(纯聊档案「同理」#4)。
+   两者是流内列,用 transform 滑入不影响布局回流;移动端状态栏走自身 translateX 抽屉,不在此处。 */
+@media (min-width: 961px) {
+  .story-deck {
+    animation: story-aside-l 0.32s var(--ease-out) both;
+  }
+  .story.status-open .story-status {
+    animation: story-aside-r 0.32s var(--ease-out) both;
+  }
+}
+@keyframes story-aside-l {
+  from {
+    transform: translateX(-22px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes story-aside-r {
+  from {
+    transform: translateX(22px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
 /* 故事记录抽屉 */
 .story-log {
   position: fixed;

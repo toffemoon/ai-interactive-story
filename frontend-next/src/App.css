@@ -26,13 +26,15 @@
 /* 页面切换 = 涟漪圆形揭示(切路由 key 变 → 重跑)。
    circle(75%) ≈ 全覆盖任意尺寸/可滚动页;动画无 fill,结束回退到无裁切 → 对页内 fixed 弹层安全。
    用 clip-path 不用 transform(transform 会成 fixed 后代包含块);动画跑不跑页面都可见(基态无裁切)。 */
+/* 涟漪原点 = 点击坐标(--ripple-x/y,由 ShellLayout 写;缺省居中)。
+   半径放大到 150%:原点移到角落时仍能覆盖整页,结束无未裁切的突跳。 */
 @keyframes mu-ripple-in {
   from {
-    clip-path: circle(0% at 50% 50%);
+    clip-path: circle(0% at var(--ripple-x, 50%) var(--ripple-y, 50%));
     opacity: 0.55;
   }
   to {
-    clip-path: circle(75% at 50% 50%);
+    clip-path: circle(150% at var(--ripple-x, 50%) var(--ripple-y, 50%));
     opacity: 1;
   }
 }

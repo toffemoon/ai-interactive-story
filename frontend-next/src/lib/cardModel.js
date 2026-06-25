@@ -30,10 +30,22 @@ function fromStory(p) {
     blurb: clip(d.synopsis || (d.story && d.story.premise) || "一个等你走进的故事。"),
     badge: BADGE.story,
     tags: (d.tags || []).slice(0, 3),
-    meta: { characters: nch, author: d.author || "" },
+    meta: {
+      characters: nch,
+      author: d.author || "",
+      uploader: d.author || "", // 上传者(真数据:故事 author)
+      typeLabel: p && p.official ? "官方" : "", // 原创/同人 需引擎类型字段(YOR-95),暂只标官方
+      useCount: pickCount(d.uses, p && p.uses, p && p.use_count), // 被使用次数:留位,等 YOR-95 后端字段
+    },
     note: "",
     raw: p,
   };
+}
+
+// 取一个数值型计数(留位:当前后端无此字段则返回 null,接上 YOR-95 字段后自动显示)。
+function pickCount(...vals) {
+  for (const v of vals) if (typeof v === "number" && isFinite(v)) return v;
+  return null;
 }
 
 // 角色卡:库项 { name, official, data: CharacterCard{ spec, data:{ name, tags, description, look, image, avatar } } }
@@ -49,7 +61,11 @@ function fromCharacter(it) {
     blurb: clip(cd.look || cd.description || "一张待你揭晓的角色卡。"),
     badge: BADGE.character,
     tags: (cd.tags || []).slice(0, 3),
-    meta: {},
+    meta: {
+      uploader: cd.author || "", // 角色卡作者多无 → 留位(YOR-95)
+      typeLabel: it && it.official ? "官方" : "", // OC/CN/同人 需引擎类型字段(YOR-95),暂只标官方
+      useCount: pickCount(cd.uses, it && it.uses, it && it.use_count), // 留位
+    },
     note: "",
     raw: it,
   };

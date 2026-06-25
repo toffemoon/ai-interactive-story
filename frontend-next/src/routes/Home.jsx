@@ -12,6 +12,7 @@ import "./Home.css";
 // 默认糖沐(取《新人入店》预设);换角色从我的角色卡库(/api/library/characters)、沿用该卡设定。
 // 主按钮:探索故事→/explore(常驻发现路径);继续故事(有进行中 game/存档才显)→存档窗口→/play。
 const HOME_KEY = "ais_home_v1";
+const PORTRAIT_KEY = "ais_home_portrait_v1"; // 立绘大小/位置(玩家可调,本机持久)
 const TANGMU_IMG = "/home/tangmu1.png";
 const BG_IMG = "/home/coffeeshop.png";
 const GREETING_NEW =
@@ -56,6 +57,15 @@ export default function Home() {
   const [fullscreen, setFullscreen] = useState(false);
   const restoredRef = useRef(false);
   const sessionIdRef = useRef(sessionId); // 镜像最新 sessionId,供 send 异步回调判定回来时是否已切会话
+  const [editMode, setEditMode] = useState(false); // 立绘编辑态(#6)
+  const [adjust, setAdjust] = useState(() => {
+    try {
+      const a = JSON.parse(localStorage.getItem(PORTRAIT_KEY));
+      return a && typeof a.scale === "number" ? a : { scale: 1, x: 0, y: 0 };
+    } catch (e) {
+      return { scale: 1, x: 0, y: 0 };
+    }
+  });
 
   const displayName = cardName(card) || (isTangmu ? "糖沐" : "角色");
   const image = isTangmu ? TANGMU_IMG : cardImageOf(card);
@@ -129,6 +139,30 @@ export default function Home() {
   useEffect(() => {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
+
+  // 持久化立绘调整(#6:大小 scale + 位移 x/y)。
+  useEffect(() => {
+    try {
+      localStorage.setItem(PORTRAIT_KEY, JSON.stringify(adjust));
+    } catch (e) {}
+  }, [adjust]);
+
+  // 编辑态:拖动立绘改位置(指针拖拽,window 级跟踪到松手)。
+  function onPortraitDown(e) {
+    if (!editMode) return;
+    e.preventDefault();
+    const sx = e.clientX,
+      sy = e.clientY;
+    const base = adjust;
+    const onMove = (ev) =>
+      setAdjust({ scale: base.scale, x: base.x + (ev.clientX - sx), y: base.y + (ev.clientY - sy) });
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
 
   // 全屏(截图态):隐藏一切 UI(含全局唤出钮),只留背景+立绘。
   // 退出方式:点击任意处 / 按 Esc / 角落按钮(细节⑧)。
@@ -222,23 +256,35 @@ export default function Home() {
   }
 
   return (
-    <div className={"home" + (fullscreen ? " is-fullscreen" : "")}>
+    <div className={"home" + (fullscreen ? " is-fullscreen" : "") + (editMode ? " is-editing" : "")}>
       {/* 背景层 */}
       <div className="home-bg" style={{ backgroundImage: `url("${BG_IMG}")` }} aria-hidden="true" />
       <div className="home-bg-scrim" aria-hidden="true" />
 
-      {/* 立绘层(换角色淡入:只动 opacity) */}
+      {/* 立绘层(换角色淡入:只动 opacity);编辑态可拖动改位置,transform 应用大小/位移(#6) */}
       <motion.div
-        className="home-portrait"
+        className={"home-portrait" + (editMode ? " is-editing" : "")}
         key={displayName}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        onPointerDown={onPortraitDown}
       >
         {image ? (
-          <img src={image} alt={displayName + "(立绘)"} draggable="false" />
+          <img
+            src={image}
+            alt={displayName + "(立绘)"}
+            draggable="false"
+            style={{ transform: `translate(${adjust.x}px, ${adjust.y}px) scale(${adjust.scale})`, transformOrigin: "top center" }}
+          />
         ) : (
-          <span className="home-portrait-ph t-kai" aria-hidden="true">{displayName.slice(0, 2)}</span>
+          <span
+            className="home-portrait-ph t-kai"
+            aria-hidden="true"
+            style={{ transform: `translate(${adjust.x}px, ${adjust.y}px) scale(${adjust.scale})` }}
+          >
+            {displayName.slice(0, 2)}
+          </span>
         )}
       </motion.div>
 
@@ -249,6 +295,35 @@ export default function Home() {
         <button className="home-exitfs t-meta" onClick={() => setFullscreen(false)} aria-label="退出全屏">
           ✕ 退出全屏
         </button>
+      )}
+
+      {/* 立绘编辑(#6):右下角图标 → 编辑态可拖动 + 滑杆调大小,持久到本机 */}
+      {!fullscreen && !editMode && (
+        <button className="home-edit-btn" onClick={() => setEditMode(true)} title="调整立绘大小 / 位置" aria-label="调整立绘大小和位置">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+          </svg>
+        </button>
+      )}
+      {editMode && (
+        <div className="home-edit-bar" role="group" aria-label="立绘调整">
+          <span className="home-edit-tip t-meta">拖动立绘移动 · 滑杆调大小</span>
+          <label className="home-edit-scale t-meta">
+            大小
+            <input
+              type="range"
+              min="0.5"
+              max="2.6"
+              step="0.02"
+              value={adjust.scale}
+              onChange={(e) => setAdjust((a) => ({ ...a, scale: parseFloat(e.target.value) }))}
+              aria-label="立绘大小"
+            />
+          </label>
+          <button className="home-edit-reset" onClick={() => setAdjust({ scale: 1, x: 0, y: 0 })}>重置</button>
+          <button className="home-edit-done" onClick={() => setEditMode(false)}>完成</button>
+        </div>
       )}
 
       {/* 前景 UI(全屏态隐藏) */}
