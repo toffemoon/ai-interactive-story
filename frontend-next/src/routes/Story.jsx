@@ -205,6 +205,7 @@ export default function Story() {
       }
     }
     if (idx === -1) return;
+    const prevChoices = choices; // 失败时恢复:reroll 被拒(如开场无可重生回合,后端 400)别把选项清没了留下死状态
     setLoading(true);
     setError("");
     setChoices([]);
@@ -216,6 +217,7 @@ export default function Story() {
       setCanUndo(true);
     } catch (e) {
       setError("重新生成失败:" + e.message);
+      setChoices(prevChoices); // 恢复原选项,避免无选项可点
     } finally {
       setLoading(false);
     }
