@@ -27,12 +27,15 @@ export default function CardCarousel({ items, renderItem, activeIndex, onActiveC
   );
 
   const trackRef = useRef(null);
+  const rootRef = useRef(null);
   const itemRefs = useRef([]);
   const scroll = useRef({ current: 0, target: 0, last: 0 });
   const drag = useRef({ down: false, startX: 0, base: 0, moved: false });
   const justDragged = useRef(false);
   const rafRef = useRef(0);
   const settleRef = useRef(0);
+  const setActiveRef = useRef(setActive);
+  setActiveRef.current = setActive; // 给 native 监听用最新的 setActive,避免闭包过期
 
   // active(外部控制 / 点击 / 键盘 / snap)→ 设滚动目标,RAF 缓动逼近。
   useEffect(() => {
@@ -113,12 +116,23 @@ export default function CardCarousel({ items, renderItem, activeIndex, onActiveC
       justDragged.current = false;
     }
   }
-  function onWheel(e) {
-    const dd = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-    if (Math.abs(dd) < 2) return;
-    scroll.current.target = Math.max(0, Math.min(n - 1, Math.round(scroll.current.target) + (dd > 0 ? 1 : -1)));
-    scheduleSnap();
-  }
+  // 滚轮控制卡片切换,限定在轮播这块「固定区域」:native 非 passive 监听 + preventDefault,
+  // 不让页面跟着上下滚(React 的 onWheel 是 passive,preventDefault 无效 → 必须 native 监听)。
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return undefined;
+    const handler = (e) => {
+      const dd = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (Math.abs(dd) < 2) return;
+      e.preventDefault();
+      const next = Math.max(0, Math.min(n - 1, Math.round(scroll.current.target) + (dd > 0 ? 1 : -1)));
+      scroll.current.target = next;
+      clearTimeout(settleRef.current);
+      settleRef.current = setTimeout(() => setActiveRef.current(next), 140);
+    };
+    el.addEventListener("wheel", handler, { passive: false });
+    return () => el.removeEventListener("wheel", handler);
+  }, [n]);
   function onKeyDown(e) {
     if (e.key === "ArrowRight") { e.preventDefault(); setActive(active + 1); }
     else if (e.key === "ArrowLeft") { e.preventDefault(); setActive(active - 1); }
@@ -127,10 +141,10 @@ export default function CardCarousel({ items, renderItem, activeIndex, onActiveC
   return (
     <div
       className="ccz"
+      ref={rootRef}
       role="group"
       aria-label={ariaLabel}
       tabIndex={0}
-      onWheel={onWheel}
       onKeyDown={onKeyDown}
       onClickCapture={onClickCapture}
     >
