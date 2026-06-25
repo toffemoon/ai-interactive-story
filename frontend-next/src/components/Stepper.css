@@ -1,0 +1,165 @@
+/* React Bits · Stepper 样式(适配沐言:暖纸面板 + 朱砂进度 + 中文字号)。
+   去掉原 aspect-ratio 约束(内容高度自适应),配色全换语义 token。 */
+.mu-stepper {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-circle-container {
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.step-indicator-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  padding: var(--sp-5) var(--sp-6) var(--sp-4);
+}
+
+.step-content-default {
+  position: relative;
+  overflow: hidden;
+}
+
+.step-default {
+  padding: 0 var(--sp-6);
+  font-family: var(--font-sans);
+  color: var(--fg);
+}
+.step-default h2 {
+  font-family: var(--font-kai);
+  font-size: var(--fs-h2);
+  color: var(--fg);
+  margin-bottom: var(--sp-3);
+}
+.step-default p {
+  color: var(--muted);
+  line-height: var(--lh-body);
+}
+
+.footer-container {
+  padding: 0 var(--sp-6) var(--sp-5);
+}
+.footer-nav {
+  margin-top: var(--sp-5);
+  display: flex;
+}
+.footer-nav.spread {
+  justify-content: space-between;
+}
+.footer-nav.end {
+  justify-content: flex-end;
+}
+
+.back-button {
+  transition: color var(--dur-fast) var(--ease-out);
+  border: none;
+  background: transparent;
+  border-radius: var(--r-sm);
+  padding: 6px 12px;
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui-sm);
+  color: var(--muted);
+  cursor: pointer;
+}
+.back-button:hover {
+  color: var(--fg);
+}
+.back-button.inactive {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.next-button {
+  transition: filter var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui-sm);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  padding: 8px 20px;
+  cursor: pointer;
+}
+.next-button:hover {
+  filter: brightness(1.06);
+}
+.next-button:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.step-indicator {
+  position: relative;
+  cursor: pointer;
+  outline: none;
+}
+.step-indicator-inner {
+  display: flex;
+  height: 2rem;
+  width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-pill);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  /* 状态色纯 CSS 驱动(未到=线灰底/弱墨字;当前/已过=朱砂底白字) */
+  background-color: var(--line);
+  color: var(--muted);
+  transition: background-color 0.3s var(--ease-out), color 0.3s var(--ease-out);
+}
+.step-indicator-inner.is-active,
+.step-indicator-inner.is-complete {
+  background-color: var(--cinnabar);
+  color: #fff;
+}
+.active-dot {
+  height: 0.7rem;
+  width: 0.7rem;
+  border-radius: var(--r-pill);
+  background-color: #fff;
+}
+.step-number {
+  font-size: 0.85rem;
+}
+
+.step-connector {
+  position: relative;
+  margin: 0 var(--sp-2);
+  height: 2px;
+  flex: 1;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background-color: var(--line);
+}
+.step-connector-inner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 0;
+  background-color: var(--cinnabar);
+  transition: width 0.4s var(--ease-out);
+}
+.step-connector-inner.is-complete {
+  width: 100%;
+}
+
+.check-icon {
+  height: 1rem;
+  width: 1rem;
+  color: #fff;
+}
