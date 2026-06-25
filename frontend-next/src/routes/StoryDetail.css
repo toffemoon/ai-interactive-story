@@ -443,6 +443,11 @@
 .detail-charmodal-x:hover {
   color: var(--accent);
 }
+/* 弹窗是 flex 列,徽标默认被拉满整行宽 → 右缘伸到放大后的 × 底下重合;
+   让它只占自身宽(左对齐小胶囊),既消重合、徽标也正常。 */
+.detail-charmodal-card .badge {
+  align-self: flex-start;
+}
 .detail-charmodal-name {
   margin: var(--sp-3) 0 var(--sp-2);
 }
