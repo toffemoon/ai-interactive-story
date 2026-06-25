@@ -37,6 +37,9 @@ const LABELS = {
   timeline: "时间线", events: "事件节点", main: "主线", anchor: "锚点", tension: "矛盾",
 };
 const STORE_KEY = "ais_create_desks_v1";
+// 这些 key 不当文本字段渲染:name/title 已在卡名展示;avatar/image/cover 是图(base64 data-URI),
+// 只走缩略图,别把 base64 大串当普通字段铺进预览(#92 上传图后的回归)。
+const NON_FIELD_KEYS = ["name", "character_id", "id", "title", "avatar", "image", "cover"];
 
 // 把任意卡字段值渲染成可读文本。根治世界书 entries / 故事书 timeline 这类"对象数组"
 // 被 v.join("、") 渲染成「[object Object]、[object Object]…」的 bug(细节⑤)。
@@ -292,7 +295,7 @@ export default function Create() {
   function cardFields(card) {
     const c = (card && card.data) || card || {};
     return Object.keys(c)
-      .filter((k) => !["name", "character_id", "id", "title"].includes(k))
+      .filter((k) => !NON_FIELD_KEYS.includes(k))
       .map((k) => ({ k: LABELS[k] || k, v: fmtVal(c[k]) }))
       .filter((f) => f.v && f.v.trim());
   }
@@ -393,7 +396,7 @@ export default function Create() {
   const fields = useMemo(() => {
     const d = desk.draft || {};
     return Object.keys(d)
-      .filter((k) => !["name", "character_id", "id", "title"].includes(k))
+      .filter((k) => !NON_FIELD_KEYS.includes(k))
       .map((k) => ({
         k: LABELS[k] || k,
         v: fmtVal(d[k]),
