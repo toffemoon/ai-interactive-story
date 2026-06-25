@@ -89,25 +89,29 @@ export default function CardCarousel({ items, renderItem, activeIndex, onActiveC
 
   function onPointerDown(e) {
     if (e.button != null && e.button !== 0) return;
-    drag.current = { down: true, startX: e.clientX, base: scroll.current.target, moved: false };
-    if (trackRef.current && trackRef.current.setPointerCapture) {
-      try { trackRef.current.setPointerCapture(e.pointerId); } catch (_) {}
-    }
+    // 不在 down 里 setPointerCapture:否则纯点击(没拖)也被轨道捕获,卡本体的 click(翻面/详情)收不到。
+    drag.current = { down: true, startX: e.clientX, base: scroll.current.target, moved: false, pointerId: e.pointerId };
   }
   function onPointerMove(e) {
     const d = drag.current;
     if (!d.down) return;
     const dx = e.clientX - d.startX;
-    if (Math.abs(dx) > 4) d.moved = true;
-    // 自由拖(略放宽边界做点阻尼感),松手 snap 回界内
-    scroll.current.target = Math.max(-0.4, Math.min(n - 0.6, d.base - dx / SPACING));
+    if (!d.moved && Math.abs(dx) > 5) {
+      d.moved = true; // 真拖起来了才捕获指针(拖出元素也不丢轨迹)
+      if (trackRef.current && trackRef.current.setPointerCapture) {
+        try { trackRef.current.setPointerCapture(d.pointerId); } catch (_) {}
+      }
+    }
+    if (d.moved) {
+      scroll.current.target = Math.max(-0.4, Math.min(n - 0.6, d.base - dx / SPACING));
+    }
   }
-  function onPointerUp(e) {
+  function onPointerUp() {
     const d = drag.current;
     if (!d.down) return;
     d.down = false;
     justDragged.current = d.moved;
-    scheduleSnap();
+    if (d.moved) scheduleSnap(); // 纯点击不 snap、不吞 click → 留给卡本体翻面/详情
   }
   // 拖动刚结束那一下 click:吞掉,别误触卡本体。
   function onClickCapture(e) {
@@ -124,8 +128,10 @@ export default function CardCarousel({ items, renderItem, activeIndex, onActiveC
     const handler = (e) => {
       const dd = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
       if (Math.abs(dd) < 2) return;
-      e.preventDefault();
-      const next = Math.max(0, Math.min(n - 1, Math.round(scroll.current.target) + (dd > 0 ? 1 : -1)));
+      const cur = Math.round(scroll.current.target);
+      const next = Math.max(0, Math.min(n - 1, cur + (dd > 0 ? 1 : -1)));
+      if (next === cur) return; // 到头了:不拦截,让页面正常滚过去(卡少时不憋着 / 缩小"固定区域"的感知)
+      e.preventDefault(); // 还有卡可切才拦,不带动页面
       scroll.current.target = next;
       clearTimeout(settleRef.current);
       settleRef.current = setTimeout(() => setActiveRef.current(next), 140);

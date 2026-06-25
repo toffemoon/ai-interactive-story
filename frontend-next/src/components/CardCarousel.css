@@ -9,6 +9,8 @@
   height: 360px;
   overflow: hidden;
   outline: none;
+  /* 把卡片的 z-index(90~200)收进轮播自己的层叠上下文 → 不跟固定「涟漪入局」条抢、不盖在它上面 */
+  isolation: isolate;
 }
 .ccz-track {
   position: absolute;
