@@ -8,13 +8,17 @@
   align-items: center;
   gap: 4px;
   color: var(--muted);
-  background: transparent;
-  border: none;
-  padding: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  padding: 5px 14px;
   margin-bottom: var(--sp-4);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 }
 .detail-back:hover {
   color: var(--fg);
+  border-color: var(--accent);
 }
 
 /* 头 · hero:封面底纹铺底,治"单调"(细节②)。整块在内容列里满铺(负边距吃掉 .page 左右内边距)。 */
@@ -292,6 +296,7 @@
 .detail-custom {
   margin-top: var(--sp-4);
   max-width: 720px;
+  margin-inline: auto; /* 自定义角色卡居中,下面的输入框也居中 */
 }
 .detail-custom-text {
   width: 100%;
@@ -389,7 +394,15 @@
   }
 }
 
-/* 角色「查看详情」弹层(细节②) */
+/* 角色「查看详情」弹层(细节②);出现时:遮罩淡入 + 卡片上浮放大(yufei 06-25) */
+@keyframes charmodal-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes charmodal-pop-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 .detail-charmodal {
   position: fixed;
   inset: 0;
@@ -398,6 +411,7 @@
   display: grid;
   place-items: center;
   padding: var(--sp-5);
+  animation: charmodal-scrim-in 0.18s ease both;
 }
 .detail-charmodal-card {
   position: relative;
@@ -410,19 +424,24 @@
   border-radius: var(--r-lg);
   padding: var(--sp-6);
   box-shadow: var(--shadow-pop);
+  animation: charmodal-pop-in 0.28s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 .detail-charmodal-x {
   position: absolute;
-  right: 14px;
-  top: 12px;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--line);
+  right: 10px;
+  top: 8px;
+  width: 40px;
+  height: 40px;
+  border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 18px;
-  border-radius: var(--r-sm);
+  font-size: 28px;
+  line-height: 1;
   cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.detail-charmodal-x:hover {
+  color: var(--accent);
 }
 .detail-charmodal-name {
   margin: var(--sp-3) 0 var(--sp-2);

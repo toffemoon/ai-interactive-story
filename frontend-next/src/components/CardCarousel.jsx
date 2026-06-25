@@ -167,8 +167,13 @@ export default function CardCarousel({ items, renderItem, activeIndex, onActiveC
             key={i}
             ref={(el) => (itemRefs.current[i] = el)}
             className="ccz-item"
-            onClick={() => {
-              if (i !== active && !justDragged.current) setActive(i);
+            onClickCapture={(e) => {
+              // 侧卡:捕获阶段拦住(卡本体 onClick 有 stopPropagation,bubble 收不到)→ 转到中间、不翻面。
+              if (i !== active) {
+                e.stopPropagation();
+                if (!justDragged.current) setActive(i);
+              }
+              // 居中卡:不拦,放给卡本体(翻面 / 详情)。
             }}
           >
             {renderItem(item, { active: i === active, index: i })}
