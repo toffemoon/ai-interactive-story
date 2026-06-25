@@ -2,8 +2,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Input } from "../components/ui";
 import { postJSON, getJSON, uploadFile } from "../lib/api";
+import { fileToCompressedDataURL } from "../lib/image";
 import { useAuth } from "../state/auth";
 import "./Create.css";
+
+// 角色卡的用户上传图(头像/立绘)单独保住,别被 AI 重建 draft 覆盖掉。
+function pickPics(d) {
+  const out = {};
+  if (d && d.avatar) out.avatar = d.avatar;
+  if (d && d.image) out.image = d.image;
+  return out;
+}
 
 // 创作 · 对话式建卡(契约固定只 reskin:/api/build_card、/api/identify*、/api/library/save、/api/presets)。
 // 去中二英文(YOR-51):卡分类去英文副标、AI 助手不叫「执笔人/坊」、标题不叫「创作桌/The Atelier」。
@@ -103,9 +112,14 @@ export default function Create() {
   const [libModal, setLibModal] = useState(null); // {items} | null
   const [libQ, setLibQ] = useState(""); // 补素材搜索
   const [builtView, setBuiltView] = useState(false); // 查看本台已建的卡(细节③)
+  const [nextModal, setNextModal] = useState(false); // 收进本台前的角色卡详情预览弹窗
+  const [genBusy, setGenBusy] = useState(false); // 自动生成角色介绍中
   const [pubModal, setPubModal] = useState(false);
-  const [pub, setPub] = useState({ name: "", synopsis: "" });
+  const [pub, setPub] = useState({ name: "", synopsis: "", cover: "", authorNote: "" });
   const fileRef = useRef(null);
+  const avatarRef = useRef(null);
+  const portraitRef = useRef(null);
+  const coverRef = useRef(null);
   const chatRef = useRef(null);
   const toastT = useRef(null);
 
@@ -148,7 +162,7 @@ export default function Create() {
       const ask = [r.reply, r.next_question].filter(Boolean).join(" ");
       patch(kk, (d0) => ({
         messages: [...d0.messages, { who: "ai", text: ask || "(这轮没接住——换个说法,或把内容分短一点再说一次)" }],
-        draft: r.draft || d0.draft,
+        draft: r.draft ? { ...r.draft, ...pickPics(d0.draft) } : d0.draft, // 保住已上传的头像/立绘
         filled: r.filled || (r.draft ? Object.keys(r.draft) : d0.filled),
       }));
     } catch (e) {
@@ -171,7 +185,7 @@ export default function Create() {
       const draft = kk === "characters" ? out.data || out : out;
       const nm = draft.name || draft.title || "未命名";
       patch(kk, (d0) => ({
-        draft,
+        draft: { ...draft, ...pickPics(d0.draft) }, // 保住已上传的头像/立绘
         filled: Object.keys(draft),
         messages: [...d0.messages, { who: "ai", text: "《" + nm + "》解析好了,已填进右边的草稿,顺手也收进了你的卡库。哪里不对,聊着改。" }],
       }));
@@ -184,22 +198,91 @@ export default function Create() {
     }
   }
 
+  // 角色卡上传 头像(avatar)/ 立绘(image):压缩成 base64 存进 draft(后端按字段持久化)。
+  async function onPicUpload(ev, field) {
+    const file = ev.target.files && ev.target.files[0];
+    ev.target.value = "";
+    if (!file) return;
+    try {
+      const opts =
+        field === "avatar"
+          ? { maxW: 256, maxH: 256, quality: 0.85 }
+          : { maxW: 768, maxH: 1152, quality: 0.82 };
+      const dataUrl = await fileToCompressedDataURL(file, opts);
+      patch(kind, (d0) => ({ draft: { ...d0.draft, [field]: dataUrl } }));
+      flash(field === "avatar" ? "头像已设置" : "立绘已设置");
+    } catch (e) {
+      flash("图片处理失败:" + e.message);
+    }
+  }
+
+  // 发布封面上传(cover,后端按 data-URI 持久)。
+  async function onCoverUpload(ev) {
+    const file = ev.target.files && ev.target.files[0];
+    ev.target.value = "";
+    if (!file) return;
+    try {
+      const dataUrl = await fileToCompressedDataURL(file, { maxW: 800, maxH: 1100, quality: 0.82 });
+      setPub((p) => ({ ...p, cover: dataUrl }));
+      flash("封面已设置");
+    } catch (e) {
+      flash("封面处理失败:" + e.message);
+    }
+  }
+
+  // 真正收进本台(复用):把当前 draft 放进 built、台子重置、提示。
+  function collectToDesk(cardDraft) {
+    const nm = cardDraft.name || cardDraft.title || "未命名";
+    setDesks((ds) => ({
+      ...ds,
+      [kind]: {
+        ...blankDesk(),
+        built: [...ds[kind].built, cardDraft],
+        messages: [{ who: "ai", text: "《" + nm + "》放进台子了(本台第 " + (ds[kind].built.length + 1) + " 张)。说说下一张?" }],
+      },
+    }));
+    flash("已收进本台(" + nm + ")");
+  }
+
   function nextCard() {
     const cur = desks[kind];
     if (!cur.draft || !Object.keys(cur.draft).length) {
       flash("草稿还空着,先聊出一张再收");
       return;
     }
-    const nm = cur.draft.name || cur.draft.title || "未命名";
-    setDesks((ds) => ({
-      ...ds,
-      [kind]: {
-        ...blankDesk(),
-        built: [...ds[kind].built, ds[kind].draft],
-        messages: [{ who: "ai", text: "《" + nm + "》放进台子了(本台第 " + (ds[kind].built.length + 1) + " 张)。说说下一张?" }],
-      },
-    }));
-    flash("已收进本台(" + nm + ")");
+    // 角色卡:先弹详情预览(可自动生成角色介绍),确认后再收;其它卡直接收。
+    if (kind === "characters") {
+      setNextModal(true);
+      return;
+    }
+    collectToDesk(cur.draft);
+  }
+
+  // 详情预览弹窗里「自动生成」:调现有 build_card,按已填设定补一段角色介绍写进 description。
+  async function genIntro() {
+    if (genBusy) return;
+    const cur = desks[kind];
+    setGenBusy(true);
+    try {
+      const apiMsgs = [
+        {
+          role: "user",
+          content:
+            "请根据已有设定,为这个角色写一段第三人称的「角色介绍」(外貌、性格、来历、当前处境,200 字以内),写进 description 字段。",
+        },
+      ];
+      const r = await postJSON("/api/build_card", { kind, messages: apiMsgs, draft: cur.draft, seed: "" });
+      if (r.draft) {
+        patch(kind, (d0) => ({ draft: { ...r.draft, ...pickPics(d0.draft) }, filled: r.filled || Object.keys(r.draft) }));
+      } else if (r.reply) {
+        patch(kind, (d0) => ({ draft: { ...d0.draft, description: r.reply } }));
+      }
+      flash("角色介绍已生成");
+    } catch (e) {
+      flash("生成失败:" + e.message);
+    } finally {
+      setGenBusy(false);
+    }
   }
   function removeBuilt(idx) {
     setDesks((ds) => ({ ...ds, [kind]: { ...ds[kind], built: ds[kind].built.filter((_, i) => i !== idx) } }));
@@ -290,7 +373,8 @@ export default function Create() {
         mode: "standard",
         synopsis: pub.synopsis.trim(),
         author: (user && (user.display_name || user.username)) || "",
-        cover: "",
+        author_note: pub.authorNote.trim(),
+        cover: pub.cover || "",
         tags,
       });
       setPubModal(false);
@@ -387,6 +471,36 @@ export default function Create() {
           <div className="create-card">
             <div className="create-card-kind t-meta">{KINDS[ki].zh}{desk.built.length > 0 && ` · 本台已建 ${desk.built.length}`}</div>
             <div className="create-card-name t-kai">{draftName}</div>
+            {kind === "characters" && (
+              <div className="create-pics">
+                <div className="create-pic">
+                  <button
+                    type="button"
+                    className="create-pic-thumb create-pic-thumb--avatar"
+                    style={desk.draft.avatar ? { backgroundImage: `url("${desk.draft.avatar}")` } : undefined}
+                    onClick={() => avatarRef.current && avatarRef.current.click()}
+                    title="上传头像"
+                  >
+                    {!desk.draft.avatar && <span className="t-meta">+ 头像</span>}
+                  </button>
+                  <input ref={avatarRef} type="file" accept="image/*" hidden onChange={(e) => onPicUpload(e, "avatar")} />
+                  <span className="create-pic-hint t-meta">纯聊里的头像</span>
+                </div>
+                <div className="create-pic">
+                  <button
+                    type="button"
+                    className="create-pic-thumb create-pic-thumb--portrait"
+                    style={desk.draft.image ? { backgroundImage: `url("${desk.draft.image}")` } : undefined}
+                    onClick={() => portraitRef.current && portraitRef.current.click()}
+                    title="上传立绘"
+                  >
+                    {!desk.draft.image && <span className="t-meta">+ 立绘</span>}
+                  </button>
+                  <input ref={portraitRef} type="file" accept="image/*" hidden onChange={(e) => onPicUpload(e, "image")} />
+                  <span className="create-pic-hint t-meta">看板 / 纯聊右侧</span>
+                </div>
+              </div>
+            )}
             <div className="create-card-fields">
               {fields.length ? (
                 fields.map((f, i) => (
@@ -525,6 +639,54 @@ export default function Create() {
         </div>
       )}
 
+      {/* 收进本台 · 角色卡详情预览(可自动生成角色介绍) */}
+      {nextModal && (
+        <div className="create-modal" onClick={() => setNextModal(false)}>
+          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="角色卡预览" onClick={(e) => e.stopPropagation()}>
+            <button className="create-modal-x" onClick={() => setNextModal(false)} aria-label="关闭">×</button>
+            <h2 className="t-h2">收进本台 · 角色卡预览</h2>
+            <div className="create-preview-top">
+              {desk.draft.avatar && (
+                <span className="create-preview-av" style={{ backgroundImage: `url("${desk.draft.avatar}")` }} aria-hidden="true" />
+              )}
+              {desk.draft.image && (
+                <span className="create-preview-portrait" style={{ backgroundImage: `url("${desk.draft.image}")` }} aria-hidden="true" />
+              )}
+              <span className="create-preview-name t-kai">{draftName}</span>
+            </div>
+            <div className="create-preview-introhead">
+              <span className="t-h3">角色介绍</span>
+              <button className="create-gen-btn" disabled={genBusy} onClick={genIntro}>
+                {genBusy ? "生成中…" : "自动生成"}
+              </button>
+            </div>
+            <p className="t-read create-preview-introtext">
+              {desk.draft.description || "(还没有角色介绍。点「自动生成」让 AI 按已填设定写一段。)"}
+            </p>
+            <div className="create-preview-fields">
+              {cardFields({ data: desk.draft })
+                .filter((f) => !["简述", "avatar", "image"].includes(f.k))
+                .map((f, i) => (
+                  <div className="create-built-field" key={i}>
+                    <span className="create-built-field-k t-meta">{f.k}</span>
+                    <span className="create-built-field-v t-ui-sm">{f.v.slice(0, 80)}</span>
+                  </div>
+                ))}
+            </div>
+            <Button
+              variant="primary"
+              full
+              onClick={() => {
+                collectToDesk(desks[kind].draft);
+                setNextModal(false);
+              }}
+            >
+              确认收进本台
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* 发布 modal(公开) */}
       {pubModal && (
         <div className="create-modal" onClick={() => setPubModal(false)}>
@@ -534,6 +696,24 @@ export default function Create() {
             <p className="t-ui create-sub">把四个台子的成品 + 当前草稿打包成一个能在探索直接玩的完整故事。需至少一张角色卡。</p>
             <label className="create-pub-label t-ui-sm">故事名</label>
             <Input value={pub.name} onChange={(e) => setPub((p) => ({ ...p, name: e.target.value }))} placeholder="给这个故事起个名字" />
+            <label className="create-pub-label t-ui-sm">封面(可空,留空按故事名自动生成)</label>
+            <div className="create-pub-cover">
+              <button
+                type="button"
+                className="create-pub-cover-thumb"
+                style={pub.cover ? { backgroundImage: `url("${pub.cover}")` } : undefined}
+                onClick={() => coverRef.current && coverRef.current.click()}
+                title="上传封面"
+              >
+                {!pub.cover && <span className="t-meta">+ 上传封面</span>}
+              </button>
+              <input ref={coverRef} type="file" accept="image/*" hidden onChange={onCoverUpload} />
+              {pub.cover && (
+                <button type="button" className="create-pub-cover-clear t-meta" onClick={() => setPub((p) => ({ ...p, cover: "" }))}>
+                  清除封面
+                </button>
+              )}
+            </div>
             <label className="create-pub-label t-ui-sm">简介(可空)</label>
             <textarea
               className="create-pub-syn"
@@ -541,6 +721,14 @@ export default function Create() {
               value={pub.synopsis}
               onChange={(e) => setPub((p) => ({ ...p, synopsis: e.target.value }))}
               placeholder="一句话介绍这个故事……"
+            />
+            <label className="create-pub-label t-ui-sm">作者的话(可空)</label>
+            <textarea
+              className="create-pub-syn"
+              rows={3}
+              value={pub.authorNote}
+              onChange={(e) => setPub((p) => ({ ...p, authorNote: e.target.value }))}
+              placeholder="想对玩家说的话、创作初衷、注意事项……"
             />
             <Button variant="primary" full disabled={busy} onClick={publish}>
               {busy ? "发布中…" : "确认发布"}

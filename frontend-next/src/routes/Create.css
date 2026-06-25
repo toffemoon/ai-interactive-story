@@ -199,6 +199,47 @@
   color: var(--fg);
   margin: var(--sp-1) 0 var(--sp-3);
 }
+/* 角色卡 头像 / 立绘 上传槽 */
+.create-pics {
+  display: flex;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-3);
+}
+.create-pic {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.create-pic-thumb {
+  border: 1px dashed var(--line);
+  border-radius: var(--r-md);
+  background-color: var(--sunk);
+  background-size: cover;
+  background-position: center top;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.create-pic-thumb:hover {
+  border-color: var(--accent-2);
+}
+.create-pic-thumb--avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r-pill);
+}
+.create-pic-thumb--portrait {
+  width: 72px;
+  height: 96px;
+}
+.create-pic-hint {
+  color: var(--muted);
+}
+
 .create-card-fields {
   display: flex;
   flex-direction: column;
@@ -466,6 +507,113 @@
 }
 .create-pub-syn:focus {
   border-color: var(--accent);
+}
+
+/* 发布封面上传槽 */
+.create-pub-cover {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.create-pub-cover-thumb {
+  width: 84px;
+  height: 112px;
+  flex: none;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-md);
+  background-color: var(--sunk);
+  background-size: cover;
+  background-position: center;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.create-pub-cover-thumb:hover {
+  border-color: var(--accent-2);
+}
+.create-pub-cover-clear {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  text-decoration: underline;
+}
+.create-pub-cover-clear:hover {
+  color: var(--accent);
+}
+
+/* 收进本台 · 角色卡详情预览弹窗 */
+.create-preview-top {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: var(--sp-3) 0;
+}
+.create-preview-av {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border-radius: var(--r-pill);
+  background-size: cover;
+  background-position: center;
+  border: 1px solid var(--line);
+}
+.create-preview-portrait {
+  width: 60px;
+  height: 80px;
+  flex: none;
+  border-radius: var(--r-sm);
+  background-size: cover;
+  background-position: center top;
+  border: 1px solid var(--line);
+}
+.create-preview-name {
+  font-family: var(--font-kai);
+  font-size: var(--fs-h2);
+  color: var(--fg);
+}
+.create-preview-introhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+}
+.create-gen-btn {
+  flex: none;
+  border: 1px solid var(--accent-2);
+  background: transparent;
+  color: var(--accent-2);
+  border-radius: var(--r-pill);
+  padding: 5px 14px;
+  font-size: var(--fs-ui-sm);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.create-gen-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-2) 12%, transparent);
+}
+.create-gen-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.create-preview-introtext {
+  color: var(--fg);
+  margin: var(--sp-2) 0 var(--sp-4);
+  white-space: pre-wrap;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.create-preview-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+  max-height: 180px;
+  overflow-y: auto;
 }
 
 /* 桌面:右侧实时卡 + 操作区固定(细节④「把右侧的按键固定」)。

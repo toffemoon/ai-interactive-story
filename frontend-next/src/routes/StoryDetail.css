@@ -123,6 +123,17 @@
   color: var(--fg);
   max-width: 60ch;
 }
+/* 作者的话:跟简介区分 —— 朱砂左纹 + 略带手写气的弱化底,像作者的一段私话 */
+.detail-authornote {
+  margin-top: var(--sp-5);
+  padding: var(--sp-3) var(--sp-4);
+  border-left: 3px solid color-mix(in srgb, var(--accent-2) 70%, transparent);
+  background: color-mix(in srgb, var(--accent-2) 6%, transparent);
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+}
+.detail-authornote .detail-intro-text {
+  color: var(--muted);
+}
 
 /* 通用块 */
 .detail-block {
