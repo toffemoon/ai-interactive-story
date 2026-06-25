@@ -125,15 +125,23 @@ export default function Create() {
   const coverRef = useRef(null);
   const chatRef = useRef(null);
   const toastT = useRef(null);
+  const quotaWarnedRef = useRef(false); // 草稿写盘失败(配额)只提醒一次,写成功后复位
 
   const kind = KINDS[ki].k;
   const desk = desks[kind];
 
   // 草稿持久化:desks 变化即落 localStorage(草稿自动保存,刷新不丢)。
+  // 写失败(多为立绘 base64 把草稿撑过 localStorage 配额)不再静默吞:否则刷新丢草稿且用户无感知。
   useEffect(() => {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(desks));
-    } catch (e) {}
+      quotaWarnedRef.current = false;
+    } catch (e) {
+      if (!quotaWarnedRef.current) {
+        quotaWarnedRef.current = true;
+        flash("草稿太大(多为立绘图片)没能自动保存,刷新可能丢失;先少放几张图,或尽快发布 / 收进卡库。");
+      }
+    }
   }, [desks]);
 
   useEffect(() => {
