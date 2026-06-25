@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import "./CardCarousel.css";
 
-// DOM 曲面轮播(coverflow):居中卡正面全尺寸,两侧卡缩小 + rotateY 转向 + 变暗,纵深排开。
-//   - 拖动(鼠标/触屏)/ 滚轮 / 方向键 / 圆点 换居中卡;点侧卡→居中它;点居中卡→透传给卡本体(翻面/详情)。
-//   - 渲染交给 renderItem(item,{active,index}),所以角色用 <Card>、扮演用角色选择卡都能复用同一轮播。
-//   - 守 HANDOFF §0.5:3D transform 只作用在轮播内的卡,不包整页;详情弹窗 / 固定入局条放轮播外。
-const SPACING = 128; // 相邻卡水平间距(px)
-const ANGLE = 38; // 侧卡 rotateY(deg)封顶
-const MIN_SCALE = 0.74;
+// 模拟 React Bits CircularGallery(bend=0)的效果,但用 DOM + 保留我们的 <Card>:
+//   - 平铺横排(不转角度)+ RAF 平滑惯性滚动(lerp 缓动逼近 target)+ 卡片随滚动速度起微浪(静止则平)。
+//   - 拖动(鼠标/触屏)/ 滚轮 / 方向键 / 圆点 / 点侧卡 换卡,松手后 snap 到最近一张(= 居中/选中)。
+//   - 渲染交给 renderItem(item,{active,index}),角色用 <Card>、扮演用选择卡复用同一轮播。
+//   - 全程无 rotateY / 无 preserve-3d → 不碰翻面 3D 命中坑;详情弹窗/固定入局条放轮播外。
+const SPACING = 198; // 相邻卡水平间距(px)
+const EASE = 0.09; // lerp 缓动(越小越顺滑)
+const WAVE_AMP = 16; // 微浪振幅(px),乘滚动速度 → 静止平、滚动起伏
 
 export default function CardCarousel({ items, renderItem, activeIndex, onActiveChange, ariaLabel = "卡片轮播" }) {
   const list = items || [];
@@ -18,6 +19,7 @@ export default function CardCarousel({ items, renderItem, activeIndex, onActiveC
   const setActive = useCallback(
     (i) => {
       const clamped = Math.max(0, Math.min(n - 1, i));
+      scroll.current.target = clamped; // 立即设滚动目标(命令式,不只靠 [active] 副作用)→ RAF 缓动逼近
       if (activeIndex == null) setInternal(clamped);
       if (onActiveChange) onActiveChange(clamped);
     },
@@ -25,44 +27,86 @@ export default function CardCarousel({ items, renderItem, activeIndex, onActiveC
   );
 
   const trackRef = useRef(null);
-  const dragRef = useRef({ down: false, startX: 0, base: 0, moved: false });
+  const itemRefs = useRef([]);
+  const scroll = useRef({ current: 0, target: 0, last: 0 });
+  const drag = useRef({ down: false, startX: 0, base: 0, moved: false });
   const justDragged = useRef(false);
-  const wheelLock = useRef(0);
-  const [drag, setDrag] = useState(0); // 连续拖动分数(单位 = 一张卡)
-  const [dragging, setDragging] = useState(false);
+  const rafRef = useRef(0);
+  const settleRef = useRef(0);
 
-  // items 变少时把 active 拉回界内
+  // active(外部控制 / 点击 / 键盘 / snap)→ 设滚动目标,RAF 缓动逼近。
   useEffect(() => {
-    if (active > n - 1) setActive(n - 1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    scroll.current.target = active;
+  }, [active]);
+
+  // RAF 动画:current 缓动逼近 target;按 offset 平铺 translateX + 速度微浪 translateY。
+  useEffect(() => {
+    let mounted = true;
+    const tick = () => {
+      if (!mounted) return;
+      const s = scroll.current;
+      s.current += (s.target - s.current) * EASE;
+      if (Math.abs(s.target - s.current) < 0.0004) s.current = s.target;
+      const speed = s.current - s.last;
+      s.last = s.current;
+      const absSpeed = Math.min(1, Math.abs(speed) * 5);
+      for (let i = 0; i < n; i++) {
+        const el = itemRefs.current[i];
+        if (!el) continue;
+        const offset = i - s.current;
+        const abs = Math.abs(offset);
+        const x = offset * SPACING;
+        const y = Math.sin(offset * 2.4 + s.current * 2.2) * WAVE_AMP * absSpeed;
+        const scaleV = Math.max(0.9, 1 - Math.min(abs, 4) * 0.035);
+        const op = abs > 3.4 ? 0 : Math.max(0.4, 1 - Math.min(abs, 4) * 0.16);
+        el.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${scaleV})`;
+        el.style.opacity = String(op);
+        el.style.zIndex = String(100 - Math.round(abs * 10));
+        el.style.pointerEvents = op <= 0 ? "none" : "auto";
+        el.classList.toggle("is-center", abs < 0.5);
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      mounted = false;
+      cancelAnimationFrame(rafRef.current);
+    };
   }, [n]);
+
+  // 拖动/滚轮后稳一下 → snap 到最近一张 → 提交 active。
+  function scheduleSnap() {
+    clearTimeout(settleRef.current);
+    settleRef.current = setTimeout(() => {
+      const snapped = Math.max(0, Math.min(n - 1, Math.round(scroll.current.target)));
+      scroll.current.target = snapped;
+      setActive(snapped);
+    }, 150);
+  }
 
   function onPointerDown(e) {
     if (e.button != null && e.button !== 0) return;
-    dragRef.current = { down: true, startX: e.clientX, base: active, moved: false };
-    setDragging(true);
+    drag.current = { down: true, startX: e.clientX, base: scroll.current.target, moved: false };
     if (trackRef.current && trackRef.current.setPointerCapture) {
       try { trackRef.current.setPointerCapture(e.pointerId); } catch (_) {}
     }
   }
   function onPointerMove(e) {
-    const d = dragRef.current;
+    const d = drag.current;
     if (!d.down) return;
     const dx = e.clientX - d.startX;
     if (Math.abs(dx) > 4) d.moved = true;
-    setDrag(-dx / SPACING);
+    // 自由拖(略放宽边界做点阻尼感),松手 snap 回界内
+    scroll.current.target = Math.max(-0.4, Math.min(n - 0.6, d.base - dx / SPACING));
   }
   function onPointerUp(e) {
-    const d = dragRef.current;
+    const d = drag.current;
     if (!d.down) return;
     d.down = false;
-    setDragging(false);
-    const target = Math.round(d.base + (-(e.clientX - d.startX) / SPACING));
     justDragged.current = d.moved;
-    setDrag(0);
-    setActive(target);
+    scheduleSnap();
   }
-  // 拖动刚结束的那一下 click:吞掉,别误触卡本体(翻面/详情)
+  // 拖动刚结束那一下 click:吞掉,别误触卡本体。
   function onClickCapture(e) {
     if (justDragged.current) {
       e.stopPropagation();
@@ -70,12 +114,10 @@ export default function CardCarousel({ items, renderItem, activeIndex, onActiveC
     }
   }
   function onWheel(e) {
-    const now = e.timeStamp || 0;
-    if (now - wheelLock.current < 130) return;
-    const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-    if (Math.abs(d) < 2) return;
-    wheelLock.current = now;
-    setActive(active + (d > 0 ? 1 : -1));
+    const dd = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    if (Math.abs(dd) < 2) return;
+    scroll.current.target = Math.max(0, Math.min(n - 1, Math.round(scroll.current.target) + (dd > 0 ? 1 : -1)));
+    scheduleSnap();
   }
   function onKeyDown(e) {
     if (e.key === "ArrowRight") { e.preventDefault(); setActive(active + 1); }
@@ -84,7 +126,7 @@ export default function CardCarousel({ items, renderItem, activeIndex, onActiveC
 
   return (
     <div
-      className={"ccz" + (dragging ? " is-dragging" : "")}
+      className="ccz"
       role="group"
       aria-label={ariaLabel}
       tabIndex={0}
@@ -100,33 +142,18 @@ export default function CardCarousel({ items, renderItem, activeIndex, onActiveC
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
       >
-        {list.map((item, i) => {
-          const offset = i - active + drag;
-          const abs = Math.abs(offset);
-          const centered = abs < 0.5;
-          const scale = Math.max(MIN_SCALE, 1 - abs * 0.12);
-          const rot = Math.max(-ANGLE, Math.min(ANGLE, -offset * (ANGLE / 1.4)));
-          const opacity = abs > 2.5 ? 0 : Math.max(0.26, 1 - abs * 0.3);
-          const style = {
-            transform: `translateX(calc(-50% + ${offset * SPACING}px)) rotateY(${rot}deg) scale(${scale})`,
-            opacity,
-            zIndex: 100 - Math.round(abs * 10),
-            pointerEvents: opacity <= 0 ? "none" : "auto",
-          };
-          return (
-            <div
-              key={i}
-              className={"ccz-item" + (centered ? " is-center" : "")}
-              style={style}
-              onClick={() => {
-                if (!centered && !justDragged.current) setActive(i);
-              }}
-              aria-hidden={!centered}
-            >
-              {renderItem(item, { active: centered, index: i })}
-            </div>
-          );
-        })}
+        {list.map((item, i) => (
+          <div
+            key={i}
+            ref={(el) => (itemRefs.current[i] = el)}
+            className="ccz-item"
+            onClick={() => {
+              if (i !== active && !justDragged.current) setActive(i);
+            }}
+          >
+            {renderItem(item, { active: i === active, index: i })}
+          </div>
+        ))}
       </div>
       {n > 1 && (
         <div className="ccz-dots">
