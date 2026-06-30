@@ -28,32 +28,42 @@
   width: 190px;
   height: 286px;
   will-change: transform, opacity;
+  /* B4:手指触点落在卡上(卡盖在 track 之上)。卡默认 touch-action:auto,真机上浏览器会先抢走横向手势 →
+     拖不动。显式 pan-y:纵向留给页面滚、横向留给轮播拖拽 JS(指针逻辑本身已支持 touch,见 .jsx)。 */
+  touch-action: pan-y;
 }
 
 .ccz-dots {
   position: absolute;
-  bottom: 4px;
+  bottom: 8px;
   left: 0;
   right: 0;
   display: flex;
   justify-content: center;
+  align-items: center;
   gap: 8px;
   z-index: 200;
 }
-/* 圆点视觉 7px,但用 content-box + padding 把命中区撑到 ~21px(原 9px 太小,M8);bg 只填内容区保持小圆点 */
+/* B5:标准分页圆点 —— 视觉 7px 正圆;命中区用透明 ::before 撑大(不再 content-box+padding+bg-clip,
+   那套会让点看着变形/偏移,M8 的副作用)。行内点间距小,命中区取 ~25px 不强求 44,免相邻重叠误触。 */
 .ccz-dot {
+  position: relative;
+  flex: none;
   width: 7px;
   height: 7px;
-  box-sizing: content-box;
-  padding: 7px;
+  padding: 0;
   border: none;
   border-radius: 50%;
   background-color: var(--line);
-  background-clip: content-box;
   cursor: pointer;
   transition: background-color 0.2s ease, transform 0.2s ease;
 }
+.ccz-dot::before {
+  content: "";
+  position: absolute;
+  inset: -9px;
+}
 .ccz-dot.is-on {
   background-color: var(--accent);
-  transform: scale(1.25);
+  transform: scale(1.3);
 }
