@@ -1,7 +1,10 @@
 /* 纯聊 · 微信式(YOR-60/61/63/59)。左联系人 / 中气泡;无右常驻档案,右上 ··· 抽档案。吃语义 token。 */
 .chat {
   display: flex;
-  height: calc(100vh - 52px);
+  /* B7:用 dvh 不用 vh —— 100vh = 地址栏收起时的最大高度,真机地址栏展开时聊天比可视区高 →
+     整页跟着滚、内容上下窜。dvh 跟随可视区(地址栏伸缩)实时变,纯聊钉死视口、只 feed 滚。
+     (52px = shell-main 顶部留白;与 .ct / shell-main--home 的 dvh 一致。) */
+  height: calc(100dvh - 52px);
   border-top: 1px solid var(--line);
 }
 
