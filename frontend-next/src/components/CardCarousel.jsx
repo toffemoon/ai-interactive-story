@@ -7,7 +7,7 @@ import "./CardCarousel.css";
 //   - 渲染交给 renderItem(item,{active,index}),角色用 <Card>、扮演用选择卡复用同一轮播。
 //   - 全程无 rotateY / 无 preserve-3d → 不碰翻面 3D 命中坑;详情弹窗/固定入局条放轮播外。
 const SPACING = 198; // 相邻卡水平间距(px)
-const EASE = 0.09; // lerp 缓动(越小越顺滑)
+const EASE = 0.18; // lerp 缓动(越大切换越快;D4 真机反馈「再快点」0.09→0.18)
 const WAVE_AMP = 16; // 微浪振幅(px),乘滚动速度 → 静止平、滚动起伏
 
 export default function CardCarousel({ items, renderItem, activeIndex, onActiveChange, ariaLabel = "卡片轮播" }) {

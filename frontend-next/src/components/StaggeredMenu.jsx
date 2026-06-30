@@ -304,41 +304,6 @@ export const StaggeredMenu = ({
     };
   }, [closeOnClickAway, open, closeMenu]);
 
-  // C7(2026-06-30 真机反馈):从屏幕左边缘右滑唤出菜单(position=left)。
-  // 起手区设在 10–34px(略离最边缘),触发要求横向右滑为主,避免误触页面滚动 / 卡片轮播拖动。
-  // 注意:iOS Safari 从最左边缘右滑 = 系统「后退」,可能抢手势;真机若开不出,改触发方式(见复查)。
-  React.useEffect(() => {
-    if (position !== "left") return;
-    let sx = 0, sy = 0, tracking = false;
-    const onStart = (e) => {
-      if (openRef.current) return;
-      const t = e.touches ? e.touches[0] : e;
-      tracking = t.clientX >= 10 && t.clientX <= 34;
-      sx = t.clientX;
-      sy = t.clientY;
-    };
-    const onMove = (e) => {
-      if (!tracking || openRef.current) return;
-      const t = e.touches ? e.touches[0] : e;
-      const dx = t.clientX - sx, dy = t.clientY - sy;
-      if (dx > 44 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-        tracking = false;
-        toggleMenu();
-      } else if (Math.abs(dy) > 30) {
-        tracking = false; // 纵向为主 = 在滚页,放弃
-      }
-    };
-    const onEnd = () => { tracking = false; };
-    document.addEventListener("touchstart", onStart, { passive: true });
-    document.addEventListener("touchmove", onMove, { passive: true });
-    document.addEventListener("touchend", onEnd, { passive: true });
-    return () => {
-      document.removeEventListener("touchstart", onStart);
-      document.removeEventListener("touchmove", onMove);
-      document.removeEventListener("touchend", onEnd);
-    };
-  }, [position, toggleMenu]);
-
   const handleItemClick = (e, it) => {
     if (onItemClick) {
       e.preventDefault();

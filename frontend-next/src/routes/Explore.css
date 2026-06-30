@@ -224,4 +224,27 @@
   .explore {
     padding-bottom: calc(76px + env(safe-area-inset-bottom));
   }
+
+  /* D3(2026-06-30 真机反馈):轨道 / 排序 / 标签筛选别折行成一坨,各自成一行、横向可滑(挤了往左滑)。 */
+  .explore-tracks,
+  .explore-sorts,
+  .explore-genres {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .explore-tracks::-webkit-scrollbar,
+  .explore-sorts::-webkit-scrollbar,
+  .explore-genres::-webkit-scrollbar {
+    display: none;
+  }
+  .explore-tracks > *,
+  .explore-sorts > *,
+  .explore-genres > * {
+    flex: none; /* chip 不压缩,撑出宽度才能横滑 */
+  }
+  .explore-sorts {
+    margin-left: 0; /* 桌面 margin-left:auto 推右,手机单行不需要 */
+  }
 }
