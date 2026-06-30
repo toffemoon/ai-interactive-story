@@ -70,17 +70,10 @@
    纸页=墨色;立绘主页(暖夜)=月白;菜单开(面板在左、压在开关之下)=墨色。 */
 [data-theme="paper"] .sm-toggle {
   color: #20201d;
-  /* B1:纸页会滚动,筛选 chip 从固定的「沐言」开关底下穿过会糊在一起(探索页尤其明显)。
-     给开关一层薄毛玻璃胶囊底 → chip 被干净盖住、开关随处可读;只局部盖开关本身,不动右侧内容。
-     立绘主页(stage)仍用纯文字 + 描边,不加底,免遮立绘。 */
-  padding: 0 12px;
-  margin: 0 -12px;
-  background: color-mix(in srgb, var(--panel) 84%, transparent);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  border-radius: var(--r-pill);
-  box-shadow: 0 2px 12px -5px rgba(0, 0, 0, 0.35);
 }
+/* D6(2026-06-30 真机反馈):B1 那层毛玻璃胶囊底原本是手机端用的(滚动时盖住筛选 chip)。
+   现在手机已换 Pill Nav、StaggeredMenu 只在桌面出现,这颗底在桌面就成了「飘在顶栏的孤立按钮」。
+   故去掉胶囊底回纯文字。手机此开关已不渲染,无需此底。 */
 [data-theme="stage"] .sm-toggle {
   color: #ece3d2;
 }
