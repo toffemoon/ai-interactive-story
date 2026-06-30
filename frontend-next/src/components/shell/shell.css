@@ -14,6 +14,11 @@
   min-height: 100%;
   padding-top: 52px;
 }
+/* C5(2026-06-30 真机反馈):顶部 52px 留白透出 body 角落晕染、内容区不透明盖住下方 → 顶部一条"意义不明的带"。
+   paper 页 shell-main 也铺不透明 --bg、盖住晕染,顶部无带。stage(home/play 立绘满铺)data-theme 不同,不受影响。 */
+html[data-theme="paper"] .shell-main {
+  background: var(--bg);
+}
 .shell-main--immersive {
   min-height: 100%;
   padding-top: 0;

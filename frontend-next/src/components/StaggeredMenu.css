@@ -9,10 +9,9 @@
 
 .staggered-menu-wrapper.fixed-wrapper {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  /* C6:原 width:100vw / height:100vh 在 iOS(scrollbar-gutter / overlay 滚动条)下会比可视区宽/高 → 横向溢出。
+     inset:0 自适应可视区,不用 vw/vh。 */
+  inset: 0;
   z-index: 40;
   overflow: hidden;
 }

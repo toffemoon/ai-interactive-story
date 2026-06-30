@@ -46,6 +46,19 @@ body {
     color var(--dur-mid) var(--ease-out);
 }
 
+/* 移动端 iOS 兼容 + 性能(C1/C6,2026-06-30 真机反馈):
+   - C1:background-attachment:fixed 在 iOS Safari 重绘极卡(看板/滚动顿挫)→ 移动端改 scroll;
+     晕染在 app 内页本就被壳/内容的不透明 --bg 盖住,视觉几乎无损。
+   - C6:scrollbar-gutter:stable 在 iOS(overlay 滚动条)仍预留 gutter,致按视口宽布局的元素右移/溢出 → 移动端 auto。 */
+@media (max-width: 720px) {
+  html {
+    scrollbar-gutter: auto;
+  }
+  body {
+    background-attachment: scroll;
+  }
+}
+
 h1,
 h2,
 h3,
