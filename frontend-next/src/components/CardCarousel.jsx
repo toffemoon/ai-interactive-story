@@ -77,25 +77,17 @@ export default function CardCarousel({ items, renderItem, activeIndex, onActiveC
     };
   }, [n]);
 
-  // 拖动/滚轮后稳一下 → snap 到最近一张 → 提交 active。
-  function scheduleSnap() {
-    clearTimeout(settleRef.current);
-    settleRef.current = setTimeout(() => {
-      const snapped = Math.max(0, Math.min(n - 1, Math.round(scroll.current.target)));
-      scroll.current.target = snapped;
-      setActive(snapped);
-    }, 150);
-  }
-
   function onPointerDown(e) {
     if (e.button != null && e.button !== 0) return;
     // 不在 down 里 setPointerCapture:否则纯点击(没拖)也被轨道捕获,卡本体的 click(翻面/详情)收不到。
-    drag.current = { down: true, startX: e.clientX, base: scroll.current.target, moved: false, pointerId: e.pointerId };
+    // base = 当前选中卡(整数)→ 一次手势以它为基准滑一张(C2:一次 swipe 切一张,不再自由拖 + snap 最近)。
+    drag.current = { down: true, startX: e.clientX, base: active, dx: 0, moved: false, pointerId: e.pointerId };
   }
   function onPointerMove(e) {
     const d = drag.current;
     if (!d.down) return;
     const dx = e.clientX - d.startX;
+    d.dx = dx;
     if (!d.moved && Math.abs(dx) > 5) {
       d.moved = true; // 真拖起来了才捕获指针(拖出元素也不丢轨迹)
       if (trackRef.current && trackRef.current.setPointerCapture) {
@@ -103,7 +95,8 @@ export default function CardCarousel({ items, renderItem, activeIndex, onActiveC
       }
     }
     if (d.moved) {
-      scroll.current.target = Math.max(-0.4, Math.min(n - 0.6, d.base - dx / SPACING));
+      // 跟手,但一次手势最多滑到相邻一张(能看到下一张露头);松手按阈值切一张或回弹。
+      scroll.current.target = Math.max(d.base - 1, Math.min(d.base + 1, d.base - dx / SPACING));
     }
   }
   function onPointerUp() {
@@ -111,7 +104,14 @@ export default function CardCarousel({ items, renderItem, activeIndex, onActiveC
     if (!d.down) return;
     d.down = false;
     justDragged.current = d.moved;
-    if (d.moved) scheduleSnap(); // 纯点击不 snap、不吞 click → 留给卡本体翻面/详情
+    if (d.moved) {
+      // C2:一次滑动 = 切一张。位移过阈值(≈44px)才按方向切一张,轻碰回弹到当前。
+      const threshold = SPACING * 0.22;
+      let next = d.base;
+      if (d.dx <= -threshold) next = d.base + 1; // 左滑 → 下一张
+      else if (d.dx >= threshold) next = d.base - 1; // 右滑 → 上一张
+      setActive(next); // 内部 clamp + 设滚动目标 + 提交 active(纯点击不进这里,留给卡本体翻面/详情)
+    }
   }
   // 拖动刚结束那一下 click:吞掉,别误触卡本体。
   function onClickCapture(e) {

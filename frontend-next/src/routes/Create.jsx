@@ -43,10 +43,11 @@ function useIsMobile(maxWidth = 860) {
 // 创作 · 对话式建卡(契约固定只 reskin:/api/build_card、/api/identify*、/api/library/save、/api/presets)。
 // 去中二英文(YOR-51):卡分类去英文副标、AI 助手不叫「执笔人/坊」、标题不叫「创作桌/The Atelier」。
 const KINDS = [
-  { zh: "角色卡", k: "characters", ph: "说说这个角色:外貌、性格、来历、口癖……" },
-  { zh: "演出卡", k: "players", ph: "说说你要扮演的主角:身份、目标、能力、限制……" },
-  { zh: "设定卡 · 世界书", k: "worlds", ph: "说说这个世界 / 组织 / 设定、规则……" },
-  { zh: "故事书", k: "stories", ph: "说说这个故事的前提、主线、结局……" },
+  // ph 是输入框 placeholder,手机端短一句即可(C3:原来一长串字段名在窄屏会被截断)。
+  { zh: "角色卡", k: "characters", ph: "说说这个角色……" },
+  { zh: "演出卡", k: "players", ph: "说说你要扮演的主角……" },
+  { zh: "设定卡 · 世界书", k: "worlds", ph: "说说这个世界 / 设定……" },
+  { zh: "故事书", k: "stories", ph: "说说这个故事……" },
 ];
 const IDENTIFY_EP = {
   characters: "/api/identify",

@@ -217,3 +217,11 @@
   gap: 6px;
   margin-bottom: var(--sp-5);
 }
+
+/* C4(2026-06-30 真机反馈):底部「继续游玩」ResumeBar 浮在右下会盖住分页「下一页」。
+   移动端给探索页底部留出 ResumeBar 高度,分页不再落在它下面被挡。 */
+@media (max-width: 720px) {
+  .explore {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+}
