@@ -146,12 +146,18 @@
   gap: var(--sp-2);
 }
 .chat-iconbtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 32px;
   height: 32px;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   background: transparent;
   color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
   cursor: pointer;
 }
 .chat-iconbtn:hover {
@@ -449,10 +455,17 @@
     height: 44px;
     margin-left: -10px; /* 命中区扩大但视觉不外扩 */
   }
-  /* 会话工具(新建/档案)+ 添加联系人 触控区补到 44(M8) */
+  /* 会话工具(新建/档案):B6 视觉收紧成 36 方块 + 图标放大到 18,命中区改用透明 ::before 撑到 ≥44
+     (M8 直接把按钮撑 44 让它显大/像空框)。 */
   .chat-iconbtn {
-    width: 44px;
-    height: 44px;
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+  .chat-iconbtn::before {
+    content: "";
+    position: absolute;
+    inset: -5px; /* 36 + 5*2 = 46 命中区 ≥44,视觉不外扩 */
   }
   .chat-add {
     min-height: 40px;
