@@ -1,0 +1,58 @@
+/* /test · Pill Nav 顶部导航原型(手机)布局。 */
+.navtest {
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--fg);
+}
+.navtest-top {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  padding: 10px 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.navtest-body {
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.navtest-seg {
+  display: flex;
+  gap: var(--sp-2);
+}
+.navtest-seg button {
+  flex: 1;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-kai);
+  font-size: var(--fs-ui);
+  cursor: pointer;
+}
+.navtest-seg button.is-on {
+  background: var(--fg);
+  color: var(--bg);
+  border-color: var(--fg);
+}
+.navtest-hint {
+  color: var(--fg);
+  line-height: var(--lh-body);
+}
+.navtest-note {
+  color: var(--muted);
+  line-height: var(--lh-body);
+}
+.navtest-card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  padding: var(--sp-5);
+  color: var(--muted);
+}
+.navtest-card.tall {
+  min-height: 520px;
+}

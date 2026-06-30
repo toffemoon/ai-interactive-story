@@ -1,0 +1,212 @@
+/* React Bits PillNav · 本地 vendored 样式,改吃沐言语义 token(--base/--pill-bg/--pill-text/--hover-text 映射到主题)。
+   - active pill 改朱砂填充(原版只有小圆点,手机上不够明显)。
+   - force-pills:窄屏也显示 pill 一行,整条横向可滑(对比汉堡用)。 */
+.pill-nav-container {
+  --base: var(--fg);
+  --pill-bg: var(--bg);
+  --pill-text: var(--fg);
+  --hover-text: var(--bg);
+  position: relative;
+  z-index: 99;
+}
+
+.pill-nav {
+  --nav-h: 44px;
+  --pill-pad-x: 16px;
+  --pill-gap: 3px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  box-sizing: border-box;
+}
+
+/* logo:文字「沐」圆标(原版是 img,这里换文字 mark) */
+.pill-logo {
+  width: var(--nav-h);
+  height: var(--nav-h);
+  flex: none;
+  border-radius: 50%;
+  background: var(--base);
+  border: none;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.pill-logo-mark {
+  font-size: 20px;
+  color: var(--bg);
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.pill-nav-items {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: var(--nav-h);
+  background: var(--base);
+  border-radius: 9999px;
+}
+.pill-list {
+  list-style: none;
+  display: flex;
+  align-items: stretch;
+  gap: var(--pill-gap);
+  margin: 0;
+  padding: 3px;
+  height: 100%;
+}
+.pill-list > li {
+  display: flex;
+  height: 100%;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0 var(--pill-pad-x);
+  background: var(--pill-bg);
+  color: var(--pill-text);
+  text-decoration: none;
+  border-radius: 9999px;
+  box-sizing: border-box;
+  font-family: var(--font-kai);
+  font-weight: 500;
+  font-size: 15px;
+  line-height: 0;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+.pill .hover-circle {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  border-radius: 50%;
+  background: var(--base);
+  z-index: 1;
+  display: block;
+  pointer-events: none;
+  will-change: transform;
+}
+.pill .label-stack {
+  position: relative;
+  display: inline-block;
+  line-height: 1;
+  z-index: 2;
+}
+.pill .pill-label {
+  position: relative;
+  z-index: 2;
+  display: inline-block;
+  line-height: 1;
+  will-change: transform;
+}
+.pill .pill-label-hover {
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--hover-text);
+  z-index: 3;
+  display: inline-block;
+  will-change: transform, opacity;
+}
+/* active:朱砂填充(原版小圆点手机上不够明显) */
+.pill.is-active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.pill.is-active .pill-label {
+  color: var(--on-accent);
+}
+
+/* 桌面 pill 行 / 窄屏汉堡(原版响应式) */
+.desktop-only { display: block; }
+.mobile-only { display: none; }
+@media (max-width: 720px) {
+  .desktop-only { display: none; }
+  .mobile-only { display: block; }
+}
+
+.mobile-menu-button {
+  width: var(--nav-h);
+  height: var(--nav-h);
+  flex: none;
+  border-radius: 50%;
+  background: var(--base);
+  border: none;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 0;
+}
+@media (max-width: 720px) {
+  .mobile-menu-button { display: flex; }
+}
+.hamburger-line {
+  width: 16px;
+  height: 2px;
+  background: var(--bg);
+  border-radius: 1px;
+  transform-origin: center;
+}
+
+.mobile-menu-popover {
+  position: absolute;
+  top: calc(44px + 12px);
+  left: 0;
+  right: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: var(--shadow-pop);
+  z-index: 998;
+  opacity: 0;
+  transform-origin: top center;
+  visibility: hidden;
+  overflow: hidden;
+}
+.mobile-menu-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.mobile-menu-link {
+  display: block;
+  padding: 12px 16px;
+  color: var(--fg);
+  background: transparent;
+  text-decoration: none;
+  font-family: var(--font-kai);
+  font-size: 16px;
+  border-radius: 12px;
+}
+.mobile-menu-link.is-active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* —— force-pills:窄屏也显示 pill 一行,整条横向可滑(logo + pills 一起滑) —— */
+.force-pills .desktop-only { display: block; }
+.force-pills .mobile-only { display: none; }
+@media (max-width: 720px) {
+  .force-pills .pill-nav {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .force-pills .pill-nav::-webkit-scrollbar { display: none; }
+  .force-pills .pill-nav-items { flex: none; }
+}
