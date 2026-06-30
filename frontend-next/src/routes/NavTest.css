@@ -115,3 +115,13 @@
   flex: 1;
   min-height: 0;
 }
+
+/* Dock 变体:底部居中浮动 */
+.navtest-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  z-index: 60;
+  pointer-events: none;
+}
