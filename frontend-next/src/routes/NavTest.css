@@ -56,3 +56,62 @@
 .navtest-card.tall {
   min-height: 520px;
 }
+
+/* 汉堡变体顶栏 */
+.navtest-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  height: 44px;
+}
+.navtest-burger {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  cursor: pointer;
+}
+.navtest-burger span {
+  width: 18px;
+  height: 2px;
+  background: var(--fg);
+  border-radius: 1px;
+}
+.navtest-bar-active {
+  font-size: var(--fs-h3);
+  color: var(--fg);
+}
+
+/* Flowing Menu 全屏覆盖层 */
+.navtest-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+.navtest-menu-close {
+  flex: none;
+  align-self: flex-end;
+  margin: calc(10px + env(safe-area-inset-top)) 16px 8px;
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--panel);
+  color: var(--fg);
+  font-family: var(--font-kai);
+  cursor: pointer;
+  z-index: 2;
+}
+.navtest-menu-overlay .menu-wrap {
+  flex: 1;
+  min-height: 0;
+}

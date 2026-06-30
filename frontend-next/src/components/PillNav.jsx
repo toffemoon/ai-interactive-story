@@ -136,16 +136,6 @@ export default function PillNav({
   return (
     <div className={"pill-nav-container" + (forcePills ? " force-pills" : "") + (className ? " " + className : "")}>
       <nav className="pill-nav" aria-label="Primary">
-        <button
-          className="pill-logo"
-          aria-label="沐言 · 看板"
-          ref={logoRef}
-          type="button"
-          onClick={(e) => { if (onBrandClick) { e.preventDefault(); onBrandClick(); } }}
-        >
-          <span className="pill-logo-mark t-kai">{brandText}</span>
-        </button>
-
         <div className="pill-nav-items desktop-only" ref={navItemsRef}>
           <ul className="pill-list" role="menubar">
             {items.map((item, i) => (

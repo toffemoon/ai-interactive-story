@@ -1,11 +1,13 @@
 /* React Bits PillNav · 本地 vendored 样式,改吃沐言语义 token(--base/--pill-bg/--pill-text/--hover-text 映射到主题)。
    - active pill 改朱砂填充(原版只有小圆点,手机上不够明显)。
    - force-pills:窄屏也显示 pill 一行,整条横向可滑(对比汉堡用)。 */
+/* 配色贴 paper:米白 panel 底条 + 幽灵 pill(muted 文字),hover 揭示圆 / active 都用朱砂(--accent)。
+   跟探索那排 chip 一个调子,不再墨色重条。 */
 .pill-nav-container {
-  --base: var(--fg);
-  --pill-bg: var(--bg);
-  --pill-text: var(--fg);
-  --hover-text: var(--bg);
+  --base: var(--accent);
+  --pill-bg: transparent;
+  --pill-text: var(--muted);
+  --hover-text: var(--on-accent);
   position: relative;
   z-index: 99;
 }
@@ -46,7 +48,8 @@
   display: flex;
   align-items: center;
   height: var(--nav-h);
-  background: var(--base);
+  background: var(--panel);
+  border: 1px solid var(--line);
   border-radius: 9999px;
 }
 .pill-list {
