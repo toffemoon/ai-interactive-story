@@ -120,12 +120,15 @@ export default function CardCarousel({ items, renderItem, activeIndex, onActiveC
       justDragged.current = false;
     }
   }
-  // 滚轮控制卡片切换,限定在轮播这块「固定区域」:native 非 passive 监听 + preventDefault,
-  // 不让页面跟着上下滚(React 的 onWheel 是 passive,preventDefault 无效 → 必须 native 监听)。
+  // 滚轮控制卡片切换,「固定区域」收窄到卡片本身:只有鼠标停在某张卡上滚轮才切卡,
+  // 落在卡片之外的空白(轮播上下留白 / 圆点行 / 卡间缝隙)照常滚页面(细节 7)。
+  // native 非 passive 监听 + preventDefault(React 的 onWheel 是 passive,preventDefault 无效)。
   useEffect(() => {
     const el = rootRef.current;
     if (!el) return undefined;
     const handler = (e) => {
+      // 不在卡上 → 不拦截,让页面正常上下滚
+      if (!(e.target && e.target.closest && e.target.closest(".ccz-item"))) return;
       const dd = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
       if (Math.abs(dd) < 2) return;
       const cur = Math.round(scroll.current.target);

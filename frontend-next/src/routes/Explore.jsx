@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "../lib/transitionNav";
 import { Chip, SearchField, Button, Badge, Tag, CardShelf } from "../components/ui";
 import { getJSON } from "../lib/api";
 import { toCardModel, toCardModels } from "../lib/cardModel";

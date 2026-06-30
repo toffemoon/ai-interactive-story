@@ -1,4 +1,5 @@
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
+import { useNavigate } from "../../lib/transitionNav";
 import { NAV } from "./nav";
 import ResumeBar from "./ResumeBar";
 import StaggeredMenu from "../StaggeredMenu";

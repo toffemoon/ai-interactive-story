@@ -47,6 +47,9 @@
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
+  min-height: 44px; /* 唯一全局导航入口,触控区 ≥44(原仅 ~23px,M4) */
+  padding: 0 6px;
+  margin: 0 -6px; /* 命中区扩大、视觉位置不外移 */
   background: transparent;
   border: none;
   cursor: pointer;
@@ -58,6 +61,10 @@
   letter-spacing: 0.1em;
   overflow: visible;
   transition: color var(--dur-mid) var(--ease-out);
+}
+/* 台主题(立绘主页)开关叠在咖啡馆图上 → 加描边保可读(M4);纸页/开菜单不需要 */
+[data-theme="stage"] .sm-toggle {
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
 }
 
 /* 开关颜色按主题/开合用 CSS 驱动(不用 gsap,根治切页时残留 tween 写错色):

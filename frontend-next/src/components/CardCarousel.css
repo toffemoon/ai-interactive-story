@@ -40,17 +40,20 @@
   gap: 8px;
   z-index: 200;
 }
+/* 圆点视觉 7px,但用 content-box + padding 把命中区撑到 ~21px(原 9px 太小,M8);bg 只填内容区保持小圆点 */
 .ccz-dot {
   width: 7px;
   height: 7px;
-  padding: 0;
+  box-sizing: content-box;
+  padding: 7px;
   border: none;
   border-radius: 50%;
-  background: var(--line);
+  background-color: var(--line);
+  background-clip: content-box;
   cursor: pointer;
-  transition: background 0.2s ease, transform 0.2s ease;
+  transition: background-color 0.2s ease, transform 0.2s ease;
 }
 .ccz-dot.is-on {
-  background: var(--accent);
+  background-color: var(--accent);
   transform: scale(1.25);
 }

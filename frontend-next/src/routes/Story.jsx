@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate } from "react-router-dom";
+import { useNavigate } from "../lib/transitionNav";
 import { Button } from "../components/ui";
 import { streamTurn, postJSON, extractStream } from "../lib/api";
 import { useGame } from "../state/game";
@@ -79,14 +80,8 @@ export default function Story() {
   const [error, setError] = useState("");
   const [canUndo, setCanUndo] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
-  // 右状态栏:桌面默认展开(可收起),移动默认收起(抽屉)。state 同驱两端(细节⑥)。
-  const [statusOpen, setStatusOpen] = useState(() => {
-    try {
-      return window.matchMedia("(min-width: 961px)").matches;
-    } catch (e) {
-      return true;
-    }
-  });
+  // 右状态栏:默认收起(抽屉),点「世界状态」从右侧平移出来,叙事区常驻满宽 → 中间正文位置固定(细节 8)。
+  const [statusOpen, setStatusOpen] = useState(false);
   const [dev, setDev] = useState(() => {
     try {
       return localStorage.getItem("ais_dev") === "1";
@@ -263,25 +258,28 @@ export default function Story() {
     <div className={"story" + (dev ? " is-dev" : "") + (statusOpen ? " status-open" : "")}>
       {/* 顶栏:离开(保留进行中故事)/ 标题 / token / 撤回·重生成·记录·dev */}
       <header className="story-top">
-        <button className="story-back" onClick={() => navigate("/explore")}>
+        <button className="story-back" onClick={() => navigate("/explore", { transition: "contract" })}>
           ← 离开
         </button>
         <div className="story-title t-kai">{game.title || "当前故事"}</div>
         <div className="story-top-right">
           {tokenTotal > 0 && <span className="t-mono story-usage">token {tokenTotal}</span>}
-          <button className="story-toolbtn" disabled={!canUndo || loading} onClick={undoLast} title="撤回上一轮">
-            撤回
+          <button className="story-toolbtn" disabled={!canUndo || loading} onClick={undoLast} title="撤回上一轮" aria-label="撤回上一轮">
+            <span className="tb-ic" aria-hidden="true">↩</span>
+            <span className="tb-tx">撤回</span>
           </button>
-          <button className="story-toolbtn" disabled={!storyTurns.length || loading} onClick={rerollLast} title="重生成上一轮">
-            重生成
+          <button className="story-toolbtn" disabled={!storyTurns.length || loading} onClick={rerollLast} title="重生成上一轮" aria-label="重生成上一轮">
+            <span className="tb-ic" aria-hidden="true">↻</span>
+            <span className="tb-tx">重生成</span>
           </button>
-          <button className="story-toolbtn" disabled={!turns.length} onClick={() => setLogOpen(true)} title="故事记录">
-            记录
+          <button className="story-toolbtn" disabled={!turns.length} onClick={() => setLogOpen(true)} title="故事记录" aria-label="故事记录">
+            <span className="tb-ic" aria-hidden="true">☰</span>
+            <span className="tb-tx">记录</span>
           </button>
           <button className={"story-statusbtn" + (statusOpen ? " is-on" : "")} onClick={() => setStatusOpen((v) => !v)} title="世界状态(可收起)">
             {statusOpen ? "收起状态" : "世界状态"}
           </button>
-          <button className={"story-toolbtn" + (dev ? " is-on" : "")} onClick={toggleDev} title="玩家仪表盘 / 开发者视图">
+          <button className={"story-toolbtn story-devbtn" + (dev ? " is-on" : "")} onClick={toggleDev} title="玩家仪表盘 / 开发者视图">
             dev
           </button>
         </div>

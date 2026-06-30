@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
+import { getLastPoint, consumeSuppressReveal } from "./lib/transitionNav";
 import { useAuth } from "./state/auth";
 import AppShell from "./components/shell/AppShell";
 import Login from "./routes/Login";
@@ -23,32 +24,24 @@ function RequireAuth({ children }) {
 }
 
 // 登录后 app 页统一挂导航壳;壳负责菜单 + 浮动续玩入口,各页只放内容。
-// 页面过渡 = 涟漪圆形揭示(motion 动 clip-path: circle(0%→75%) + 轻 opacity)。
-// 用 clip-path 不用 transform:transform 会成为 fixed 后代的包含块、让页面里的 modal/入局条/状态抽屉错位;
-// clip-path 不建包含块(只是过渡中视觉裁切,导航时无浮层打开),且 circle(75%) ≈ 全覆盖任意尺寸/可滚动页,过渡后不残留裁切。
+// 进入 / 前进 = 目标页「扩散」涟漪(.page-reveal,原点 = 点击点,看板居中);
+// 离开 / 返回 = curtain「收拢」(transitionNav,navigate 传 {transition:"contract"}),并抑制本次目标页扩散。
 function ShellLayout() {
   const loc = useLocation();
   const revealRef = useRef(null);
-  const lastPointer = useRef(null);
-
-  // 记录最近一次指针落点(切页前点的那个按钮/菜单项),供涟漪从该点扩散(细节#5)。
-  useEffect(() => {
-    const onDown = (e) => {
-      lastPointer.current = { x: e.clientX, y: e.clientY };
-    };
-    document.addEventListener("pointerdown", onDown, true);
-    return () => document.removeEventListener("pointerdown", onDown, true);
-  }, []);
-
   const revealKey = loc.pathname.startsWith("/story/") ? "story-detail" : loc.pathname;
 
-  // 新页挂载后、首帧绘制前,把点击坐标(换算到 .page-reveal 自身盒)写进 CSS 变量 → 涟漪从该点起。
-  // 无点击来源(程序跳转/初次载入)则不设,回退默认 50% 50%(居中)。
+  // 新页挂载、首帧前:离开转场则跳过扩散(curtain 已收拢满盖、随后淡出);否则把涟漪原点设到点击处(看板居中)。
   useLayoutEffect(() => {
     const el = revealRef.current;
     if (!el) return;
-    const p = lastPointer.current;
-    if (p && p.x != null) {
+    if (consumeSuppressReveal()) {
+      el.style.animation = "none"; // 离开:目标页不扩散(避免「先收拢又扩散」)
+      return;
+    }
+    const home = revealKey === "/home";
+    const p = getLastPoint();
+    if (!home && p && p.x != null) {
       const rect = el.getBoundingClientRect();
       el.style.setProperty("--ripple-x", p.x - rect.left + "px");
       el.style.setProperty("--ripple-y", p.y - rect.top + "px");
@@ -60,7 +53,7 @@ function ShellLayout() {
 
   return (
     <AppShell>
-      {/* key 变(切路由)→ 重挂 → 重跑 CSS 涟漪揭示动画。动画无 fill,结束回退到无裁切,fixed 弹层安全。 */}
+      {/* key 变(切路由)→ 重挂 → 重跑扩散涟漪(离开转场时被抑制)。 */}
       <div key={revealKey} ref={revealRef} className="page-reveal">
         <Outlet />
       </div>

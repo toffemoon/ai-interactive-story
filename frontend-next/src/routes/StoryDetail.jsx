@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
+import { useNavigate } from "../lib/transitionNav";
 import { Button } from "../components/ui";
 import CardCarousel from "../components/CardCarousel";
 import StoryHero from "../components/StoryHero";
@@ -117,7 +118,7 @@ export default function StoryDetail() {
         <div className="detail-missing">
           <h2 className="t-h1">没找到这个故事</h2>
           <p className="t-ui">它可能已被作者下架,或链接失效了。</p>
-          <Button variant="primary" onClick={() => navigate("/explore")}>
+          <Button variant="primary" onClick={() => navigate("/explore", { transition: "contract" })}>
             回到探索
           </Button>
         </div>
@@ -135,7 +136,7 @@ export default function StoryDetail() {
   return (
     <>
       <div className="page detail">
-        <button className="detail-back t-ui-sm" onClick={() => navigate("/explore")}>
+        <button className="detail-back t-ui-sm" onClick={() => navigate("/explore", { transition: "contract" })}>
           ← 放回书架
         </button>
 

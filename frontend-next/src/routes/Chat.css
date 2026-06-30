@@ -208,7 +208,7 @@
   border-radius: var(--r-md);
   padding: 10px 13px;
   font-family: var(--font-kai);
-  font-size: var(--fs-ui);
+  font-size: 16px; /* ≥16px 防 iOS 聚焦缩放 */
   color: var(--fg);
   outline: none;
 }
@@ -438,7 +438,23 @@
   .chat.m-list .chat-conv {
     display: none;
   }
+  /* 返回‹ 原 20×26 几乎点不中(会话↔列表唯一后退路径)→ 44×44 命中区,箭头视觉照旧(M8) */
   .chat-back {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin-left: -10px; /* 命中区扩大但视觉不外扩 */
+  }
+  /* 会话工具(新建/档案)+ 添加联系人 触控区补到 44(M8) */
+  .chat-iconbtn {
+    width: 44px;
+    height: 44px;
+  }
+  .chat-add {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
   }
 }

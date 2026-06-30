@@ -78,6 +78,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-height: 36px; /* 触控区(原 ~30px 偏小,M8/M9) */
   font-family: var(--font-sans);
   font-size: var(--fs-ui-sm);
   padding: 6px 14px;
@@ -155,7 +156,7 @@
   border-radius: var(--r-md);
   padding: 0 14px;
   font-family: var(--font-sans);
-  font-size: var(--fs-ui);
+  font-size: 16px; /* ≥16px 防 iOS Safari 聚焦自动缩放 */
   color: var(--fg);
   outline: none;
   transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
@@ -192,7 +193,7 @@
   background: transparent;
   outline: none;
   font-family: var(--font-sans);
-  font-size: var(--fs-ui);
+  font-size: 16px; /* ≥16px 防 iOS 聚焦缩放 */
   color: var(--fg);
   min-width: 0;
 }
@@ -241,6 +242,14 @@
   width: 100%;
   height: auto;
   aspect-ratio: 190 / 286;
+}
+/* 手机:窄屏强制 2 列(否则 minmax(190) 在 <420px 掉成单列、卡铺满宽变 ~527px 高、滚动负担极重)。
+   2 列下单卡约 160×240,一屏可见 ~3-4 张、滚动减半。 */
+@media (max-width: 480px) {
+  .card-shelf:not(.is-scroll) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-3);
+  }
 }
 
 /* 卡片入场:渐起 + 阶梯延时(细节⑧)。翻面 transform 在子面 .card-front/.card-back 上
@@ -362,27 +371,11 @@
   opacity: 1;
 }
 
-/* 正面:封面(立绘)或书脊底色;顶行 = 类型角标,底部 = 名 + 上传者/使用次数 */
+/* 正面 = 封面区(立绘/书脊底色,角标浮其上)+ 下方白条(书名 + 作者)。书名不再压住立绘。 */
 .card-front {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: 12px;
-  background-size: cover;
-  background-position: center;
-}
-.card-front::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 52%;
-  background: linear-gradient(180deg, transparent, rgba(15, 12, 8, 0.55));
-  pointer-events: none;
-}
-.card-front.no-cover::before {
-  opacity: 0.5;
+  overflow: hidden;
 }
 .card-spine-frame {
   position: absolute;
@@ -391,14 +384,40 @@
   border-radius: 8px;
   pointer-events: none;
 }
-/* 顶行:kind 角标(左)+ 类型标(右,如「官方」);use-count/uploader 走底部 */
-.card-front-top {
+/* 封面区:占满上方;背景图由内联 style 设,无封面用书脊底色 + 居中淡书名 */
+.card-cover {
   position: relative;
+  flex: 1;
+  min-height: 0;
+  background-size: cover;
+  background-position: center;
+}
+.card-cover-ph {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  line-height: 1.1;
+  color: #ece3d2;
+  opacity: 0.5;
+  text-align: center;
+  padding: 0 10px;
+  word-break: break-word;
+}
+/* 角标行:浮在封面左上(kind 角标)+ 右上(官方) */
+.card-cover-top {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
   z-index: 1;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 6px;
+  pointer-events: none;
 }
 .card-badge {
   font-family: var(--font-sans);
@@ -423,30 +442,29 @@
   color: #fff;
   white-space: nowrap;
 }
-/* 底部:名 + 上传者/使用次数(有真数据才显,留位) */
-.card-front-foot {
-  position: relative;
-  z-index: 1;
+/* 白条:封面下方实底,放书名(楷,≤2 行)+ 作者(弱);书名不再压立绘 */
+.card-bar {
+  flex: none;
+  background: var(--panel);
+  border-top: 0.5px solid var(--line);
+  padding: 8px 10px 10px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  min-width: 0;
+  gap: 2px;
 }
-.card-front-meta {
-  color: rgba(236, 227, 210, 0.84);
+.card-bar-title {
+  font-size: 15px;
+  line-height: 1.3;
+  color: var(--fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.card-spine-title {
-  position: relative;
-  font-size: 34px;
-  line-height: 1.04;
-  color: #ece3d2;
-  z-index: 1;
-  word-break: break-word;
-  max-height: 4.2em;
+.card-bar-author {
+  color: var(--muted);
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 背面:书名 + 一句话简介 + 标签 + 操作 */
@@ -495,6 +513,12 @@
 }
 .card-actions .btn--full {
   flex-basis: 100%;
+}
+/* 手机:卡片操作按钮(查看故事/纯聊/收藏)触控区补到 ≥40(原 31,M8) */
+@media (max-width: 600px) {
+  .card-actions .btn {
+    min-height: 40px;
+  }
 }
 
 /* ── row 横排 ── */
