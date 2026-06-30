@@ -304,6 +304,7 @@
   background: var(--scrim);
   display: grid;
   place-items: center;
+  justify-content: center; /* B3:列轨道也要居中——place-items 只在轨道内居中,卡比内容框宽时列被起始对齐会偏右 ~9px */
   padding: var(--sp-5);
 }
 .create-modal-card {
