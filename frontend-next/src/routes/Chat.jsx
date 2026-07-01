@@ -305,7 +305,9 @@ export default function Chat() {
                           {!active.avatar && avatarChar(activeName)}
                         </span>
                       )}
-                      <span className="chat-bubble t-ui">{m.text}</span>
+                      <span className={"chat-bubble t-ui" + (m.text === "……" ? " chat-typing" : "")}>
+                        {m.text === "……" ? "对方正在输入…" : m.text}
+                      </span>
                     </div>
                   </div>
                 );
