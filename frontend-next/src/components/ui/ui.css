@@ -189,6 +189,7 @@
 }
 .search-input {
   flex: 1;
+  align-self: stretch; /* 撑满 .search 的 40px 高,整框可点、消除上下死区(视觉不变) */
   border: none;
   background: transparent;
   outline: none;
