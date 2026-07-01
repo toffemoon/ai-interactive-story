@@ -1,0 +1,67 @@
+/* React Bits Dock · 本地 vendored 样式,改吃沐言 token(米白 panel + 朱砂选中),底部居中浮动。
+   放大项向上长(align flex-end),不裁。 */
+.dock-outer {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  width: 100%;
+  pointer-events: none;
+}
+.dock-panel {
+  position: relative;
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.55rem;
+  width: fit-content;
+  max-width: calc(100vw - 24px);
+  border-radius: 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-pop);
+  padding: 0 0.6rem 0.6rem;
+}
+.dock-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 12px;
+  background: var(--sunk);
+  border: 1px solid var(--line);
+  color: var(--fg);
+  cursor: pointer;
+  outline: none;
+}
+.dock-item.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.dock-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dock-icon svg {
+  width: 26px;
+  height: 26px;
+}
+.dock-label {
+  position: absolute;
+  top: -1.7rem;
+  left: 50%;
+  width: fit-content;
+  white-space: pre;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: var(--shadow-card);
+  padding: 2px 9px;
+  font-family: var(--font-kai);
+  font-size: 12px;
+  color: var(--fg);
+  transform: translateX(-50%);
+  pointer-events: none;
+}

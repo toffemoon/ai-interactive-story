@@ -1,23 +1,24 @@
-/* DOM 曲面轮播(coverflow)。
-   - perspective 放在 track(items 的直接父),靠 perspective + 子元素 rotateY 出 3D,
-     **不用 transform-style: preserve-3d** —— 避免把可翻面的卡拖进共享 3D 空间、
-     重踩「翻面后背面按钮点不动」的坑(见 ui.css 翻面注释)。
-   - 居中卡停在 rotateY(0)(平的),侧卡才旋转;调用方只让居中卡可交互。 */
+/* DOM 模拟 CircularGallery(bend=0):平铺横排 + 平滑惯性滚动 + 微浪。
+   - 卡片的 transform / opacity / z-index 由 CardCarousel.jsx 的 RAF 循环每帧直接写
+     (不在 CSS 设 transition —— 否则会跟逐帧 transform 打架、卡顿)。
+   - 全程无 rotateY / 无 perspective / 无 preserve-3d → 不把可翻卡拖进 3D,
+     避开「翻面后背面点不动」的命中坑(见 ui.css 翻面注释)。 */
 .ccz {
   position: relative;
   width: 100%;
   height: 360px;
   overflow: hidden;
   outline: none;
+  /* 把卡片的 z-index(90~200)收进轮播自己的层叠上下文 → 不跟固定「涟漪入局」条抢、不盖在它上面 */
+  isolation: isolate;
 }
 .ccz-track {
   position: absolute;
   inset: 0;
-  perspective: 1200px;
   cursor: grab;
   touch-action: pan-y;
 }
-.ccz.is-dragging .ccz-track {
+.ccz-track:active {
   cursor: grabbing;
 }
 .ccz-item {
@@ -26,41 +27,43 @@
   left: 50%;
   width: 190px;
   height: 286px;
-  margin-top: -158px;
-  transform-origin: center center;
-  transition: transform 0.36s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.36s ease;
   will-change: transform, opacity;
-}
-/* 拖动中关掉过渡,跟手 */
-.ccz.is-dragging .ccz-item {
-  transition: none;
-}
-/* 非居中卡整张可点(用来居中);居中卡把点击透传给卡本体 */
-.ccz-item:not(.is-center) {
-  cursor: pointer;
+  /* B4:手指触点落在卡上(卡盖在 track 之上)。卡默认 touch-action:auto,真机上浏览器会先抢走横向手势 →
+     拖不动。显式 pan-y:纵向留给页面滚、横向留给轮播拖拽 JS(指针逻辑本身已支持 touch,见 .jsx)。 */
+  touch-action: pan-y;
 }
 
 .ccz-dots {
   position: absolute;
-  bottom: 4px;
+  bottom: 8px;
   left: 0;
   right: 0;
   display: flex;
   justify-content: center;
+  align-items: center;
   gap: 8px;
   z-index: 200;
 }
+/* B5:标准分页圆点 —— 视觉 7px 正圆;命中区用透明 ::before 撑大(不再 content-box+padding+bg-clip,
+   那套会让点看着变形/偏移,M8 的副作用)。行内点间距小,命中区取 ~25px 不强求 44,免相邻重叠误触。 */
 .ccz-dot {
+  position: relative;
+  flex: none;
   width: 7px;
   height: 7px;
   padding: 0;
   border: none;
   border-radius: 50%;
-  background: var(--line);
+  background-color: var(--line);
   cursor: pointer;
-  transition: background 0.2s ease, transform 0.2s ease;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+.ccz-dot::before {
+  content: "";
+  position: absolute;
+  inset: -9px;
 }
 .ccz-dot.is-on {
-  background: var(--accent);
-  transform: scale(1.25);
+  background-color: var(--accent);
+  transform: scale(1.3);
 }

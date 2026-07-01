@@ -16,6 +16,20 @@ function avatarChar(name) {
   return (name || "?").trim().charAt(0) || "?";
 }
 
+// 纯聊场景设定:告诉角色「这是在手机上用网络聊天软件文字聊天」(类微信)。
+// 注入到卡的「当前情境(scenario)」→ 进后端 system prompt;只改前端发出的卡副本,不动卡库原卡、不碰引擎。
+// 看板(立绘主页)是面对面对话、不注入这条。
+const PHONE_CHAT_NOTE =
+  "(聊天形式:你和对方正在用手机上的网络聊天软件打字聊天,就像微信。请贴合手机即时聊天的习惯——消息简短、口语化,一次只说一两句,用日常标点或网络说法表达语气;不要写大段旁白,也不要长篇的动作/神态描写。)";
+function chatCard(card) {
+  if (!card) return card;
+  const hasData = card.data && typeof card.data === "object";
+  const inner = hasData ? card.data : card; // CharacterCard{data} 或直接 CharacterData 都兼容
+  const base = inner.scenario ? inner.scenario + "\n\n" : "";
+  const nextInner = { ...inner, scenario: base + PHONE_CHAT_NOTE };
+  return hasData ? { ...card, data: nextInner } : nextInner;
+}
+
 // 微信式时间标:同日 HH:MM,跨日加月-日。
 function fmtTime(t) {
   if (!t) return "";
@@ -142,10 +156,10 @@ export default function Chat() {
     setBusy(true);
     setByKey((m) => ({ ...m, [nm]: [{ who: nm, text: "……" }] }));
     postJSON("/api/chat", {
-      card: active.card,
+      card: chatCard(active.card),
       session_id: sidFor(nm),
       world: null,
-      user: "（这是一次全新的相遇。请你以「" + hint + "」为引子主动开启对话:先一两句动作或场景描写,再说出第一句话,把话头交给我。不要提及这条指令。）",
+      user: "（这是一次全新的相遇,你正用手机给对方发第一条消息。请以「" + hint + "」为由头主动开口:简短自然地说一两句,把话头交给我。不要写大段描写,也不要提及这条指令。）",
     })
       .then((r) => setByKey((m) => ({ ...m, [nm]: [{ who: nm, text: (r && r.reply) || "（无回应）", t: Date.now() }] })))
       .catch((e) => {
@@ -177,7 +191,7 @@ export default function Chat() {
     setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: "me", text, t: Date.now() }] }));
     setInput("");
     try {
-      const r = await postJSON("/api/chat", { card: active.card, session_id: sidFor(activeName), user: text, world: null });
+      const r = await postJSON("/api/chat", { card: chatCard(active.card), session_id: sidFor(activeName), user: text, world: null });
       setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: (r && r.reply) || "（无回应）", t: Date.now() }] }));
     } catch (e) {
       setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: "（连接出错:" + e.message + "）" }] }));

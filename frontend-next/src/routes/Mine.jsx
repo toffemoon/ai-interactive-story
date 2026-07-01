@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "../lib/transitionNav";
 import { Button, Input, CardShelf } from "../components/ui";
 import { getJSON, postJSON } from "../lib/api";
 import { toCardModels } from "../lib/cardModel";
@@ -56,6 +56,36 @@ export default function Mine() {
   });
   const [visited, setVisited] = useState(() => new Set(["profile"]));
   const fileRef = useRef(null);
+  // 子分区红线指示条:测量当前 tab 的位置/宽度,用 transform 平移过去(不再硬切 border-color)。
+  const tabRefs = useRef([]);
+  const [bar, setBar] = useState({ x: 0, y: 0, w: 0 });
+  const measureBar = useCallback(() => {
+    const i = TABS.findIndex((t) => t.key === tab);
+    const el = tabRefs.current[i];
+    if (!el) return;
+    setBar({ x: el.offsetLeft, y: el.offsetTop + el.offsetHeight - 2, w: el.offsetWidth });
+  }, [tab]);
+  useLayoutEffect(() => {
+    measureBar();
+  }, [measureBar]);
+  // 首帧 offsetWidth 常为 0(楷书字体未加载完 / 布局未定)→ rAF + 字体就绪后各重测一次,
+  // 否则红线初载宽度=0、要切 tab 才出现。
+  useEffect(() => {
+    let alive = true;
+    const remeasure = () => alive && measureBar();
+    const raf = requestAnimationFrame(remeasure);
+    if (typeof document !== "undefined" && document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(remeasure);
+    }
+    return () => {
+      alive = false;
+      cancelAnimationFrame(raf);
+    };
+  }, [measureBar]);
+  useEffect(() => {
+    window.addEventListener("resize", measureBar);
+    return () => window.removeEventListener("resize", measureBar);
+  }, [measureBar]);
 
   useEffect(() => setMe(user), [user]);
   useEffect(() => setVisited((v) => new Set([...v, tab])), [tab]);
@@ -163,11 +193,21 @@ export default function Mine() {
       </div>
 
       <div className="mine-tabs">
-        {TABS.map((t) => (
-          <button key={t.key} className={"mine-tab" + (tab === t.key ? " is-on" : "")} onClick={() => setTab(t.key)}>
+        {TABS.map((t, i) => (
+          <button
+            key={t.key}
+            ref={(el) => (tabRefs.current[i] = el)}
+            className={"mine-tab" + (tab === t.key ? " is-on" : "")}
+            onClick={() => setTab(t.key)}
+          >
             {t.label}
           </button>
         ))}
+        <span
+          className="mine-tab-underline"
+          style={{ transform: `translate(${bar.x}px, ${bar.y}px)`, width: bar.w + "px" }}
+          aria-hidden="true"
+        />
       </div>
 
       {/* 档案 + 账号设置 */}

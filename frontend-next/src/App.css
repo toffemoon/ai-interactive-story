@@ -26,23 +26,44 @@
 /* 页面切换 = 涟漪圆形揭示(切路由 key 变 → 重跑)。
    circle(75%) ≈ 全覆盖任意尺寸/可滚动页;动画无 fill,结束回退到无裁切 → 对页内 fixed 弹层安全。
    用 clip-path 不用 transform(transform 会成 fixed 后代包含块);动画跑不跑页面都可见(基态无裁切)。 */
-/* 涟漪原点 = 点击坐标(--ripple-x/y,由 ShellLayout 写;缺省居中)。
-   半径放大到 150%:原点移到角落时仍能覆盖整页,结束无未裁切的突跳。 */
+/* 「扩散」转场(进入 / 前进):目标页挂载时 clip-path 从点击点(看板居中)漾开。
+   圆用 0→150vmax(与离开「收拢」同一圆 + 同一时长 var(--mu-reveal-dur) + 同一缓动 → 进出场手感一致)。
+   原点 --ripple-x/y 由 ShellLayout 写(缺省 / 看板 → 居中);离开转场会把本次动画抑制掉(见 transitionNav)。 */
 @keyframes mu-ripple-in {
   from {
-    clip-path: circle(0% at var(--ripple-x, 50%) var(--ripple-y, 50%));
+    clip-path: circle(0vmax at var(--ripple-x, 50%) var(--ripple-y, 50%));
     opacity: 0.55;
   }
   to {
-    clip-path: circle(150% at var(--ripple-x, 50%) var(--ripple-y, 50%));
+    clip-path: circle(150vmax at var(--ripple-x, 50%) var(--ripple-y, 50%));
     opacity: 1;
   }
 }
 .page-reveal {
-  animation: mu-ripple-in 0.55s var(--ease-out);
+  animation: mu-ripple-in var(--mu-reveal-dur) var(--ease-out);
 }
 @media (prefers-reduced-motion: reduce) {
   .page-reveal {
     animation: none;
+  }
+}
+
+/* 「收拢」转场(离开 / 返回):克隆当前页盖最上层(.route-leave,样式在 JS 内联),clip-path 圆 150vmax→0vmax
+   往点击点收,圆外露出底下已切好的目标页。与「扩散」同圆 / 同时长 / 同缓动,只是方向相反(收 vs 漾)。 */
+@keyframes mu-ripple-out {
+  from {
+    clip-path: circle(150vmax at var(--lx, 50%) var(--ly, 50%));
+  }
+  to {
+    clip-path: circle(0vmax at var(--lx, 50%) var(--ly, 50%));
+  }
+}
+.route-leave {
+  animation: mu-ripple-out var(--mu-reveal-dur) var(--ease-out) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .route-leave {
+    animation: none;
+    opacity: 0;
   }
 }

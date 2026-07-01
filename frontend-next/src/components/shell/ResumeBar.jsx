@@ -1,4 +1,5 @@
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
+import { useNavigate } from "../../lib/transitionNav";
 import { useGame } from "../../state/game";
 
 // 「继续游玩」浮动入口(全局):有进行中故事(game 已装配在 sessionStorage)才显,

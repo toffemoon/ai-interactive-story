@@ -97,6 +97,7 @@
 .home-go {
   width: auto;
   min-width: 128px;
+  min-height: 48px; /* 首屏主 CTA,触控区 ≥48(M9) */
   justify-content: center;
   padding: 11px 26px;
   font-size: var(--fs-ui);
@@ -136,7 +137,7 @@
 /* 对话框:坞内静态(在按钮行下方);浅色卡 + 深色字(YOR-136 反馈) */
 .home-dialogue {
   width: 100%;
-  background: rgba(250, 247, 241, 0.8);
+  background: rgba(250, 247, 241, 0.92); /* 0.8→0.92:叠咖啡馆图上文字对比更稳(M11) */
   border: 1px solid rgba(34, 26, 18, 0.14);
   border-radius: var(--r-lg);
   padding: var(--sp-4) var(--sp-5) var(--sp-4);
@@ -161,8 +162,8 @@
   gap: var(--sp-2);
 }
 .home-tool {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
   border: 1px solid #d8d2c7;
@@ -190,6 +191,24 @@
   min-height: 3.2em;
   margin: 0 0 var(--sp-3);
 }
+/* 流式打字光标(逐字浮现时闪烁) */
+.home-dlg-caret {
+  display: inline-block;
+  margin-left: 1px;
+  color: var(--cinnabar);
+  font-weight: 400;
+  animation: home-caret-blink 0.9s steps(1) infinite;
+}
+@keyframes home-caret-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  50.01%,
+  100% {
+    opacity: 0;
+  }
+}
 .home-composer {
   display: flex;
   gap: var(--sp-3);
@@ -204,7 +223,7 @@
   padding: 0 14px;
   height: 44px;
   font-family: var(--font-sans);
-  font-size: var(--fs-ui);
+  font-size: 16px; /* ≥16px 防 iOS 聚焦缩放 */
   color: #20201d;
   outline: none;
 }
@@ -371,6 +390,7 @@
   background: var(--scrim);
   display: grid;
   place-items: center;
+  justify-content: center; /* B3:统一所有 modal 居中(列轨道居中,修 ~9px 偏移) */
   padding: var(--sp-5);
 }
 .home-modal-card {

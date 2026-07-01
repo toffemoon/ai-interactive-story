@@ -14,6 +14,33 @@
   min-height: 100%;
   padding-top: 52px;
 }
+/* C5(2026-06-30 真机反馈):顶部 52px 留白透出 body 角落晕染、内容区不透明盖住下方 → 顶部一条"意义不明的带"。
+   paper 页 shell-main 也铺不透明 --bg、盖住晕染,顶部无带。stage(home/play 立绘满铺)data-theme 不同,不受影响。 */
+html[data-theme="paper"] .shell-main {
+  background: var(--bg);
+}
+
+/* 手机顶部 Pill Nav 一行(D2/D5:替掉角落浮动「沐言」开关)。占满 shell-main 预留的顶部 52px 条,
+   故 .ct / .chat 的 calc(100dvh − 52px) 等定高页照旧对齐。挤了横滑(PillNav forcePills)。 */
+.shell-pillnav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  background: var(--bg);
+}
+html[data-theme="paper"] .shell-pillnav {
+  border-bottom: 1px solid var(--line);
+}
+.shell-pillnav .pill-nav-container {
+  width: 100%;
+  min-width: 0;
+}
 .shell-main--immersive {
   min-height: 100%;
   padding-top: 0;

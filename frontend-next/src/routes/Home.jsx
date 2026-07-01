@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "../lib/transitionNav";
 import { motion } from "motion/react";
 import { Button } from "../components/ui";
 import { getJSON, postJSON, newSessionId } from "../lib/api";
@@ -80,6 +80,23 @@ export default function Home() {
     }
     return greeting;
   }, [messages, greeting]);
+
+  // 流式打字:对话文字逐字浮现(galgame 台词感;/api/chat 非流式,前端模拟)。等回应时不打字、显状态。
+  const [typed, setTyped] = useState("");
+  useEffect(() => {
+    if (busy) return undefined;
+    const full = currentLine || "";
+    setTyped("");
+    if (!full) return undefined;
+    let i = 0;
+    const id = setInterval(() => {
+      i += 1;
+      setTyped(full.slice(0, i));
+      if (i >= full.length) clearInterval(id);
+    }, 32);
+    return () => clearInterval(id);
+  }, [currentLine, busy]);
+  const typing = !busy && typed.length < (currentLine || "").length;
 
   // 恢复本机首页会话(同步,先于 presets 落卡)。
   useEffect(() => {
@@ -220,8 +237,10 @@ export default function Home() {
   }
 
   // 重开(抄纯聊 newChat):清会话 + 清本地对话 → 回静态招呼。
+  // 是破坏性操作(清掉当前对话),有内容时二次确认防误触(M12)。
   function restart() {
     if (busy) return;
+    if (messages.length > 0 && !window.confirm("重开会清空当前和 " + displayName + " 的这段对话,确定?")) return;
     setMessages([]);
     setSessionId(newSessionId());
   }
@@ -362,7 +381,10 @@ export default function Home() {
                 <button className="home-tool" onClick={() => setFullscreen(true)} title="全屏(只留背景+立绘,方便截图)" aria-label="全屏">⛶</button>
               </div>
             </div>
-            <p className="home-dlg-line t-read">{busy ? `(${displayName}正在回应…)` : currentLine}</p>
+            <p className="home-dlg-line t-read">
+              {busy ? `(${displayName}正在回应…)` : typed}
+              {typing && <span className="home-dlg-caret" aria-hidden="true">▌</span>}
+            </p>
             <div className="home-composer">
               <input
                 className="home-input"

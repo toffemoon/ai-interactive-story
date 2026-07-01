@@ -1,46 +1,85 @@
-import { useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
+import { useNavigate } from "../../lib/transitionNav";
 import { NAV } from "./nav";
 import ResumeBar from "./ResumeBar";
 import StaggeredMenu from "../StaggeredMenu";
+import PillNav from "../PillNav";
 import "./shell.css";
 
-// 全局导航壳:菜单统一用 React Bits StaggeredMenu(错层滑入侧栏),替掉旧「沐言 ☰」+ 抽屉 + 移动底 tab。
-//   - 默认隐藏 + 一个唤出开关(满足「菜单默认隐藏 + 唤出按钮」决策,只是换了实现)。
-//   - 菜单项 = nav.js 单一源(5 项);点项走 react-router navigate。
-//   - chrome 配色按主题自适应:纸页(paper)用墨色,立绘主页(stage)用月白——否则浅底上看不见。
-//   - 退出登录 / 账号在「我的」页内;styleguide 走 /styleguide 直链;故菜单只留 5 项,不再放 footer。
-// 沉浸玩 /play:不挂任何导航 chrome(Story 自带「离开」),退出靠 ResumeBar 回带。
-// /login · /styleguide 不经本壳(App 路由表里在 ShellLayout 之外),天然无菜单。
+// 全局导航壳:
+//   - 手机(≤720)= 顶部 Pill Nav 一行(米底幽灵 pill,选中朱砂;挤了横滑)。直达 6 入口,不用抽屉。
+//   - 桌面(≥721)= StaggeredMenu 错层侧栏(保持原样)。
+//   - 沉浸玩 /play:不挂任何 chrome(Story 自带「离开」),退出靠 ResumeBar。
+//   单一导航源 nav.js(看板 + NAV 5 项)。
+function useIsMobile(maxWidth = 720) {
+  const [m, setM] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia ? window.matchMedia(`(max-width: ${maxWidth}px)`).matches : false
+  );
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia(`(max-width: ${maxWidth}px)`);
+    const update = () => setM(mq.matches);
+    update();
+    mq.addEventListener ? mq.addEventListener("change", update) : mq.addListener(update);
+    window.addEventListener("resize", update);
+    return () => {
+      mq.removeEventListener ? mq.removeEventListener("change", update) : mq.removeListener(update);
+      window.removeEventListener("resize", update);
+    };
+  }, [maxWidth]);
+  return m;
+}
+
+const PILL_ITEMS = [{ label: "看板", href: "/home" }, ...NAV.map((it) => ({ label: it.zh, href: it.to }))];
+
 export default function AppShell({ children }) {
   const loc = useLocation();
   const navigate = useNavigate();
+  const isMobile = useIsMobile(720);
 
   const immersive = loc.pathname.startsWith("/play");
-  // 立绘主页(家):背景+立绘满铺(无纸页顶留白);其余纸页保留顶部 52px 给浮动开关留白。
+  // 立绘主页(家):背景 + 立绘满铺(无纸页顶留白)。
   const atHome = loc.pathname.startsWith("/home");
 
   if (immersive) {
     return <main className="shell-main shell-main--immersive">{children}</main>;
   }
 
+  // 当前顶层路由 → 高亮对应 pill(/story/* 这类无对应项则不高亮)。
+  const seg = "/" + (loc.pathname.split("/")[1] || "home");
+  const activeHref = PILL_ITEMS.some((i) => i.href === seg) ? seg : null;
+
   return (
     <div className={"shell" + (atHome ? " shell--home" : "")}>
-      <StaggeredMenu
-        isFixed
-        position="left"
-        brandText="沐言"
-        items={[
-          { label: "看板", ariaLabel: "回到看板", link: "/home" },
-          ...NAV.map((it) => ({ label: it.zh, ariaLabel: it.zh, link: it.to })),
-        ]}
-        displaySocials={false}
-        displayItemNumbering
-        colors={["#c79a4e", "#8f3c32"]}
-        accentColor="#8f3c32"
-        menuButtonColor={atHome ? "#ece3d2" : "#20201d"}
-        openMenuButtonColor="#20201d"
-        onItemClick={(it) => navigate(it.link)}
-      />
+      {isMobile ? (
+        <header className="shell-pillnav">
+          <PillNav
+            items={PILL_ITEMS}
+            activeHref={activeHref}
+            forcePills
+            initialLoadAnimation={false}
+            onItemClick={(it) => navigate(it.href)}
+          />
+        </header>
+      ) : (
+        <StaggeredMenu
+          isFixed
+          position="left"
+          brandText="沐言"
+          items={[
+            { label: "看板", ariaLabel: "回到看板", link: "/home" },
+            ...NAV.map((it) => ({ label: it.zh, ariaLabel: it.zh, link: it.to })),
+          ]}
+          displaySocials={false}
+          displayItemNumbering
+          colors={["#c79a4e", "#8f3c32"]}
+          accentColor="#8f3c32"
+          menuButtonColor={atHome ? "#ece3d2" : "#20201d"}
+          openMenuButtonColor="#20201d"
+          onItemClick={(it) => navigate(it.link)}
+        />
+      )}
       <main className={"shell-main" + (atHome ? " shell-main--home" : "")}>{children}</main>
       <ResumeBar />
     </div>

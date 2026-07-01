@@ -1,7 +1,10 @@
 /* 纯聊 · 微信式(YOR-60/61/63/59)。左联系人 / 中气泡;无右常驻档案,右上 ··· 抽档案。吃语义 token。 */
 .chat {
   display: flex;
-  height: calc(100vh - 52px);
+  /* B7:用 dvh 不用 vh —— 100vh = 地址栏收起时的最大高度,真机地址栏展开时聊天比可视区高 →
+     整页跟着滚、内容上下窜。dvh 跟随可视区(地址栏伸缩)实时变,纯聊钉死视口、只 feed 滚。
+     (52px = shell-main 顶部留白;与 .ct / shell-main--home 的 dvh 一致。) */
+  height: calc(100dvh - 52px);
   border-top: 1px solid var(--line);
 }
 
@@ -146,12 +149,18 @@
   gap: var(--sp-2);
 }
 .chat-iconbtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 32px;
   height: 32px;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   background: transparent;
   color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
   cursor: pointer;
 }
 .chat-iconbtn:hover {
@@ -208,7 +217,7 @@
   border-radius: var(--r-md);
   padding: 10px 13px;
   font-family: var(--font-kai);
-  font-size: var(--fs-ui);
+  font-size: 16px; /* ≥16px 防 iOS 聚焦缩放 */
   color: var(--fg);
   outline: none;
 }
@@ -334,6 +343,7 @@
   background: rgba(8, 6, 4, 0.82);
   display: grid;
   place-items: center;
+  justify-content: center; /* B3:统一所有 modal 居中(图片 lightbox 同样修列轨道居中) */
   padding: var(--sp-6);
   animation: chat-lb-in 0.18s var(--ease-out) both;
 }
@@ -360,6 +370,7 @@
   background: var(--scrim);
   display: grid;
   place-items: center;
+  justify-content: center; /* B3:统一所有 modal 居中(列轨道居中,修 ~9px 偏移) */
   padding: var(--sp-5);
 }
 .chat-modal-card {
@@ -438,7 +449,30 @@
   .chat.m-list .chat-conv {
     display: none;
   }
+  /* 返回‹ 原 20×26 几乎点不中(会话↔列表唯一后退路径)→ 44×44 命中区,箭头视觉照旧(M8) */
   .chat-back {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin-left: -10px; /* 命中区扩大但视觉不外扩 */
+  }
+  /* 会话工具(新建/档案):B6 视觉收紧成 36 方块 + 图标放大到 18,命中区改用透明 ::before 撑到 ≥44
+     (M8 直接把按钮撑 44 让它显大/像空框)。 */
+  .chat-iconbtn {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+  .chat-iconbtn::before {
+    content: "";
+    position: absolute;
+    inset: -5px; /* 36 + 5*2 = 46 命中区 ≥44,视觉不外扩 */
+  }
+  .chat-add {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
   }
 }

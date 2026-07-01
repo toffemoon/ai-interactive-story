@@ -49,6 +49,7 @@ export default function StoryHero({ preset, onOpenChar }) {
   );
 
   const [charActive, setCharActive] = useState(0);
+  const [charFlip, setCharFlip] = useState(false); // 居中角色卡翻面看简介(切卡时复位)
 
   return (
     <>
@@ -94,17 +95,21 @@ export default function StoryHero({ preset, onOpenChar }) {
       {charModels.length > 0 && (
         <section className="detail-block">
           <h2 className="t-h3 detail-sec">角色</h2>
-          <p className="detail-hint t-meta">拖动 / 滚轮浏览角色,点居中卡看完整介绍</p>
+          <p className="detail-hint t-meta">拖动 / 滚轮换角色,点居中卡翻面看简介,「详情」看完整介绍</p>
           <CardCarousel
             items={charModels}
             activeIndex={charActive}
-            onActiveChange={setCharActive}
+            onActiveChange={(i) => {
+              setCharActive(i);
+              setCharFlip(false);
+            }}
             ariaLabel="角色卡轮播"
             renderItem={(m, { active }) => (
               <Card
                 model={m}
                 variant="shelf"
-                onToggleFlip={() => active && onOpenChar && onOpenChar(m)}
+                flipped={active && charFlip}
+                onToggleFlip={() => active && setCharFlip((f) => !f)}
                 onOpen={() => onOpenChar && onOpenChar(m)}
               />
             )}
