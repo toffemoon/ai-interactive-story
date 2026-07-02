@@ -252,6 +252,9 @@
   z-index: 5;
   top: clamp(14px, 3vh, 24px);
   right: clamp(14px, 3vw, 28px);
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px; /* 触控下限(YOR-160),视觉不变 */
   background: color-mix(in srgb, var(--panel) 70%, transparent);
   border: 1px solid var(--line);
   color: var(--muted);
