@@ -371,7 +371,7 @@ export default function Story() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+                if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing) {
                   e.preventDefault();
                   runTurn({ text: input });
                 }
