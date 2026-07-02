@@ -308,7 +308,7 @@
   background: var(--panel);
   color: var(--fg);
   font-family: var(--font-kai);
-  font-size: var(--fs-ui);
+  font-size: 16px; /* ≥16px 防 iOS 聚焦缩放(var(--fs-ui)=14px 会触发) */
   line-height: var(--lh-body);
   outline: none;
 }
