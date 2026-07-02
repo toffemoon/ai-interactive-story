@@ -58,6 +58,33 @@ html.mu-nav-tab .page-reveal {
   transition: opacity 0.3s var(--ease-out);
 }
 
+/* 落墨 →「推演中…」的衔接:墨散进夜里,在等待指示前留一粒朱砂随呼吸明暗——
+   等待有了心跳,也有了出处(那滴墨没消失,是在替你研墨)。
+   纯 CSS 挂在 pending 态上:首回合一到,React 撤掉指示器,墨点自然消失,零同步成本;
+   之后每个回合的「推演中…」也带同一粒墨点,等待语言全程一致。 */
+.story-pending::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: 1px;
+  animation: mu-ink-breathe 1.8s ease-in-out infinite;
+}
+@keyframes mu-ink-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html.mu-nav-tab .page-reveal,
   html .page-reveal {
@@ -65,5 +92,9 @@ html.mu-nav-tab .page-reveal {
   }
   .mu-ink {
     display: none;
+  }
+  .story-pending::before {
+    animation: none;
+    opacity: 0.7;
   }
 }
