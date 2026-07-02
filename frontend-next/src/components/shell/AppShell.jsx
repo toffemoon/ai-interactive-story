@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
-import { useNavigate } from "../../lib/transitionNav";
+import { useLocation, useNavigate as useRouterNavigate } from "react-router-dom";
 import { NAV } from "./nav";
 import ResumeBar from "./ResumeBar";
 import StaggeredMenu from "../StaggeredMenu";
@@ -35,8 +34,17 @@ const PILL_ITEMS = [{ label: "看板", href: "/home" }, ...NAV.map((it) => ({ la
 
 export default function AppShell({ children }) {
   const loc = useLocation();
-  const navigate = useNavigate();
+  const routerNavigate = useRouterNavigate();
   const isMobile = useIsMobile(720);
+
+  // tab 平级切换降级(YOR-166 demo):不走 transitionNav 的全屏涟漪克隆,
+  // 打一个 html.mu-nav-tab 标记让 .page-reveal 换 240ms 轻淡入(transition-tuning.css),
+  // 涟漪留给「跨界」时刻(主动线前进 / 收敛返回 / 落墨入局)。
+  const navTab = (href) => {
+    document.documentElement.classList.add("mu-nav-tab");
+    routerNavigate(href);
+    setTimeout(() => document.documentElement.classList.remove("mu-nav-tab"), 350);
+  };
 
   const immersive = loc.pathname.startsWith("/play");
   // 立绘主页(家):背景 + 立绘满铺(无纸页顶留白)。
@@ -59,7 +67,7 @@ export default function AppShell({ children }) {
             activeHref={activeHref}
             forcePills
             initialLoadAnimation={false}
-            onItemClick={(it) => navigate(it.href)}
+            onItemClick={(it) => navTab(it.href)}
           />
         </header>
       ) : (
@@ -77,7 +85,7 @@ export default function AppShell({ children }) {
           accentColor="#8f3c32"
           menuButtonColor={atHome ? "#ece3d2" : "#20201d"}
           openMenuButtonColor="#20201d"
-          onItemClick={(it) => navigate(it.link)}
+          onItemClick={(it) => navTab(it.link)}
         />
       )}
       <main className={"shell-main" + (atHome ? " shell-main--home" : "")}>{children}</main>
