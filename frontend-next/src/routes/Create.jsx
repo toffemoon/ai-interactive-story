@@ -581,6 +581,8 @@ export default function Create() {
                 </button>
                 <button onClick={openLib}>从卡库补素材</button>
                 <button className="ct-more-pub" onClick={openPreview} disabled={!hasChars}>预览并发布到探索 · 公开</button>
+                {/* 禁用原因触屏可见(桌面版的 title 手机看不到,同 YOR-173 范式) */}
+                {!hasChars && <span className="ct-more-note t-meta">至少要一张角色卡——先聊一张,或从卡库补一张</span>}
               </div>
             )}
             <div className="ct-composer">
