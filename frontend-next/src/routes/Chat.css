@@ -73,6 +73,10 @@
 }
 .chat-contact-name {
   color: var(--fg);
+  /* 长名截断(YOR-164):父级 .chat-contact-tx 已有 min-width:0 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .chat-contact-last {
   color: var(--muted);
@@ -140,9 +144,13 @@
 }
 .chat-conv-name {
   flex: 1;
+  min-width: 0; /* flex 子项默认 min-width:auto 会挡住收缩,长名会顶开两侧按钮(YOR-164) */
   font-family: var(--font-kai);
   font-size: var(--fs-h3);
   color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .chat-conv-tools {
   display: flex;
