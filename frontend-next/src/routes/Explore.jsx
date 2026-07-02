@@ -283,7 +283,7 @@ export default function Explore() {
                 full
                 onClick={() => {
                   setDetail(null);
-                  chatWith();
+                  chatWith(detail); // 不传角色的话预载永远没写,用户会落到空联系人列表(YOR-167)
                 }}
               >
                 和 TA 纯聊
