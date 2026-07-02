@@ -285,6 +285,14 @@
   box-shadow: var(--shadow-pop);
   animation: create-toast-in 0.2s var(--ease-out) both;
 }
+/* 手机端 .ct 定高布局:foot 钉底(约 117px),toast 若留在 bottom 会盖住动作行 →
+   移到顶部(shell 顶栏 52px 之下)居中,避开钉底 foot;桌面(≥861,无 .ct-foot)不受影响。 */
+@media (max-width: 860px) {
+  .create-toast {
+    bottom: auto;
+    top: calc(52px + var(--sp-3) + env(safe-area-inset-top));
+  }
+}
 @keyframes create-toast-in {
   from {
     opacity: 0;
