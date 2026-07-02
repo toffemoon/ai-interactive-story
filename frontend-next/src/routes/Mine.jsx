@@ -119,8 +119,10 @@ export default function Mine() {
   const favModels = useMemo(() => {
     const sm = toCardModels("story", favs.stories || []);
     const cm = toCardModels("character", favs.characters || []);
-    return [...sm, ...cm];
+    return [...sm, ...cm].map((m) => ({ ...m, fav: true })); // 收藏 tab 全点亮书签(YOR-171)
   }, [favs]);
+  // 「我创建的」里已收藏的也点亮(同一份 ais_favorites_v1,按归一化 id 判)
+  const favIdSet = useMemo(() => new Set(favModels.map((m) => m.kind + ":" + m.id)), [favModels]);
 
   const achState = {
     rosterCount: (() => {
@@ -311,7 +313,7 @@ export default function Mine() {
           <h2 className="t-h3 mine-sec-title">我创建的卡</h2>
           {createdModels.length ? (
             <>
-              <CardShelf models={createdShown} onOpen={() => {}} />
+              <CardShelf models={createdShown.map((m) => (favIdSet.has(m.kind + ":" + m.id) ? { ...m, fav: true } : m))} onOpen={() => {}} />
               {createdPageCount > 1 && (
                 <div className="mine-pager">
                   <Button variant="line" disabled={createdPage <= 1} onClick={() => setCreatedPage((p) => Math.max(1, p - 1))}>
