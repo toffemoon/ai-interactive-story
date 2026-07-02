@@ -439,7 +439,11 @@
   color: var(--muted);
   font-size: 18px;
   cursor: pointer;
-  display: block; /* 抽屉模式:任何宽度都可点 × 收起 */
+  display: inline-flex; /* 抽屉模式:任何宽度都可点 × 收起 */
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px; /* 触控下限(YOR-163):原 23×26 手机上难点中 */
 }
 .story-status-list {
   flex: 1;
