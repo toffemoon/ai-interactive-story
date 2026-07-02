@@ -282,7 +282,7 @@ export default function Chat() {
               </button>
               <span className="chat-conv-name t-kai">{activeName}</span>
               <div className="chat-conv-tools">
-                <button className="chat-iconbtn" onClick={newChat} title="新建对话">⟳</button>
+                <button className="chat-iconbtn" onClick={newChat} disabled={busy} title={busy ? "等回复完再新建" : "新建对话"}>⟳</button>
                 <button className="chat-iconbtn" onClick={() => setProfileOpen((v) => !v)} title="角色档案">···</button>
               </div>
             </header>
