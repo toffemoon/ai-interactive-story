@@ -201,7 +201,7 @@ export default function Explore() {
                 key={s.key}
                 active={sort === s.key}
                 disabled={!s.live}
-                title={s.live ? undefined : "待后端数据(YOR-95)"}
+                title={s.live ? undefined : "还在攒数据,暂未开放"}
                 className={s.live ? "" : "is-disabled"}
                 onClick={s.live ? () => setSort(s.key) : undefined}
               >
