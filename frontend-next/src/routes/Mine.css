@@ -103,6 +103,12 @@
 .mine-avatar:hover .mine-avatar-edit {
   opacity: 1;
 }
+/* 触屏没有 hover,「换」提示条常显,否则用户不知道头像可换(YOR-165) */
+@media (hover: none) {
+  .mine-avatar-edit {
+    opacity: 1;
+  }
+}
 .mine-name {
   color: var(--fg);
 }
