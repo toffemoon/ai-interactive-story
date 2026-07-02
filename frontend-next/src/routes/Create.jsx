@@ -591,7 +591,7 @@ export default function Create() {
                 placeholder={KINDS[ki].ph}
                 onChange={(e) => patch(kind, { input: e.target.value })}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !busy) {
+                  if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
                     e.preventDefault();
                     send();
                   }
@@ -654,7 +654,7 @@ export default function Create() {
                   placeholder={KINDS[ki].ph}
                   onChange={(e) => patch(kind, { input: e.target.value })}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !busy) {
+                    if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
                       e.preventDefault();
                       send();
                     }

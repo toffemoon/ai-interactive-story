@@ -394,7 +394,7 @@ export default function Home() {
                 placeholder={card ? "和 " + displayName + " 说点什么…" : "正在把糖沐请出来…"}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !busy) {
+                  if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
                     e.preventDefault();
                     send();
                   }
