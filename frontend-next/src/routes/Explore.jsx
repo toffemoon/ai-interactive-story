@@ -165,6 +165,8 @@ export default function Explore() {
   }
 
   const totalCount = storyModels.length + charModels.length;
+  // 计数跟着筛选走:有任一筛选/搜索时显示「匹配 N / 共 M 个」,否则保持全量口径。
+  const filtering = track !== "all" || q.trim() !== "" || genre !== "全部";
 
   return (
     <>
@@ -176,7 +178,15 @@ export default function Explore() {
             <p className="t-ui explore-sub">取下一本书,或挑一张角色卡,走进会回应你的故事世界。</p>
           </div>
           <div className="explore-count t-ui-sm">
-            共 <b>{totalCount}</b> 个故事 / 角色
+            {filtering ? (
+              <>
+                匹配 <b>{filtered.length}</b> / 共 {totalCount} 个
+              </>
+            ) : (
+              <>
+                共 <b>{totalCount}</b> 个故事 / 角色
+              </>
+            )}
           </div>
         </div>
 
@@ -235,7 +245,7 @@ export default function Explore() {
         ) : !filtered.length ? (
           <div className="explore-empty">
             <h3 className="t-h2">{totalCount ? "没有匹配的内容" : "书架还空着"}</h3>
-            <p className="t-ui explore-sub">{totalCount ? "换个关键词、标签或轨道试试。" : "去创作从一张角色卡开始。"}</p>
+            <p className="t-ui explore-sub">{totalCount ? "换个关键词、标签或类型试试。" : "去创作从一张角色卡开始。"}</p>
           </div>
         ) : (
           <>
