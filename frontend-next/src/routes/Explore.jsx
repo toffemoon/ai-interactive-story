@@ -209,6 +209,10 @@ export default function Explore() {
               </Chip>
             ))}
           </div>
+          {/* 禁用排序的解释:title 在触屏上不可见,补一行可见说明;live 全开后自动消失 */}
+          {SORTS.some((s) => !s.live) && (
+            <span className="explore-sorts-note t-meta">热度 / 点击 还在攒数据,暂未开放</span>
+          )}
         </div>
 
         {/* 标签筛选(真实存在的标签) */}
