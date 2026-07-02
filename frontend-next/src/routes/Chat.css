@@ -417,6 +417,22 @@
 .chat-modal-item:hover:not(:disabled) {
   border-color: var(--accent-2);
 }
+/* 添加联系人搜索(YOR-169):同创作页 .create-lib-search 范式 */
+.chat-modal-search {
+  width: 100%;
+  margin-top: var(--sp-4);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 9px 12px;
+  font-family: var(--font-kai);
+  font-size: 16px; /* ≥16px 防 iOS 聚焦缩放 */
+  color: var(--fg);
+  outline: none;
+}
+.chat-modal-search:focus {
+  border-color: var(--accent);
+}
 .chat-modal-item:disabled {
   opacity: 0.5;
   cursor: default;

@@ -71,6 +71,7 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [addModal, setAddModal] = useState(null); // {items} | null
+  const [addQ, setAddQ] = useState(""); // 添加联系人搜索(YOR-169)
   const [profileOpen, setProfileOpen] = useState(false);
   const [lightbox, setLightbox] = useState(null); // 头像放大照片(细节⑩)
   const [mobileView, setMobileView] = useState("list"); // list | chat(窄屏单栏切换)
@@ -217,6 +218,7 @@ export default function Chat() {
     return d.name || (it && it.name) || "未命名";
   }
   async function openAdd() {
+    setAddQ("");
     try {
       const items = await getJSON("/api/library/characters");
       const list = Array.isArray(items) ? items : [];
@@ -379,9 +381,36 @@ export default function Chat() {
           <div className="chat-modal-card" onClick={(e) => e.stopPropagation()}>
             <button className="chat-modal-x" onClick={() => setAddModal(null)} aria-label="关闭">×</button>
             <h2 className="t-h2">从卡库添加联系人</h2>
+            {/* 卡库线性增长,平铺翻不动:前端过滤,范式同创作页「补素材」搜索(YOR-169) */}
+            {addModal.items.length > 0 && (
+              <input
+                className="chat-modal-search"
+                value={addQ}
+                onChange={(e) => setAddQ(e.target.value)}
+                placeholder="搜角色:名字 / 简介…"
+              />
+            )}
             <div className="chat-modal-list">
-              {addModal.items.length ? (
-                addModal.items.map((it, i) => {
+              {(() => {
+                const s = addQ.trim().toLowerCase();
+                const list = addModal.items.filter((it) => {
+                  if (!s) return true;
+                  const raw = (it && it.data && it.data.data) || (it && it.data) || {};
+                  const nm = raw.name || it.name || "";
+                  return (nm + " " + (raw.persona || raw.description || "")).toLowerCase().includes(s);
+                });
+                if (!list.length) {
+                  return (
+                    <p className="t-ui">
+                      {addModal.items.length
+                        ? `没有匹配「${addQ.trim()}」的角色卡。`
+                        : addModal.err
+                          ? "读库失败:" + addModal.err
+                          : "卡库里还没有角色卡。去创作造一个。"}
+                    </p>
+                  );
+                }
+                return list.map((it, i) => {
                   const raw = (it && it.data && it.data.data) || (it && it.data) || {};
                   const nm = raw.name || it.name || "未命名";
                   const inRoster = roster.some((r) => r.name === nm);
@@ -397,10 +426,8 @@ export default function Chat() {
                       <span className="t-meta">{inRoster ? "已添加" : "添加 →"}</span>
                     </button>
                   );
-                })
-              ) : (
-                <p className="t-ui">{addModal.err ? "读库失败:" + addModal.err : "卡库里还没有角色卡。去创作造一个。"}</p>
-              )}
+                });
+              })()}
             </div>
           </div>
         </div>
