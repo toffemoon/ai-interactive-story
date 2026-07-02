@@ -86,20 +86,22 @@ export default function Login() {
 
         {tab === "login" ? (
           <>
-            <input className="login-input" placeholder="邮箱或用户名" value={identifier} onChange={(e) => setIdentifier(e.target.value)} onKeyDown={onEnter} />
-            <input className="login-input" type="password" placeholder="密码" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter} />
+            {/* 手机键盘会自动首字母大写/纠错,把用户名悄悄改错 → 登录必败(YOR-158) */}
+            <input className="login-input" placeholder="邮箱或用户名" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" value={identifier} onChange={(e) => setIdentifier(e.target.value)} onKeyDown={onEnter} />
+            <input className="login-input" type="password" placeholder="密码" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter} />
           </>
         ) : (
           <>
-            <input className="login-input" type="email" placeholder="邮箱" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter} />
+            <input className="login-input" type="email" placeholder="邮箱" autoCapitalize="none" spellCheck={false} autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter} />
             <div className="login-coderow">
-              <input className="login-input" placeholder="邮箱验证码" value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={onEnter} />
+              {/* 数字键盘 + 系统验证码自动填充(YOR-158) */}
+              <input className="login-input" placeholder="邮箱验证码" inputMode="numeric" pattern="[0-9]*" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={onEnter} />
               <button className="login-codebtn" disabled={sending} onClick={sendCode}>
                 {sending ? "…" : "发送验证码"}
               </button>
             </div>
-            <input className="login-input" placeholder="用户名(可选)" value={username} onChange={(e) => setUsername(e.target.value)} onKeyDown={onEnter} />
-            <input className="login-input" type="password" placeholder="密码(至少 6 位)" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter} />
+            <input className="login-input" placeholder="用户名(可选)" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} onKeyDown={onEnter} />
+            <input className="login-input" type="password" placeholder="密码(至少 6 位)" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter} />
           </>
         )}
 
