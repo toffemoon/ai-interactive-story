@@ -377,7 +377,10 @@
   position: relative;
   width: min(480px, 92vw);
   max-height: 80vh;
-  overflow-y: auto;
+  /* 滚动下放给 .chat-modal-list:card 自己不滚,absolute 的关闭 × 才能恒钉右上(YOR-154) */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
@@ -397,11 +400,20 @@
   border-radius: var(--r-sm);
   cursor: pointer;
 }
+/* 命中区撑到 44×44,本体视觉不变(同 .chat-iconbtn 手法) */
+.chat-modal-x::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
 .chat-modal-list {
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
   margin-top: var(--sp-4);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 .chat-modal-item {
   display: flex;
