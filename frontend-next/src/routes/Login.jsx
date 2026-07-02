@@ -19,6 +19,10 @@ export default function Login() {
   const [sending, setSending] = useState(false);
   const [hint, setHint] = useState("");
 
+  // 网络层失败(断网/后端没起)fetch 抛英文 TypeError「Failed to fetch」,给人看中文(YOR-162);
+  // HTTP 错误在 authApi 里已是中文(data.detail || 请求失败),原样透传。
+  const zhErr = (e, fallback) => (e instanceof TypeError ? "网络连不上,稍后再试" : e.message || fallback);
+
   async function sendCode() {
     if (sending) return;
     if (!email.trim() || email.indexOf("@") < 0) {
@@ -31,7 +35,7 @@ export default function Login() {
       const d = await authApi("/api/auth/email/send_code", { email: email.trim(), purpose: "register" });
       setHint(d.dev_code ? `验证码已发(本地测试码:${d.dev_code})` : "验证码已发到邮箱,10 分钟内有效");
     } catch (e) {
-      setErr(e.message || "发送失败");
+      setErr(zhErr(e, "发送失败"));
     } finally {
       setSending(false);
     }
@@ -59,7 +63,7 @@ export default function Login() {
       onAuthed(data.user, data.token);
       navigate("/explore");
     } catch (e) {
-      setErr(e.message || "失败");
+      setErr(zhErr(e, "失败"));
     } finally {
       setBusy(false);
     }
