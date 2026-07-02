@@ -44,11 +44,13 @@ function useIsMobile(maxWidth = 860) {
 // 去中二英文(YOR-51):卡分类去英文副标、AI 助手不叫「执笔人/坊」、标题不叫「创作桌/The Atelier」。
 const KINDS = [
   // ph 是输入框 placeholder,手机端短一句即可(C3:原来一长串字段名在窄屏会被截断)。
-  { zh: "角色卡", k: "characters", ph: "说说这个角色……" },
-  { zh: "演出卡", k: "players", ph: "说说你要扮演的主角……" },
-  { zh: "设定卡 · 世界书", k: "worlds", ph: "说说这个世界 / 设定……" },
-  { zh: "故事书", k: "stories", ph: "说说这个故事……" },
+  // opening 是空台子的助手开场白,和 ph 同一套按类分句的范式(YOR-174)。
+  { zh: "角色卡", k: "characters", ph: "说说这个角色……", opening: "想造谁?说一个画面、一句话都行——聊着聊着,人就立起来了。" },
+  { zh: "演出卡", k: "players", ph: "说说你要扮演的主角……", opening: "想亲自扮演谁?说说主角的身份、来历,一句话也行——聊着聊着,卡就长出来了。" },
+  { zh: "设定卡 · 世界书", k: "worlds", ph: "说说这个世界 / 设定……", opening: "想搭什么样的世界?一条规则、一个地名都能起头——聊着聊着,世界就有了轮廓。" },
+  { zh: "故事书", k: "stories", ph: "说说这个故事……", opening: "想讲什么样的故事?一个开头、一句梗概都行——聊着聊着,书就翻开了。" },
 ];
+const OPENINGS = Object.fromEntries(KINDS.map((t) => [t.k, t.opening]));
 const IDENTIFY_EP = {
   characters: "/api/identify",
   worlds: "/api/identify_world",
@@ -103,9 +105,9 @@ function worldEntries(card) {
   return Array.isArray(c.entries) ? c.entries : null;
 }
 
-function blankDesk() {
+function blankDesk(kk) {
   return {
-    messages: [{ who: "ai", text: "想造哪张卡?说一个画面、一句话都行——聊着聊着,卡就长出来了。" }],
+    messages: [{ who: "ai", text: OPENINGS[kk] || "想造哪张卡?说一个画面、一句话都行——聊着聊着,卡就长出来了。" }],
     draft: {},
     filled: [],
     input: "",
@@ -117,7 +119,7 @@ function loadDesks() {
     const s = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
     if (s && s.characters && s.players && s.worlds && s.stories) return s;
   } catch (e) {}
-  return { characters: blankDesk(), players: blankDesk(), worlds: blankDesk(), stories: blankDesk() };
+  return { characters: blankDesk("characters"), players: blankDesk("players"), worlds: blankDesk("worlds"), stories: blankDesk("stories") };
 }
 function wrapCard(data) {
   return { spec: "chara_card_v2", spec_version: "2.0", data: { ...data, speech_rules: data.speech_rules || [], tags: data.tags || [] } };
@@ -259,7 +261,7 @@ export default function Create() {
     setDesks((ds) => ({
       ...ds,
       [kind]: {
-        ...blankDesk(),
+        ...blankDesk(kind),
         built: [...ds[kind].built, cardDraft],
         messages: [{ who: "ai", text: "《" + nm + "》放进台子了(本台第 " + (ds[kind].built.length + 1) + " 张)。说说下一张?" }],
       },
