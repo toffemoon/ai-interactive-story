@@ -39,6 +39,11 @@ export default function Login() {
 
   async function submit() {
     if (busy) return;
+    // 空提交别发请求:后端 401 的「邮箱/用户名或密码错误」会误导没填的人(镜像注册分支的前置校验范式)。
+    if (tab === "login") {
+      if (!identifier.trim()) return setErr("先填邮箱或用户名");
+      if (!password) return setErr("先填密码");
+    }
     if (tab === "register") {
       if (!email.trim() || email.indexOf("@") < 0) return setErr("邮箱格式不对");
       if (!code.trim()) return setErr("先填邮箱验证码");
