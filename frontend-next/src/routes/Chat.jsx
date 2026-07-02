@@ -203,6 +203,10 @@ export default function Chat() {
   function newChat() {
     const nm = activeName;
     if (!nm || busy) return;
+    // 破坏性操作:清空整段记录且不可找回。聊过(有自己发的消息)就先确认,镜像看板重开的 M12 范式;
+    // 只有自动开场白的对话不拦(没什么可丢的)。
+    const talked = (byKey[nm] || []).some((m) => m.who === "me");
+    if (talked && !window.confirm("新建对话会清空当前和 " + nm + " 的聊天记录,确定?")) return;
     delete sidsRef.current[nm];
     openedRef.current[nm] = false;
     setByKey((m) => {
