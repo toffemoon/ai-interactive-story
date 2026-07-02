@@ -180,10 +180,11 @@ export default function Explore() {
           </div>
         </div>
 
-        {/* 双轨切换 */}
+        {/* 双轨切换。切轨道时标签重置回「全部」:旧标签常不在新轨道的标签条里,
+            留着会变成看不见的过滤器把列表筛空(YOR-178)。 */}
         <div className="explore-tracks">
           {TRACKS.map((t) => (
-            <Chip key={t.key} active={track === t.key} onClick={() => setTrack(t.key)}>
+            <Chip key={t.key} active={track === t.key} onClick={() => { setTrack(t.key); setGenre("全部"); }}>
               {t.label}
             </Chip>
           ))}
