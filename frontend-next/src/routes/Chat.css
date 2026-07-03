@@ -7,6 +7,14 @@
   height: calc(100dvh - 52px);
   border-top: 1px solid var(--line);
 }
+/* 桌面:StaggeredMenu 唤出钮浮在左上、探到 ~66px,比壳的 52px 顶留白多一截,会挤住左栏「纯聊」头。
+   多让 16px 顶部,两栏头一起落到 y68(与探索页标题同高)、让开唤出钮;高度相应减不溢出(YOR-189)。 */
+@media (min-width: 721px) {
+  .chat {
+    margin-top: 16px;
+    height: calc(100dvh - 68px);
+  }
+}
 
 /* 左:联系人 */
 .chat-contacts {
