@@ -1038,6 +1038,28 @@
   color: var(--muted);
   text-align: center;
 }
+/* 发布前「本次将公开的卡」清单(YOR-192):消静默,上个故事残留的卡在这现形。 */
+.ct-pub-manifest {
+  margin-top: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--sunk);
+}
+.ct-pub-manifest-h {
+  color: var(--fg);
+}
+.ct-pub-manifest-list {
+  margin: var(--sp-2) 0 0;
+  padding-left: 1.2em;
+  color: var(--muted);
+  line-height: var(--lh-read);
+}
+.ct-pub-manifest-warn {
+  margin-top: var(--sp-2);
+  color: var(--accent);
+  line-height: var(--lh-read);
+}
 .ct-pub-foot {
   flex: none;
   border-top: 1px solid var(--line);
