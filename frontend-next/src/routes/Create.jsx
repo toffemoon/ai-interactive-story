@@ -456,9 +456,14 @@ export default function Create() {
         cover: pub.cover || "",
         tags,
       });
+      // 发布成功 = 一个故事装配完成。台子是「一故事一次性」,把四台全部归零 + 重置发布信息,
+      // 否则这批 built 卡会静默留到下个故事、再发布时被一起打包公开(YOR-191)。只在此成功分支清,
+      // catch 失败分支绝不清(避免误清用户还没发出去的卡);清台是缩小 localStorage 写入,不触发配额失败。
+      setDesks({ characters: blankDesk(), players: blankDesk(), worlds: blankDesk(), stories: blankDesk() });
+      setPub({ name: "", synopsis: "", cover: "", authorNote: "" });
       setPreviewOpen(false);
       setPreviewChar(null);
-      flash("已发布到探索 · 公开");
+      flash("已发布到探索 · 公开;台子已清空,可以开始下一个故事了");
     } catch (e) {
       flash("发布失败:" + e.message);
     } finally {
