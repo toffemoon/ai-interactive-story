@@ -7,29 +7,16 @@ import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
 import "./Mine.css";
 
-// 我的 · 个人中心。继承 ReconProfile;补 收藏 / 我创建的 / 账号设置 / 成就(YOR-68)/ 卡库竖卡分页(YOR-67)/
+// 我的 · 个人中心。继承 ReconProfile;补 收藏 / 我创建的 / 账号设置 / 卡库竖卡分页(YOR-67)/
 // 存档跨设备(YOR-22)/ 占位卡过滤(YOR-16)。登录相关端点对 guest 优雅降级。
 const TABS = [
   { key: "profile", label: "档案" },
   { key: "saves", label: "存档" },
   { key: "favorites", label: "收藏" },
   { key: "created", label: "我创建的" },
-  { key: "achievements", label: "成就" },
 ];
 const PAGE = 8;
 const FAV_KEY = "ais_favorites_v1";
-
-// 整蛊成就:大多靠本机轻量信号点亮,没有真后端追踪也能玩起来(YOR-68 轻量整蛊向)。
-const ACHIEVEMENTS = [
-  { id: "arrive", name: "初来乍到", desc: "你来了。就凭这个。", check: () => true },
-  { id: "social", name: "社交悍匪", desc: "在纯聊加了第一个联系人。", check: (s) => s.rosterCount > 0 },
-  { id: "creator", name: "无中生有", desc: "卡库里有了你亲手造的卡。", check: (s) => s.createdCount > 0 },
-  { id: "hoarder", name: "仓鼠成精", desc: "卡库攒到 5 张以上。", check: (s) => s.createdCount >= 5 },
-  { id: "player", name: "入戏太深", desc: "至少有一个进行中的故事。", check: (s) => s.hasGame },
-  { id: "collector", name: "始乱终弃", desc: "收藏过、又没怎么打开过。", check: (s) => s.favCount > 0 },
-  { id: "explorer", name: "翻箱倒柜", desc: "把「我的」每个分区都点了一遍。", check: (s) => s.visitedAll },
-  { id: "ghost", name: "薛定谔的存档", desc: "存档跨设备同步成功(需登录)。", check: (s) => s.savesSynced },
-];
 
 function avatarChar(name) {
   return (name || "?").trim().charAt(0) || "?";
@@ -54,7 +41,6 @@ export default function Mine() {
       return { stories: [], characters: [] };
     }
   });
-  const [visited, setVisited] = useState(() => new Set(["profile"]));
   const fileRef = useRef(null);
   // 子分区红线指示条:测量当前 tab 的位置/宽度,用 transform 平移过去(不再硬切 border-color)。
   const tabRefs = useRef([]);
@@ -88,7 +74,6 @@ export default function Mine() {
   }, [measureBar]);
 
   useEffect(() => setMe(user), [user]);
-  useEffect(() => setVisited((v) => new Set([...v, tab])), [tab]);
 
   // 我创建的(卡):本机/账号下非官方角色卡。
   useEffect(() => {
@@ -121,22 +106,6 @@ export default function Mine() {
     const cm = toCardModels("character", favs.characters || []);
     return [...sm, ...cm];
   }, [favs]);
-
-  const achState = {
-    rosterCount: (() => {
-      try {
-        const uid = user ? user.id : "";
-        return (JSON.parse(localStorage.getItem("ais_chat_roster_v1" + (uid ? "_u_" + uid : "")) || "[]")).length;
-      } catch (e) {
-        return 0;
-      }
-    })(),
-    createdCount: created.length,
-    hasGame: !!game,
-    favCount: (favs.stories || []).length + (favs.characters || []).length,
-    visitedAll: visited.size >= TABS.length,
-    savesSynced: Array.isArray(saves) && saves.length > 0 && !!(enabled && user),
-  };
 
   async function uploadAvatar(ev) {
     const f = ev.target.files && ev.target.files[0];
@@ -330,26 +299,6 @@ export default function Mine() {
         </section>
       )}
 
-      {/* 成就(整蛊 YOR-68) */}
-      {tab === "achievements" && (
-        <section className="mine-section">
-          <h2 className="t-h3 mine-sec-title">成就墙</h2>
-          <div className="mine-achs">
-            {ACHIEVEMENTS.map((a) => {
-              const got = a.check(achState);
-              return (
-                <div className={"mine-ach" + (got ? " is-got" : "")} key={a.id}>
-                  <div className="mine-ach-icon" aria-hidden="true">{got ? "★" : "☆"}</div>
-                  <div className="mine-ach-tx">
-                    <div className="mine-ach-name t-ui-sm">{got ? a.name : "??????"}</div>
-                    <div className="mine-ach-desc t-meta">{got ? a.desc : "尚未解锁"}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
     </div>
   );
 }
