@@ -426,6 +426,21 @@ export default function Create() {
     };
   }
 
+  // 发布前明列「本次将公开哪些卡」——消除混台发布的「静默」:上个故事残留在台上的卡会在这里现形(YOR-192)。
+  // 数据源与 publish 同为 deskCards 四路,保证「看到的 = 会发的」。secret 检测=卡的键里有 隐藏/真相/secret 且有内容。
+  function publishManifest() {
+    const hasSecret = (c) =>
+      Object.keys(c || {}).some((k) => /secret|隐藏|真相/i.test(k) && c[k] && String(c[k]).trim());
+    const chars = deskCards("characters"), worlds = deskCards("worlds"), stories = deskCards("stories"), players = deskCards("players");
+    return {
+      chars: chars.map((c) => ({ name: c.name || c.title || "未命名", secret: hasSecret(c) })),
+      worlds: worlds.length,
+      players: players.map((p) => p.name || p.title || "主角"),
+      story: stories.length ? stories[stories.length - 1].name || stories[stories.length - 1].title || "本故事" : null,
+      anySecret: chars.some(hasSecret),
+    };
+  }
+
   // 打包发布(公开):四台子成品 → 可玩预设落 /api/presets。
   async function publish() {
     if (busy) return;
@@ -896,6 +911,28 @@ export default function Create() {
               <textarea className="ct-pub-syn" rows={3} value={pub.synopsis} onChange={(e) => setPub((p) => ({ ...p, synopsis: e.target.value }))} placeholder="一句话介绍这个故事……" />
               <label className="ct-pub-label t-ui-sm">作者的话(可空)</label>
               <textarea className="ct-pub-syn" rows={3} value={pub.authorNote} onChange={(e) => setPub((p) => ({ ...p, authorNote: e.target.value }))} placeholder="想对玩家说的话、创作初衷……" />
+              {(() => {
+                const mf = publishManifest();
+                return (
+                  <div className="ct-pub-manifest">
+                    <div className="ct-pub-manifest-h t-ui-sm">本次将公开(发布 = 进探索 · 公开):</div>
+                    <ul className="ct-pub-manifest-list t-meta">
+                      <li>
+                        角色卡 ×{mf.chars.length}
+                        {mf.chars.length > 0 && ":" + mf.chars.map((c) => c.name + (c.secret ? " ⚠" : "")).join("、")}
+                      </li>
+                      {mf.worlds > 0 && <li>设定卡 · 世界书 ×{mf.worlds}</li>}
+                      {mf.players.length > 0 && <li>演出卡 ×{mf.players.length}:{mf.players.join("、")}</li>}
+                      {mf.story && <li>故事书:{mf.story}</li>}
+                    </ul>
+                    {mf.anySecret && (
+                      <div className="ct-pub-manifest-warn t-meta">
+                        ⚠ 标记的卡带「隐藏真相」等隐藏字段,会随卡一起公开。确认这些都是本次要发布的卡——若混进了别的故事的卡,回「查看本台已建」移除。
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               <div className="ct-pub-divider t-meta">↓ 下面是发布后玩家看到的详情页(实时跟着上面变)</div>
             </div>
             <div className="page detail">
