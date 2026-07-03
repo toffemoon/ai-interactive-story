@@ -24,7 +24,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.4em 1.6em;
+  /* 顶内边距上移「沐言」唤出钮:原 1.4em(钮到 y66)会挤住纯聊左栏头;
+     收到 0.4em 让钮落在壳的 52px 顶留白内(y6–50),纯聊等定高页的头就不再被压(YOR-189)。 */
+  padding: 0.4em 1.6em 1.4em;
   background: transparent;
   pointer-events: none;
   z-index: 20;
