@@ -437,6 +437,8 @@ export default function Create() {
       worlds: worlds.length,
       players: players.map((p) => p.name || p.title || "主角"),
       story: stories.length ? stories[stories.length - 1].name || stories[stories.length - 1].title || "本故事" : null,
+      // publish 只取 stories[last],故事书台多建的会被静默丢——如实披露被丢的张数,别让清单口径误导(YOR-192 复核②)。
+      storyExtra: Math.max(0, stories.length - 1),
       anySecret: chars.some(hasSecret),
     };
   }
@@ -923,7 +925,12 @@ export default function Create() {
                       </li>
                       {mf.worlds > 0 && <li>设定卡 · 世界书 ×{mf.worlds}</li>}
                       {mf.players.length > 0 && <li>演出卡 ×{mf.players.length}:{mf.players.join("、")}</li>}
-                      {mf.story && <li>故事书:{mf.story}</li>}
+                      {mf.story && (
+                        <li>
+                          故事书:{mf.story}
+                          {mf.storyExtra > 0 && `(只发这一张;台上另有 ${mf.storyExtra} 张故事书不会发布)`}
+                        </li>
+                      )}
                     </ul>
                     {mf.anySecret && (
                       <div className="ct-pub-manifest-warn t-meta">
