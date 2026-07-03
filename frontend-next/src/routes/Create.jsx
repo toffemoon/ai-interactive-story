@@ -456,9 +456,19 @@ export default function Create() {
         cover: pub.cover || "",
         tags,
       });
+      // 发布成功 = 一个故事装配完成。台子是「一故事一次性」,把四台全部归零 + 重置发布信息,
+      // 否则这批 built 卡会静默留到下个故事、再发布时被一起打包公开(YOR-191)。只在此成功分支清,
+      // catch 失败分支绝不清(避免误清用户还没发出去的卡)。
+      const cleared = { characters: blankDesk(), players: blankDesk(), worlds: blankDesk(), stories: blankDesk() };
+      // 先直接落 localStorage 再 setState:若用户发布成功后立刻离开创作页(组件卸载),setDesks 会成 no-op,
+      // 而含旧卡的 desks 早已被 [desks] useEffect 写盘 → 下次进创作台 loadDesks 读回旧卡、泄漏复现。
+      // 直接写盘让清台不依赖组件仍挂载(缩小写入,不触发配额失败)。
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(cleared)); } catch (e) {}
+      setDesks(cleared);
+      setPub({ name: "", synopsis: "", cover: "", authorNote: "" });
       setPreviewOpen(false);
       setPreviewChar(null);
-      flash("已发布到探索 · 公开");
+      flash("已发布到探索 · 公开;台子已清空,可以开始下一个故事了");
     } catch (e) {
       flash("发布失败:" + e.message);
     } finally {
