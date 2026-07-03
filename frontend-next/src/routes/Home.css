@@ -310,6 +310,14 @@
 .home-edit-btn:active {
   transform: scale(0.94);
 }
+/* 桌面:放回右下角。dock 居中(≤920px)、铅笔在屏幕最右下,不会碰居中的「发送」;
+   移动端仍留右上(dock 近满宽,右下会撞发送,YOR-179)。 */
+@media (min-width: 721px) {
+  .home-edit-btn {
+    top: auto;
+    bottom: clamp(14px, 4vh, 36px);
+  }
+}
 
 /* 编辑态:立绘可拖动 + 虚线提示 */
 .home-portrait.is-editing {
