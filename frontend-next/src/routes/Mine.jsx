@@ -37,7 +37,7 @@ function avatarChar(name) {
 
 export default function Mine() {
   const navigate = useNavigate();
-  const { user, enabled, logout } = useAuth();
+  const { user, enabled, logout, patchUser } = useAuth();
   const { game } = useGame();
   const [tab, setTab] = useState("profile");
   const [me, setMe] = useState(user); // 本地档案副本(头像/昵称改后即时反映)
@@ -158,7 +158,9 @@ export default function Mine() {
         x.drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, S, S);
         const dataUrl = c.toDataURL("image/jpeg", 0.85);
         const r = await postJSON("/api/my/avatar", { avatar: dataUrl });
-        setMe((u) => ({ ...(u || {}), avatar: r.avatar || dataUrl }));
+        const nextAvatar = r.avatar || dataUrl;
+        setMe((u) => ({ ...(u || {}), avatar: nextAvatar }));
+        patchUser({ avatar: nextAvatar }); // 回写 context,切走再回不被旧 user 盖回(YOR-186)
       } catch (e) {
         /* ignore */
       } finally {
@@ -174,7 +176,9 @@ export default function Mine() {
     setSaving(true);
     try {
       const r = await postJSON("/api/my/display_name", { display_name: nm });
-      setMe((u) => ({ ...(u || {}), display_name: r.display_name || nm }));
+      const nextName = r.display_name || nm;
+      setMe((u) => ({ ...(u || {}), display_name: nextName }));
+      patchUser({ display_name: nextName }); // 回写 context,切走再回不被旧 user 盖回(YOR-186)
       setNameEdit("");
     } catch (e) {
       /* ignore */
