@@ -364,10 +364,10 @@ html[data-theme="paper"] .shell-pillnav {
   background: var(--panel);
   color: var(--fg);
   box-shadow: var(--shadow-pop);
-  transition: transform var(--dur-fast) var(--ease-out),
+  transition: transform 0.3s var(--ease-out),
     border-color var(--dur-fast) var(--ease-out);
 }
-.resume-bar:hover {
+.resume-bar:not(.is-retracted):hover {
   transform: translateY(-2px);
   border-color: var(--accent-2);
 }
@@ -408,6 +408,12 @@ html[data-theme="paper"] .shell-pillnav {
 @media (max-width: 720px) {
   .resume-bar {
     bottom: calc(var(--sp-4) + env(safe-area-inset-bottom));
+  }
+  /* 滚到探索底部时向右收成小把手,让开分页「下一页」;只露脉冲圆点,仍可点 → 继续游玩(YOR-187)。
+     收起仅手机生效(桌面浮条不挡居中分页)。 */
+  .resume-bar.is-retracted {
+    transform: translateX(calc(100% - 46px));
+    box-shadow: var(--shadow-card);
   }
 }
 
