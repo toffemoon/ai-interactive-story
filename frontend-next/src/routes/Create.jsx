@@ -64,6 +64,7 @@ const LABELS = {
   timeline: "时间线", events: "事件节点", main: "主线", anchor: "锚点", tension: "矛盾",
 };
 const STORE_KEY = "ais_create_desks_v1";
+const KI_KEY = "ais_create_ki_v1"; // 记住当前卡种 tab(YOR-200)
 // 这些 key 不当文本字段渲染:name/title 已在卡名展示;avatar/image/cover 是图(base64 data-URI),
 // 只走缩略图,别把 base64 大串当普通字段铺进预览(#92 上传图后的回归)。
 const NON_FIELD_KEYS = ["name", "character_id", "id", "title", "avatar", "image", "cover"];
@@ -135,7 +136,15 @@ function mergeWorldBooks(worldBooks) {
 export default function Create() {
   const { user } = useAuth();
   const isMobile = useIsMobile();
-  const [ki, setKi] = useState(0);
+  const [ki, setKi] = useState(() => {
+    // 记住上次的卡种 tab:刷新 / 切走再回来不重置回角色卡(YOR-200)。
+    try {
+      const n = parseInt(localStorage.getItem(KI_KEY) || "", 10);
+      return Number.isInteger(n) && n >= 0 && n < KINDS.length ? n : 0;
+    } catch (e) {
+      return 0;
+    }
+  });
   const [desks, setDesks] = useState(loadDesks);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState("");
@@ -171,6 +180,13 @@ export default function Create() {
       }
     }
   }, [desks]);
+
+  // 记住当前卡种 tab(YOR-200):切走 / 刷新再回来续上,不重置回角色卡。
+  useEffect(() => {
+    try {
+      localStorage.setItem(KI_KEY, String(ki));
+    } catch (e) {}
+  }, [ki]);
 
   useEffect(() => {
     const el = chatRef.current;
