@@ -72,7 +72,7 @@ export default function ImageCropField({
           disabled
           title="自动生成图片(暂未开放,留位)"
         >
-          自动生成
+          自动生成(暂未开放)
         </button>
       </div>
       <button
@@ -113,7 +113,7 @@ export default function ImageCropField({
             />
           </div>
           <div className="icf-cropper-bar">
-            <div className="icf-cropper-tip t-meta">拖动取景 · 滑杆或滚轮缩放</div>
+            <div className="icf-cropper-tip t-meta">拖动取景 · 捏合 / 滚轮 / 滑杆缩放</div>
             <input
               className="icf-zoom"
               type="range"
