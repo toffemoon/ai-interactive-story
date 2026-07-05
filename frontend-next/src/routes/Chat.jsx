@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../components/ui";
+import { useNavigate } from "../lib/transitionNav";
 import { postJSON, getJSON } from "../lib/api";
 import { useAuth } from "../state/auth";
 import "./Chat.css";
@@ -43,6 +44,7 @@ function fmtTime(t) {
 const TIME_GAP = 5 * 60 * 1000; // 间隔 > 5 分钟才再插一条时间(类微信)
 
 export default function Chat() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const uid = user ? user.id : "";
   const ROSTER_KEY = "ais_chat_roster_v1" + (uid ? "_u_" + uid : "");
@@ -399,7 +401,14 @@ export default function Chat() {
                   );
                 })
               ) : (
-                <p className="t-ui">{addModal.err ? "读库失败:" + addModal.err : "卡库里还没有角色卡。去创作造一个。"}</p>
+                <div className="chat-modal-empty">
+                  <p className="t-ui">{addModal.err ? "读库失败:" + addModal.err : "卡库里还没有角色卡。"}</p>
+                  {addModal.err ? (
+                    <Button variant="line" onClick={openAdd}>重试</Button>
+                  ) : (
+                    <Button variant="primary" onClick={() => { setAddModal(null); navigate("/create"); }}>去创作一张 →</Button>
+                  )}
+                </div>
               )}
             </div>
           </div>
