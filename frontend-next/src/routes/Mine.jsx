@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "../lib/transitionNav";
 import { Button, Input, CardShelf } from "../components/ui";
+import CharDetailModal from "../components/CharDetailModal";
 import { getJSON, postJSON } from "../lib/api";
 import { toCardModels } from "../lib/cardModel";
 import { useAuth } from "../state/auth";
@@ -40,6 +41,7 @@ export default function Mine() {
   const { user, enabled, logout } = useAuth();
   const { game } = useGame();
   const [tab, setTab] = useState("profile");
+  const [detail, setDetail] = useState(null); // 角色卡「详情」弹层:CardModel | null(YOR-193)
   const [me, setMe] = useState(user); // 本地档案副本(头像/昵称改后即时反映)
   const [nameEdit, setNameEdit] = useState("");
   const [saving, setSaving] = useState(false);
@@ -121,6 +123,12 @@ export default function Mine() {
     const cm = toCardModels("character", favs.characters || []);
     return [...sm, ...cm];
   }, [favs]);
+
+  // 卡片「详情」去向:故事卡 → 详情页(带 preset);角色卡 → 详情弹层。与探索页同一套(YOR-193 修死按钮)。
+  const openCard = (m) =>
+    m.kind === "story"
+      ? navigate(`/story/${encodeURIComponent(m.id)}`, { state: { preset: m.raw } })
+      : setDetail(m);
 
   const achState = {
     rosterCount: (() => {
@@ -298,7 +306,7 @@ export default function Mine() {
         <section className="mine-section">
           <h2 className="t-h3 mine-sec-title">我的收藏</h2>
           {favModels.length ? (
-            <CardShelf models={favModels} onOpen={() => {}} />
+            <CardShelf models={favModels} onOpen={openCard} />
           ) : (
             <p className="t-ui mine-sub">还没有收藏。在探索 / 故事详情点收藏,故事和角色会出现在这里。</p>
           )}
@@ -311,7 +319,7 @@ export default function Mine() {
           <h2 className="t-h3 mine-sec-title">我创建的卡</h2>
           {createdModels.length ? (
             <>
-              <CardShelf models={createdShown} onOpen={() => {}} />
+              <CardShelf models={createdShown} onOpen={openCard} />
               {createdPageCount > 1 && (
                 <div className="mine-pager">
                   <Button variant="line" disabled={createdPage <= 1} onClick={() => setCreatedPage((p) => Math.max(1, p - 1))}>
@@ -350,6 +358,8 @@ export default function Mine() {
           </div>
         </section>
       )}
+
+      {detail && <CharDetailModal model={detail} onClose={() => setDetail(null)} />}
     </div>
   );
 }
