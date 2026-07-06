@@ -5,7 +5,7 @@ import { Button } from "../components/ui";
 import { getJSON, postJSON, newSessionId } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
-import { PORTRAIT, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
+import { PORTRAIT, INTRO, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
 import "./Home.css";
 
 // 立绘主页(家)· YOR-136 · galgame 式登录后首屏。
@@ -59,12 +59,15 @@ export default function Home({ testMode = false }) {
 
   // 新手引导(onboarding):obStep=当前拍 id(null=非引导态);obEcho=回声(称呼/口味);obInput=引导中输入框。
   const [obStep, setObStep] = useState(null);
+  const [obIntro, setObIntro] = useState(-1); // 入场演出帧索引(-1=非演出):背身→回头→转正面进登记
   const [obEcho, setObEcho] = useState({});
   const [obInput, setObInput] = useState("");
   const obBeat = obStep ? beatById(obStep) : null;
+  const introFrame = obIntro >= 0 ? INTRO[obIntro] : null;
+  const obActive = obIntro >= 0 || !!obBeat;
 
   const displayName = cardName(card) || (isTangmu ? "糖沐" : "角色");
-  const image = obBeat ? PORTRAIT[obBeat.emo] || TANGMU_IMG : isTangmu ? TANGMU_IMG : cardImageOf(card);
+  const image = introFrame ? introFrame.img : obBeat ? PORTRAIT[obBeat.emo] || TANGMU_IMG : isTangmu ? TANGMU_IMG : cardImageOf(card);
   const hasSaves = !!game || serverSaves.length > 0;
   const isReturning = hasSaves || messages.length > 0;
   const greeting = isReturning ? GREETING_BACK : GREETING_NEW;
@@ -97,14 +100,28 @@ export default function Home({ testMode = false }) {
   useEffect(() => {
     if (testMode) {
       setObEcho({});
-      setObStep(FIRST_BEAT);
+      setObIntro(0); // 从入场演出(背身)开始
       return;
     }
     if (!isOnboarded() && !restoredRef.current) {
       setObEcho(loadEcho());
-      setObStep(FIRST_BEAT);
+      setObIntro(0);
     }
   }, []);
+
+  // 入场演出推进:定时切帧(背身→回头),播完转身正面 → 进登记拍(name)。
+  useEffect(() => {
+    if (obIntro < 0) return undefined;
+    const cur = INTRO[obIntro];
+    const t = setTimeout(() => {
+      if (obIntro + 1 < INTRO.length) setObIntro(obIntro + 1);
+      else {
+        setObIntro(-1);
+        setObStep(FIRST_BEAT);
+      }
+    }, (cur && cur.dur) || 1200);
+    return () => clearTimeout(t);
+  }, [obIntro]);
 
   // 拉默认糖沐卡(《新人入店》characters 里 name 含「糖沐」)。
   useEffect(() => {
@@ -254,7 +271,7 @@ export default function Home({ testMode = false }) {
       {/* 立绘层(换角色淡入:只动 opacity) */}
       <motion.div
         className="home-portrait"
-        key={obBeat ? "ob-" + obBeat.emo : displayName}
+        key={introFrame ? "intro-" + obIntro : obBeat ? "ob-" + obBeat.emo : displayName}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
@@ -278,16 +295,23 @@ export default function Home({ testMode = false }) {
       {/* 前景 UI(全屏态隐藏) */}
       {!fullscreen && (
         <div className="home-ui">
+          {/* 新手引导:糖沐台词气泡,贴在立绘头部一侧(galgame 式,台词随角色) */}
+          {(obBeat || (introFrame && introFrame.line)) && (
+            <div className="home-ob-bubble">
+              <div className="home-ob-bubble-head">
+                <span className="home-dlg-name t-kai">糖沐</span>
+                {obBeat && (
+                  <button className="home-ob-skip" onClick={() => endOnboarding()} title="跳过引导,直接进店">跳过</button>
+                )}
+              </div>
+              <p className="home-ob-line t-read">{obBeat ? obBeat.line(obEcho) : introFrame.line}</p>
+            </div>
+          )}
           {/* 底部交互坞:主按钮行(贴对话框上方右对齐)+ 对话框聚成一组,不再悬空 */}
           <div className="home-dock">
             {obBeat ? (
-              /* 新手引导态:糖沐脚本台词 + 选项 chip +(登记拍)输入框 */
-              <div className="home-dialogue home-ob">
-                <div className="home-dlg-head">
-                  <span className="home-dlg-name t-kai">糖沐</span>
-                  <button className="home-tool home-ob-skip" onClick={() => endOnboarding()} title="跳过引导,直接进店">跳过</button>
-                </div>
-                <p className="home-dlg-line t-read">{obBeat.line(obEcho)}</p>
+              /* 新手引导态:底部只留输入框 + 选项 chip(台词在头侧气泡) */
+              <div className="home-ob-tray">
                 {obBeat.field && (
                   <div className="home-composer">
                     <input
@@ -317,7 +341,7 @@ export default function Home({ testMode = false }) {
                   </div>
                 )}
               </div>
-            ) : (
+            ) : obActive ? null : (
               <>
                 <div className="home-actions">
                   <Button variant="primary" className="home-go" onClick={() => navigate("/explore")}>

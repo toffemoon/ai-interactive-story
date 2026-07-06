@@ -38,6 +38,13 @@ function tasteQuote(echo) {
 
 export const FIRST_BEAT = "name";
 
+// 入场演出:进 onboarding 先播这段(背身 → 回头),播完转身正面(tangmu02 好奇)进登记拍。
+// 每帧 { img, line, dur(ms) };line 空则不显气泡(纯立绘演出)。
+export const INTRO = [
+  { img: "/home/tangmu11.png", line: "", dur: 1300 }, // 背身,忙店里的活
+  { img: "/home/tangmu12.png", line: "哎?", dur: 1200 }, // 回头,察觉生面孔
+];
+
 export const BEATS = [
   {
     id: "name",
