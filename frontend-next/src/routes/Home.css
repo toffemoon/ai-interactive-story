@@ -396,6 +396,13 @@
   display: none !important;
 }
 
+/* onboarding 全屏接管:隐藏导航壳 chrome(菜单头条「沐言」+ 续玩浮条),
+   新客引导期间不露导航;引导结束自动恢复。 */
+.ais-onboarding .staggered-menu-header,
+.ais-onboarding .resume-bar {
+  display: none !important;
+}
+
 /* —— modal(换角色 / 存档 / 记录)—— */
 .home-modal {
   position: fixed;

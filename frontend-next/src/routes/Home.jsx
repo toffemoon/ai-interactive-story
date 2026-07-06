@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { Button } from "../components/ui";
 import { getJSON, postJSON, newSessionId } from "../lib/api";
 import { useAuth } from "../state/auth";
@@ -185,6 +185,14 @@ export default function Home({ testMode = false }) {
     };
   }, [fullscreen]);
 
+  // onboarding 期间 = 全屏接管:给 root 挂类,隐藏导航壳 chrome(菜单头条 / 续玩浮条),
+  // 新客引导期间不露导航,真·满铺。引导结束(obActive→false)自动恢复。
+  useEffect(() => {
+    const el = document.documentElement;
+    el.classList.toggle("ais-onboarding", obActive);
+    return () => el.classList.remove("ais-onboarding");
+  }, [obActive]);
+
   async function send() {
     const text = input.trim();
     if (!text || busy || !card) return;
@@ -272,20 +280,24 @@ export default function Home({ testMode = false }) {
       <div className="home-bg" style={{ backgroundImage: `url("${BG_IMG}")` }} aria-hidden="true" />
       <div className="home-bg-scrim" aria-hidden="true" />
 
-      {/* 立绘层(换角色淡入:只动 opacity) */}
-      <motion.div
-        className="home-portrait"
-        key={introFrame ? "intro-" + obIntro : obBeat ? "ob-" + obBeat.emo : displayName}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      >
-        {image ? (
-          <img src={image} alt={displayName} draggable="false" />
-        ) : (
-          <span className="home-portrait-ph t-kai">{displayName.slice(0, 2)}</span>
-        )}
-      </motion.div>
+      {/* 立绘层:换姿势 = 交叉溶解(新旧两层叠置同淡,避免硬切像 PPT)。
+          .home-portrait 是 position:absolute inset:0,新旧两层完全重叠 → 真交叉淡入淡出。 */}
+      <AnimatePresence>
+        <motion.div
+          className="home-portrait"
+          key={introFrame ? "intro-" + obIntro : obBeat ? "ob-" + obBeat.emo : displayName}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {image ? (
+            <img src={image} alt={displayName} draggable="false" />
+          ) : (
+            <span className="home-portrait-ph t-kai">{displayName.slice(0, 2)}</span>
+          )}
+        </motion.div>
+      </AnimatePresence>
 
       {/* 入场演出:点屏任意处加速推进当前帧(VN 式 tap-to-advance);只在入场存在。
           入场态无其它可交互元素,整屏捕获层置顶不抢占任何点击。 */}

@@ -17,7 +17,8 @@ export default function AppShell({ children }) {
 
   const immersive = loc.pathname.startsWith("/play");
   // 立绘主页(家):背景+立绘满铺(无纸页顶留白);其余纸页保留顶部 52px 给浮动开关留白。
-  const atHome = loc.pathname.startsWith("/home");
+  // /test = onboarding 测试页,渲染的也是 Home,同样要满铺(否则顶部 52px 壳留白会露出棕条)。
+  const atHome = loc.pathname.startsWith("/home") || loc.pathname.startsWith("/test");
 
   if (immersive) {
     return <main className="shell-main shell-main--immersive">{children}</main>;
