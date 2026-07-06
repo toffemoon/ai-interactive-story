@@ -57,12 +57,23 @@
   object-fit: contain;
   object-position: top center;
   filter: drop-shadow(0 14px 44px rgba(0, 0, 0, 0.5));
-  opacity: 0;
-  transition: opacity 0.75s cubic-bezier(0.22, 1, 0.36, 1);
+  opacity: 1; /* 非当前层:停在底部保持可见,被上层新图盖住(整段过渡不透出背景 → 少 PPT 感) */
+  z-index: 1;
 }
-/* 当前层不透明;非当前层 opacity 0 → 换层即交叉溶解 */
+/* 当前层:置顶,播「新图淡入 + 轻微缩放落定」;淡入完由 JS 清掉底层,不留重影 */
 .home-portrait-img.is-on {
-  opacity: 1;
+  z-index: 2;
+  animation: posePlace 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes posePlace {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scale(1.035);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
 }
 .home-portrait-ph {
   align-self: center;

@@ -31,24 +31,27 @@ export const PORTRAIT = {
   wry: "/home/tangmu10.png",
 };
 
-// 每张立绘「头中心」占图比例(x,y ∈ 0..1),用来把台词气泡竖向对齐到头的高度、并贴在头侧边。
-// 数值按立绘目测估(全身居中构图,头在偏上中央);后期真机微调只改这两张表。
+// 每张立绘的定位锚点(占图比例 0..1),从立绘 alpha 通道实测(tools/analyze_tangmu_anchors.py,PS精修后可重跑):
+//   x    头中心横向(参考用)
+//   y    头中心纵向 → 气泡纵向中心对齐到这里(齐头高)
+//   edge 气泡纵向范围内的立绘身体左轮廓 → 气泡右缘落在这之前(避让该姿势的头/肩/手臂)
+// 例:spark(tangmu03 抬拳)edge=0.211 明显更靠左,气泡就得更左才不撞拳头。真机微调改这张表即可。
 export const HEAD = {
-  smile: { x: 0.47, y: 0.13 },
-  curious: { x: 0.47, y: 0.14 },
-  spark: { x: 0.45, y: 0.13 },
-  whisper: { x: 0.46, y: 0.13 },
-  proud: { x: 0.46, y: 0.13 },
-  offer: { x: 0.46, y: 0.13 },
-  bow: { x: 0.46, y: 0.14 },
-  surprise: { x: 0.46, y: 0.12 },
-  wave: { x: 0.46, y: 0.12 },
-  wry: { x: 0.46, y: 0.13 },
+  smile: { x: 0.502, y: 0.153, edge: 0.355 }, // tangmu01 常态笑
+  curious: { x: 0.517, y: 0.16, edge: 0.326 }, // tangmu02 歪头好奇
+  spark: { x: 0.479, y: 0.188, edge: 0.211 }, // tangmu03 眼亮抬拳
+  whisper: { x: 0.465, y: 0.194, edge: 0.267 }, // tangmu04 凑近小声
+  proud: { x: 0.558, y: 0.153, edge: 0.369 }, // tangmu05 得意
+  offer: { x: 0.476, y: 0.146, edge: 0.318 }, // tangmu06 递出
+  bow: { x: 0.479, y: 0.176, edge: 0.275 }, // tangmu07 温和欠身
+  surprise: { x: 0.533, y: 0.187, edge: 0.316 }, // tangmu08 惊讶
+  wave: { x: 0.547, y: 0.206, edge: 0.341 }, // tangmu09 挥手
+  wry: { x: 0.48, y: 0.149, edge: 0.279 }, // tangmu10 无奈笑
 };
-// 入场帧(背身 tangmu11 / 回头 tangmu12)的头中心
+// 入场帧(背身 tangmu11 / 回头 tangmu12)
 export const INTRO_HEAD = [
-  { x: 0.48, y: 0.1 },
-  { x: 0.47, y: 0.13 },
+  { x: 0.493, y: 0.153, edge: 0.354 }, // tangmu11 背身
+  { x: 0.499, y: 0.112, edge: 0.363 }, // tangmu12 回头
 ];
 
 // 化用玩家口味原话(截断,避免太长)。

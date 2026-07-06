@@ -215,13 +215,11 @@ export default function Home({ testMode = false }) {
       if (!img) return;
       const r = img.getBoundingClientRect();
       if (!r.width) return;
-      const headCX = r.left + headAnchor.x * r.width;
+      // 纵向:气泡中心对齐该姿势的头高(headAnchor.y,实测);
+      // 横向:气泡右缘落在该姿势立绘身体左轮廓(headAnchor.edge,实测)之前,留 0.025 图宽余量。
       const headCY = r.top + headAnchor.y * r.height;
-      // 气泡右缘:头左侧(跟随头) 与 立绘身体左轮廓之前(避免遮身体)取更靠左者。
-      // 立绘全身居中构图,身体/肩膀左缘约在图宽 0.30 处;右缘钳到 0.29 之前,保证不压立绘。
-      const headSide = headCX - r.width * 0.15;
-      const bodyClear = r.left + r.width * 0.29;
-      setObBubblePos({ left: Math.round(Math.min(headSide, bodyClear)), top: Math.round(headCY) });
+      const rightEdge = r.left + (headAnchor.edge - 0.025) * r.width;
+      setObBubblePos({ left: Math.round(rightEdge), top: Math.round(headCY) });
     };
     compute();
     window.addEventListener("resize", compute);
@@ -379,6 +377,18 @@ export default function Home({ testMode = false }) {
                 alt={obLayer === i ? displayName : ""}
                 aria-hidden={obLayer !== i}
                 draggable="false"
+                onAnimationEnd={
+                  obLayer === i
+                    ? () =>
+                        setObSlots((s) => {
+                          const o = 1 - i; // 新图淡入完 → 清掉底层旧图,不留重影
+                          if (s[o] == null) return s;
+                          const n = [...s];
+                          n[o] = null;
+                          return n;
+                        })
+                    : undefined
+                }
               />
             ) : null
           )
