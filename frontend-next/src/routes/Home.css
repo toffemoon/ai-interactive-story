@@ -334,8 +334,10 @@
   color: #fff;
 }
 
-/* 移动:气泡收窄、移到立绘下方靠上(头侧空间不足) */
-@media (max-width: 720px) {
+/* 移动 + 竖版视口:气泡收窄、移到立绘下方靠上。
+   头侧只在宽横版留得住;竖版(orientation: portrait)立绘按高度放大会横向铺满,
+   721–900 的竖版平板会把左上气泡压到人物身上(实测 820×1180 重叠~130px),故一并下沉。 */
+@media (max-width: 720px), (orientation: portrait) {
   .home-ob-bubble {
     left: 12px;
     right: 12px;
@@ -351,6 +353,15 @@
     opacity: 0;
     transform: translateY(8px);
   }
+}
+
+/* 入场演出点击加速:整屏透明捕获层(VN 式 tap-to-advance)。
+   z 置于气泡(4)之上,让台词区也能点;透明不遮画面,入场态无其它交互元素不误伤。 */
+.home-ob-introcatch {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  cursor: pointer;
 }
 
 /* 全屏:整屏点击捕获层(点任意处退出);z 在立绘之上、退出角标之下 */

@@ -109,17 +109,21 @@ export default function Home({ testMode = false }) {
     }
   }, []);
 
-  // 入场演出推进:定时切帧(背身→回头),播完转身正面 → 进登记拍(name)。
+  // 入场演出推进:一帧前进一步(背身→回头→转正进登记拍 name)。
+  // 定时自动播 + 点击加速走同一逻辑:点击改 obIntro → 下方 effect 重跑,
+  // cleanup 清掉待触发的定时器,不会自动+手动双跳。
+  function advanceIntro() {
+    if (obIntro < 0) return;
+    if (obIntro + 1 < INTRO.length) setObIntro(obIntro + 1);
+    else {
+      setObIntro(-1);
+      setObStep(FIRST_BEAT);
+    }
+  }
   useEffect(() => {
     if (obIntro < 0) return undefined;
     const cur = INTRO[obIntro];
-    const t = setTimeout(() => {
-      if (obIntro + 1 < INTRO.length) setObIntro(obIntro + 1);
-      else {
-        setObIntro(-1);
-        setObStep(FIRST_BEAT);
-      }
-    }, (cur && cur.dur) || 1200);
+    const t = setTimeout(advanceIntro, (cur && cur.dur) || 1200);
     return () => clearTimeout(t);
   }, [obIntro]);
 
@@ -282,6 +286,10 @@ export default function Home({ testMode = false }) {
           <span className="home-portrait-ph t-kai">{displayName.slice(0, 2)}</span>
         )}
       </motion.div>
+
+      {/* 入场演出:点屏任意处加速推进当前帧(VN 式 tap-to-advance);只在入场存在。
+          入场态无其它可交互元素,整屏捕获层置顶不抢占任何点击。 */}
+      {introFrame && <div className="home-ob-introcatch" onClick={advanceIntro} aria-hidden="true" />}
 
       {/* 全屏:整屏点击捕获层(点任意处退出);只在全屏存在,不干扰常态交互、无冒泡竞态 */}
       {fullscreen && <div className="home-fs-catcher" onClick={() => setFullscreen(false)} aria-hidden="true" />}
