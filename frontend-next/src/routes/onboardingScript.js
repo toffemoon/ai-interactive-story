@@ -30,6 +30,26 @@ export const PORTRAIT = {
   wry: "/home/tangmu10.png",
 };
 
+// 每张立绘「头中心」占图比例(x,y ∈ 0..1),用来把台词气泡竖向对齐到头的高度、并贴在头侧边。
+// 数值按立绘目测估(全身居中构图,头在偏上中央);后期真机微调只改这两张表。
+export const HEAD = {
+  smile: { x: 0.47, y: 0.13 },
+  curious: { x: 0.47, y: 0.14 },
+  spark: { x: 0.45, y: 0.13 },
+  whisper: { x: 0.46, y: 0.13 },
+  proud: { x: 0.46, y: 0.13 },
+  offer: { x: 0.46, y: 0.13 },
+  bow: { x: 0.46, y: 0.14 },
+  surprise: { x: 0.46, y: 0.12 },
+  wave: { x: 0.46, y: 0.12 },
+  wry: { x: 0.46, y: 0.13 },
+};
+// 入场帧(背身 tangmu11 / 回头 tangmu12)的头中心
+export const INTRO_HEAD = [
+  { x: 0.48, y: 0.1 },
+  { x: 0.47, y: 0.13 },
+];
+
 // 化用玩家口味原话(截断,避免太长)。
 function tasteQuote(echo) {
   const t = (echo && echo.taste) || "";

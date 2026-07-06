@@ -265,10 +265,10 @@
   color: #f1e7d6;
   animation: obBubbleIn 320ms var(--ease-out);
 }
+/* 气泡入场只淡不移:定位改由 JS 贴头(inline transform),避免关键帧动 transform 与之打架。 */
 @keyframes obBubbleIn {
   from {
     opacity: 0;
-    transform: translateY(8px);
   }
 }
 .home-ob-bubble-head {

@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "../components/ui";
 import { getJSON, postJSON, newSessionId } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
-import { PORTRAIT, INTRO, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
+import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
 import "./Home.css";
 
 // 立绘主页(家)· YOR-136 · galgame 式登录后首屏。
@@ -62,9 +62,12 @@ export default function Home({ testMode = false }) {
   const [obIntro, setObIntro] = useState(-1); // 入场演出帧索引(-1=非演出):背身→回头→转正面进登记
   const [obEcho, setObEcho] = useState({});
   const [obInput, setObInput] = useState("");
+  const [obBubblePos, setObBubblePos] = useState(null); // 台词气泡贴头定位 {left,top}(px);null=走 CSS(窄屏/竖版底部)
   const obBeat = obStep ? beatById(obStep) : null;
   const introFrame = obIntro >= 0 ? INTRO[obIntro] : null;
   const obActive = obIntro >= 0 || !!obBeat;
+  // 当前姿势的「头中心」锚点(入场帧 / 差分 emo);用于把气泡贴到头侧、齐头高。
+  const headAnchor = introFrame ? INTRO_HEAD[obIntro] : obBeat ? HEAD[obBeat.emo] : null;
 
   const displayName = cardName(card) || (isTangmu ? "糖沐" : "角色");
   const image = introFrame ? introFrame.img : obBeat ? PORTRAIT[obBeat.emo] || TANGMU_IMG : isTangmu ? TANGMU_IMG : cardImageOf(card);
@@ -193,6 +196,26 @@ export default function Home({ testMode = false }) {
     return () => el.classList.remove("ais-onboarding");
   }, [obActive]);
 
+  // 台词气泡「贴头侧、齐头高」定位:按当前姿势头中心算屏幕坐标,把气泡右缘锚到头左侧一点、纵向中心对齐头高。
+  // 立绘各姿势 CSS 尺寸一致,量任一张 img 盒即可(几何稳定)。窄屏/竖版走 CSS 底部布局 → 清空锚点。
+  useLayoutEffect(() => {
+    const compute = () => {
+      if (!obActive || !headAnchor) return setObBubblePos(null);
+      if (window.matchMedia("(max-width: 720px), (orientation: portrait)").matches) return setObBubblePos(null);
+      const img = document.querySelector(".home-portrait img");
+      if (!img) return;
+      const r = img.getBoundingClientRect();
+      if (!r.width) return;
+      const headCX = r.left + headAnchor.x * r.width;
+      const headCY = r.top + headAnchor.y * r.height;
+      const gapX = r.width * 0.13; // 头半宽 + 余量:气泡右缘落到头左侧,给脸留呼吸
+      setObBubblePos({ left: Math.round(headCX - gapX), top: Math.round(headCY) });
+    };
+    compute();
+    window.addEventListener("resize", compute);
+    return () => window.removeEventListener("resize", compute);
+  }, [obActive, headAnchor, obStep, obIntro, image]);
+
   async function send() {
     const text = input.trim();
     if (!text || busy || !card) return;
@@ -317,7 +340,14 @@ export default function Home({ testMode = false }) {
         <div className="home-ui">
           {/* 新手引导:糖沐台词气泡,贴在立绘头部一侧(galgame 式,台词随角色) */}
           {(obBeat || (introFrame && introFrame.line)) && (
-            <div className="home-ob-bubble">
+            <div
+              className="home-ob-bubble"
+              style={
+                obBubblePos
+                  ? { left: obBubblePos.left, top: obBubblePos.top, right: "auto", bottom: "auto", transform: "translate(-100%, -50%)" }
+                  : undefined
+              }
+            >
               <div className="home-ob-bubble-head">
                 <span className="home-dlg-name t-kai">糖沐</span>
                 {obBeat && (
