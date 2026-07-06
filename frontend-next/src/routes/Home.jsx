@@ -4,7 +4,7 @@ import { Button } from "../components/ui";
 import { getJSON, postJSON, newSessionId } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
-import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
+import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
 import "./Home.css";
 
 // 立绘主页(家)· YOR-136 · galgame 式登录后首屏。
@@ -64,6 +64,8 @@ export default function Home({ testMode = false }) {
   const [obBubblePos, setObBubblePos] = useState(null); // 台词气泡贴头定位 {left,top}(px);null=走 CSS(窄屏/竖版底部)
   const [obHistory, setObHistory] = useState([]); // 已访拍栈(不含当前),供「上一步」回退
   const [obViaBack, setObViaBack] = useState(false); // 当前拍是否由回退进入 → 显反悔反应(backLine/backEmo)
+  const [obThinking, setObThinking] = useState(false); // AI 自适应:提交后糖沐"思考态"(等 /api/chat)
+  const [obAiLine, setObAiLine] = useState(null); // AI 生成的自适应台词(当前拍开场,替静态 line);null=用脚本
   const [obSlots, setObSlots] = useState([null, null]); // 立绘双层(交叉溶解)各层 src;null=空
   const [obLayer, setObLayer] = useState(0); // 当前在顶(不透明)的层索引
   const prevImageRef = useRef(null); // 上一帧立绘 src,供双层比对
@@ -73,8 +75,16 @@ export default function Home({ testMode = false }) {
   const obActive = obIntro >= 0 || !!obBeat;
   // 当前有效 emo:回退进入且该拍有 backEmo → 用反悔姿势,否则常态 emo。
   const obEmo = obBeat ? (obViaBack && obBeat.backEmo ? obBeat.backEmo : obBeat.emo) : null;
-  // 当前台词:回退进入且有 backLine → 反悔台词,否则常态台词。
-  const obLine = obBeat ? (obViaBack && obBeat.backLine ? obBeat.backLine(obEcho) : obBeat.line(obEcho)) : introFrame ? introFrame.line : "";
+  // 当前台词优先级:思考态 > 回退反悔(backLine) > AI 自适应(obAiLine) > 静态脚本(line)。
+  const obLine = obThinking
+    ? "（想一下……）"
+    : obBeat
+    ? obViaBack && obBeat.backLine
+      ? obBeat.backLine(obEcho)
+      : obAiLine || obBeat.line(obEcho)
+    : introFrame
+    ? introFrame.line
+    : "";
   // 当前姿势的「头中心」锚点(入场帧 / 差分 emo);用于把气泡贴到头侧、齐头高。
   const headAnchor = introFrame ? INTRO_HEAD[obIntro] : obEmo ? HEAD[obEmo] : null;
 
@@ -284,6 +294,8 @@ export default function Home({ testMode = false }) {
     }
     setObHistory([]);
     setObViaBack(false);
+    setObAiLine(null);
+    setObThinking(false);
     setObStep(null);
   }
   function obChip(c) {
@@ -303,28 +315,50 @@ export default function Home({ testMode = false }) {
     if (c.done) endOnboarding(echo);
     else if (c.next) obGoNext(c.next);
   }
-  function obFieldSubmit() {
+  async function obFieldSubmit() {
     const v = obInput.trim();
-    if (!v || !obBeat || !obBeat.field) return;
+    if (!v || !obBeat || !obBeat.field || obThinking) return;
     const echo = { ...obEcho, [obBeat.field]: v };
     setObEcho(echo);
     saveEcho(echo);
-    if (obBeat.next) obGoNext(obBeat.next);
+    const beat = obBeat;
+    if (!beat.next) return;
+    // AI 自适应(点4/5):复用 /api/chat(看板同款)让糖沐接住玩家输入 + 引下一步;失败/超时回退静态台词。
+    if (beat.ai) {
+      setObThinking(true);
+      let aiLine = null;
+      try {
+        const card = { spec: "chara_card_v2", spec_version: "2.0", data: { name: "糖沐", description: AI_PERSONA, scenario: beat.ai.scenario(echo) } };
+        const r = await Promise.race([
+          postJSON("/api/chat", { card, session_id: newSessionId(), user: v, world: null }),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000)),
+        ]);
+        aiLine = ((r && r.reply) || "").trim() || null;
+      } catch (e) {
+        aiLine = null; // 降级:下一拍用静态台词,不卡新客
+      }
+      setObThinking(false);
+      obGoNext(beat.next, aiLine);
+    } else {
+      obGoNext(beat.next);
+    }
   }
-  // 前进一拍:把当前拍压进历史(供回退),清回退态与输入框。
-  function obGoNext(nextId) {
+  // 前进一拍:压历史(供回退),清回退态与输入框;aiLine=本次 AI 自适应台词(替下一拍静态开场),null=用脚本。
+  function obGoNext(nextId, aiLine = null) {
     setObHistory((h) => [...h, obStep]);
     setObViaBack(false);
+    setObAiLine(aiLine);
     setObInput("");
     setObStep(nextId);
   }
-  // 回退上一拍:糖沐做反悔反应(backLine/backEmo);字段拍回填旧值方便改。
+  // 回退上一拍:糖沐做反悔反应(backLine/backEmo);字段拍回填旧值方便改。清 AI 自适应/思考态。
   function obBack() {
-    if (!obHistory.length) return;
+    if (!obHistory.length || obThinking) return;
     const prevId = obHistory[obHistory.length - 1];
     const prev = beatById(prevId);
     setObHistory((h) => h.slice(0, -1));
     setObViaBack(true);
+    setObAiLine(null);
     setObInput(prev && prev.field ? obEcho[prev.field] || "" : "");
     setObStep(prevId);
   }
@@ -426,7 +460,7 @@ export default function Home({ testMode = false }) {
               <div className="home-ob-bubble-head">
                 <span className="home-dlg-name t-kai">糖沐</span>
                 {obBeat && (
-                  <button className="home-ob-skip" onClick={() => endOnboarding()} title="跳过引导,直接进店">跳过</button>
+                  <button className="home-ob-skip" onClick={() => endOnboarding()} disabled={obThinking} title="跳过引导,直接进店">跳过</button>
                 )}
               </div>
               <p className="home-ob-line t-read">{obLine}</p>
@@ -438,7 +472,7 @@ export default function Home({ testMode = false }) {
               /* 新手引导态:底部只留输入框 + 选项 chip(台词在头侧气泡) */
               <div className="home-ob-tray">
                 {!!obHistory.length && (
-                  <button className="home-ob-back" onClick={obBack} title="回上一步,重新填">
+                  <button className="home-ob-back" onClick={obBack} disabled={obThinking} title="回上一步,重新填">
                     ← 上一步
                   </button>
                 )}
@@ -448,7 +482,8 @@ export default function Home({ testMode = false }) {
                       ref={obInputRef}
                       className="home-input"
                       value={obInput}
-                      placeholder={obBeat.field === "name" ? "输入你的称呼…" : "随口说说…"}
+                      disabled={obThinking}
+                      placeholder={obThinking ? "糖沐正想着怎么接…" : obBeat.field === "name" ? "输入你的称呼…" : "随口说说…"}
                       onChange={(e) => setObInput(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.isComposing) {
@@ -457,15 +492,15 @@ export default function Home({ testMode = false }) {
                         }
                       }}
                     />
-                    <Button variant="primary" onClick={obFieldSubmit} disabled={!obInput.trim()}>
-                      好
+                    <Button variant="primary" onClick={obFieldSubmit} disabled={!obInput.trim() || obThinking}>
+                      {obThinking ? "…" : "好"}
                     </Button>
                   </div>
                 )}
                 {!!(obBeat.chips && obBeat.chips.length) && (
                   <div className="home-ob-chips">
                     {obBeat.chips.map((c, i) => (
-                      <button key={i} className="home-ob-chip" onClick={() => obChip(c)}>
+                      <button key={i} className="home-ob-chip" onClick={() => obChip(c)} disabled={obThinking}>
                         {c.label}
                       </button>
                     ))}
