@@ -6,8 +6,9 @@
 //   { id, emo, line(echo)->string,
 //     field?: "name"|"taste",  // 该拍等自由输入,回车/发送写入 echo[field] 后进 next
 //     next?: string,           // field 提交后去的下一拍 id
-//     chips?: [{ label, set?, next?, to?, done? }] }
-//       set  : 点后并入 echo(如「随便起一个」直接给个名)
+//     chips?: [{ label, fill?, set?, next?, to?, done? }] }
+//       fill : 点后把这段文字填进输入框(不直接发送),玩家确认/改再提交(点 3 反馈)
+//       set  : 点后并入 echo
 //       next : 点后推进到的拍 id
 //       to   : 点后导航的路由(如 /explore)
 //       done : 点后结束 onboarding(落地标记 + 退出引导态)
@@ -76,7 +77,7 @@ export const BEATS = [
     backEmo: "wry",
     field: "name",
     next: "taste",
-    chips: [{ label: "随便起一个", set: { name: "夜游客" }, next: "taste" }],
+    chips: [{ label: "随便起一个", fill: "夜游客" }],
   },
   {
     id: "taste",

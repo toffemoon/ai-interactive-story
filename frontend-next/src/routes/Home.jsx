@@ -67,6 +67,7 @@ export default function Home({ testMode = false }) {
   const [obSlots, setObSlots] = useState([null, null]); // 立绘双层(交叉溶解)各层 src;null=空
   const [obLayer, setObLayer] = useState(0); // 当前在顶(不透明)的层索引
   const prevImageRef = useRef(null); // 上一帧立绘 src,供双层比对
+  const obInputRef = useRef(null); // onboarding 输入框(选项 fill 后聚焦)
   const obBeat = obStep ? beatById(obStep) : null;
   const introFrame = obIntro >= 0 ? INTRO[obIntro] : null;
   const obActive = obIntro >= 0 || !!obBeat;
@@ -216,8 +217,11 @@ export default function Home({ testMode = false }) {
       if (!r.width) return;
       const headCX = r.left + headAnchor.x * r.width;
       const headCY = r.top + headAnchor.y * r.height;
-      const gapX = r.width * 0.13; // 头半宽 + 余量:气泡右缘落到头左侧,给脸留呼吸
-      setObBubblePos({ left: Math.round(headCX - gapX), top: Math.round(headCY) });
+      // 气泡右缘:头左侧(跟随头) 与 立绘身体左轮廓之前(避免遮身体)取更靠左者。
+      // 立绘全身居中构图,身体/肩膀左缘约在图宽 0.30 处;右缘钳到 0.29 之前,保证不压立绘。
+      const headSide = headCX - r.width * 0.15;
+      const bodyClear = r.left + r.width * 0.29;
+      setObBubblePos({ left: Math.round(Math.min(headSide, bodyClear)), top: Math.round(headCY) });
     };
     compute();
     window.addEventListener("resize", compute);
@@ -285,6 +289,12 @@ export default function Home({ testMode = false }) {
     setObStep(null);
   }
   function obChip(c) {
+    // 点 3:带 fill 的选项 = 把文字填进输入框,不直接发送;玩家确认/改后再点「好」提交。
+    if (c.fill != null) {
+      setObInput(c.fill);
+      requestAnimationFrame(() => obInputRef.current?.focus());
+      return;
+    }
     let echo = obEcho;
     if (c.set) {
       echo = { ...obEcho, ...c.set };
@@ -425,6 +435,7 @@ export default function Home({ testMode = false }) {
                 {obBeat.field && (
                   <div className="home-composer">
                     <input
+                      ref={obInputRef}
                       className="home-input"
                       value={obInput}
                       placeholder={obBeat.field === "name" ? "输入你的称呼…" : "随口说说…"}
