@@ -13,7 +13,7 @@ import "./Home.css";
 // 主按钮:探索故事→/explore(常驻发现路径);继续故事(有进行中 game/存档才显)→存档窗口→/play。
 const HOME_KEY = "ais_home_v1";
 const TANGMU_IMG = "/home/tangmu1.png";
-const BG_IMG = "/home/coffeeshop.png";
+const BG_IMG = "/home/background.png";
 const GREETING_NEW =
   "初次见面。我是糖沐,这家书坊的店员。你写的故事、想见的人,都能在这儿活过来——先挑一本读读,还是先跟我说说话?";
 const GREETING_BACK = "欢迎回来。上次那段还悬着呢——接着往下,还是换一本新的?";
