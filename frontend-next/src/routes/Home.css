@@ -36,21 +36,33 @@
   z-index: 2;
   left: 0;
   right: 0;
-  top: 0;
+  /* 立绘整体下移(缩小后往下坐)。原为 padding-top;改用 top 偏移,让绝对定位图层的 %高
+     按「缩减后的容器高」解析,渲染尺寸与旧版一致(否则 122% 会按全高算,立绘变大)。 */
+  top: clamp(48px, 13vh, 132px);
   bottom: 0;
-  display: flex;
+  display: flex; /* 仅供无图时的占位符 span 居中;绝对定位的立绘图层不受 flex 影响 */
   align-items: flex-start;
   justify-content: center;
-  padding-top: clamp(48px, 13vh, 132px); /* 头顶留白 + 立绘整体下移(缩小后往下坐,不悬浮顶部) */
   pointer-events: none;
 }
-.home-portrait img {
+/* 立绘图层:绝对定位,双缓冲两层完全重叠(交叉溶解)。顶偏移由 .home-portrait 的 top 承担,故这里 top:0。 */
+.home-portrait-img {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
   height: 122%;
   width: auto;
   max-width: none;
   object-fit: contain;
   object-position: top center;
   filter: drop-shadow(0 14px 44px rgba(0, 0, 0, 0.5));
+  opacity: 0;
+  transition: opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* 当前层不透明;非当前层 opacity 0 → 换层即交叉溶解 */
+.home-portrait-img.is-on {
+  opacity: 1;
 }
 .home-portrait-ph {
   align-self: center;
@@ -303,6 +315,22 @@
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
+}
+/* 上一步(回退键):低调文字钮,贴操作盘左上 */
+.home-ob-back {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: rgba(241, 231, 214, 0.62);
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui-sm);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  padding: 2px 4px;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.home-ob-back:hover {
+  color: #f1e7d6;
 }
 .home-ob-tray .home-input {
   background: rgba(20, 16, 12, 0.7);
@@ -559,7 +587,7 @@
     padding: 10px 16px;
     min-width: 0;
   }
-  .home-portrait img {
+  .home-portrait-img {
     height: 150%;
     max-width: none;
   }

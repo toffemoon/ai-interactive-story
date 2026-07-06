@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "motion/react";
 import { Button } from "../components/ui";
 import { getJSON, postJSON, newSessionId } from "../lib/api";
 import { useAuth } from "../state/auth";
@@ -63,14 +62,23 @@ export default function Home({ testMode = false }) {
   const [obEcho, setObEcho] = useState({});
   const [obInput, setObInput] = useState("");
   const [obBubblePos, setObBubblePos] = useState(null); // 台词气泡贴头定位 {left,top}(px);null=走 CSS(窄屏/竖版底部)
+  const [obHistory, setObHistory] = useState([]); // 已访拍栈(不含当前),供「上一步」回退
+  const [obViaBack, setObViaBack] = useState(false); // 当前拍是否由回退进入 → 显反悔反应(backLine/backEmo)
+  const [obSlots, setObSlots] = useState([null, null]); // 立绘双层(交叉溶解)各层 src;null=空
+  const [obLayer, setObLayer] = useState(0); // 当前在顶(不透明)的层索引
+  const prevImageRef = useRef(null); // 上一帧立绘 src,供双层比对
   const obBeat = obStep ? beatById(obStep) : null;
   const introFrame = obIntro >= 0 ? INTRO[obIntro] : null;
   const obActive = obIntro >= 0 || !!obBeat;
+  // 当前有效 emo:回退进入且该拍有 backEmo → 用反悔姿势,否则常态 emo。
+  const obEmo = obBeat ? (obViaBack && obBeat.backEmo ? obBeat.backEmo : obBeat.emo) : null;
+  // 当前台词:回退进入且有 backLine → 反悔台词,否则常态台词。
+  const obLine = obBeat ? (obViaBack && obBeat.backLine ? obBeat.backLine(obEcho) : obBeat.line(obEcho)) : introFrame ? introFrame.line : "";
   // 当前姿势的「头中心」锚点(入场帧 / 差分 emo);用于把气泡贴到头侧、齐头高。
-  const headAnchor = introFrame ? INTRO_HEAD[obIntro] : obBeat ? HEAD[obBeat.emo] : null;
+  const headAnchor = introFrame ? INTRO_HEAD[obIntro] : obEmo ? HEAD[obEmo] : null;
 
   const displayName = cardName(card) || (isTangmu ? "糖沐" : "角色");
-  const image = introFrame ? introFrame.img : obBeat ? PORTRAIT[obBeat.emo] || TANGMU_IMG : isTangmu ? TANGMU_IMG : cardImageOf(card);
+  const image = introFrame ? introFrame.img : obBeat ? PORTRAIT[obEmo] || TANGMU_IMG : isTangmu ? TANGMU_IMG : cardImageOf(card);
   const hasSaves = !!game || serverSaves.length > 0;
   const isReturning = hasSaves || messages.length > 0;
   const greeting = isReturning ? GREETING_BACK : GREETING_NEW;
@@ -216,6 +224,33 @@ export default function Home({ testMode = false }) {
     return () => window.removeEventListener("resize", compute);
   }, [obActive, headAnchor, obStep, obIntro, image]);
 
+  // 立绘双层交叉溶解(纯 CSS opacity 过渡,不依赖 Motion,任意切换频率都稳):
+  // image 变了 → 新图放到「非当前层」,再切换当前层 → 新层淡入、旧层淡出。永远只 2 层。
+  useLayoutEffect(() => {
+    if (!image) return;
+    if (prevImageRef.current === null) {
+      // 首帧:直接落到当前层,不淡入
+      setObSlots((s) => {
+        if (s[obLayer] === image) return s;
+        const n = [...s];
+        n[obLayer] = image;
+        return n;
+      });
+      prevImageRef.current = image;
+      return;
+    }
+    if (image !== prevImageRef.current) {
+      const next = obLayer === 0 ? 1 : 0;
+      setObSlots((s) => {
+        const n = [...s];
+        n[next] = image;
+        return n;
+      });
+      setObLayer(next);
+      prevImageRef.current = image;
+    }
+  }, [image, obLayer]);
+
   async function send() {
     const text = input.trim();
     if (!text || busy || !card) return;
@@ -245,6 +280,8 @@ export default function Home({ testMode = false }) {
       markOnboarded();
       saveEcho(echo || obEcho);
     }
+    setObHistory([]);
+    setObViaBack(false);
     setObStep(null);
   }
   function obChip(c) {
@@ -256,7 +293,7 @@ export default function Home({ testMode = false }) {
     }
     if (c.to) navigate(c.to);
     if (c.done) endOnboarding(echo);
-    else if (c.next) setObStep(c.next);
+    else if (c.next) obGoNext(c.next);
   }
   function obFieldSubmit() {
     const v = obInput.trim();
@@ -264,8 +301,24 @@ export default function Home({ testMode = false }) {
     const echo = { ...obEcho, [obBeat.field]: v };
     setObEcho(echo);
     saveEcho(echo);
+    if (obBeat.next) obGoNext(obBeat.next);
+  }
+  // 前进一拍:把当前拍压进历史(供回退),清回退态与输入框。
+  function obGoNext(nextId) {
+    setObHistory((h) => [...h, obStep]);
+    setObViaBack(false);
     setObInput("");
-    if (obBeat.next) setObStep(obBeat.next);
+    setObStep(nextId);
+  }
+  // 回退上一拍:糖沐做反悔反应(backLine/backEmo);字段拍回填旧值方便改。
+  function obBack() {
+    if (!obHistory.length) return;
+    const prevId = obHistory[obHistory.length - 1];
+    const prev = beatById(prevId);
+    setObHistory((h) => h.slice(0, -1));
+    setObViaBack(true);
+    setObInput(prev && prev.field ? obEcho[prev.field] || "" : "");
+    setObStep(prevId);
   }
 
   async function openSwitcher() {
@@ -303,24 +356,26 @@ export default function Home({ testMode = false }) {
       <div className="home-bg" style={{ backgroundImage: `url("${BG_IMG}")` }} aria-hidden="true" />
       <div className="home-bg-scrim" aria-hidden="true" />
 
-      {/* 立绘层:换姿势 = 交叉溶解(新旧两层叠置同淡,避免硬切像 PPT)。
-          .home-portrait 是 position:absolute inset:0,新旧两层完全重叠 → 真交叉淡入淡出。 */}
-      <AnimatePresence>
-        <motion.div
-          className="home-portrait"
-          key={introFrame ? "intro-" + obIntro : obBeat ? "ob-" + obBeat.emo : displayName}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-        >
-          {image ? (
-            <img src={image} alt={displayName} draggable="false" />
-          ) : (
-            <span className="home-portrait-ph t-kai">{displayName.slice(0, 2)}</span>
-          )}
-        </motion.div>
-      </AnimatePresence>
+      {/* 立绘层:双层交叉溶解(纯 CSS opacity 过渡)。两层常驻,换图放到非当前层再切换当前层,
+          新层淡入、旧层淡出。永远只 2 层,任意切换频率都不堆积、不透明。 */}
+      <div className="home-portrait">
+        {image ? (
+          obSlots.map((src, i) =>
+            src ? (
+              <img
+                key={i}
+                className={"home-portrait-img" + (obLayer === i ? " is-on" : "")}
+                src={src}
+                alt={obLayer === i ? displayName : ""}
+                aria-hidden={obLayer !== i}
+                draggable="false"
+              />
+            ) : null
+          )
+        ) : (
+          <span className="home-portrait-ph t-kai">{displayName.slice(0, 2)}</span>
+        )}
+      </div>
 
       {/* 入场演出:点屏任意处加速推进当前帧(VN 式 tap-to-advance);只在入场存在。
           入场态无其它可交互元素,整屏捕获层置顶不抢占任何点击。 */}
@@ -354,7 +409,7 @@ export default function Home({ testMode = false }) {
                   <button className="home-ob-skip" onClick={() => endOnboarding()} title="跳过引导,直接进店">跳过</button>
                 )}
               </div>
-              <p className="home-ob-line t-read">{obBeat ? obBeat.line(obEcho) : introFrame.line}</p>
+              <p className="home-ob-line t-read">{obLine}</p>
             </div>
           )}
           {/* 底部交互坞:主按钮行(贴对话框上方右对齐)+ 对话框聚成一组,不再悬空 */}
@@ -362,6 +417,11 @@ export default function Home({ testMode = false }) {
             {obBeat ? (
               /* 新手引导态:底部只留输入框 + 选项 chip(台词在头侧气泡) */
               <div className="home-ob-tray">
+                {!!obHistory.length && (
+                  <button className="home-ob-back" onClick={obBack} title="回上一步,重新填">
+                    ← 上一步
+                  </button>
+                )}
                 {obBeat.field && (
                   <div className="home-composer">
                     <input

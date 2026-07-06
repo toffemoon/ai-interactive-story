@@ -71,6 +71,9 @@ export const BEATS = [
     emo: "curious",
     line: () =>
       "哎,生面孔。头回来的客人,按店主的规矩得先登记一下——回头给你张身份卡,凭卡随便出入这儿。怎么称呼你?",
+    // 从「口味」拍回退到这儿时,糖沐的反悔反应(草稿·待雨钦润色);backEmo=回退时的姿势。
+    backLine: () => "咦,又踅回来了?名字想换就换——重新报一个便是。",
+    backEmo: "wry",
     field: "name",
     next: "taste",
     chips: [{ label: "随便起一个", set: { name: "夜游客" }, next: "taste" }],
@@ -80,6 +83,9 @@ export const BEATS = [
     emo: "smile",
     line: (e) =>
       `记下了,${e.name || "客人"}。卡上还差一行——最近在看什么?书也行、剧也行,随口说说;没有就说想看什么。`,
+    // 从「认识书坊」拍回退到这儿时的反悔反应(草稿·待雨钦润色)。
+    backLine: (e) => `${e.name || "客人"},书还没进门呢又绕回来了?最近在看什么,这行再补补——`,
+    backEmo: "wry",
     field: "taste",
     next: "tour",
     chips: [{ label: "先跳过", set: { taste: "" }, next: "tour" }],
