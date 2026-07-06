@@ -254,10 +254,9 @@
 .home-ob-bubble {
   position: absolute;
   z-index: 4;
-  top: clamp(56px, 14vh, 150px);
-  left: 50%;
-  transform: translateX(-104%);
-  width: min(340px, 42vw);
+  top: clamp(36px, 8vh, 96px);
+  left: clamp(20px, 4vw, 56px);
+  width: min(320px, 38vw);
   background: rgba(28, 22, 16, 0.82);
   border: 1px solid rgba(199, 154, 78, 0.5);
   border-radius: var(--r-lg);
@@ -269,7 +268,7 @@
 @keyframes obBubbleIn {
   from {
     opacity: 0;
-    transform: translateX(-104%) translateY(8px);
+    transform: translateY(8px);
   }
 }
 .home-ob-bubble-head {
