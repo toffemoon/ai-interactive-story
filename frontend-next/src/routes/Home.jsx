@@ -38,7 +38,7 @@ function cardImageOf(card) {
   return d.image || d.avatar || "";
 }
 
-export default function Home() {
+export default function Home({ testMode = false }) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { game } = useGame();
@@ -93,7 +93,13 @@ export default function Home() {
   }, []);
 
   // 首访引导:没被引导过 + 没恢复出历史会话 → 进新手引导(老用户 / 聊过的人不触发)。
+  // testMode(/test):每次进都强制从首拍开始、清空回声,方便反复测(不读写完成标记)。
   useEffect(() => {
+    if (testMode) {
+      setObEcho({});
+      setObStep(FIRST_BEAT);
+      return;
+    }
     if (!isOnboarded() && !restoredRef.current) {
       setObEcho(loadEcho());
       setObStep(FIRST_BEAT);
@@ -131,9 +137,9 @@ export default function Home() {
       .catch(() => {});
   }, [user]);
 
-  // 持久化首页会话。
+  // 持久化首页会话(testMode 不写,避免污染 /home 的首访判断)。
   useEffect(() => {
-    if (!card) return;
+    if (!card || testMode) return;
     try {
       localStorage.setItem(HOME_KEY, JSON.stringify({ card, isTangmu, sessionId, msgs: messages.slice(-40) }));
     } catch (e) {}
@@ -183,8 +189,10 @@ export default function Home() {
 
   // —— 新手引导逻辑 ——
   function endOnboarding(echo) {
-    markOnboarded();
-    saveEcho(echo || obEcho);
+    if (!testMode) {
+      markOnboarded();
+      saveEcho(echo || obEcho);
+    }
     setObStep(null);
   }
   function obChip(c) {
