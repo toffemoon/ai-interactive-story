@@ -12,7 +12,7 @@ import "./Home.css";
 // 默认糖沐(取《新人入店》预设);换角色从我的角色卡库(/api/library/characters)、沿用该卡设定。
 // 主按钮:探索故事→/explore(常驻发现路径);继续故事(有进行中 game/存档才显)→存档窗口→/play。
 const HOME_KEY = "ais_home_v1";
-const TANGMU_IMG = "/home/tangmu1.png";
+const TANGMU_IMG = "/home/tangmu01.png";
 const BG_IMG = "/home/background.png";
 const GREETING_NEW =
   "初次见面。我是糖沐,这家书坊的店员。你写的故事、想见的人,都能在这儿活过来——先挑一本读读,还是先跟我说说话?";

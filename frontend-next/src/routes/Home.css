@@ -41,11 +41,11 @@
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding-top: clamp(10px, 3vh, 32px); /* 头顶留白,不顶到屏幕边 */
+  padding-top: clamp(48px, 13vh, 132px); /* 头顶留白 + 立绘整体下移(缩小后往下坐,不悬浮顶部) */
   pointer-events: none;
 }
 .home-portrait img {
-  height: 170%;
+  height: 122%;
   width: auto;
   max-width: none;
   object-fit: contain;
