@@ -5,6 +5,7 @@ import { Button } from "../components/ui";
 import { getJSON, postJSON, newSessionId } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
+import { PORTRAIT, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
 import "./Home.css";
 
 // 立绘主页(家)· YOR-136 · galgame 式登录后首屏。
@@ -56,8 +57,14 @@ export default function Home() {
   const [fullscreen, setFullscreen] = useState(false);
   const restoredRef = useRef(false);
 
+  // 新手引导(onboarding):obStep=当前拍 id(null=非引导态);obEcho=回声(称呼/口味);obInput=引导中输入框。
+  const [obStep, setObStep] = useState(null);
+  const [obEcho, setObEcho] = useState({});
+  const [obInput, setObInput] = useState("");
+  const obBeat = obStep ? beatById(obStep) : null;
+
   const displayName = cardName(card) || (isTangmu ? "糖沐" : "角色");
-  const image = isTangmu ? TANGMU_IMG : cardImageOf(card);
+  const image = obBeat ? PORTRAIT[obBeat.emo] || TANGMU_IMG : isTangmu ? TANGMU_IMG : cardImageOf(card);
   const hasSaves = !!game || serverSaves.length > 0;
   const isReturning = hasSaves || messages.length > 0;
   const greeting = isReturning ? GREETING_BACK : GREETING_NEW;
@@ -82,6 +89,14 @@ export default function Home() {
       setIsTangmu(!!r.isTangmu);
       setSessionId(r.sessionId || newSessionId());
       setMessages(Array.isArray(r.msgs) ? r.msgs : []);
+    }
+  }, []);
+
+  // 首访引导:没被引导过 + 没恢复出历史会话 → 进新手引导(老用户 / 聊过的人不触发)。
+  useEffect(() => {
+    if (!isOnboarded() && !restoredRef.current) {
+      setObEcho(loadEcho());
+      setObStep(FIRST_BEAT);
     }
   }, []);
 
@@ -166,6 +181,33 @@ export default function Home() {
     setSessionId(newSessionId());
   }
 
+  // —— 新手引导逻辑 ——
+  function endOnboarding(echo) {
+    markOnboarded();
+    saveEcho(echo || obEcho);
+    setObStep(null);
+  }
+  function obChip(c) {
+    let echo = obEcho;
+    if (c.set) {
+      echo = { ...obEcho, ...c.set };
+      setObEcho(echo);
+      saveEcho(echo);
+    }
+    if (c.to) navigate(c.to);
+    if (c.done) endOnboarding(echo);
+    else if (c.next) setObStep(c.next);
+  }
+  function obFieldSubmit() {
+    const v = obInput.trim();
+    if (!v || !obBeat || !obBeat.field) return;
+    const echo = { ...obEcho, [obBeat.field]: v };
+    setObEcho(echo);
+    saveEcho(echo);
+    setObInput("");
+    if (obBeat.next) setObStep(obBeat.next);
+  }
+
   async function openSwitcher() {
     try {
       const items = await getJSON("/api/library/characters");
@@ -204,7 +246,7 @@ export default function Home() {
       {/* 立绘层(换角色淡入:只动 opacity) */}
       <motion.div
         className="home-portrait"
-        key={displayName}
+        key={obBeat ? "ob-" + obBeat.emo : displayName}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
@@ -230,57 +272,98 @@ export default function Home() {
         <div className="home-ui">
           {/* 底部交互坞:主按钮行(贴对话框上方右对齐)+ 对话框聚成一组,不再悬空 */}
           <div className="home-dock">
-            <div className="home-actions">
-              <Button variant="primary" className="home-go" onClick={() => navigate("/explore")}>
-                {isReturning ? "探索故事" : "开始故事"}
-              </Button>
-              {hasSaves && (
-                <Button variant="secondary" className="home-go" onClick={() => setSavesModal(true)}>
-                  继续故事
-                </Button>
-              )}
-            </div>
-
-            {/* 对话框 */}
-            <div className="home-dialogue">
-            <div className="home-dlg-head">
-              <span className="home-dlg-name t-kai">{displayName}</span>
-              <div className="home-dlg-tools">
-                <button className="home-tool" onClick={openSwitcher} title="换个人聊" aria-label="换个人聊">
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="9" cy="8" r="3" />
-                    <path d="M3.5 19c0-3 2.5-4.5 5.5-4.5" />
-                    <path d="M16 6l3 0 0 3" />
-                    <path d="M19 6l-4 4" />
-                    <circle cx="16.5" cy="16" r="3" />
-                    <path d="M21 19c0-2-1.8-3-4.5-3" />
-                  </svg>
-                </button>
-                <button className="home-tool" onClick={restart} disabled={busy} title="重开(清空这段对话)" aria-label="重开">⟳</button>
-                <button className="home-tool" onClick={() => setLogOpen(true)} disabled={!messages.length} title="查看记录" aria-label="查看记录">≡</button>
-                <button className="home-tool" onClick={() => setFullscreen(true)} title="全屏(只留背景+立绘,方便截图)" aria-label="全屏">⛶</button>
+            {obBeat ? (
+              /* 新手引导态:糖沐脚本台词 + 选项 chip +(登记拍)输入框 */
+              <div className="home-dialogue home-ob">
+                <div className="home-dlg-head">
+                  <span className="home-dlg-name t-kai">糖沐</span>
+                  <button className="home-tool home-ob-skip" onClick={() => endOnboarding()} title="跳过引导,直接进店">跳过</button>
+                </div>
+                <p className="home-dlg-line t-read">{obBeat.line(obEcho)}</p>
+                {obBeat.field && (
+                  <div className="home-composer">
+                    <input
+                      className="home-input"
+                      value={obInput}
+                      placeholder={obBeat.field === "name" ? "输入你的称呼…" : "随口说说…"}
+                      onChange={(e) => setObInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.isComposing) {
+                          e.preventDefault();
+                          obFieldSubmit();
+                        }
+                      }}
+                    />
+                    <Button variant="primary" onClick={obFieldSubmit} disabled={!obInput.trim()}>
+                      好
+                    </Button>
+                  </div>
+                )}
+                {!!(obBeat.chips && obBeat.chips.length) && (
+                  <div className="home-ob-chips">
+                    {obBeat.chips.map((c, i) => (
+                      <button key={i} className="home-ob-chip" onClick={() => obChip(c)}>
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-            <p className="home-dlg-line t-read">{busy ? `(${displayName}正在回应…)` : currentLine}</p>
-            <div className="home-composer">
-              <input
-                className="home-input"
-                value={input}
-                disabled={busy || !card}
-                placeholder={card ? "和 " + displayName + " 说点什么…" : "正在把糖沐请出来…"}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !busy) {
-                    e.preventDefault();
-                    send();
-                  }
-                }}
-              />
-              <Button variant="primary" onClick={send} disabled={busy || !input.trim() || !card}>
-                发送
-              </Button>
-            </div>
-          </div>
+            ) : (
+              <>
+                <div className="home-actions">
+                  <Button variant="primary" className="home-go" onClick={() => navigate("/explore")}>
+                    {isReturning ? "探索故事" : "开始故事"}
+                  </Button>
+                  {hasSaves && (
+                    <Button variant="secondary" className="home-go" onClick={() => setSavesModal(true)}>
+                      继续故事
+                    </Button>
+                  )}
+                </div>
+
+                {/* 对话框 */}
+                <div className="home-dialogue">
+                  <div className="home-dlg-head">
+                    <span className="home-dlg-name t-kai">{displayName}</span>
+                    <div className="home-dlg-tools">
+                      <button className="home-tool" onClick={openSwitcher} title="换个人聊" aria-label="换个人聊">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="9" cy="8" r="3" />
+                          <path d="M3.5 19c0-3 2.5-4.5 5.5-4.5" />
+                          <path d="M16 6l3 0 0 3" />
+                          <path d="M19 6l-4 4" />
+                          <circle cx="16.5" cy="16" r="3" />
+                          <path d="M21 19c0-2-1.8-3-4.5-3" />
+                        </svg>
+                      </button>
+                      <button className="home-tool" onClick={restart} disabled={busy} title="重开(清空这段对话)" aria-label="重开">⟳</button>
+                      <button className="home-tool" onClick={() => setLogOpen(true)} disabled={!messages.length} title="查看记录" aria-label="查看记录">≡</button>
+                      <button className="home-tool" onClick={() => setFullscreen(true)} title="全屏(只留背景+立绘,方便截图)" aria-label="全屏">⛶</button>
+                    </div>
+                  </div>
+                  <p className="home-dlg-line t-read">{busy ? `(${displayName}正在回应…)` : currentLine}</p>
+                  <div className="home-composer">
+                    <input
+                      className="home-input"
+                      value={input}
+                      disabled={busy || !card}
+                      placeholder={card ? "和 " + displayName + " 说点什么…" : "正在把糖沐请出来…"}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !busy) {
+                          e.preventDefault();
+                          send();
+                        }
+                      }}
+                    />
+                    <Button variant="primary" onClick={send} disabled={busy || !input.trim() || !card}>
+                      发送
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

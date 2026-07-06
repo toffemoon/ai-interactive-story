@@ -249,6 +249,35 @@
   min-height: 44px;
 }
 
+/* —— 新手引导(onboarding):选项 chip + 跳过 —— */
+.home-ob-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+.home-ob-chip {
+  padding: 9px 18px;
+  border: 1px solid var(--cinnabar);
+  border-radius: var(--r-pill);
+  background: rgba(250, 247, 241, 0.92);
+  color: var(--cinnabar);
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.home-ob-chip:hover {
+  background: var(--cinnabar);
+  color: #fff;
+}
+.home-ob-skip {
+  width: auto;
+  padding: 0 10px;
+  font-size: var(--fs-ui-sm);
+  color: var(--muted);
+}
+
 /* 全屏:整屏点击捕获层(点任意处退出);z 在立绘之上、退出角标之下 */
 .home-fs-catcher {
   position: absolute;
