@@ -241,13 +241,9 @@ export default function Home({ testMode = false }) {
   useLayoutEffect(() => {
     if (!image) return;
     if (prevImageRef.current === null) {
-      // 首帧:直接落到当前层,不淡入
-      setObSlots((s) => {
-        if (s[obLayer] === image) return s;
-        const n = [...s];
-        n[obLayer] = image;
-        return n;
-      });
+      // 首帧:两层都放首图(slot1 也存在但透明),这样首次换姿势也能过渡淡入
+      // (否则新层刚挂载 = 瞬显,首次切换会像硬切)。obLayer=0 → slot0 显、slot1 透明备用。
+      setObSlots([image, image]);
       prevImageRef.current = image;
       return;
     }
@@ -411,18 +407,6 @@ export default function Home({ testMode = false }) {
                 alt={obLayer === i ? displayName : ""}
                 aria-hidden={obLayer !== i}
                 draggable="false"
-                onAnimationEnd={
-                  obLayer === i
-                    ? () =>
-                        setObSlots((s) => {
-                          const o = 1 - i; // 新图淡入完 → 清掉底层旧图,不留重影
-                          if (s[o] == null) return s;
-                          const n = [...s];
-                          n[o] = null;
-                          return n;
-                        })
-                    : undefined
-                }
               />
             ) : null
           )
