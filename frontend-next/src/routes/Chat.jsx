@@ -327,7 +327,7 @@ export default function Chat() {
                 placeholder={busy ? "对方正在回复…" : "说点什么…"}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !busy) {
+                  if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
                     e.preventDefault();
                     send();
                   }
