@@ -4,7 +4,7 @@ import { Button } from "../components/ui";
 import { getJSON, postJSON, newSessionId } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
-import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
+import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, AUTO_MS, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
 import { IdentityCard } from "../components/IdentityCard";
 import "./Home.css";
 
@@ -65,6 +65,7 @@ export default function Home({ testMode = false }) {
   // 新手引导(onboarding):obStep=当前拍 id(null=非引导态);obEcho=回声(称呼/口味);obInput=引导中输入框。
   const [obStep, setObStep] = useState(null);
   const [obIntro, setObIntro] = useState(-1); // 入场演出帧索引(-1=非演出):背身→回头→转正面进登记
+  const [showIntroHint, setShowIntroHint] = useState(false); // 入场改点击推进:太久没点→显示"点击继续"提示
   const [obEcho, setObEcho] = useState({});
   const [obInput, setObInput] = useState("");
   const [obBubblePos, setObBubblePos] = useState(null); // 台词气泡贴头定位 {left,top}(px);null=走 CSS(窄屏/竖版底部)
@@ -74,8 +75,8 @@ export default function Home({ testMode = false }) {
   const [obAiLine, setObAiLine] = useState(null); // AI 生成的自适应台词(当前拍开场,替静态 line);null=用脚本
   const [obCardMessage, setObCardMessage] = useState(null); // 身份卡上糖沐的 AI 寄语;null=卡组件用默认暖句
   const [obCardAvatar, setObCardAvatar] = useState(null); // 身份卡头像(上传后 dataURL);null=用称呼字头
-  const [obSlots, setObSlots] = useState([null, null]); // 立绘双层(交叉溶解)各层 src;null=空
-  const [obLayer, setObLayer] = useState(0); // 当前在顶(不透明)的层索引
+  // 立绘双层(交叉溶解):slots=两层各 src, layer=当前在顶(不透明)的层。合成一个 state 一次提交,避免换图/切层两次 setState 间的中间帧闪(重影根因之一)。
+  const [obPortrait, setObPortrait] = useState({ slots: [null, null], layer: 0 });
   const prevImageRef = useRef(null); // 上一帧立绘 src,供双层比对
   const obInputRef = useRef(null); // onboarding 输入框(选项 fill 后聚焦)
   const obAvatarInputRef = useRef(null); // 身份卡头像上传的隐藏 file input
@@ -84,12 +85,15 @@ export default function Home({ testMode = false }) {
   const obActive = obIntro >= 0 || !!obBeat;
   // 当前有效 emo:回退进入且该拍有 backEmo → 用反悔姿势,否则常态 emo。
   const obEmo = obBeat ? (obViaBack && obBeat.backEmo ? obBeat.backEmo : obBeat.emo) : null;
-  // 当前台词优先级:思考态 > 回退反悔(backLine) > AI 自适应(obAiLine) > 静态脚本(line)。
+  // 当前台词优先级:思考态 > 回退反悔(backLine) > 上传头像后的回应(avatarLine) > AI 自适应/闲聊(obAiLine) > 静态脚本(line)。
+  const obHasAvatar = !!(obCardAvatar || (obEcho && obEcho.avatar));
   const obLine = obThinking
     ? "（想一下……）"
     : obBeat
     ? obViaBack && obBeat.backLine
       ? obBeat.backLine(obEcho)
+      : obBeat.avatarLine && obHasAvatar && !obAiLine
+      ? obBeat.avatarLine(obEcho)
       : obAiLine || obBeat.line(obEcho)
     : introFrame
     ? introFrame.line
@@ -140,21 +144,26 @@ export default function Home({ testMode = false }) {
     }
   }, []);
 
-  // 入场演出推进:一帧前进一步(背身→回头→转正进登记拍 name)。
-  // 定时自动播 + 点击加速走同一逻辑:点击改 obIntro → 下方 effect 重跑,
-  // cleanup 清掉待触发的定时器,不会自动+手动双跳。
+  // 入场演出推进:点击一帧前进一步(背身→回头→转正进登记拍 name)。改点击推进——不再自动播,点屏才走下一句。
   function advanceIntro() {
     if (obIntro < 0) return;
+    setShowIntroHint(false);
     if (obIntro + 1 < INTRO.length) setObIntro(obIntro + 1);
     else {
       setObIntro(-1);
       setObStep(FIRST_BEAT);
     }
   }
+  // 入场节奏:背身→回头(无 hold)按 dur 自动播到正面;正面对话帧(hold)停下等点击推进,太久没点(2.5s)冒"点击继续"提示。
   useEffect(() => {
     if (obIntro < 0) return undefined;
+    setShowIntroHint(false);
     const cur = INTRO[obIntro];
-    const t = setTimeout(advanceIntro, (cur && cur.dur) || 1200);
+    if (cur && cur.hold) {
+      const t = setTimeout(() => setShowIntroHint(true), 2500); // 正面对话:等点击,太久没点→提示
+      return () => clearTimeout(t);
+    }
+    const t = setTimeout(advanceIntro, (cur && cur.dur) || 1200); // 背身/回头:自动切下一帧
     return () => clearTimeout(t);
   }, [obIntro]);
 
@@ -230,49 +239,42 @@ export default function Home({ testMode = false }) {
     const compute = () => {
       if (!obActive || !headAnchor) return setObBubblePos(null);
       if (window.matchMedia("(max-width: 720px), (orientation: portrait)").matches) return setObBubblePos(null);
+      const portrait = document.querySelector(".home-portrait");
       const img = document.querySelector(".home-portrait img");
-      if (!img) return;
+      if (!portrait || !img) return;
+      const pr = portrait.getBoundingClientRect();
       const r = img.getBoundingClientRect();
       if (!r.width) return;
-      // 纵向:气泡中心对齐该姿势的头高(headAnchor.y,实测);
-      // 横向:气泡右缘落在该姿势立绘身体左轮廓(headAnchor.edge,实测)之前,留 0.025 图宽余量。
-      const headCY = r.top + headAnchor.y * r.height;
-      const rightEdge = r.left + (headAnchor.edge - 0.025) * r.width;
+      // 坐标相对 .home-portrait(图 rect 减容器 rect):祖先 transform 对图和容器同样偏移、相减抵消,故滑动中途量也稳。
+      // 气泡就渲染在 .home-portrait 里,立绘 -8% 滑动时气泡随容器 transform 一起走 → 不用重算、天然不卡(不再靠 transitionend)。
+      const headCY = r.top - pr.top + headAnchor.y * r.height;
+      const rightEdge = r.left - pr.left + (headAnchor.edge - 0.025) * r.width;
       setObBubblePos({ left: Math.round(rightEdge), top: Math.round(headCY) });
     };
     compute();
     window.addEventListener("resize", compute);
-    // 立绘一旦有 transform 过渡(未来若做立绘滑动),过渡结束后重算气泡,保证「立绘一动就调气泡」不滞后
-    const portrait = document.querySelector(".home-portrait");
-    if (portrait) portrait.addEventListener("transitionend", compute);
-    return () => {
-      window.removeEventListener("resize", compute);
-      if (portrait) portrait.removeEventListener("transitionend", compute);
-    };
+    return () => window.removeEventListener("resize", compute);
   }, [obActive, headAnchor, obStep, obIntro, image]);
 
-  // 立绘双层交叉溶解(纯 CSS opacity 过渡,不依赖 Motion,任意切换频率都稳):
-  // image 变了 → 新图放到「非当前层」,再切换当前层 → 新层淡入、旧层淡出。永远只 2 层。
+  // 立绘双层交叉溶解:image 变 → 把新图放「非当前层」+ 切当前层到它 = 新层淡入、旧层淡出。
+  // 换图与切层合成一次 setObPortrait(原子提交),消掉两次 setState 间「新图挂在旧层判定上以 opacity:1 闪现」的中间帧(整图差分重影的根因之一)。
   useLayoutEffect(() => {
     if (!image) return;
     if (prevImageRef.current === null) {
-      // 首帧:两层都放首图(slot1 也存在但透明),这样首次换姿势也能过渡淡入
-      // (否则新层刚挂载 = 瞬显,首次切换会像硬切)。obLayer=0 → slot0 显、slot1 透明备用。
-      setObSlots([image, image]);
+      setObPortrait({ slots: [image, image], layer: 0 }); // 首帧两层同图,首次换姿势也能淡入
       prevImageRef.current = image;
       return;
     }
     if (image !== prevImageRef.current) {
-      const next = obLayer === 0 ? 1 : 0;
-      setObSlots((s) => {
-        const n = [...s];
-        n[next] = image;
-        return n;
+      setObPortrait((p) => {
+        const next = p.layer === 0 ? 1 : 0;
+        const slots = [...p.slots];
+        slots[next] = image;
+        return { slots, layer: next };
       });
-      setObLayer(next);
       prevImageRef.current = image;
     }
-  }, [image, obLayer]);
+  }, [image]);
 
   // 身份卡 AI 寄语:进 card 拍时,糖沐现场为这位客人写一句话(卡背)。后台生成、不挡卡出现;失败留 null → 卡用默认暖句。
   useEffect(() => {
@@ -296,6 +298,16 @@ export default function Home({ testMode = false }) {
       alive = false;
     };
   }, [obStep]);
+
+  // 导览拍自动连讲:进导览拍(有 tour)后 AUTO_MS 自动进下一个功能介绍。obThinking(玩家插话中)暂停;插话答完 obAiLine 变→本 effect 重挂、重新计时。终点拍(tourForum,首 chip 无 next)不自动、停在出口等选。
+  useEffect(() => {
+    const beat = obStep ? beatById(obStep) : null;
+    if (!beat || !beat.tour || obThinking) return undefined;
+    const nextId = beat.chips && beat.chips[0] && beat.chips[0].next;
+    if (!nextId) return undefined;
+    const t = setTimeout(() => obGoNext(nextId), AUTO_MS);
+    return () => clearTimeout(t);
+  }, [obStep, obThinking, obAiLine]);
 
   async function send() {
     const text = input.trim();
@@ -334,6 +346,11 @@ export default function Home({ testMode = false }) {
     setObStep(null);
   }
   function obChip(c) {
+    // 头像 chip:触发文件选择(不推进);上传后 obCardAvatar 变、气泡切到 avatarLine(像糖沐在回应)。
+    if (c.upload) {
+      obPickAvatar();
+      return;
+    }
     // 点 3:带 fill 的选项 = 把文字填进输入框,不直接发送;玩家确认/改后再点「好」提交。
     if (c.fill != null) {
       setObInput(c.fill);
@@ -350,33 +367,74 @@ export default function Home({ testMode = false }) {
     if (c.done) endOnboarding(echo);
     else if (c.next) obGoNext(c.next);
   }
+  // 解析糖沐回复的辨别标记:[CHAT]=玩家在闲聊/没正经回答(接话不填、停这拍) / [OK] 或无标记=当答案(填卡+推进)。
+  // 解析糖沐回复的辨别标记:[CHAT]=闲聊(接话不填、停这拍) / [NONE]=明说没有(推进但卡上记空) / [OK]或无标记=当答案(填原话+推进)。
+  function parseIntent(reply) {
+    if (!reply) return { intent: "answer", text: null }; // AI 失败→保守当答案(回退旧行为,不卡新客)
+    const m = reply.match(/^\s*\[(OK|NONE|CHAT)\]\s*/i);
+    if (!m) return { intent: "answer", text: reply };
+    const tag = m[1].toUpperCase();
+    const intent = tag === "CHAT" ? "chat" : tag === "NONE" ? "none" : "answer";
+    return { intent, text: reply.slice(m[0].length).trim() || null };
+  }
   async function obFieldSubmit() {
     const v = obInput.trim();
     if (!v || !obBeat || !obBeat.field || obThinking) return;
-    const echo = { ...obEcho, [obBeat.field]: v };
-    setObEcho(echo);
-    saveEcho(echo);
     const beat = obBeat;
     if (!beat.next) return;
-    // AI 自适应(点4/5):复用 /api/chat(看板同款)让糖沐接住玩家输入 + 引下一步;失败/超时回退静态台词。
+    // AI 辨别:让糖沐判断这句是不是正经回答(报称呼/口味)。[OK]→填卡+推进;[CHAT]→接话但不填、停这拍继续等。失败/无标记→保守当答案。
     if (beat.ai) {
       setObThinking(true);
-      let aiLine = null;
+      let reply = null;
       try {
-        const card = { spec: "chara_card_v2", spec_version: "2.0", data: { name: "糖沐", description: AI_PERSONA, scenario: beat.ai.scenario(echo) } };
+        const card = { spec: "chara_card_v2", spec_version: "2.0", data: { name: "糖沐", description: AI_PERSONA, scenario: beat.ai.scenario(obEcho) } };
         const r = await Promise.race([
           postJSON("/api/chat", { card, session_id: newSessionId(), user: v, world: null }),
           new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000)),
         ]);
-        aiLine = ((r && r.reply) || "").trim() || null;
+        reply = ((r && r.reply) || "").trim() || null;
       } catch (e) {
-        aiLine = null; // 降级:下一拍用静态台词,不卡新客
+        reply = null; // 降级:当答案,不卡新客
       }
       setObThinking(false);
-      obGoNext(beat.next, aiLine);
+      const p = parseIntent(reply);
+      if (p.intent === "chat") {
+        // 闲聊/没正经回答:糖沐接话但不填卡、不推进,停这拍继续等真正的答案。
+        setObAiLine(p.text);
+        setObInput("");
+        return;
+      }
+      // answer=填玩家原话 / none=明说没有→卡上记空(背面写暖句、不写书)。两者都推进,回复作下一拍开场。
+      const echo = { ...obEcho, [beat.field]: p.intent === "none" ? "" : v };
+      setObEcho(echo);
+      saveEcho(echo);
+      obGoNext(beat.next, p.text);
     } else {
+      const echo = { ...obEcho, [beat.field]: v };
+      setObEcho(echo);
+      saveEcho(echo);
       obGoNext(beat.next);
     }
+  }
+  // 导览期玩家插话:糖沐用店员口吻答一两句(不填卡、不推进当前导览拍)。自动连讲的定时器会因 obThinking 暂停、答完(obAiLine 变)重启。
+  async function obChatSubmit() {
+    const v = obInput.trim();
+    if (!v || obThinking) return;
+    setObInput("");
+    setObThinking(true);
+    let reply = null;
+    try {
+      const card = { spec: "chara_card_v2", spec_version: "2.0", data: { name: "糖沐", description: AI_PERSONA, scenario: CHAT_SCENARIO } };
+      const r = await Promise.race([
+        postJSON("/api/chat", { card, session_id: newSessionId(), user: v, world: null }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000)),
+      ]);
+      reply = ((r && r.reply) || "").trim() || null;
+    } catch (e) {
+      reply = null;
+    }
+    setObThinking(false);
+    if (reply) setObAiLine(reply);
   }
   // 前进一拍:压历史(供回退),清回退态与输入框;aiLine=本次 AI 自适应台词(替下一拍静态开场),null=用脚本。
   function obGoNext(nextId, aiLine = null) {
@@ -412,6 +470,7 @@ export default function Home({ testMode = false }) {
       const url = String(reader.result || "");
       if (!url) return;
       setObCardAvatar(url);
+      setObAiLine(null); // 清掉"引导贴头像"那句 AI 台词,让气泡切到 avatarLine(糖沐对上传的回应"这张好看")
       const echo = { ...obEcho, avatar: url };
       setObEcho(echo);
       saveEcho(echo);
@@ -449,7 +508,7 @@ export default function Home({ testMode = false }) {
   }
 
   return (
-    <div className={"home" + (fullscreen ? " is-fullscreen" : "") + (obBeat && obBeat.card ? " is-cardbeat" : "")}>
+    <div className={"home" + (fullscreen ? " is-fullscreen" : "") + (obBeat && obBeat.showCard ? " is-cardbeat" : "")}>
       {/* 背景层 */}
       <div className="home-bg" style={{ backgroundImage: `url("${BG_IMG}")` }} aria-hidden="true" />
       <div className="home-bg-scrim" aria-hidden="true" />
@@ -458,26 +517,50 @@ export default function Home({ testMode = false }) {
           新层淡入、旧层淡出。永远只 2 层,任意切换频率都不堆积、不透明。 */}
       <div className="home-portrait">
         {image ? (
-          obSlots.map((src, i) =>
+          obPortrait.slots.map((src, i) =>
             src ? (
               <img
                 key={i}
-                className={"home-portrait-img" + (obLayer === i ? " is-on" : "")}
+                className={"home-portrait-img" + (obPortrait.layer === i ? " is-on" : "")}
                 src={src}
-                alt={obLayer === i ? displayName : ""}
-                aria-hidden={obLayer !== i}
+                alt={obPortrait.layer === i ? displayName : ""}
+                aria-hidden={obPortrait.layer !== i}
                 draggable="false"
               />
             ) : null
           )
         ) : (
-          <span className="home-portrait-ph t-kai">{displayName.slice(0, 2)}</span>
+          <span className="home-portrait-ph t-kai">{Array.from(displayName).slice(0, 2).join("")}</span>
+        )}
+        {/* 台词气泡:渲染在 .home-portrait 内 → 立绘 -8% 滑动时随容器 transform 一起走(零重量、不卡)。坐标相对 portrait(见 compute)。窄屏 obBubblePos=null 走 CSS 底部。 */}
+        {(obBeat || (introFrame && introFrame.line)) && (
+          <div
+            key={obBeat ? "b-" + obBeat.id + (obViaBack ? "-back" : "") : "i-" + obIntro}
+            className="home-ob-bubble"
+            style={
+              obBubblePos
+                ? { left: obBubblePos.left, top: obBubblePos.top, right: "auto", bottom: "auto", transform: "translate(-100%, -50%)" }
+                : undefined
+            }
+          >
+            <div className="home-ob-bubble-head">
+              <span className="home-dlg-name t-kai">糖沐</span>
+              {obBeat && (
+                <button className="home-ob-skip" onClick={() => endOnboarding()} disabled={obThinking} title="跳过引导,直接进店">跳过</button>
+              )}
+            </div>
+            <p className="home-ob-line t-read">{obLine}</p>
+          </div>
         )}
       </div>
 
       {/* 入场演出:点屏任意处加速推进当前帧(VN 式 tap-to-advance);只在入场存在。
           入场态无其它可交互元素,整屏捕获层置顶不抢占任何点击。 */}
       {introFrame && <div className="home-ob-introcatch" onClick={advanceIntro} aria-hidden="true" />}
+      {/* 入场点击推进:太久没点冒出"点击继续"提示(闪烁),引导玩家点屏。 */}
+      {introFrame && showIntroHint && (
+        <div className="home-ob-clickhint t-meta" aria-hidden="true">点击继续 ▾</div>
+      )}
 
       {/* 全屏:整屏点击捕获层(点任意处退出);只在全屏存在,不干扰常态交互、无冒泡竞态 */}
       {fullscreen && <div className="home-fs-catcher" onClick={() => setFullscreen(false)} aria-hidden="true" />}
@@ -491,36 +574,20 @@ export default function Home({ testMode = false }) {
       {/* 前景 UI(全屏态隐藏) */}
       {!fullscreen && (
         <div className="home-ui">
-          {/* 新手引导:糖沐台词气泡,贴在立绘头部一侧(galgame 式,台词随角色) */}
-          {(obBeat || (introFrame && introFrame.line)) && (
-            <div
-              key={obBeat ? "b-" + obBeat.id + (obViaBack ? "-back" : "") : "i-" + obIntro}
-              className="home-ob-bubble"
-              style={
-                obBubblePos
-                  ? { left: obBubblePos.left, top: obBubblePos.top, right: "auto", bottom: "auto", transform: "translate(-100%, -50%)" }
-                  : undefined
-              }
-            >
-              <div className="home-ob-bubble-head">
-                <span className="home-dlg-name t-kai">糖沐</span>
-                {obBeat && (
-                  <button className="home-ob-skip" onClick={() => endOnboarding()} disabled={obThinking} title="跳过引导,直接进店">跳过</button>
-                )}
-              </div>
-              <p className="home-ob-line t-read">{obLine}</p>
-            </div>
-          )}
-          {/* 身份卡收尾拍:糖沐递上的入店凭证(点一下翻面看她写的寄语) */}
-          {obBeat && obBeat.card && (
-            <div className="home-ob-card">
+          {/* 台词气泡已移进 .home-portrait(跟立绘一起滑,见上)。 */}
+          {/* 身份卡:登记段(showCard)常驻画面角、随回声逐行成形;cardDone 拍落章办好(寄语+上传+翻面)。 */}
+          {obBeat && obBeat.showCard && (
+            <div className={"home-ob-card" + (obBeat.card ? " is-done" : " is-forming")}>
               <IdentityCard
                 name={obEcho.name}
                 taste={obEcho.taste}
-                message={obCardMessage}
+                message={obBeat.card ? obCardMessage : null}
                 avatar={obCardAvatar || obEcho.avatar}
                 issuedAt={todayYmd()}
+                forming={!obBeat.card}
               />
+              {/* 隐藏 file input:只要在卡拍(showCard,含头像拍)就渲染。原来挂在 obBeat.card(只 cardDone)上,
+                  头像前置到「头像拍」后那拍非 card,ref 为 null → 上传按钮点了没反应。 */}
               <input ref={obAvatarInputRef} type="file" accept="image/*" onChange={obAvatarChange} hidden />
             </div>
           )}
@@ -534,39 +601,49 @@ export default function Home({ testMode = false }) {
                     ← 上一步
                   </button>
                 )}
-                {obBeat.field && (
-                  <div className="home-composer">
-                    <input
-                      ref={obInputRef}
-                      className="home-input"
-                      value={obInput}
-                      disabled={obThinking}
-                      placeholder={obThinking ? "糖沐正想着怎么接…" : obBeat.field === "name" ? "输入你的称呼…" : "随口说说…"}
-                      onChange={(e) => setObInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.isComposing) {
-                          e.preventDefault();
-                          obFieldSubmit();
-                        }
-                      }}
-                    />
-                    <Button variant="primary" onClick={obFieldSubmit} disabled={!obInput.trim() || obThinking}>
-                      {obThinking ? "…" : "好"}
-                    </Button>
-                  </div>
-                )}
-                {obBeat.card && (
-                  <button className="home-ob-upload" onClick={obPickAvatar}>
-                    {obCardAvatar || obEcho.avatar ? "换张头像" : "＋ 上传头像"}
-                  </button>
-                )}
+                {/* 输入框:所有引导拍常驻。field 拍=回答登记(走 AI 辨别);其余(导览/办卡)=跟糖沐说话(闲聊,不填卡、不推进导览)。 */}
+                <div className="home-composer">
+                  <input
+                    ref={obInputRef}
+                    className="home-input"
+                    value={obInput}
+                    disabled={obThinking}
+                    placeholder={
+                      obThinking
+                        ? "糖沐正想着怎么接…"
+                        : obBeat.field === "name"
+                        ? "输入你的称呼…"
+                        : obBeat.field === "taste"
+                        ? "随口说说…"
+                        : "想跟糖沐说点什么…"
+                    }
+                    onChange={(e) => setObInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.isComposing) {
+                        e.preventDefault();
+                        if (obBeat.field) obFieldSubmit();
+                        else obChatSubmit();
+                      }
+                    }}
+                  />
+                  <Button variant="primary" onClick={() => (obBeat.field ? obFieldSubmit() : obChatSubmit())} disabled={!obInput.trim() || obThinking}>
+                    {obThinking ? "…" : obBeat.field ? "好" : "说"}
+                  </Button>
+                </div>
                 {!!(obBeat.chips && obBeat.chips.length) && (
                   <div className="home-ob-chips">
-                    {obBeat.chips.map((c, i) => (
-                      <button key={i} className="home-ob-chip" onClick={() => obChip(c)} disabled={obThinking}>
-                        {c.label}
-                      </button>
-                    ))}
+                    {obBeat.chips.map((c, i) => {
+                      // 头像拍传了头像后,chip 文案随之变(＋传张头像→换一张 / 用字头就好→好了,继续)。
+                      let label = c.label;
+                      if (obBeat.id === "avatar" && (obCardAvatar || obEcho.avatar)) {
+                        label = c.upload ? "换一张" : "好了,继续";
+                      }
+                      return (
+                        <button key={i} className="home-ob-chip" onClick={() => obChip(c)} disabled={obThinking}>
+                          {label}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -648,7 +725,7 @@ export default function Home({ testMode = false }) {
                   return (
                     <button className="home-switch-item" key={i} onClick={() => pickChar(it)}>
                       <span className="home-switch-av" style={img ? { backgroundImage: `url("${img}")` } : undefined}>
-                        {!img && libItemName(it).slice(0, 1)}
+                        {!img && (Array.from(libItemName(it))[0] || "")}
                       </span>
                       <span className="t-ui-sm">{libItemName(it)}</span>
                     </button>

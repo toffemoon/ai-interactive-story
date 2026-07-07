@@ -44,6 +44,9 @@
   align-items: flex-start;
   justify-content: center;
   pointer-events: none;
+  /* 开场"掏卡"演出:从入场第三帧(居中)进 name 拍(左移 -8%)时,角色滑动到左边、给右侧淡入的身份卡让位。
+     滑动期间气泡靠 transitionend 在滑完重算 +「先动作后气泡」延迟出现,避免贴头气泡量到过渡中途位。 */
+  transition: transform 0.62s var(--ease-out);
 }
 /* 立绘图层:绝对定位,双缓冲两层完全重叠(交叉溶解)。顶偏移由 .home-portrait 的 top 承担,故这里 top:0。 */
 .home-portrait-img {
@@ -57,12 +60,28 @@
   object-fit: contain;
   object-position: top center;
   filter: drop-shadow(0 14px 44px rgba(0, 0, 0, 0.5));
-  opacity: 0; /* 非当前层透明。换姿势 = 旧层 1→0 淡出 + 新层 0→1 淡入,同时进行(真交叉溶解) */
-  /* ease-in-out:淡变均匀铺满全程(不像 ease-out 挤在前段),两姿势在中点各半、更丝滑 */
-  transition: opacity 0.9s ease-in-out;
+  opacity: 0; /* 非当前层透明。换姿势 = 旧层 1→0 淡出 + 新层 0→1 淡入 */
+  /* 整图差分裸溶解必重影(两张完整立绘中点都半透明)。取短 0.35s + ease-out:新图前段快速显现,
+     把两图各半的重影窗口从 ~0.45s 压到 ~0.12s,肉眼近乎无重影(galgame 整图切换惯例 250-400ms)。 */
+  transition: opacity 0.35s var(--ease-out);
 }
+/* 新到顶的层:淡入 + 从右侧 9px 微移入落定(错峰位移)。让眼睛跟运动、不比对两张轮廓,把整图差分的重影带过去。 */
 .home-portrait-img.is-on {
   opacity: 1;
+  animation: portraitSlideIn 0.42s var(--ease-out);
+}
+@keyframes portraitSlideIn {
+  from {
+    transform: translateX(calc(-50% + 9px));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-portrait-img {
+    transition: opacity 0.18s linear;
+  }
+  .home-portrait-img.is-on {
+    animation: none;
+  }
 }
 .home-portrait-ph {
   align-self: center;
@@ -276,6 +295,7 @@
   box-shadow: 0 14px 40px -14px rgba(0, 0, 0, 0.7);
   color: #f1e7d6;
   /* 380ms 延迟:每拍气泡 key 重挂后先按住不显,让立绘先换姿势(先动作、后气泡),错开更自然 */
+  pointer-events: auto; /* 气泡现渲染在 .home-portrait(pointer-events:none)内,需恢复可点,否则"跳过"按钮失效 */
   animation: obBubbleIn 320ms var(--ease-out) 380ms both;
 }
 /* 气泡入场只淡不移:定位改由 JS 贴头(inline transform),避免关键帧动 transform 与之打架。 */
@@ -326,8 +346,8 @@
     transform: translateY(calc(-50% + 44px)) scale(0.93) rotate(-2deg);
   }
 }
-/* card 拍:糖沐稍向左让位,给右边的卡腾地方。瞬移(不做 transition):
-   气泡定位靠 layout effect 量立绘 rect,滑动会让它量到过渡中途的旧位置而滞后遮挡,故瞬移到位。 */
+/* 登记/办卡拍:糖沐向左让位(-8%),给右侧身份卡腾地方。滑动过渡挂在 .home-portrait 上(开场掏卡演出);
+   气泡贴头定位靠 transitionend 在滑完重算 +「先动作后气泡」延迟出现,避开过渡中途位。 */
 .home.is-cardbeat .home-portrait {
   transform: translateX(-8%);
 }
@@ -430,11 +450,53 @@
     bottom: 168px;
     animation-name: obBubbleInM;
   }
+  /* 登记态/办好态身份卡:竖屏 460px 宽会横向溢出,故缩小居中、放气泡上方(立绘腰腹处、露脸),
+     取消入场位移动画(其 translateY transform 与这里的缩放 transform 冲突)。 */
+  .home-ob-card {
+    right: auto;
+    left: 50%;
+    top: auto;
+    bottom: 368px;
+    transform: translateX(-50%) scale(0.62);
+    transform-origin: bottom center;
+    animation: none;
+  }
+  /* 竖屏卡已横向居中,立绘无需左移让位 */
+  .home.is-cardbeat .home-portrait {
+    transform: none;
+  }
 }
 @keyframes obBubbleInM {
   from {
     opacity: 0;
     transform: translateY(8px);
+  }
+}
+
+/* 入场改点击推进:太久没点冒出的"点击继续"提示,轻微呼吸闪烁,引导点屏(不抢点击,pointer-events:none)。 */
+.home-ob-clickhint {
+  position: absolute;
+  z-index: 6;
+  right: clamp(24px, 6vw, 84px);
+  bottom: clamp(24px, 7vh, 76px);
+  color: rgba(241, 231, 214, 0.85);
+  letter-spacing: 0.1em;
+  pointer-events: none;
+  animation: clickHintBlink 1.5s ease-in-out infinite;
+}
+@keyframes clickHintBlink {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-ob-clickhint {
+    animation: none;
+    opacity: 0.85;
   }
 }
 
