@@ -983,6 +983,11 @@
   color: var(--accent);
   font-weight: 500;
 }
+/* 发布项禁用原因(触屏可见,YOR-177) */
+.ct-more-note {
+  padding: 0 12px 8px;
+  opacity: 0.55;
+}
 
 /* 「完善角色卡」弹窗:立绘大图在上(单独放大)+ 头像居中名字在下 + 介绍可编辑 */
 .ct-finalize-portrait {
