@@ -86,6 +86,16 @@ export async function getJSON(url) {
   return r.json();
 }
 
+// DELETE(卡库/预设等删除):token 由全局 patchFetch 注入;空 body / 非 JSON 容错。
+export async function delJSON(url) {
+  const r = await fetch(url, { method: "DELETE" });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({ detail: r.statusText }));
+    throw new Error(err.detail || "删除失败");
+  }
+  return r.json().catch(() => ({}));
+}
+
 export async function uploadFile(file) {
   const r = await fetch("/api/upload?filename=" + encodeURIComponent(file.name), {
     method: "POST",

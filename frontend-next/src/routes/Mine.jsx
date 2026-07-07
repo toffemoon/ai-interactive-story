@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useNavigate } from "../lib/transitionNav";
 import { Button, Input, CardShelf } from "../components/ui";
 import CharDetailModal from "../components/CharDetailModal";
-import { getJSON, postJSON } from "../lib/api";
+import { getJSON, postJSON, delJSON } from "../lib/api";
 import { toCardModels } from "../lib/cardModel";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
@@ -117,6 +117,20 @@ export default function Mine() {
     m.kind === "story"
       ? navigate(`/story/${encodeURIComponent(m.id)}`, { state: { preset: m.raw } })
       : setDetail(m);
+
+  // 删除「我创建的」角色卡:二次确认(镜像 YOR-175/184 破坏性操作范式)→ DELETE 卡库 → 本地移除 + 关弹层。
+  async function deleteCard(m) {
+    const nm = (m.raw && m.raw.name) || m.id;
+    if (!nm) return;
+    if (!window.confirm(`确定删除「${m.title}」?删除后无法恢复。`)) return;
+    try {
+      await delJSON(`/api/library/characters/${encodeURIComponent(nm)}`);
+      setCreated((rows) => rows.filter((r) => r.name !== nm));
+      setDetail(null);
+    } catch (e) {
+      alert("删除失败:" + (e.message || "请稍后再试"));
+    }
+  }
 
   async function uploadAvatar(ev) {
     const f = ev.target.files && ev.target.files[0];
@@ -314,7 +328,7 @@ export default function Mine() {
         </section>
       )}
 
-      {detail && <CharDetailModal model={detail} onClose={() => setDetail(null)} />}
+      {detail && <CharDetailModal model={detail} onClose={() => setDetail(null)} onDelete={tab === "created" ? deleteCard : undefined} />}
     </div>
   );
 }

@@ -503,6 +503,28 @@
   overflow-y: auto;
   line-height: var(--lh-read);
 }
+/* 我的·我创建的:详情弹层底部删除卡按钮(仅 Mine 传 onDelete 时渲染)。flex 列里固定不缩,不被 body 滚动吞。 */
+.detail-charmodal-del {
+  flex: none;
+  align-self: flex-start;
+  margin-top: var(--sp-4);
+  min-height: 40px; /* 触控下限(YOR-160) */
+  padding: 8px 18px;
+  background: none;
+  border: 1px solid #c98b7a;
+  border-radius: var(--r-pill);
+  color: #b25b47;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.detail-charmodal-del:hover {
+  background: #b25b47;
+  color: #fff;
+  border-color: #b25b47;
+}
 
 /* 载入 / 缺失 */
 .detail-loading,
