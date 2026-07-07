@@ -200,10 +200,73 @@
   letter-spacing: 0.06em;
 }
 
+/* —— 登记态(边填边成形):不可翻、正面临时显口味行、字段报一句浮现一句 —— */
+.idcard.is-forming {
+  cursor: default;
+}
+/* 未办好:不抬起(登记态不可点)、朱砂章先淡淡浮着 */
+.idcard.is-forming:hover .idcard-inner {
+  transform: none;
+}
+.idcard.is-forming:hover .idcard-face {
+  box-shadow: 0 20px 46px -18px rgba(0, 0, 0, 0.5);
+}
+/* 登记态:完全没章(最开始卡上无印);办好(非登记态)时 idSealStamp 把章盖下来。 */
+.idcard.is-forming .idcard-seal-img {
+  opacity: 0;
+}
+/* 正面口味成形行(登记态用,占原发卡日底行的位) */
+.idcard-forming-line {
+  flex: none;
+  font-size: var(--fs-body);
+  color: var(--idcard-meta);
+  letter-spacing: 0.04em;
+}
+/* 空态占位:名字/口味淡灰 */
+.idcard-name.is-empty,
+.idcard-forming-taste.is-empty {
+  color: rgba(106, 87, 48, 0.48);
+}
+/* 报一行浮现一行:name/口味 span 用 key 重挂触发入场 */
+.idcard.is-forming .idcard-name,
+.idcard-forming-line .idcard-forming-taste {
+  animation: idFieldIn 440ms var(--ease-out) both;
+}
+@keyframes idFieldIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+    filter: blur(2px);
+  }
+}
+/* 办好落章:两行齐了,朱砂真章从上方盖下来(slam)。非登记态即办好 → 触发一次。 */
+.idcard:not(.is-forming) .idcard-seal-img {
+  animation: idSealStamp 520ms var(--ease-out) both;
+}
+@keyframes idSealStamp {
+  0% {
+    opacity: 0;
+    transform: rotate(-4deg) scale(2.1);
+  }
+  55% {
+    opacity: 0.98;
+    transform: rotate(-4deg) scale(0.9);
+  }
+  100% {
+    transform: rotate(-4deg) scale(1);
+    opacity: 0.94;
+  }
+}
+
 /* 无障碍:减弱动效偏好下,翻面/抬起即时,不做动画 */
 @media (prefers-reduced-motion: reduce) {
   .idcard-inner,
   .idcard-face {
     transition: none;
+  }
+  .idcard.is-forming .idcard-name,
+  .idcard-forming-line .idcard-forming-taste,
+  .idcard:not(.is-forming) .idcard-seal-img {
+    animation: none;
   }
 }
