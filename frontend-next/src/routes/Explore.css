@@ -73,6 +73,12 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+/* 禁用排序的可见解释(触屏看不到 title,YOR-173) */
+.explore-sorts-note {
+  flex: 0 0 100%;
+  text-align: right;
+  opacity: 0.55;
+}
 
 /* 标签筛选 */
 .explore-genres {
@@ -246,5 +252,8 @@
   }
   .explore-sorts {
     margin-left: 0; /* 桌面 margin-left:auto 推右,手机单行不需要 */
+  }
+  .explore-sorts-note {
+    text-align: left; /* 手机排序行靠左横滑,说明行跟着靠左 */
   }
 }
