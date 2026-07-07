@@ -303,6 +303,19 @@
     transform: translate(-50%, 0);
   }
 }
+/* toast 内可选去处(YOR-170:发布成功「去看看」)。toast 底色是 --fg,按钮反色处理 */
+.create-toast-go {
+  margin-left: 12px;
+  padding: 8px 2px;
+  background: transparent;
+  border: none;
+  color: var(--bg);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
 
 /* modal(补素材 / 发布) */
 .create-modal {

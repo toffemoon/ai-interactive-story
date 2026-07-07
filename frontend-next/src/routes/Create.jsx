@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "../lib/transitionNav";
 import { Button } from "../components/ui";
 import { postJSON, getJSON, uploadFile } from "../lib/api";
 import { fileToCompressedDataURL } from "../lib/image";
@@ -135,10 +136,12 @@ function mergeWorldBooks(worldBooks) {
 export default function Create() {
   const { user } = useAuth();
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const [ki, setKi] = useState(0);
   const [desks, setDesks] = useState(loadDesks);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState("");
+  const [toastGo, setToastGo] = useState(null); // toast 可选去处(YOR-170:发布成功带「去看看」)
   const [libModal, setLibModal] = useState(null); // {items} | null
   const [libQ, setLibQ] = useState(""); // 补素材搜索
   const [builtView, setBuiltView] = useState(false); // 查看本台已建的卡(细节③)
@@ -177,10 +180,15 @@ export default function Create() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [desk.messages, busy]);
 
-  function flash(msg) {
+  // go = 可选去处路由:带去处的 toast 多留一会儿,不然来不及点(YOR-170)
+  function flash(msg, go = null) {
     setToast(msg);
+    setToastGo(go);
     if (toastT.current) clearTimeout(toastT.current);
-    toastT.current = setTimeout(() => setToast(""), 2200);
+    toastT.current = setTimeout(() => {
+      setToast("");
+      setToastGo(null);
+    }, go ? 4500 : 2200);
   }
   const patch = (kk, p) =>
     setDesks((ds) => ({ ...ds, [kk]: { ...ds[kk], ...(typeof p === "function" ? p(ds[kk]) : p) } }));
@@ -458,7 +466,7 @@ export default function Create() {
       });
       setPreviewOpen(false);
       setPreviewChar(null);
-      flash("已发布到探索 · 公开");
+      flash("已发布到探索 · 公开", "/story/" + encodeURIComponent(pub.name.trim())); // 直链按名解析,发布即刻可达(YOR-170)
     } catch (e) {
       flash("发布失败:" + e.message);
     } finally {
@@ -723,7 +731,24 @@ export default function Create() {
         </>
       )}
 
-      {toast && <div className="create-toast t-ui-sm">{toast}</div>}
+      {toast && (
+        <div className="create-toast t-ui-sm">
+          {toast}
+          {toastGo && (
+            <button
+              className="create-toast-go"
+              onClick={() => {
+                const to = toastGo;
+                setToast("");
+                setToastGo(null);
+                navigate(to);
+              }}
+            >
+              去看看 →
+            </button>
+          )}
+        </div>
+      )}
 
       {/* —————————————— 以下弹层桌面 / 手机共用 —————————————— */}
 
