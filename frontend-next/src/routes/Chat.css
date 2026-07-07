@@ -279,6 +279,7 @@
 }
 /* 详情顶部立绘 / 布偶动画(细节⑨):放全不裁(去掉 max-height 与 cover 裁切)。 */
 .chat-profile-art {
+  flex: none; /* 档案文字长时不许 flex 把立绘压扁,超高交给卡片自身滚动 */
   width: 100%;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
