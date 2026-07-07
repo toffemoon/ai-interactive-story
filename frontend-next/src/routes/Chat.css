@@ -167,6 +167,15 @@
   color: var(--fg);
   border-color: var(--accent-2);
 }
+/* busy 期间 ⟳ 不可点:给出可感知的失效态,而不是静默吞点击(YOR-150) */
+.chat-iconbtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.chat-iconbtn:disabled:hover {
+  color: var(--muted);
+  border-color: var(--line);
+}
 .chat-feed {
   flex: 1;
   overflow-y: auto;
