@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "_comment": "Vercel 前端门面(2026-07-07 cutover:frontend/ 退役,主前端=frontend-next)。Vercel 控制台把 Root Directory 设为 frontend-next;Vercel 自动 npm install + `npm run build`(outputDirectory=dist)。/api/* 反代到 Render 后端(纯 API),前端相对路径 /api 仍同源、免 CORS。HashRouter 无需 SPA catch-all rewrite。把 destination 改成 Render 部署后的真实 URL。",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://ai-interactive-story.onrender.com/api/:path*"
+    }
+  ]
+}

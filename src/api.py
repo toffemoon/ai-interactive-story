@@ -39,7 +39,7 @@ from . import costguard
 from . import auth
 
 ROOT = Path(__file__).resolve().parent.parent
-FRONTEND = ROOT / "frontend"
+FRONTEND = ROOT / "frontend-next" / "dist"  # 主前端 = frontend-next 构建产物(2026-07-07 cutover;旧零构建 frontend/ 已退役,HashRouter 无需 SPA fallback)
 OC_DIR = ROOT / "oc"  # OC 集:用户 OC 的设定/世界观/立绘/地图(operator 控制台「OC集」用)
 
 # prod 排障基建:此前全仓无 logging 配置,story_turn 异常被保底回合吞掉后无任何痕迹。
