@@ -30,6 +30,16 @@ export default function StoryDetail() {
   const [preset, setPreset] = useState(() => (loc.state && loc.state.preset) || null);
   const [notFound, setNotFound] = useState(false);
 
+  // in-page 切到另一本书(/story/A → /story/B,组件不重挂):上一本的 preset/notFound
+  // 是旧状态,不清掉的话下面的解析 effect 会在 `if (preset) return` 直接 bail,
+  // 页面就停在旧书上、URL 和内容脱节(YOR-157)。按新 name 复位后让它重新解析。
+  useEffect(() => {
+    const cur = preset && ((preset.data && preset.data.name) || preset.name);
+    if (preset && cur !== name) setPreset((loc.state && loc.state.preset) || null);
+    setNotFound(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name]);
+
   useEffect(() => {
     if (preset) return;
     getJSON("/api/presets")
