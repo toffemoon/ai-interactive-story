@@ -22,6 +22,19 @@ updated: 2026-06-04
 
 ---
 
+## 当前状态 (2026-07-05)
+
+> synced 2026-07-05 · 真源=本 repo `docs/` + `decisions/`（下面是快照,细节以真源为准）
+
+- **前端有两套,未收敛(已知结构债)**:
+  - **线上实际服务的是 `frontend/`(零构建单文件 React)** —— `src/api.py` 挂载的是它(`FRONTEND = ROOT / "frontend"`,`app.mount("/", ...)`)。
+  - `frontend-next/`(Vite + React 重写,YOR-92..192)承载了近期几乎全部前端工作,但**尚未接管线上服务**。双前端未收敛,是待处理的结构债。
+- **引擎主线(2026-06-27 战略会拍板)**:找 OC 用户 + 打磨 UX;token 三指标(用户数 / 总 token / 人均 token);**不加新功能**(成就系统已暂缓)。
+- **部署**:Render(`AUTH_ENABLED=1`、`COST_GUARD_ENABLED=1`)。Supabase prod=`hhrqxllcamdxqcoepwgx`、test=`yldfnbmpzkzjzjoyvfhb`。
+- 记忆 Phase 1–3 已上线;导演 / 运营台已发布;约 65 局 / 1090 回合真实使用。
+
+---
+
 ## 0. 任何新 session 第一件事
 
 1. **读本文件** —— 你正在做

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useNavigate } from "../lib/transitionNav";
 import { Button } from "../components/ui";
-import { streamTurn, postJSON, extractStream } from "../lib/api";
+import { streamTurn, postJSON, getJSON, extractStream } from "../lib/api";
 import { useGame } from "../state/game";
 import "./Story.css";
 
@@ -97,6 +97,7 @@ export default function Story() {
   );
   const feedRef = useRef(null);
   const openedRef = useRef(false);
+  const syncedRef = useRef(0); // 已同步到前端的服务器回合数(续玩还原 + tail after 用)
 
   useEffect(() => {
     const el = feedRef.current;
@@ -151,6 +152,7 @@ export default function Story() {
       setChoices(finalTurn.choices || []);
       setState(finalTurn.state || null);
       setCanUndo(true);
+      syncedRef.current += 1; // 本地出了一回合,服务器也已存 → 同步计数跟上,避免 tail 重复拉回本轮
     } catch (e) {
       setStreaming(null);
       setError("本轮生成失败:" + e.message);
@@ -182,6 +184,7 @@ export default function Story() {
       setStreaming(null);
       setInput(out.undone_input || "");
       setCanUndo(false);
+      syncedRef.current = Math.max(0, syncedRef.current - 1); // 撤回一回合 → 同步计数回退
     } catch (e) {
       setError("撤回失败:" + e.message);
     } finally {
@@ -222,13 +225,66 @@ export default function Story() {
     setDeck((dk) => ({ ...dk, characters: (dk.characters || []).filter((c) => ((c.data && c.data.name) || c.name) !== nm) }));
   }
 
-  // 自动开场(只触发一次)。
+  // 进入本局:先尝试从服务器还原历史(续玩);有历史则还原,无历史才开新场(只触发一次)。
   useEffect(() => {
     if (!game || openedRef.current) return;
     openedRef.current = true;
-    runTurn();
+    (async () => {
+      try {
+        const data = await getJSON("/api/session/" + game.sessionId);
+        const srv = (data && data.turns) || [];
+        if (srv.length) {
+          const restored = [];
+          for (const tr of srv) {
+            if (tr.player_input) restored.push({ kind: "player", text: tr.player_input });
+            restored.push({ kind: "story", data: tr });
+          }
+          setTurns(restored);
+          const last = srv[srv.length - 1];
+          setChoices((last && last.choices) || []);
+          setState((data && data.state) || (last && last.state) || null);
+          setCanUndo(true);
+          syncedRef.current = srv.length;
+          return; // 已还原,不再开新场
+        }
+      } catch (e) {
+        // 读不到(新局/网络抖动)→ 落到开新场
+      }
+      runTurn(); // 新局:开场
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game]);
+
+  // 实时 tail:轮询服务器新回合(运营「立即生效」/ 任何 server 端新回合),玩家界面自动冒出。
+  // 自己出回合时(loading)暂停,避免与本地 append 竞态;syncedRef 记已同步回合数作 after。
+  useEffect(() => {
+    if (!game) return;
+    let alive = true;
+    const timer = setInterval(async () => {
+      if (!alive || loading) return;
+      try {
+        const d = await getJSON(`/api/session/${game.sessionId}/tail?after=${syncedRef.current}`);
+        const nt = (d && d.new_turns) || [];
+        if (nt.length) {
+          setTurns((xs) => {
+            const add = [];
+            for (const tr of nt) {
+              if (tr.player_input) add.push({ kind: "player", text: tr.player_input });
+              add.push({ kind: "story", data: tr });
+            }
+            return [...xs, ...add];
+          });
+          syncedRef.current += nt.length;
+          if (d.state) setState(d.state);
+        }
+      } catch (e) {}
+    }, 3500);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game, loading]);
 
   // 派生:累计 token / 记忆卡 / 已触发事件(跨回合聚合)。
   const storyTurns = useMemo(() => turns.filter((t) => t.kind === "story"), [turns]);
