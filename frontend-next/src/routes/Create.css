@@ -339,6 +339,17 @@
   border-radius: var(--r-sm);
   cursor: pointer;
 }
+/* 完善角色卡弹窗的主 CTA 钉底(YOR-148):卡内容超出 84vh 时按钮钉在可视底边,
+   负 margin 抵消 .create-modal-card 的 var(--sp-6) 内边距让底栏贴边;
+   独立 class,不影响共用 .create-modal-card 的补素材弹窗。 */
+.ct-finalize-footer {
+  position: sticky;
+  bottom: calc(-1 * var(--sp-6));
+  margin: var(--sp-4) calc(-1 * var(--sp-6)) calc(-1 * var(--sp-6));
+  padding: var(--sp-3) var(--sp-6) var(--sp-4);
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+}
 .create-lib-search {
   width: 100%;
   margin-top: var(--sp-4);

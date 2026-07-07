@@ -864,9 +864,12 @@ export default function Create() {
               onChange={(e) => setDraftDesc(e.target.value)}
               placeholder="写角色介绍,或点「自动生成」让 AI 按已填设定写一段。"
             />
-            <Button variant="primary" full onClick={confirmFinalize}>
-              {finalize.action === "desk" ? "确认收进本台" : "确认收入卡库 · 私密"}
-            </Button>
+            {/* 钉在弹窗可视底边:矮屏下内容超出 84vh 时主 CTA 不再沉到折叠线下(YOR-148) */}
+            <div className="ct-finalize-footer">
+              <Button variant="primary" full onClick={confirmFinalize}>
+                {finalize.action === "desk" ? "确认收进本台" : "确认收入卡库 · 私密"}
+              </Button>
+            </div>
           </div>
         </div>
       )}
