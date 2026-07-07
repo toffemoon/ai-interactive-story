@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "../lib/transitionNav";
 import { Chip, SearchField, Button, Badge, Tag, CardShelf } from "../components/ui";
 import { getJSON } from "../lib/api";
 import { toCardModel, toCardModels } from "../lib/cardModel";
@@ -165,6 +165,8 @@ export default function Explore() {
   }
 
   const totalCount = storyModels.length + charModels.length;
+  // 计数跟着筛选走:有任一筛选/搜索时显示「匹配 N / 共 M 个」,否则保持全量口径。
+  const filtering = track !== "all" || q.trim() !== "" || genre !== "全部";
 
   return (
     <>
@@ -176,14 +178,23 @@ export default function Explore() {
             <p className="t-ui explore-sub">取下一本书,或挑一张角色卡,走进会回应你的故事世界。</p>
           </div>
           <div className="explore-count t-ui-sm">
-            共 <b>{totalCount}</b> 个故事 / 角色
+            {filtering ? (
+              <>
+                匹配 <b>{filtered.length}</b> / 共 {totalCount} 个
+              </>
+            ) : (
+              <>
+                共 <b>{totalCount}</b> 个故事 / 角色
+              </>
+            )}
           </div>
         </div>
 
-        {/* 双轨切换 */}
+        {/* 双轨切换。切轨道时标签重置回「全部」:旧标签常不在新轨道的标签条里,
+            留着会变成看不见的过滤器把列表筛空(YOR-178)。 */}
         <div className="explore-tracks">
           {TRACKS.map((t) => (
-            <Chip key={t.key} active={track === t.key} onClick={() => setTrack(t.key)}>
+            <Chip key={t.key} active={track === t.key} onClick={() => { setTrack(t.key); setGenre("全部"); }}>
               {t.label}
             </Chip>
           ))}
@@ -201,7 +212,7 @@ export default function Explore() {
                 key={s.key}
                 active={sort === s.key}
                 disabled={!s.live}
-                title={s.live ? undefined : "待后端数据(YOR-95)"}
+                title={s.live ? undefined : "还在攒数据,暂未开放"}
                 className={s.live ? "" : "is-disabled"}
                 onClick={s.live ? () => setSort(s.key) : undefined}
               >
@@ -209,6 +220,10 @@ export default function Explore() {
               </Chip>
             ))}
           </div>
+          {/* 禁用排序的解释:title 在触屏上不可见,补一行可见说明;live 全开后自动消失 */}
+          {SORTS.some((s) => !s.live) && (
+            <span className="explore-sorts-note t-meta">热度 / 点击 还在攒数据,暂未开放</span>
+          )}
         </div>
 
         {/* 标签筛选(真实存在的标签) */}
@@ -235,12 +250,12 @@ export default function Explore() {
         ) : !filtered.length ? (
           <div className="explore-empty">
             <h3 className="t-h2">{totalCount ? "没有匹配的内容" : "书架还空着"}</h3>
-            <p className="t-ui explore-sub">{totalCount ? "换个关键词、标签或轨道试试。" : "去创作从一张角色卡开始。"}</p>
+            <p className="t-ui explore-sub">{totalCount ? "换个关键词、标签或类型试试。" : "去创作从一张角色卡开始。"}</p>
           </div>
         ) : (
           <>
             <CardShelf
-              models={shown}
+              models={shown.map((m) => (isFav(m) ? { ...m, fav: true } : m))} /* 已收藏点亮书签(YOR-171) */
               actionsFor={actionsFor}
               onOpen={(m) => (m.kind === "story" ? goDetail(m) : setDetail(m))}
             />
@@ -283,7 +298,7 @@ export default function Explore() {
                 full
                 onClick={() => {
                   setDetail(null);
-                  chatWith();
+                  chatWith(detail); // 不传角色的话预载永远没写,用户会落到空联系人列表(YOR-167)
                 }}
               >
                 和 TA 纯聊

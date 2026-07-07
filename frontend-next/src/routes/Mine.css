@@ -9,6 +9,7 @@
 
 /* 子分区 tab */
 .mine-tabs {
+  position: relative; /* 红线指示条的定位上下文(子按钮 offsetLeft/Top 相对它) */
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-2);
@@ -25,13 +26,25 @@
   padding: 8px 4px;
   margin-right: var(--sp-3);
   cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
 }
 .mine-tab:hover {
   color: var(--fg);
 }
 .mine-tab.is-on {
   color: var(--fg);
-  border-bottom-color: var(--accent);
+}
+/* 滑动红线:切 tab 时平移到当前项(替代生硬的下划线瞬切) */
+.mine-tab-underline {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+  transition: transform var(--dur-mid) var(--ease-out), width var(--dur-mid) var(--ease-out);
+  pointer-events: none;
+  will-change: transform, width;
 }
 
 .mine-section {
@@ -89,6 +102,12 @@
 }
 .mine-avatar:hover .mine-avatar-edit {
   opacity: 1;
+}
+/* 触屏没有 hover,「换」提示条常显,否则用户不知道头像可换(YOR-165) */
+@media (hover: none) {
+  .mine-avatar-edit {
+    opacity: 1;
+  }
 }
 .mine-name {
   color: var(--fg);
@@ -183,43 +202,6 @@
   color: var(--muted);
   min-width: 48px;
   text-align: center;
-}
-
-/* 成就 */
-.mine-achs {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: var(--sp-3);
-}
-.mine-ach {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-3) var(--sp-4);
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--panel);
-  opacity: 0.6;
-}
-.mine-ach.is-got {
-  opacity: 1;
-  border-color: color-mix(in srgb, var(--accent-3) 45%, var(--line));
-}
-.mine-ach-icon {
-  font-size: 24px;
-  color: var(--muted);
-  flex: none;
-}
-.mine-ach.is-got .mine-ach-icon {
-  color: var(--accent-3);
-}
-.mine-ach-name {
-  color: var(--fg);
-}
-.mine-ach-desc {
-  color: var(--muted);
-  margin-top: 2px;
-  line-height: var(--lh-body);
 }
 
 @media (max-width: 720px) {

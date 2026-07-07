@@ -73,6 +73,12 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+/* 禁用排序的可见解释(触屏看不到 title,YOR-173) */
+.explore-sorts-note {
+  flex: 0 0 100%;
+  text-align: right;
+  opacity: 0.55;
+}
 
 /* 标签筛选 */
 .explore-genres {
@@ -174,6 +180,7 @@
   background: var(--scrim);
   display: grid;
   place-items: center;
+  justify-content: center; /* B3:统一所有 modal 居中(列轨道居中,修 ~9px 偏移) */
   padding: var(--sp-5);
 }
 .explore-modal-card {
@@ -215,4 +222,38 @@
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: var(--sp-5);
+}
+
+/* C4(2026-06-30 真机反馈):底部「继续游玩」ResumeBar 浮在右下会盖住分页「下一页」。
+   移动端给探索页底部留出 ResumeBar 高度,分页不再落在它下面被挡。 */
+@media (max-width: 720px) {
+  .explore {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  }
+
+  /* D3(2026-06-30 真机反馈):轨道 / 排序 / 标签筛选别折行成一坨,各自成一行、横向可滑(挤了往左滑)。 */
+  .explore-tracks,
+  .explore-sorts,
+  .explore-genres {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .explore-tracks::-webkit-scrollbar,
+  .explore-sorts::-webkit-scrollbar,
+  .explore-genres::-webkit-scrollbar {
+    display: none;
+  }
+  .explore-tracks > *,
+  .explore-sorts > *,
+  .explore-genres > * {
+    flex: none; /* chip 不压缩,撑出宽度才能横滑 */
+  }
+  .explore-sorts {
+    margin-left: 0; /* 桌面 margin-left:auto 推右,手机单行不需要 */
+  }
+  .explore-sorts-note {
+    text-align: left; /* 手机排序行靠左横滑,说明行跟着靠左 */
+  }
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Tag } from "./Tag";
 
 // ── 统一 Card ───────────────────────────────────────────────────────────────
@@ -22,14 +22,29 @@ function coverStyle(kind, cover) {
 }
 
 function CoverFront({ model }) {
-  const { kind, cover, title, badge } = model;
+  const { kind, cover, title, badge, meta = {} } = model;
   const noCoverFrame = !cover && (kind === "world" || kind === "player");
   const style = coverStyle(kind, cover);
+  // 角标缩短(「完整故事 · 可直接玩」→「完整故事」),小卡上不挤;「官方」单独一枚。
+  const shortBadge = badge ? (badge.label || "").split(" · ")[0] : "";
+  const author = meta.uploader || ""; // 作者/上传者(故事=author,角色多为空 → 留位)
+  // 正面 = 封面区(立绘/书脊底色,角标浮其上)+ 下方白条(书名 + 作者),书名不再压住立绘。
   return (
-    <div className={["card-front", cover ? "has-cover" : "no-cover"].join(" ")} style={style}>
-      {noCoverFrame && <span className="card-spine-frame" aria-hidden="true" />}
-      {badge && <span className="card-badge">{badge.label}</span>}
-      <span className="card-spine-title t-kai">{title}</span>
+    <div className="card-front">
+      <div className={["card-cover", cover ? "has-cover" : "no-cover"].join(" ")} style={style}>
+        {noCoverFrame && <span className="card-spine-frame" aria-hidden="true" />}
+        {!cover && <span className="card-cover-ph t-kai" aria-hidden="true">{title.slice(0, 4)}</span>}
+        <div className="card-cover-top">
+          {shortBadge && <span className="card-badge">{shortBadge}</span>}
+          {meta.typeLabel ? <span className="card-type">{meta.typeLabel}</span> : null}
+        </div>
+        {/* 已收藏 = 封面右上垂一枚书签(YOR-171);走 CardModel.fav,由用处决定亮不亮 */}
+        {model.fav ? <span className="card-fav-mark" title="已收藏" aria-label="已收藏" /> : null}
+      </div>
+      <div className="card-bar">
+        <span className="card-bar-title t-kai">{title}</span>
+        {author ? <span className="card-bar-author t-meta">{author}</span> : null}
+      </div>
     </div>
   );
 }
@@ -68,13 +83,25 @@ function ActionRow({ actions, onOpen }) {
 
 function ShelfCard({ model, flipped, onToggleFlip, actions, onOpen }) {
   const { kind, title, blurb, tags, note, meta } = model;
+  const cardRef = useRef(null);
+  // 安全版 depth(卡片#1):光斑跟随鼠标 + hover 抬升,只动高光/阴影,不动 3D 翻面 ——
+  // 避免给翻面卡加 preserve-3d 导致背面按钮真机点不动的回归(repo 已踩过的坑)。
+  const onMove = (e) => {
+    const el = cardRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty("--mx", (((e.clientX - r.left) / r.width) * 100).toFixed(1) + "%");
+    el.style.setProperty("--my", (((e.clientY - r.top) / r.height) * 100).toFixed(1) + "%");
+  };
   return (
     <div
+      ref={cardRef}
       className={["card", "card--shelf", "kind-" + kind, flipped ? "is-flipped" : ""].join(" ")}
       onClick={(e) => {
         e.stopPropagation();
         onToggleFlip && onToggleFlip();
       }}
+      onMouseMove={onMove}
       role="button"
       tabIndex={0}
       aria-pressed={flipped}

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate } from "react-router-dom";
+import { useNavigate } from "../lib/transitionNav";
 import { Button } from "../components/ui";
-import { streamTurn, postJSON, extractStream } from "../lib/api";
+import { streamTurn, postJSON, getJSON, extractStream } from "../lib/api";
 import { useGame } from "../state/game";
 import "./Story.css";
 
@@ -79,14 +80,8 @@ export default function Story() {
   const [error, setError] = useState("");
   const [canUndo, setCanUndo] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
-  // 右状态栏:桌面默认展开(可收起),移动默认收起(抽屉)。state 同驱两端(细节⑥)。
-  const [statusOpen, setStatusOpen] = useState(() => {
-    try {
-      return window.matchMedia("(min-width: 961px)").matches;
-    } catch (e) {
-      return true;
-    }
-  });
+  // 右状态栏:默认收起(抽屉),点「世界状态」从右侧平移出来,叙事区常驻满宽 → 中间正文位置固定(细节 8)。
+  const [statusOpen, setStatusOpen] = useState(false);
   const [dev, setDev] = useState(() => {
     try {
       return localStorage.getItem("ais_dev") === "1";
@@ -102,6 +97,7 @@ export default function Story() {
   );
   const feedRef = useRef(null);
   const openedRef = useRef(false);
+  const syncedRef = useRef(0); // 已同步到前端的服务器回合数(续玩还原 + tail after 用)
 
   useEffect(() => {
     const el = feedRef.current;
@@ -156,6 +152,7 @@ export default function Story() {
       setChoices(finalTurn.choices || []);
       setState(finalTurn.state || null);
       setCanUndo(true);
+      syncedRef.current += 1; // 本地出了一回合,服务器也已存 → 同步计数跟上,避免 tail 重复拉回本轮
     } catch (e) {
       setStreaming(null);
       setError("本轮生成失败:" + e.message);
@@ -187,6 +184,7 @@ export default function Story() {
       setStreaming(null);
       setInput(out.undone_input || "");
       setCanUndo(false);
+      syncedRef.current = Math.max(0, syncedRef.current - 1); // 撤回一回合 → 同步计数回退
     } catch (e) {
       setError("撤回失败:" + e.message);
     } finally {
@@ -205,6 +203,7 @@ export default function Story() {
       }
     }
     if (idx === -1) return;
+    const prevChoices = choices; // 失败时恢复:reroll 被拒(如开场无可重生回合,后端 400)别把选项清没了留下死状态
     setLoading(true);
     setError("");
     setChoices([]);
@@ -216,6 +215,7 @@ export default function Story() {
       setCanUndo(true);
     } catch (e) {
       setError("重新生成失败:" + e.message);
+      setChoices(prevChoices); // 恢复原选项,避免无选项可点
     } finally {
       setLoading(false);
     }
@@ -225,13 +225,66 @@ export default function Story() {
     setDeck((dk) => ({ ...dk, characters: (dk.characters || []).filter((c) => ((c.data && c.data.name) || c.name) !== nm) }));
   }
 
-  // 自动开场(只触发一次)。
+  // 进入本局:先尝试从服务器还原历史(续玩);有历史则还原,无历史才开新场(只触发一次)。
   useEffect(() => {
     if (!game || openedRef.current) return;
     openedRef.current = true;
-    runTurn();
+    (async () => {
+      try {
+        const data = await getJSON("/api/session/" + game.sessionId);
+        const srv = (data && data.turns) || [];
+        if (srv.length) {
+          const restored = [];
+          for (const tr of srv) {
+            if (tr.player_input) restored.push({ kind: "player", text: tr.player_input });
+            restored.push({ kind: "story", data: tr });
+          }
+          setTurns(restored);
+          const last = srv[srv.length - 1];
+          setChoices((last && last.choices) || []);
+          setState((data && data.state) || (last && last.state) || null);
+          setCanUndo(true);
+          syncedRef.current = srv.length;
+          return; // 已还原,不再开新场
+        }
+      } catch (e) {
+        // 读不到(新局/网络抖动)→ 落到开新场
+      }
+      runTurn(); // 新局:开场
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game]);
+
+  // 实时 tail:轮询服务器新回合(运营「立即生效」/ 任何 server 端新回合),玩家界面自动冒出。
+  // 自己出回合时(loading)暂停,避免与本地 append 竞态;syncedRef 记已同步回合数作 after。
+  useEffect(() => {
+    if (!game) return;
+    let alive = true;
+    const timer = setInterval(async () => {
+      if (!alive || loading) return;
+      try {
+        const d = await getJSON(`/api/session/${game.sessionId}/tail?after=${syncedRef.current}`);
+        const nt = (d && d.new_turns) || [];
+        if (nt.length) {
+          setTurns((xs) => {
+            const add = [];
+            for (const tr of nt) {
+              if (tr.player_input) add.push({ kind: "player", text: tr.player_input });
+              add.push({ kind: "story", data: tr });
+            }
+            return [...xs, ...add];
+          });
+          syncedRef.current += nt.length;
+          if (d.state) setState(d.state);
+        }
+      } catch (e) {}
+    }, 3500);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game, loading]);
 
   // 派生:累计 token / 记忆卡 / 已触发事件(跨回合聚合)。
   const storyTurns = useMemo(() => turns.filter((t) => t.kind === "story"), [turns]);
@@ -261,25 +314,28 @@ export default function Story() {
     <div className={"story" + (dev ? " is-dev" : "") + (statusOpen ? " status-open" : "")}>
       {/* 顶栏:离开(保留进行中故事)/ 标题 / token / 撤回·重生成·记录·dev */}
       <header className="story-top">
-        <button className="story-back" onClick={() => navigate("/explore")}>
+        <button className="story-back" onClick={() => navigate("/explore", { transition: "contract" })}>
           ← 离开
         </button>
         <div className="story-title t-kai">{game.title || "当前故事"}</div>
         <div className="story-top-right">
           {tokenTotal > 0 && <span className="t-mono story-usage">token {tokenTotal}</span>}
-          <button className="story-toolbtn" disabled={!canUndo || loading} onClick={undoLast} title="撤回上一轮">
-            撤回
+          <button className="story-toolbtn" disabled={!canUndo || loading} onClick={undoLast} title="撤回上一轮" aria-label="撤回上一轮">
+            <span className="tb-ic" aria-hidden="true">↩</span>
+            <span className="tb-tx">撤回</span>
           </button>
-          <button className="story-toolbtn" disabled={!storyTurns.length || loading} onClick={rerollLast} title="重生成上一轮">
-            重生成
+          <button className="story-toolbtn" disabled={!storyTurns.length || loading} onClick={rerollLast} title="重生成上一轮" aria-label="重生成上一轮">
+            <span className="tb-ic" aria-hidden="true">↻</span>
+            <span className="tb-tx">重生成</span>
           </button>
-          <button className="story-toolbtn" disabled={!turns.length} onClick={() => setLogOpen(true)} title="故事记录">
-            记录
+          <button className="story-toolbtn" disabled={!turns.length} onClick={() => setLogOpen(true)} title="故事记录" aria-label="故事记录">
+            <span className="tb-ic" aria-hidden="true">☰</span>
+            <span className="tb-tx">记录</span>
           </button>
           <button className={"story-statusbtn" + (statusOpen ? " is-on" : "")} onClick={() => setStatusOpen((v) => !v)} title="世界状态(可收起)">
             {statusOpen ? "收起状态" : "世界状态"}
           </button>
-          <button className={"story-toolbtn" + (dev ? " is-on" : "")} onClick={toggleDev} title="玩家仪表盘 / 开发者视图">
+          <button className={"story-toolbtn story-devbtn" + (dev ? " is-on" : "")} onClick={toggleDev} title="玩家仪表盘 / 开发者视图">
             dev
           </button>
         </div>
@@ -371,8 +427,10 @@ export default function Story() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+                if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing) {
                   e.preventDefault();
+                  // 对齐发送按钮的守卫:空输入按 Enter 不发空回合(否则会烧一轮 token 且无玩家气泡,YOR-182)。
+                  if (!input.trim() || loading) return;
                   runTurn({ text: input });
                 }
               }}

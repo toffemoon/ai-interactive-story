@@ -39,7 +39,7 @@ from . import costguard
 from . import auth
 
 ROOT = Path(__file__).resolve().parent.parent
-FRONTEND = ROOT / "frontend"
+FRONTEND = ROOT / "frontend-next" / "dist"  # 主前端 = frontend-next 构建产物(2026-07-07 cutover;旧零构建 frontend/ 已退役,HashRouter 无需 SPA fallback)
 OC_DIR = ROOT / "oc"  # OC 集:用户 OC 的设定/世界观/立绘/地图(operator 控制台「OC集」用)
 
 # prod 排障基建:此前全仓无 logging 配置,story_turn 异常被保底回合吞掉后无任何痕迹。
@@ -893,6 +893,7 @@ class PresetReq(BaseModel):
     cover: str = ""          # 封面图:图片 URL 或自包含 data-URI;空则前端按故事名生成渐变星空封面
     synopsis: str = ""       # 简介
     author: str = ""         # 作者
+    author_note: str = ""    # 作者的话(发布时填,详情页显示;Yufei 域元数据,2026-06-25 加,经 yufei 批,知会 Gengyue)
     tags: list[str] = []     # 分类标签
 
 

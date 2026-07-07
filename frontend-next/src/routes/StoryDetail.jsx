@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Button, Tag, Badge, CardShelf } from "../components/ui";
+import { useLocation, useParams } from "react-router-dom";
+import { useNavigate } from "../lib/transitionNav";
+import { inkInto } from "../lib/inkTransition";
+import { Button } from "../components/ui";
+import CardCarousel from "../components/CardCarousel";
+import StoryHero from "../components/StoryHero";
+import CharDetailModal from "../components/CharDetailModal";
 import { getJSON, postJSON, uploadFile } from "../lib/api";
+import { toCardModel } from "../lib/cardModel";
 import { useGame } from "../state/game";
 import "./StoryDetail.css";
 
@@ -26,6 +32,16 @@ export default function StoryDetail() {
   const [preset, setPreset] = useState(() => (loc.state && loc.state.preset) || null);
   const [notFound, setNotFound] = useState(false);
 
+  // in-page 切到另一本书(/story/A → /story/B,组件不重挂):上一本的 preset/notFound
+  // 是旧状态,不清掉的话下面的解析 effect 会在 `if (preset) return` 直接 bail,
+  // 页面就停在旧书上、URL 和内容脱节(YOR-157)。按新 name 复位后让它重新解析。
+  useEffect(() => {
+    const cur = preset && ((preset.data && preset.data.name) || preset.name);
+    if (preset && cur !== name) setPreset((loc.state && loc.state.preset) || null);
+    setNotFound(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name]);
+
   useEffect(() => {
     if (preset) return;
     getJSON("/api/presets")
@@ -38,44 +54,32 @@ export default function StoryDetail() {
       .catch(() => setNotFound(true));
   }, [preset, name]);
 
+  // 收藏(YOR-171):与探索卡背共用同一份 ais_favorites_v1,按归一化 id 判重。
+  const [favs, setFavs] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("ais_favorites_v1")) || { stories: [], characters: [] };
+    } catch (e) {
+      return { stories: [], characters: [] };
+    }
+  });
+  const favId = preset ? toCardModel("story", preset).id : null;
+  const isFaved = !!(favId && (favs.stories || []).some((raw) => toCardModel("story", raw).id === favId));
+  function toggleFav() {
+    if (!preset) return;
+    setFavs((prev) => {
+      const arr = prev.stories || [];
+      const next = isFaved ? arr.filter((raw) => toCardModel("story", raw).id !== favId) : [...arr, preset];
+      const updated = { ...prev, stories: next };
+      try {
+        localStorage.setItem("ais_favorites_v1", JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  }
+
   const d = (preset && preset.data) || {};
   const bookName = d.name || (preset && preset.name) || "未命名故事";
-  const synopsis = d.synopsis || (d.story && d.story.premise) || "";
-  const tags = d.tags || [];
-  const author = d.author || "";
-
-  // 角色:用统一 Card · 横轴滚动(环形轮播的感觉);背面 + 查看详情看完整介绍(细节②)。
-  // 简介细化:取公开层多字段(锚点/外貌/性格/矛盾/设定/情境/公开已知),不进剧透层(known_hidden/versions)。
-  const charModels = useMemo(
-    () => (d.characters || []).map((c, i) => {
-      const cd = (c && c.data) || c || {};
-      const sec = (label, v) => (v && String(v).trim() ? (label ? label + " · " + v : String(v)) : "");
-      const intro =
-        [
-          sec("", cd.anchor),
-          sec("外貌", cd.look),
-          sec("性格", cd.personality),
-          sec("矛盾", cd.tension),
-          sec("", cd.description || cd.persona),
-          sec("情境", cd.scenario),
-          (cd.known_public || []).length ? "已知 · " + cd.known_public.join(";") : "",
-        ]
-          .filter(Boolean)
-          .join("\n\n") || "这个角色还没写简介,入局后逐渐揭晓。";
-      return {
-        id: (cd.name || "char") + "#" + i,
-        kind: "character",
-        title: cd.name || "角色",
-        cover: cd.image || cd.avatar || "",
-        blurb: intro,
-        badge: { label: "角色", tone: "gilt" },
-        tags: (cd.tags || []).slice(0, 3),
-        meta: {},
-        raw: c,
-      };
-    }),
-    [preset]
-  );
+  // 「门面」(封面/标题/简介/作者的话 + 角色卡轮播)抽到 StoryHero 共享组件,创作「预览成详情页」复用同一套。
 
   // 选主角候选:playables 优先,空则 characters;末尾补「以旁观者开始」。
   const roleCards = useMemo(() => {
@@ -83,6 +87,9 @@ export default function StoryDetail() {
     const cards = src.map(normRole).filter((c) => c.name);
     return [...cards, { name: "以旁观者开始", persona: "不扮演特定角色,以观察者视角进入故事", spectator: true }];
   }, [preset]);
+
+  // 扮演选择 = roleCards + 末尾「自定义角色」,做成轮播(居中卡 = 选中;居中自定义卡 = 进自定义模式)。
+  const roleItems = useMemo(() => [...roleCards, { custom: true }], [roleCards]);
 
   const [selIdx, setSelIdx] = useState(0);
   const [charDetail, setCharDetail] = useState(null); // 角色「查看详情」弹层(细节②)
@@ -108,7 +115,7 @@ export default function StoryDetail() {
       player: role || null,
       mode: d.mode || "standard",
     });
-    navigate("/play");
+    inkInto(navigate, "/play"); // 落墨入局(YOR-166):墨从点击点涨圆盖屏,/play 在墨下挂载
   }
 
   // 现场描述 → identify_player 识别成演出卡 → 入局。
@@ -146,7 +153,7 @@ export default function StoryDetail() {
         <div className="detail-missing">
           <h2 className="t-h1">没找到这个故事</h2>
           <p className="t-ui">它可能已被作者下架,或链接失效了。</p>
-          <Button variant="primary" onClick={() => navigate("/explore")}>
+          <Button variant="primary" onClick={() => navigate("/explore", { transition: "contract" })}>
             回到探索
           </Button>
         </div>
@@ -164,85 +171,54 @@ export default function StoryDetail() {
   return (
     <>
       <div className="page detail">
-        <button className="detail-back t-ui-sm" onClick={() => navigate("/explore")}>
-          ← 放回书架
-        </button>
-
-        {/* 头:大封面 + 柔化封面底纹(治单调)+ 标题/标签/元信息 + 简介(只留简介,删背景 YOR-45,细节②) */}
-        <div className="detail-hero">
-          {d.cover && (
-            <div className="detail-hero-bg" style={{ backgroundImage: `url("${d.cover}")` }} aria-hidden="true" />
-          )}
-          <div className="detail-head">
-            <div className="detail-cover" style={d.cover ? { backgroundImage: `url("${d.cover}")` } : undefined}>
-              {!d.cover && <span className="detail-cover-spine t-kai">{bookName.slice(0, 8)}</span>}
-            </div>
-            <div className="detail-headmain">
-              <Badge tone="pine">完整故事 · 可直接玩</Badge>
-              <h1 className="t-display detail-title">{bookName}</h1>
-              {tags.length > 0 && (
-                <div className="detail-tags">
-                  {tags.map((t, i) => (
-                    <Tag key={i}>{t}</Tag>
-                  ))}
-                </div>
-              )}
-              <div className="detail-meta">
-                {author && <span className="detail-meta-i t-meta">作者 · {author}</span>}
-                {charModels.length > 0 && <span className="detail-meta-i t-meta">{charModels.length} 位角色</span>}
-                <span className="detail-meta-i t-meta">打开即玩</span>
-              </div>
-              <div className="detail-intro">
-                <h2 className="t-h3 detail-sec">简介</h2>
-                <p className="t-read detail-intro-text">{synopsis || "暂无简介。"}</p>
-              </div>
-            </div>
-          </div>
+        <div className="detail-topbar">
+          <button className="detail-back t-ui-sm" onClick={() => navigate("/explore", { transition: "contract" })}>
+            ← 放回书架
+          </button>
+          {/* 详情页收藏入口(YOR-171):和探索卡背同一份数据,书架书签同步点亮 */}
+          <button className={"detail-fav t-ui-sm" + (isFaved ? " is-on" : "")} onClick={toggleFav} aria-pressed={isFaved}>
+            {isFaved ? "已收藏" : "收藏"}
+          </button>
         </div>
 
-        {/* 角色:统一 Card 横轴滚动,翻面看完整介绍(细节②/YOR-23) */}
-        {charModels.length > 0 && (
-          <section className="detail-block">
-            <h2 className="t-h3 detail-sec">角色</h2>
-            <p className="detail-hint t-meta">点卡片翻面速览,或「详情」看完整介绍</p>
-            <CardShelf scroll models={charModels} onOpen={(m) => setCharDetail(m)} />
-          </section>
-        )}
+        {/* 门面(封面/标题/简介/作者的话 + 角色卡轮播)= 共享组件,跟创作「预览成详情页」同一套 */}
+        <StoryHero preset={preset} onOpenChar={setCharDetail} />
 
         <div className="detail-rule" aria-hidden="true" />
 
         {/* 选主角三选一:选作者卡 / 上传 / 现场描述(横轴滚动 · 对齐边缘,细节③) */}
         <section className="detail-block">
           <h2 className="t-h3 detail-sec">选择你扮演谁</h2>
-          <div className="detail-roles">
-            {roleCards.map((c, i) => {
-              const on = castMode === "list" && i === selIdx;
-              return (
-                <button
-                  key={i}
-                  className={"detail-role" + (on ? " is-on" : "")}
-                  onClick={() => {
-                    setSelIdx(i);
-                    setCastMode("list");
-                  }}
-                >
-                  <div className="detail-role-name t-kai">{c.name}</div>
-                  <div className="detail-role-line t-ui-sm">
-                    {c.persona || (c.spectator ? "观察者视角" : "可扮演")}
-                  </div>
-                  <div className="detail-role-tick t-meta">{on ? "已选择" : "可扮演"}</div>
-                </button>
-              );
-            })}
-            <button
-              className={"detail-role detail-role--custom" + (castMode === "custom" ? " is-on" : "")}
-              onClick={() => setCastMode((m) => (m === "custom" ? "list" : "custom"))}
-            >
-              <div className="detail-role-name t-kai">自定义角色</div>
-              <div className="detail-role-line t-ui-sm">写下你想扮演的身份,AI 识别成演出卡</div>
-              <div className="detail-role-tick t-meta">{castMode === "custom" ? "编辑中" : "自由出演"}</div>
-            </button>
-          </div>
+          <p className="detail-hint t-meta">拖动 / 滚轮把想扮演的那张转到中间(居中即选中)</p>
+          <CardCarousel
+            items={roleItems}
+            activeIndex={castMode === "custom" ? roleItems.length - 1 : selIdx}
+            onActiveChange={(i) => {
+              if (roleItems[i] && roleItems[i].custom) setCastMode("custom");
+              else {
+                setSelIdx(i);
+                setCastMode("list");
+              }
+            }}
+            ariaLabel="扮演角色选择"
+            renderItem={(it, { active }) =>
+              it.custom ? (
+                <div className={"cc-role cc-role--custom" + (active && castMode === "custom" ? " is-on" : "")}>
+                  <div className="cc-role-tag t-meta">自由出演</div>
+                  <div className="cc-role-name t-kai">自定义角色</div>
+                  <div className="cc-role-line t-ui-sm">写下你想扮演的身份,AI 识别成演出卡</div>
+                  <div className="cc-role-tick t-meta">{active && castMode === "custom" ? "编辑中" : "转到中间自定义"}</div>
+                </div>
+              ) : (
+                <div className={"cc-role" + (active && castMode === "list" ? " is-on" : "")}>
+                  <div className="cc-role-tag t-meta">{it.spectator ? "旁观" : "可扮演"}</div>
+                  <div className="cc-role-name t-kai">{it.name}</div>
+                  <div className="cc-role-line t-ui-sm">{it.persona || (it.spectator ? "观察者视角" : "可扮演")}</div>
+                  <div className="cc-role-tick t-meta">{active && castMode === "list" ? "已选择" : "可扮演"}</div>
+                </div>
+              )
+            }
+          />
 
           {castMode === "custom" && (
             <div className="detail-custom">
@@ -292,24 +268,8 @@ export default function StoryDetail() {
         )}
       </div>
 
-      {/* 角色「查看详情」:完整介绍,长则滚动(细节②) */}
-      {charDetail && (
-        <div className="detail-charmodal" onClick={() => setCharDetail(null)}>
-          <div className="detail-charmodal-card" onClick={(e) => e.stopPropagation()}>
-            <button className="detail-charmodal-x" onClick={() => setCharDetail(null)} aria-label="关闭">×</button>
-            <Badge tone="gilt">角色</Badge>
-            <h2 className="t-h1 detail-charmodal-name">{charDetail.title}</h2>
-            {(charDetail.tags || []).length > 0 && (
-              <div className="detail-tags">
-                {charDetail.tags.map((t, i) => (
-                  <Tag key={i}>{t}</Tag>
-                ))}
-              </div>
-            )}
-            <div className="detail-charmodal-body t-read">{charDetail.blurb}</div>
-          </div>
-        </div>
-      )}
+      {/* 角色「查看详情」= 共享组件 */}
+      <CharDetailModal model={charDetail} onClose={() => setCharDetail(null)} />
     </>
   );
 }

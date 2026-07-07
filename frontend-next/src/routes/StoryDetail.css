@@ -7,14 +7,62 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  min-height: 36px; /* 触控下限(YOR-160),页面唯一显式返回 */
   color: var(--muted);
-  background: transparent;
-  border: none;
-  padding: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  padding: 5px 14px;
   margin-bottom: var(--sp-4);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
 }
 .detail-back:hover {
   color: var(--fg);
+  border-color: var(--accent);
+}
+/* 顶排:返回居左 + 收藏居右(YOR-171) */
+.detail-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-4);
+}
+.detail-topbar .detail-back {
+  margin-bottom: 0;
+}
+.detail-fav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  padding: 5px 14px;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+/* 书签小图:currentColor 随态变色 */
+.detail-fav::before {
+  content: "";
+  width: 8px;
+  height: 14px;
+  background: currentColor;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 4px), 0 100%);
+  opacity: 0.55;
+}
+.detail-fav:hover {
+  color: var(--fg);
+  border-color: var(--accent);
+}
+.detail-fav.is-on {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+.detail-fav.is-on::before {
+  opacity: 1;
 }
 
 /* 头 · hero:封面底纹铺底,治"单调"(细节②)。整块在内容列里满铺(负边距吃掉 .page 左右内边距)。 */
@@ -123,6 +171,17 @@
   color: var(--fg);
   max-width: 60ch;
 }
+/* 作者的话:跟简介区分 —— 朱砂左纹 + 略带手写气的弱化底,像作者的一段私话 */
+.detail-authornote {
+  margin-top: var(--sp-5);
+  padding: var(--sp-3) var(--sp-4);
+  border-left: 3px solid color-mix(in srgb, var(--accent-2) 70%, transparent);
+  background: color-mix(in srgb, var(--accent-2) 6%, transparent);
+  border-radius: 0 var(--r-md) var(--r-md) 0;
+}
+.detail-authornote .detail-intro-text {
+  color: var(--muted);
+}
 
 /* 通用块 */
 .detail-block {
@@ -227,10 +286,61 @@
   border-style: dashed;
 }
 
+/* 扮演选择卡(放进 CardCarousel 的卡位:填满 190×286,居中卡 = 选中) */
+.cc-role {
+  width: 190px;
+  height: 286px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--sp-2);
+  text-align: center;
+  padding: var(--sp-5) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--panel);
+  color: var(--fg);
+  box-shadow: var(--shadow-card);
+  user-select: none;
+}
+.cc-role--custom {
+  border-style: dashed;
+}
+.cc-role.is-on {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent), var(--shadow-card);
+}
+.cc-role-tag {
+  color: var(--muted);
+  letter-spacing: 0.1em;
+}
+.cc-role-name {
+  font-family: var(--font-kai);
+  font-size: var(--fs-h2, 1.3rem);
+  line-height: 1.2;
+}
+.cc-role-line {
+  color: var(--muted);
+  line-height: var(--lh-body);
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cc-role-tick {
+  margin-top: var(--sp-2);
+  color: var(--accent-2);
+}
+.cc-role.is-on .cc-role-tick {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 /* 自定义角色 */
 .detail-custom {
   margin-top: var(--sp-4);
   max-width: 720px;
+  margin-inline: auto; /* 自定义角色卡居中,下面的输入框也居中 */
 }
 .detail-custom-text {
   width: 100%;
@@ -242,7 +352,7 @@
   background: var(--panel);
   color: var(--fg);
   font-family: var(--font-kai);
-  font-size: var(--fs-ui);
+  font-size: 16px; /* ≥16px 防 iOS 聚焦缩放(var(--fs-ui)=14px 会触发) */
   line-height: var(--lh-body);
   outline: none;
 }
@@ -328,7 +438,15 @@
   }
 }
 
-/* 角色「查看详情」弹层(细节②) */
+/* 角色「查看详情」弹层(细节②);出现时:遮罩淡入 + 卡片上浮放大(yufei 06-25) */
+@keyframes charmodal-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes charmodal-pop-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 .detail-charmodal {
   position: fixed;
   inset: 0;
@@ -336,7 +454,9 @@
   background: var(--scrim);
   display: grid;
   place-items: center;
+  justify-content: center; /* B3:统一所有 modal 居中(列轨道居中,修角色详情弹窗 ~9px 偏移) */
   padding: var(--sp-5);
+  animation: charmodal-scrim-in 0.18s ease both;
 }
 .detail-charmodal-card {
   position: relative;
@@ -349,19 +469,29 @@
   border-radius: var(--r-lg);
   padding: var(--sp-6);
   box-shadow: var(--shadow-pop);
+  animation: charmodal-pop-in 0.28s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 .detail-charmodal-x {
   position: absolute;
-  right: 14px;
-  top: 12px;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--line);
+  right: 10px;
+  top: 8px;
+  width: 40px;
+  height: 40px;
+  border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 18px;
-  border-radius: var(--r-sm);
+  font-size: 28px;
+  line-height: 1;
   cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.detail-charmodal-x:hover {
+  color: var(--accent);
+}
+/* 弹窗是 flex 列,徽标默认被拉满整行宽 → 右缘伸到放大后的 × 底下重合;
+   让它只占自身宽(左对齐小胶囊),既消重合、徽标也正常。 */
+.detail-charmodal-card .badge {
+  align-self: flex-start;
 }
 .detail-charmodal-name {
   margin: var(--sp-3) 0 var(--sp-2);

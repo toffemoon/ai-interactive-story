@@ -78,6 +78,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-height: 36px; /* 触控区(原 ~30px 偏小,M8/M9) */
   font-family: var(--font-sans);
   font-size: var(--fs-ui-sm);
   padding: 6px 14px;
@@ -155,7 +156,7 @@
   border-radius: var(--r-md);
   padding: 0 14px;
   font-family: var(--font-sans);
-  font-size: var(--fs-ui);
+  font-size: 16px; /* ≥16px 防 iOS Safari 聚焦自动缩放 */
   color: var(--fg);
   outline: none;
   transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
@@ -188,11 +189,12 @@
 }
 .search-input {
   flex: 1;
+  align-self: stretch; /* 撑满 .search 的 40px 高,整框可点、消除上下死区(视觉不变) */
   border: none;
   background: transparent;
   outline: none;
   font-family: var(--font-sans);
-  font-size: var(--fs-ui);
+  font-size: 16px; /* ≥16px 防 iOS 聚焦缩放 */
   color: var(--fg);
   min-width: 0;
 }
@@ -241,6 +243,14 @@
   width: 100%;
   height: auto;
   aspect-ratio: 190 / 286;
+}
+/* 手机:窄屏强制 2 列(否则 minmax(190) 在 <420px 掉成单列、卡铺满宽变 ~527px 高、滚动负担极重)。
+   2 列下单卡约 160×240,一屏可见 ~3-4 张、滚动减半。 */
+@media (max-width: 480px) {
+  .card-shelf:not(.is-scroll) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-3);
+  }
 }
 
 /* 卡片入场:渐起 + 阶梯延时(细节⑧)。翻面 transform 在子面 .card-front/.card-back 上
@@ -331,26 +341,42 @@
   transform: perspective(1300px) rotateY(360deg);
 }
 
-/* 正面:封面(立绘)或书脊底色 + 左上角标 + 底部楷书名 */
-.card-front {
-  display: flex;
-  align-items: flex-end;
-  padding: 14px;
-  background-size: cover;
-  background-position: center;
+/* 安全版 depth(卡片#1):hover 抬升 + 内层微放大 + 光斑跟随鼠标。
+   只动高光/阴影/scale,不给翻面卡加 preserve-3d/3D tilt → 不碰背面按钮可点的既定修复。 */
+.card--shelf {
+  --mx: 50%;
+  --my: 0%;
 }
-.card-front::before {
+.card--shelf .card-inner {
+  transition: transform 0.22s var(--ease-out);
+}
+.card--shelf:hover {
+  box-shadow: 0 18px 34px -14px rgba(0, 0, 0, 0.5);
+}
+.card--shelf:hover .card-inner {
+  transform: scale(1.025);
+}
+.card-front::after {
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 52%;
-  background: linear-gradient(180deg, transparent, rgba(15, 12, 8, 0.55));
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: radial-gradient(360px circle at var(--mx, 50%) var(--my, 0%), rgba(255, 255, 255, 0.22), transparent 58%);
+  opacity: 0;
+  transition: opacity 0.25s var(--ease-out);
   pointer-events: none;
+  mix-blend-mode: soft-light;
 }
-.card-front.no-cover::before {
-  opacity: 0.5;
+.card--shelf:hover .card-front::after {
+  opacity: 1;
+}
+
+/* 正面 = 封面区(立绘/书脊底色,角标浮其上)+ 下方白条(书名 + 作者)。书名不再压住立绘。 */
+.card-front {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .card-spine-frame {
   position: absolute;
@@ -359,31 +385,101 @@
   border-radius: 8px;
   pointer-events: none;
 }
-.card-badge {
+/* 封面区:占满上方;背景图由内联 style 设,无封面用书脊底色 + 居中淡书名 */
+.card-cover {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background-size: cover;
+  background-position: center;
+}
+/* 已收藏书签(YOR-171):朱砂书签从封面右下「露出书底」,垂过封面与书名条的交界
+   (夹书签 = 收藏;顶部两角是 badge 位,底部才是书签真实露出的位置) */
+.card-fav-mark {
+  position: absolute;
+  right: 14px;
+  bottom: -8px;
+  width: 12px;
+  height: 26px;
+  background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 78%, #3a1510));
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 6px), 0 100%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+  z-index: 1;
+}
+.card-cover-ph {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  line-height: 1.1;
+  color: #ece3d2;
+  opacity: 0.5;
+  text-align: center;
+  padding: 0 10px;
+  word-break: break-word;
+}
+/* 角标行:浮在封面左上(kind 角标)+ 右上(官方) */
+.card-cover-top {
   position: absolute;
   top: 10px;
   left: 10px;
+  right: 10px;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  pointer-events: none;
+}
+.card-badge {
   font-family: var(--font-sans);
   font-size: 11px;
   padding: 3px 9px;
   border-radius: var(--r-sm);
   background: rgba(20, 18, 14, 0.7);
   color: #e0cfa4;
-  z-index: 1;
+  white-space: nowrap;
 }
 .kind-story .card-badge {
   background: rgba(20, 25, 26, 0.72);
   color: #cfe3d8;
 }
-.card-spine-title {
-  position: relative;
-  font-size: 34px;
-  line-height: 1.04;
-  color: #ece3d2;
-  z-index: 1;
-  word-break: break-word;
-  max-height: 4.2em;
+.card-type {
+  flex: none;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--cinnabar) 88%, transparent);
+  color: #fff;
+  white-space: nowrap;
+}
+/* 白条:封面下方实底,放书名(楷,≤2 行)+ 作者(弱);书名不再压立绘 */
+.card-bar {
+  flex: none;
+  background: var(--panel);
+  border-top: 0.5px solid var(--line);
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.card-bar-title {
+  font-size: 15px;
+  line-height: 1.3;
+  color: var(--fg);
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-bar-author {
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 背面:书名 + 一句话简介 + 标签 + 操作 */
@@ -432,6 +528,12 @@
 }
 .card-actions .btn--full {
   flex-basis: 100%;
+}
+/* 手机:卡片操作按钮(查看故事/纯聊/收藏)触控区补到 ≥40(原 31,M8) */
+@media (max-width: 600px) {
+  .card-actions .btn {
+    min-height: 40px;
+  }
 }
 
 /* ── row 横排 ── */

@@ -14,6 +14,33 @@
   min-height: 100%;
   padding-top: 52px;
 }
+/* C5(2026-06-30 真机反馈):顶部 52px 留白透出 body 角落晕染、内容区不透明盖住下方 → 顶部一条"意义不明的带"。
+   paper 页 shell-main 也铺不透明 --bg、盖住晕染,顶部无带。stage(home/play 立绘满铺)data-theme 不同,不受影响。 */
+html[data-theme="paper"] .shell-main {
+  background: var(--bg);
+}
+
+/* 手机顶部 Pill Nav 一行(D2/D5:替掉角落浮动「沐言」开关)。占满 shell-main 预留的顶部 52px 条,
+   故 .ct / .chat 的 calc(100dvh − 52px) 等定高页照旧对齐。挤了横滑(PillNav forcePills)。 */
+.shell-pillnav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  background: var(--bg);
+}
+html[data-theme="paper"] .shell-pillnav {
+  border-bottom: 1px solid var(--line);
+}
+.shell-pillnav .pill-nav-container {
+  width: 100%;
+  min-width: 0;
+}
 .shell-main--immersive {
   min-height: 100%;
   padding-top: 0;
@@ -337,15 +364,24 @@
   background: var(--panel);
   color: var(--fg);
   box-shadow: var(--shadow-pop);
-  transition: transform var(--dur-fast) var(--ease-out),
+  transition: transform 0.3s var(--ease-out),
     border-color var(--dur-fast) var(--ease-out);
 }
-.resume-bar:hover {
+.resume-bar:not(.is-retracted):hover {
   transform: translateY(-2px);
   border-color: var(--accent-2);
 }
 /* 菜单展开时收起浮动入口(移动端底 tab 与之同处底栏,避免重叠挡点击) */
 .shell[data-open="true"] .resume-bar {
+  display: none;
+}
+/* 看板:浮条挪右上(顶导航下)——底部是 home-dock 主按钮区,右下会撞(YOR-168) */
+.resume-bar--home {
+  bottom: auto;
+  top: 64px;
+}
+/* 看板全屏态只留背景+立绘,浮条一并隐藏 */
+.ais-home-fullscreen .resume-bar {
   display: none;
 }
 .resume-bar-dot {
@@ -381,6 +417,12 @@
 @media (max-width: 720px) {
   .resume-bar {
     bottom: calc(var(--sp-4) + env(safe-area-inset-bottom));
+  }
+  /* 滚到探索底部时向右收成小把手,让开分页「下一页」;只露脉冲圆点,仍可点 → 继续游玩(YOR-187)。
+     收起仅手机生效(桌面浮条不挡居中分页)。 */
+  .resume-bar.is-retracted {
+    transform: translateX(calc(100% - 46px));
+    box-shadow: var(--shadow-card);
   }
 }
 

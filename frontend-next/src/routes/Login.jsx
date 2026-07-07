@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "../lib/transitionNav";
 import { authApi } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { Button } from "../components/ui";
@@ -19,6 +19,10 @@ export default function Login() {
   const [sending, setSending] = useState(false);
   const [hint, setHint] = useState("");
 
+  // 网络层失败(断网/后端没起)fetch 抛英文 TypeError「Failed to fetch」,给人看中文(YOR-162);
+  // HTTP 错误在 authApi 里已是中文(data.detail || 请求失败),原样透传。
+  const zhErr = (e, fallback) => (e instanceof TypeError ? "网络连不上,稍后再试" : e.message || fallback);
+
   async function sendCode() {
     if (sending) return;
     if (!email.trim() || email.indexOf("@") < 0) {
@@ -31,7 +35,7 @@ export default function Login() {
       const d = await authApi("/api/auth/email/send_code", { email: email.trim(), purpose: "register" });
       setHint(d.dev_code ? `验证码已发(本地测试码:${d.dev_code})` : "验证码已发到邮箱,10 分钟内有效");
     } catch (e) {
-      setErr(e.message || "发送失败");
+      setErr(zhErr(e, "发送失败"));
     } finally {
       setSending(false);
     }
@@ -39,6 +43,11 @@ export default function Login() {
 
   async function submit() {
     if (busy) return;
+    // 空提交别发请求:后端 401 的「邮箱/用户名或密码错误」会误导没填的人(镜像注册分支的前置校验范式)。
+    if (tab === "login") {
+      if (!identifier.trim()) return setErr("先填邮箱或用户名");
+      if (!password) return setErr("先填密码");
+    }
     if (tab === "register") {
       if (!email.trim() || email.indexOf("@") < 0) return setErr("邮箱格式不对");
       if (!code.trim()) return setErr("先填邮箱验证码");
@@ -57,9 +66,9 @@ export default function Login() {
               username: username.trim() || null,
             });
       onAuthed(data.user, data.token);
-      navigate("/explore");
+      navigate("/home"); // 方案 A:登录后落「立绘主页(家)」,与 App.jsx 根路由一致(YOR-161)
     } catch (e) {
-      setErr(e.message || "失败");
+      setErr(zhErr(e, "失败"));
     } finally {
       setBusy(false);
     }
@@ -86,20 +95,22 @@ export default function Login() {
 
         {tab === "login" ? (
           <>
-            <input className="login-input" placeholder="邮箱或用户名" value={identifier} onChange={(e) => setIdentifier(e.target.value)} onKeyDown={onEnter} />
-            <input className="login-input" type="password" placeholder="密码" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter} />
+            {/* 手机键盘会自动首字母大写/纠错,把用户名悄悄改错 → 登录必败(YOR-158) */}
+            <input className="login-input" placeholder="邮箱或用户名" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" value={identifier} onChange={(e) => setIdentifier(e.target.value)} onKeyDown={onEnter} />
+            <input className="login-input" type="password" placeholder="密码" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter} />
           </>
         ) : (
           <>
-            <input className="login-input" type="email" placeholder="邮箱" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter} />
+            <input className="login-input" type="email" placeholder="邮箱" autoCapitalize="none" spellCheck={false} autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter} />
             <div className="login-coderow">
-              <input className="login-input" placeholder="邮箱验证码" value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={onEnter} />
+              {/* 数字键盘 + 系统验证码自动填充(YOR-158) */}
+              <input className="login-input" placeholder="邮箱验证码" inputMode="numeric" pattern="[0-9]*" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={onEnter} />
               <button className="login-codebtn" disabled={sending} onClick={sendCode}>
                 {sending ? "…" : "发送验证码"}
               </button>
             </div>
-            <input className="login-input" placeholder="用户名(可选)" value={username} onChange={(e) => setUsername(e.target.value)} onKeyDown={onEnter} />
-            <input className="login-input" type="password" placeholder="密码(至少 6 位)" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter} />
+            <input className="login-input" placeholder="用户名(可选)" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} onKeyDown={onEnter} />
+            <input className="login-input" type="password" placeholder="密码(至少 6 位)" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter} />
           </>
         )}
 
@@ -111,7 +122,7 @@ export default function Login() {
         </Button>
 
         {!enabled && (
-          <button className="login-guest" onClick={() => navigate("/explore")}>
+          <button className="login-guest" onClick={() => navigate("/home")}>
             本地未开账号 · 以游客身份进入 →
           </button>
         )}

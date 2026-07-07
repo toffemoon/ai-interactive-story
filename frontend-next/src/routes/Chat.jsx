@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../components/ui";
+import { useNavigate } from "../lib/transitionNav";
 import { postJSON, getJSON } from "../lib/api";
 import { useAuth } from "../state/auth";
 import "./Chat.css";
@@ -16,6 +17,20 @@ function avatarChar(name) {
   return (name || "?").trim().charAt(0) || "?";
 }
 
+// 纯聊场景设定:告诉角色「这是在手机上用网络聊天软件文字聊天」(类微信)。
+// 注入到卡的「当前情境(scenario)」→ 进后端 system prompt;只改前端发出的卡副本,不动卡库原卡、不碰引擎。
+// 看板(立绘主页)是面对面对话、不注入这条。
+const PHONE_CHAT_NOTE =
+  "(聊天形式:你和对方正在用手机上的网络聊天软件打字聊天,就像微信。请贴合手机即时聊天的习惯——消息简短、口语化,一次只说一两句,用日常标点或网络说法表达语气;不要写大段旁白,也不要长篇的动作/神态描写。)";
+function chatCard(card) {
+  if (!card) return card;
+  const hasData = card.data && typeof card.data === "object";
+  const inner = hasData ? card.data : card; // CharacterCard{data} 或直接 CharacterData 都兼容
+  const base = inner.scenario ? inner.scenario + "\n\n" : "";
+  const nextInner = { ...inner, scenario: base + PHONE_CHAT_NOTE };
+  return hasData ? { ...card, data: nextInner } : nextInner;
+}
+
 // 微信式时间标:同日 HH:MM,跨日加月-日。
 function fmtTime(t) {
   if (!t) return "";
@@ -29,10 +44,23 @@ function fmtTime(t) {
 const TIME_GAP = 5 * 60 * 1000; // 间隔 > 5 分钟才再插一条时间(类微信)
 
 export default function Chat() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const uid = user ? user.id : "";
   const ROSTER_KEY = "ais_chat_roster_v1" + (uid ? "_u_" + uid : "");
   const CHAT_KEY = "ais_chat_hist_v1" + (uid ? "_u_" + uid : "");
+  const ACTIVE_KEY = "ais_chat_active_v1" + (uid ? "_u_" + uid : ""); // 记住当前选中的联系人(YOR-195)
+  // 恢复上次选中的联系人(切走再回来续上),校验仍在 roster 里,否则回空。
+  const readActiveName = () => {
+    try {
+      const saved = localStorage.getItem(ACTIVE_KEY) || "";
+      if (!saved) return "";
+      const rs = JSON.parse(localStorage.getItem(ROSTER_KEY)) || [];
+      return Array.isArray(rs) && rs.some((r) => r && r.name === saved) ? saved : "";
+    } catch (e) {
+      return "";
+    }
+  };
 
   const [roster, setRoster] = useState(() => {
     try {
@@ -53,13 +81,14 @@ export default function Chat() {
       return {};
     }
   });
-  const [activeName, setActiveName] = useState("");
+  const [activeName, setActiveName] = useState(readActiveName);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [addModal, setAddModal] = useState(null); // {items} | null
+  const [addQ, setAddQ] = useState(""); // 添加联系人搜索(YOR-169)
   const [profileOpen, setProfileOpen] = useState(false);
   const [lightbox, setLightbox] = useState(null); // 头像放大照片(细节⑩)
-  const [mobileView, setMobileView] = useState("list"); // list | chat(窄屏单栏切换)
+  const [mobileView, setMobileView] = useState(() => (readActiveName() ? "chat" : "list")); // list | chat(恢复了联系人则直接进会话,YOR-195)
 
   const sidsRef = useRef(null);
   const openedRef = useRef(null);
@@ -91,6 +120,13 @@ export default function Chat() {
       localStorage.setItem(CHAT_KEY, JSON.stringify(out));
     } catch (e) {}
   }, [byKey]);
+
+  // 记住当前选中的联系人:切走再回来(路由重挂)时续上,不再掉回空白页(YOR-195)。
+  useEffect(() => {
+    try {
+      if (activeName) localStorage.setItem(ACTIVE_KEY, activeName);
+    } catch (e) {}
+  }, [activeName]);
 
   useEffect(() => {
     const el = feedRef.current;
@@ -142,15 +178,27 @@ export default function Chat() {
     setBusy(true);
     setByKey((m) => ({ ...m, [nm]: [{ who: nm, text: "……" }] }));
     postJSON("/api/chat", {
-      card: active.card,
+      card: chatCard(active.card),
       session_id: sidFor(nm),
       world: null,
-      user: "（这是一次全新的相遇。请你以「" + hint + "」为引子主动开启对话:先一两句动作或场景描写,再说出第一句话,把话头交给我。不要提及这条指令。）",
+      user: "（这是一次全新的相遇,你正用手机给对方发第一条消息。请以「" + hint + "」为由头主动开口:简短自然地说一两句,把话头交给我。不要写大段描写,也不要提及这条指令。）",
     })
-      .then((r) => setByKey((m) => ({ ...m, [nm]: [{ who: nm, text: (r && r.reply) || "（无回应）", t: Date.now() }] })))
+      // 落开场白前先看该会话有没有用户消息:并发竞态下(切到别的联系人使 busy 提前解锁、
+      // 用户已给这人发过话)不能整组覆盖,否则会把用户刚发的消息抹掉(YOR-181)。
+      .then((r) =>
+        setByKey((m) => {
+          const cur = m[nm] || [];
+          if (cur.some((x) => x.who === "me")) return m;
+          return { ...m, [nm]: [{ who: nm, text: (r && r.reply) || "（无回应）", t: Date.now() }] };
+        })
+      )
       .catch((e) => {
         openedRef.current[nm] = false;
-        setByKey((m) => ({ ...m, [nm]: [{ who: nm, text: "（开场失败:" + e.message + "）" }] }));
+        setByKey((m) => {
+          const cur = m[nm] || [];
+          if (cur.some((x) => x.who === "me")) return m;
+          return { ...m, [nm]: [{ who: nm, text: "（开场失败:" + e.message + "）" }] };
+        });
       })
       .finally(() => setBusy(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -177,7 +225,7 @@ export default function Chat() {
     setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: "me", text, t: Date.now() }] }));
     setInput("");
     try {
-      const r = await postJSON("/api/chat", { card: active.card, session_id: sidFor(activeName), user: text, world: null });
+      const r = await postJSON("/api/chat", { card: chatCard(active.card), session_id: sidFor(activeName), user: text, world: null });
       setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: (r && r.reply) || "（无回应）", t: Date.now() }] }));
     } catch (e) {
       setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: "（连接出错:" + e.message + "）" }] }));
@@ -189,6 +237,10 @@ export default function Chat() {
   function newChat() {
     const nm = activeName;
     if (!nm || busy) return;
+    // 破坏性操作:清空整段记录且不可找回。聊过(有自己发的消息)就先确认,镜像看板重开的 M12 范式;
+    // 只有自动开场白的对话不拦(没什么可丢的)。
+    const talked = (byKey[nm] || []).some((m) => m.who === "me");
+    if (talked && !window.confirm("新建对话会清空当前和 " + nm + " 的聊天记录,确定?")) return;
     delete sidsRef.current[nm];
     openedRef.current[nm] = false;
     setByKey((m) => {
@@ -203,6 +255,7 @@ export default function Chat() {
     return d.name || (it && it.name) || "未命名";
   }
   async function openAdd() {
+    setAddQ("");
     try {
       const items = await getJSON("/api/library/characters");
       const list = Array.isArray(items) ? items : [];
@@ -268,7 +321,7 @@ export default function Chat() {
               </button>
               <span className="chat-conv-name t-kai">{activeName}</span>
               <div className="chat-conv-tools">
-                <button className="chat-iconbtn" onClick={newChat} title="新建对话">⟳</button>
+                <button className="chat-iconbtn" onClick={newChat} disabled={busy} title={busy ? "等回复完再新建" : "新建对话"}>⟳</button>
                 <button className="chat-iconbtn" onClick={() => setProfileOpen((v) => !v)} title="角色档案">···</button>
               </div>
             </header>
@@ -291,7 +344,9 @@ export default function Chat() {
                           {!active.avatar && avatarChar(activeName)}
                         </span>
                       )}
-                      <span className="chat-bubble t-ui">{m.text}</span>
+                      <span className={"chat-bubble t-ui" + (m.text === "……" ? " chat-typing" : "")}>
+                        {m.text === "……" ? "对方正在输入…" : m.text}
+                      </span>
                     </div>
                   </div>
                 );
@@ -311,7 +366,7 @@ export default function Chat() {
                 placeholder={busy ? "对方正在回复…" : "说点什么…"}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !busy) {
+                  if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
                     e.preventDefault();
                     send();
                   }
@@ -365,9 +420,41 @@ export default function Chat() {
           <div className="chat-modal-card" onClick={(e) => e.stopPropagation()}>
             <button className="chat-modal-x" onClick={() => setAddModal(null)} aria-label="关闭">×</button>
             <h2 className="t-h2">从卡库添加联系人</h2>
+            {/* 卡库线性增长,平铺翻不动:前端过滤,范式同创作页「补素材」搜索(YOR-169) */}
+            {addModal.items.length > 0 && (
+              <input
+                className="chat-modal-search"
+                value={addQ}
+                onChange={(e) => setAddQ(e.target.value)}
+                placeholder="搜角色:名字 / 简介…"
+              />
+            )}
             <div className="chat-modal-list">
-              {addModal.items.length ? (
-                addModal.items.map((it, i) => {
+              {(() => {
+                const s = addQ.trim().toLowerCase();
+                const list = addModal.items.filter((it) => {
+                  if (!s) return true;
+                  const raw = (it && it.data && it.data.data) || (it && it.data) || {};
+                  const nm = raw.name || it.name || "";
+                  return (nm + " " + (raw.persona || raw.description || "")).toLowerCase().includes(s);
+                });
+                if (!list.length) {
+                  // YOR-194:空库/读库失败给可点出路(去创作/重试),不再死胡同;仅搜索无匹配时保持纯文字。
+                  if (addModal.items.length) {
+                    return <p className="t-ui">{`没有匹配「${addQ.trim()}」的角色卡。`}</p>;
+                  }
+                  return (
+                    <div className="chat-modal-empty">
+                      <p className="t-ui">{addModal.err ? "读库失败:" + addModal.err : "卡库里还没有角色卡。"}</p>
+                      {addModal.err ? (
+                        <Button variant="line" onClick={openAdd}>重试</Button>
+                      ) : (
+                        <Button variant="primary" onClick={() => { setAddModal(null); navigate("/create"); }}>去创作一张 →</Button>
+                      )}
+                    </div>
+                  );
+                }
+                return list.map((it, i) => {
                   const raw = (it && it.data && it.data.data) || (it && it.data) || {};
                   const nm = raw.name || it.name || "未命名";
                   const inRoster = roster.some((r) => r.name === nm);
@@ -383,10 +470,8 @@ export default function Chat() {
                       <span className="t-meta">{inRoster ? "已添加" : "添加 →"}</span>
                     </button>
                   );
-                })
-              ) : (
-                <p className="t-ui">{addModal.err ? "读库失败:" + addModal.err : "卡库里还没有角色卡。去创作造一个。"}</p>
-              )}
+                });
+              })()}
             </div>
           </div>
         </div>

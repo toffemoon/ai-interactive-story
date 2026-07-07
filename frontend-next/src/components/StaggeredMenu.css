@@ -9,10 +9,9 @@
 
 .staggered-menu-wrapper.fixed-wrapper {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  /* C6:原 width:100vw / height:100vh 在 iOS(scrollbar-gutter / overlay 滚动条)下会比可视区宽/高 → 横向溢出。
+     inset:0 自适应可视区,不用 vw/vh。 */
+  inset: 0;
   z-index: 40;
   overflow: hidden;
 }
@@ -25,7 +24,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.4em 1.6em;
+  /* 顶内边距上移「沐言」唤出钮:原 1.4em(钮到 y66)会挤住纯聊左栏头;
+     收到 0.4em 让钮落在壳的 52px 顶留白内(y6–50),纯聊等定高页的头就不再被压(YOR-189)。 */
+  padding: 0.4em 1.6em 1.4em;
   background: transparent;
   pointer-events: none;
   z-index: 20;
@@ -35,27 +36,7 @@
   pointer-events: auto;
 }
 
-.sm-logo {
-  display: flex;
-  align-items: center;
-  user-select: none;
-}
-
-/* 文字 logo「沐言」(无图;月白楷书,深场景上可读) */
-.sm-logo-text {
-  font-family: var(--font-kai);
-  font-size: 22px;
-  letter-spacing: 0.12em;
-  color: #f0e6d2;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
-}
-/* 纸页(paper):隐藏浮动 logo,免与页面左上标题撞;只留唤出开关。
-   立绘主页(stage):显「沐言」logo(月白,暖夜场景上可读)。 */
-[data-theme="paper"] .sm-logo {
-  display: none;
-}
-
-/* position=left:开关(+logo)靠左对齐(默认 space-between 会把开关推到右)。 */
+/* position=left:开关靠左对齐(默认 space-between 会把开关推到右)。 */
 .staggered-menu-wrapper[data-position="left"] .staggered-menu-header {
   justify-content: flex-start;
   gap: var(--sp-4);
@@ -67,6 +48,9 @@
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
+  min-height: 44px; /* 唯一全局导航入口,触控区 ≥44(原仅 ~23px,M4) */
+  padding: 0 6px;
+  margin: 0 -6px; /* 命中区扩大、视觉位置不外移 */
   background: transparent;
   border: none;
   cursor: pointer;
@@ -79,12 +63,19 @@
   overflow: visible;
   transition: color var(--dur-mid) var(--ease-out);
 }
+/* 台主题(立绘主页)开关叠在咖啡馆图上 → 加描边保可读(M4);纸页/开菜单不需要 */
+[data-theme="stage"] .sm-toggle {
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+}
 
 /* 开关颜色按主题/开合用 CSS 驱动(不用 gsap,根治切页时残留 tween 写错色):
    纸页=墨色;立绘主页(暖夜)=月白;菜单开(面板在左、压在开关之下)=墨色。 */
 [data-theme="paper"] .sm-toggle {
   color: #20201d;
 }
+/* D6(2026-06-30 真机反馈):B1 那层毛玻璃胶囊底原本是手机端用的(滚动时盖住筛选 chip)。
+   现在手机已换 Pill Nav、StaggeredMenu 只在桌面出现,这颗底在桌面就成了「飘在顶栏的孤立按钮」。
+   故去掉胶囊底回纯文字。手机此开关已不渲染,无需此底。 */
 [data-theme="stage"] .sm-toggle {
   color: #ece3d2;
 }
@@ -96,10 +87,6 @@
   outline: 2px solid #ffffffaa;
   outline-offset: 4px;
   border-radius: 4px;
-}
-
-.sm-line:last-of-type {
-  margin-top: 6px;
 }
 
 .sm-toggle-textWrap {
@@ -151,10 +138,6 @@
   border-radius: 2px;
   transform: translate(-50%, -50%);
   will-change: transform;
-}
-
-.sm-line {
-  display: none !important;
 }
 
 .staggered-menu-panel {

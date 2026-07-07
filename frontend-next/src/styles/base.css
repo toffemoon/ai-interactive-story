@@ -16,6 +16,17 @@ body,
   height: 100%;
 }
 
+/* 滚动条常驻 gutter:内容多的页会出纵向滚动条、内容少的不会,
+   居中的 .page 在两者之间因可用宽变化而左右跳(探索切轨道整体左移 ~5px 即此)。
+   常驻 gutter → 可用宽恒定 → 不跳。
+   stage(立绘主页 /home、游玩 /play 满铺且不滚动)排除,否则右侧白白留出 8px 缝。 */
+html {
+  scrollbar-gutter: stable;
+}
+html[data-theme="stage"] {
+  scrollbar-gutter: auto;
+}
+
 body {
   margin: 0;
   /* 装饰(细节⑦):底色之上叠两道极淡的角落晕染(赭金 / 松绿),宣纸不再死平;随主题换色。
@@ -33,6 +44,19 @@ body {
   text-rendering: optimizeLegibility;
   transition: background-color var(--dur-mid) var(--ease-out),
     color var(--dur-mid) var(--ease-out);
+}
+
+/* 移动端 iOS 兼容 + 性能(C1/C6,2026-06-30 真机反馈):
+   - C1:background-attachment:fixed 在 iOS Safari 重绘极卡(看板/滚动顿挫)→ 移动端改 scroll;
+     晕染在 app 内页本就被壳/内容的不透明 --bg 盖住,视觉几乎无损。
+   - C6:scrollbar-gutter:stable 在 iOS(overlay 滚动条)仍预留 gutter,致按视口宽布局的元素右移/溢出 → 移动端 auto。 */
+@media (max-width: 720px) {
+  html {
+    scrollbar-gutter: auto;
+  }
+  body {
+    background-attachment: scroll;
+  }
 }
 
 h1,

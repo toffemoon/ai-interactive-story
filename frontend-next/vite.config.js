@@ -14,6 +14,10 @@ export default defineConfig({
   },
   server: {
     port: 5182,
+    // 临时公网隧道(cloudflared trycloudflare 随机域名)真机自测用:放开 Host 校验,否则 Vite 5 拦截非本机 Host。
+    // 仅 dev;隧道地址私发(API 无鉴权)。HMR 浮层关掉,隧道下 WS 连不上也不挡手机屏。
+    allowedHosts: true,
+    hmr: { overlay: false },
     proxy: {
       "/api": {
         target: "http://localhost:8000",

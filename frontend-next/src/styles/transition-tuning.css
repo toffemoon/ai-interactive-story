@@ -1,0 +1,100 @@
+/* ============ 转场精修对照 demo(YOR-166)============
+   纯增量覆写:不改 App.css / transitionNav.js(未提交 WIP)。
+   选择器统一加 html 前缀抬一级优先级,压过 App.css 里同名规则,与加载顺序无关。
+
+   分层原则:涟漪留给「跨界」时刻,平级切换降级轻淡入——
+     主动线前进(卡→详情等) 550ms / 收敛返回 420ms / 冷载兜底 650ms / tab 240ms。
+   出场比进场快 ~25%:已经决定离开的人不该等。 */
+
+/* 主动线前进(旧页克隆挖洞,transitionNav forwardReveal) */
+html .route-enter-hole {
+  animation-duration: 0.55s;
+}
+/* 收敛返回(旧页克隆收拢):缓动从纯 ease-out 换 ease-in-out,「合上」而不是「啪地缩掉」 */
+html .route-leave {
+  animation-duration: 0.42s;
+  animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+}
+/* 冷载 / 无克隆兜底的目标页自涨 */
+html .page-reveal {
+  animation-duration: 0.65s;
+}
+
+/* tab 平级切换(AppShell 导航项走 navTab 标记 html.mu-nav-tab):
+   降级为 240ms 轻淡入 + 8px 上移,不再全屏涟漪。 */
+@keyframes mu-tab-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+html.mu-nav-tab .page-reveal {
+  animation: mu-tab-in 0.24s var(--ease-out);
+}
+
+/* 落墨入局(lib/inkTransition.js):一滴 stage 暖夜底色从点击点涨圆盖屏,
+   /play 在墨下挂载,墨层再淡出。纯色层零克隆,clip-path 走合成器。
+   颜色 = tokens --stage-bg(写死避免转场中途主题翻转把墨染色)。 */
+.mu-ink {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: #221c16;
+  clip-path: circle(0 at var(--ix, 50%) var(--iy, 80%));
+  animation: mu-ink-in 0.48s var(--ease-out) forwards;
+}
+@keyframes mu-ink-in {
+  to {
+    clip-path: circle(150vmax at var(--ix, 50%) var(--iy, 80%));
+  }
+}
+.mu-ink.is-fading {
+  opacity: 0;
+  transition: opacity 0.3s var(--ease-out);
+}
+
+/* 落墨 →「推演中…」的衔接:墨散进夜里,在等待指示前留一粒朱砂随呼吸明暗——
+   等待有了心跳,也有了出处(那滴墨没消失,是在替你研墨)。
+   纯 CSS 挂在 pending 态上:首回合一到,React 撤掉指示器,墨点自然消失,零同步成本;
+   之后每个回合的「推演中…」也带同一粒墨点,等待语言全程一致。 */
+.story-pending::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: 1px;
+  animation: mu-ink-breathe 1.8s ease-in-out infinite;
+}
+@keyframes mu-ink-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.mu-nav-tab .page-reveal,
+  html .page-reveal {
+    animation: none;
+  }
+  .mu-ink {
+    display: none;
+  }
+  .story-pending::before {
+    animation: none;
+    opacity: 0.7;
+  }
+}

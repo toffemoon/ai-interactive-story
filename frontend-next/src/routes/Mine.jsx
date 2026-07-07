@@ -1,48 +1,35 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "../lib/transitionNav";
 import { Button, Input, CardShelf } from "../components/ui";
+import CharDetailModal from "../components/CharDetailModal";
 import { getJSON, postJSON } from "../lib/api";
 import { toCardModels } from "../lib/cardModel";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
 import "./Mine.css";
 
-// 我的 · 个人中心。继承 ReconProfile;补 收藏 / 我创建的 / 账号设置 / 成就(YOR-68)/ 卡库竖卡分页(YOR-67)/
+// 我的 · 个人中心。继承 ReconProfile;补 收藏 / 我创建的 / 账号设置 / 卡库竖卡分页(YOR-67)/
 // 存档跨设备(YOR-22)/ 占位卡过滤(YOR-16)。登录相关端点对 guest 优雅降级。
 const TABS = [
   { key: "profile", label: "档案" },
   { key: "saves", label: "存档" },
   { key: "favorites", label: "收藏" },
   { key: "created", label: "我创建的" },
-  { key: "achievements", label: "成就" }, // ⚠️ 暂缓(2026-06-24,YOR-68 已 Backlog)— 先留着不删,别再加东西
 ];
 const PAGE = 8;
 const FAV_KEY = "ais_favorites_v1";
 
-// ⚠️ 暂缓(2026-06-24 主理人决定):成就系统当下=过度开发,先搁置、不再往上加东西。
-//    代码与「成就」tab 先留着不删(不影响线上,前端还没 cutover),后续 cutover 前再议去留。
-//    详见 Linear YOR-68(已移回 Backlog)+ yorha-a2-team `zicheng-assets/.../成就系统.md` 暂缓顶注。
-// 整蛊成就:大多靠本机轻量信号点亮,没有真后端追踪也能玩起来(YOR-68 轻量整蛊向)。
-const ACHIEVEMENTS = [
-  { id: "arrive", name: "初来乍到", desc: "你来了。就凭这个。", check: () => true },
-  { id: "social", name: "社交悍匪", desc: "在纯聊加了第一个联系人。", check: (s) => s.rosterCount > 0 },
-  { id: "creator", name: "无中生有", desc: "卡库里有了你亲手造的卡。", check: (s) => s.createdCount > 0 },
-  { id: "hoarder", name: "仓鼠成精", desc: "卡库攒到 5 张以上。", check: (s) => s.createdCount >= 5 },
-  { id: "player", name: "入戏太深", desc: "至少有一个进行中的故事。", check: (s) => s.hasGame },
-  { id: "collector", name: "始乱终弃", desc: "收藏过、又没怎么打开过。", check: (s) => s.favCount > 0 },
-  { id: "explorer", name: "翻箱倒柜", desc: "把「我的」每个分区都点了一遍。", check: (s) => s.visitedAll },
-  { id: "ghost", name: "薛定谔的存档", desc: "存档跨设备同步成功(需登录)。", check: (s) => s.savesSynced },
-];
-
+// 成就系统已删除(YOR-188,yufei 拍板)。
 function avatarChar(name) {
   return (name || "?").trim().charAt(0) || "?";
 }
 
 export default function Mine() {
   const navigate = useNavigate();
-  const { user, enabled, logout } = useAuth();
+  const { user, enabled, logout, patchUser } = useAuth();
   const { game } = useGame();
   const [tab, setTab] = useState("profile");
+  const [detail, setDetail] = useState(null); // 角色卡「详情」弹层:CardModel | null(YOR-193)
   const [me, setMe] = useState(user); // 本地档案副本(头像/昵称改后即时反映)
   const [nameEdit, setNameEdit] = useState("");
   const [saving, setSaving] = useState(false);
@@ -57,11 +44,39 @@ export default function Mine() {
       return { stories: [], characters: [] };
     }
   });
-  const [visited, setVisited] = useState(() => new Set(["profile"]));
   const fileRef = useRef(null);
+  // 子分区红线指示条:测量当前 tab 的位置/宽度,用 transform 平移过去(不再硬切 border-color)。
+  const tabRefs = useRef([]);
+  const [bar, setBar] = useState({ x: 0, y: 0, w: 0 });
+  const measureBar = useCallback(() => {
+    const i = TABS.findIndex((t) => t.key === tab);
+    const el = tabRefs.current[i];
+    if (!el) return;
+    setBar({ x: el.offsetLeft, y: el.offsetTop + el.offsetHeight - 2, w: el.offsetWidth });
+  }, [tab]);
+  useLayoutEffect(() => {
+    measureBar();
+  }, [measureBar]);
+  // 首帧 offsetWidth 常为 0(楷书字体未加载完 / 布局未定)→ rAF + 字体就绪后各重测一次,
+  // 否则红线初载宽度=0、要切 tab 才出现。
+  useEffect(() => {
+    let alive = true;
+    const remeasure = () => alive && measureBar();
+    const raf = requestAnimationFrame(remeasure);
+    if (typeof document !== "undefined" && document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(remeasure);
+    }
+    return () => {
+      alive = false;
+      cancelAnimationFrame(raf);
+    };
+  }, [measureBar]);
+  useEffect(() => {
+    window.addEventListener("resize", measureBar);
+    return () => window.removeEventListener("resize", measureBar);
+  }, [measureBar]);
 
   useEffect(() => setMe(user), [user]);
-  useEffect(() => setVisited((v) => new Set([...v, tab])), [tab]);
 
   // 我创建的(卡):本机/账号下非官方角色卡。
   useEffect(() => {
@@ -92,24 +107,16 @@ export default function Mine() {
   const favModels = useMemo(() => {
     const sm = toCardModels("story", favs.stories || []);
     const cm = toCardModels("character", favs.characters || []);
-    return [...sm, ...cm];
+    return [...sm, ...cm].map((m) => ({ ...m, fav: true })); // 收藏 tab 全点亮书签(YOR-171)
   }, [favs]);
+  // 「我创建的」里已收藏的也点亮(同一份 ais_favorites_v1,按归一化 id 判)
+  const favIdSet = useMemo(() => new Set(favModels.map((m) => m.kind + ":" + m.id)), [favModels]);
 
-  const achState = {
-    rosterCount: (() => {
-      try {
-        const uid = user ? user.id : "";
-        return (JSON.parse(localStorage.getItem("ais_chat_roster_v1" + (uid ? "_u_" + uid : "")) || "[]")).length;
-      } catch (e) {
-        return 0;
-      }
-    })(),
-    createdCount: created.length,
-    hasGame: !!game,
-    favCount: (favs.stories || []).length + (favs.characters || []).length,
-    visitedAll: visited.size >= TABS.length,
-    savesSynced: Array.isArray(saves) && saves.length > 0 && !!(enabled && user),
-  };
+  // 卡片「详情」去向:故事卡 → 详情页(带 preset);角色卡 → 详情弹层。与探索页同一套(YOR-193 修死按钮)。
+  const openCard = (m) =>
+    m.kind === "story"
+      ? navigate(`/story/${encodeURIComponent(m.id)}`, { state: { preset: m.raw } })
+      : setDetail(m);
 
   async function uploadAvatar(ev) {
     const f = ev.target.files && ev.target.files[0];
@@ -131,7 +138,9 @@ export default function Mine() {
         x.drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, S, S);
         const dataUrl = c.toDataURL("image/jpeg", 0.85);
         const r = await postJSON("/api/my/avatar", { avatar: dataUrl });
-        setMe((u) => ({ ...(u || {}), avatar: r.avatar || dataUrl }));
+        const nextAvatar = r.avatar || dataUrl;
+        setMe((u) => ({ ...(u || {}), avatar: nextAvatar }));
+        patchUser({ avatar: nextAvatar }); // 回写 context,切走再回不被旧 user 盖回(YOR-186)
       } catch (e) {
         /* ignore */
       } finally {
@@ -147,7 +156,9 @@ export default function Mine() {
     setSaving(true);
     try {
       const r = await postJSON("/api/my/display_name", { display_name: nm });
-      setMe((u) => ({ ...(u || {}), display_name: r.display_name || nm }));
+      const nextName = r.display_name || nm;
+      setMe((u) => ({ ...(u || {}), display_name: nextName }));
+      patchUser({ display_name: nextName }); // 回写 context,切走再回不被旧 user 盖回(YOR-186)
       setNameEdit("");
     } catch (e) {
       /* ignore */
@@ -166,11 +177,21 @@ export default function Mine() {
       </div>
 
       <div className="mine-tabs">
-        {TABS.map((t) => (
-          <button key={t.key} className={"mine-tab" + (tab === t.key ? " is-on" : "")} onClick={() => setTab(t.key)}>
+        {TABS.map((t, i) => (
+          <button
+            key={t.key}
+            ref={(el) => (tabRefs.current[i] = el)}
+            className={"mine-tab" + (tab === t.key ? " is-on" : "")}
+            onClick={() => setTab(t.key)}
+          >
             {t.label}
           </button>
         ))}
+        <span
+          className="mine-tab-underline"
+          style={{ transform: `translate(${bar.x}px, ${bar.y}px)`, width: bar.w + "px" }}
+          aria-hidden="true"
+        />
       </div>
 
       {/* 档案 + 账号设置 */}
@@ -261,7 +282,7 @@ export default function Mine() {
         <section className="mine-section">
           <h2 className="t-h3 mine-sec-title">我的收藏</h2>
           {favModels.length ? (
-            <CardShelf models={favModels} onOpen={() => {}} />
+            <CardShelf models={favModels} onOpen={openCard} />
           ) : (
             <p className="t-ui mine-sub">还没有收藏。在探索 / 故事详情点收藏,故事和角色会出现在这里。</p>
           )}
@@ -274,7 +295,7 @@ export default function Mine() {
           <h2 className="t-h3 mine-sec-title">我创建的卡</h2>
           {createdModels.length ? (
             <>
-              <CardShelf models={createdShown} onOpen={() => {}} />
+              <CardShelf models={createdShown.map((m) => (favIdSet.has(m.kind + ":" + m.id) ? { ...m, fav: true } : m))} onOpen={openCard} />
               {createdPageCount > 1 && (
                 <div className="mine-pager">
                   <Button variant="line" disabled={createdPage <= 1} onClick={() => setCreatedPage((p) => Math.max(1, p - 1))}>
@@ -293,26 +314,7 @@ export default function Mine() {
         </section>
       )}
 
-      {/* 成就(整蛊 YOR-68) */}
-      {tab === "achievements" && (
-        <section className="mine-section">
-          <h2 className="t-h3 mine-sec-title">成就墙</h2>
-          <div className="mine-achs">
-            {ACHIEVEMENTS.map((a) => {
-              const got = a.check(achState);
-              return (
-                <div className={"mine-ach" + (got ? " is-got" : "")} key={a.id}>
-                  <div className="mine-ach-icon" aria-hidden="true">{got ? "★" : "☆"}</div>
-                  <div className="mine-ach-tx">
-                    <div className="mine-ach-name t-ui-sm">{got ? a.name : "??????"}</div>
-                    <div className="mine-ach-desc t-meta">{got ? a.desc : "尚未解锁"}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
+      {detail && <CharDetailModal model={detail} onClose={() => setDetail(null)} />}
     </div>
   );
 }

@@ -34,15 +34,11 @@
   color: var(--fg);
   border-color: var(--muted);
 }
-/* 标题钉在页面正中,不随两侧按钮宽度漂移(细节③);pointer-events:none 保证不挡按钮点击 */
+/* 标题占中段 flex:1、截断;两侧按钮 flex:none 不被挤 → 顶栏单行不折、标题不和按钮重叠(细节③ / M1) */
 .story-title {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  max-width: 44%;
+  flex: 1;
+  min-width: 0;
   text-align: center;
-  pointer-events: none;
   font-size: 20px;
   color: var(--fg);
   white-space: nowrap;
@@ -51,14 +47,21 @@
 }
 @media (max-width: 720px) {
   .story-title {
-    max-width: 38%;
     font-size: 17px;
   }
 }
+.story-back {
+  flex: none;
+}
 .story-top-right {
+  flex: none;
   display: flex;
   align-items: center;
   gap: var(--sp-2);
+}
+/* 工具按钮:桌面显文字、隐图标;手机显图标、隐文字(见下方 media) */
+.tb-ic {
+  display: none;
 }
 .story-usage {
   color: var(--muted);
@@ -92,20 +95,82 @@
   display: inline-block; /* 桌面也出:可收起右状态栏(细节⑥) */
 }
 
-/* 三栏主体 */
+/* 手机:顶栏单行紧凑(M1)。撤回/重生成/记录 → 40×40 图标按钮;dev 隐藏;世界状态留文字单行;
+   标题 flex 截断吸收挤压 → 不再竖向折行、不压标题、顶栏 ≤ ~56px。 */
+@media (max-width: 600px) {
+  .story-top {
+    padding: var(--sp-2) var(--sp-3);
+    gap: var(--sp-2);
+  }
+  .story-top-right {
+    gap: 6px;
+  }
+  .story-toolbtn {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .story-toolbtn .tb-tx {
+    display: none;
+  }
+  .story-toolbtn .tb-ic {
+    display: inline;
+    font-size: 18px;
+    line-height: 1;
+  }
+  .story-devbtn {
+    display: none; /* dev 仅桌面 */
+  }
+  .story-statusbtn {
+    display: inline-flex;
+    align-items: center;
+    height: 40px;
+    padding: 0 12px;
+  }
+  .story-back {
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .story-usage {
+    display: none; /* token 用量手机端让位,世界状态/dev 里仍可见 */
+  }
+}
+
+/* 主体:叙事区常驻满宽,左右两栏改 overlay 抽屉(绝对定位于此)→ 开合不挤回流、中间正文位置固定(细节 8) */
 .story-body {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
 }
 
-/* 左:卡组栏 */
+/* 左:卡组栏(dev) —— overlay 抽屉,从左平移进来,不占布局、不推叙事区 */
 .story-deck {
-  flex: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
   width: 220px;
+  z-index: 6;
+  background: var(--panel);
   border-right: 1px solid var(--line);
+  box-shadow: var(--shadow-pop);
   padding: var(--sp-4);
   overflow-y: auto;
+  animation: story-drawer-l var(--dur-mid) var(--ease-out) both;
+}
+@keyframes story-drawer-l {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 .story-deck-h {
   font-family: var(--font-kai);
@@ -295,6 +360,8 @@
 .story-choice-label {
   display: block;
   color: var(--fg);
+  font-size: 15px; /* 选项是每回合主操作,不应小于正文阅读层级 */
+  line-height: 1.5;
 }
 .story-choice-desc {
   display: block;
@@ -333,19 +400,26 @@
   min-height: 44px;
 }
 
-/* 右:世界状态(8 栏目) */
+/* 右:世界状态(8 栏目) —— overlay 抽屉,默认收起(移出右侧),点「世界状态」从右平移进来。
+   绝对定位于 .story-body,不占布局 → 叙事区始终满宽、中间正文位置固定(细节 8)。 */
 .story-status {
-  flex: none;
-  width: 320px;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(320px, 86vw);
+  z-index: 6;
   border-left: 1px solid var(--line);
   background: var(--panel);
+  box-shadow: var(--shadow-pop);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  transform: translateX(100%);
+  transition: transform var(--dur-mid) var(--ease-out);
 }
-/* 桌面:收起 = 整列隐藏(细节⑥),叙事区随之拉宽 */
-.story:not(.status-open) .story-status {
-  display: none;
+.story.status-open .story-status {
+  transform: translateX(0);
 }
 .story-status-h {
   flex: none;
@@ -365,7 +439,11 @@
   color: var(--muted);
   font-size: 18px;
   cursor: pointer;
-  display: none; /* 仅移动端抽屉显示 */
+  display: inline-flex; /* 抽屉模式:任何宽度都可点 × 收起 */
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px; /* 触控下限(YOR-163):原 23×26 手机上难点中 */
 }
 .story-status-list {
   flex: 1;
@@ -486,6 +564,9 @@
   margin: var(--sp-1) 0;
 }
 
+/* 注:左右两栏的滑入已在各自基样式里(.story-deck 用 story-drawer-l 挂载动画 / .story-status 用 translateX 过渡),
+   所有宽度统一走 overlay 抽屉,不再按桌面/移动分两套。 */
+
 /* 故事记录抽屉 */
 .story-log {
   position: fixed;
@@ -571,32 +652,9 @@
   color: var(--accent-3);
 }
 
-/* ———— 移动:三栏收成单列,右状态栏转抽屉 ———— */
+/* ———— 移动:dev 卡组栏在窄屏隐藏(dev 视图以桌面为主);状态栏抽屉与桌面共用基样式 ———— */
 @media (max-width: 960px) {
-  .story-statusbtn {
-    display: inline-block;
-  }
   .story-deck {
-    display: none; /* dev 卡组栏在窄屏隐藏(dev 视图以桌面为主) */
-  }
-  /* 移动:始终作为抽屉渲染(覆盖桌面收起的 display:none),靠 translateX 显隐 */
-  .story-status,
-  .story:not(.status-open) .story-status {
-    display: flex;
-    position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: min(320px, 86vw);
-    z-index: 50;
-    transform: translateX(100%);
-    transition: transform var(--dur-mid) var(--ease-out);
-    box-shadow: var(--shadow-pop);
-  }
-  .story.status-open .story-status {
-    transform: translateX(0);
-  }
-  .story-status-x {
-    display: block;
+    display: none;
   }
 }

@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
+import { getLastPoint, consumeSuppressReveal } from "./lib/transitionNav";
 import { useAuth } from "./state/auth";
 import AppShell from "./components/shell/AppShell";
 import Login from "./routes/Login";
@@ -12,6 +13,7 @@ import Forum from "./routes/Forum";
 import Story from "./routes/Story";
 import Home from "./routes/Home";
 import Styleguide from "./routes/Styleguide";
+import NavTest from "./routes/NavTest";
 import Preloader from "./components/preloader";
 import "./App.css";
 
@@ -23,15 +25,37 @@ function RequireAuth({ children }) {
 }
 
 // 登录后 app 页统一挂导航壳;壳负责菜单 + 浮动续玩入口,各页只放内容。
-// 页面过渡 = 涟漪圆形揭示(motion 动 clip-path: circle(0%→75%) + 轻 opacity)。
-// 用 clip-path 不用 transform:transform 会成为 fixed 后代的包含块、让页面里的 modal/入局条/状态抽屉错位;
-// clip-path 不建包含块(只是过渡中视觉裁切,导航时无浮层打开),且 circle(75%) ≈ 全覆盖任意尺寸/可滚动页,过渡后不残留裁切。
+// 进入 / 前进 = 目标页「扩散」涟漪(.page-reveal,原点 = 点击点,看板居中);
+// 离开 / 返回 = curtain「收拢」(transitionNav,navigate 传 {transition:"contract"}),并抑制本次目标页扩散。
 function ShellLayout() {
   const loc = useLocation();
+  const revealRef = useRef(null);
+  const revealKey = loc.pathname.startsWith("/story/") ? "story-detail" : loc.pathname;
+
+  // 新页挂载、首帧前:离开转场则跳过扩散(curtain 已收拢满盖、随后淡出);否则把涟漪原点设到点击处(看板居中)。
+  useLayoutEffect(() => {
+    const el = revealRef.current;
+    if (!el) return;
+    if (consumeSuppressReveal()) {
+      el.style.animation = "none"; // 离开:目标页不扩散(避免「先收拢又扩散」)
+      return;
+    }
+    const home = revealKey === "/home";
+    const p = getLastPoint();
+    if (!home && p && p.x != null) {
+      const rect = el.getBoundingClientRect();
+      el.style.setProperty("--ripple-x", p.x - rect.left + "px");
+      el.style.setProperty("--ripple-y", p.y - rect.top + "px");
+    } else {
+      el.style.removeProperty("--ripple-x");
+      el.style.removeProperty("--ripple-y");
+    }
+  }, [revealKey]);
+
   return (
     <AppShell>
-      {/* key 变(切路由)→ 重挂 → 重跑 CSS 涟漪揭示动画。动画无 fill,结束回退到无裁切,fixed 弹层安全。 */}
-      <div key={loc.pathname.startsWith("/story/") ? "story-detail" : loc.pathname} className="page-reveal">
+      {/* key 变(切路由)→ 重挂 → 重跑扩散涟漪(离开转场时被抑制)。 */}
+      <div key={revealKey} ref={revealRef} className="page-reveal">
         <Outlet />
       </div>
     </AppShell>
@@ -67,6 +91,7 @@ export default function App() {
           <Route path="/" element={<Navigate to={home} replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/styleguide" element={<Styleguide />} />
+          <Route path="/test" element={<NavTest />} />
 
           {/* 登录后 app 壳(桌面 Rail / 移动 tab) */}
           <Route
