@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "../components/ui";
+import { useNavigate } from "../lib/transitionNav";
 import { postJSON, getJSON } from "../lib/api";
 import { useAuth } from "../state/auth";
 import "./Chat.css";
@@ -43,6 +44,7 @@ function fmtTime(t) {
 const TIME_GAP = 5 * 60 * 1000; // 间隔 > 5 分钟才再插一条时间(类微信)
 
 export default function Chat() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const uid = user ? user.id : "";
   const ROSTER_KEY = "ais_chat_roster_v1" + (uid ? "_u_" + uid : "");
@@ -437,14 +439,19 @@ export default function Chat() {
                   return (nm + " " + (raw.persona || raw.description || "")).toLowerCase().includes(s);
                 });
                 if (!list.length) {
+                  // YOR-194:空库/读库失败给可点出路(去创作/重试),不再死胡同;仅搜索无匹配时保持纯文字。
+                  if (addModal.items.length) {
+                    return <p className="t-ui">{`没有匹配「${addQ.trim()}」的角色卡。`}</p>;
+                  }
                   return (
-                    <p className="t-ui">
-                      {addModal.items.length
-                        ? `没有匹配「${addQ.trim()}」的角色卡。`
-                        : addModal.err
-                          ? "读库失败:" + addModal.err
-                          : "卡库里还没有角色卡。去创作造一个。"}
-                    </p>
+                    <div className="chat-modal-empty">
+                      <p className="t-ui">{addModal.err ? "读库失败:" + addModal.err : "卡库里还没有角色卡。"}</p>
+                      {addModal.err ? (
+                        <Button variant="line" onClick={openAdd}>重试</Button>
+                      ) : (
+                        <Button variant="primary" onClick={() => { setAddModal(null); navigate("/create"); }}>去创作一张 →</Button>
+                      )}
+                    </div>
                   );
                 }
                 return list.map((it, i) => {
