@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, Chip, Badge, Tag, Input, SearchField, ChatBubble, Card, CardShelf } from "../components/ui";
+import { IdentityCard } from "../components/IdentityCard";
 import { getJSON } from "../lib/api";
 import { toCardModel } from "../lib/cardModel";
 import "./Styleguide.css";
@@ -237,6 +238,28 @@ export default function Styleguide() {
           {cards.map((m) => (
             <Card key={"thumb-" + m.kind} model={m} variant="thumb" />
           ))}
+        </div>
+      </section>
+
+      {/* 身份卡 · IdentityCard(onboarding 收尾凭证,点一下翻面) */}
+      <section className="sg-section">
+        <h2 className="t-h2 sg-label">身份卡 · IdentityCard(点一下翻面 · 入店凭证)</h2>
+        <p className="t-ui-sm sg-sub">
+          onboarding 收尾:糖沐递给新客的凭证。正面 = 字头头像 + 称呼;点一下翻到背面 = 最近在看 / 发卡 / 落款。暖夜金边,复用统一 Card 的翻转技术(两面各自 perspective+rotateY,背面可点)。
+        </p>
+        <div className="sg-idcards">
+          <IdentityCard
+            name="小满"
+            taste="最近在追《雾山五行》,重看《红楼梦》"
+            message="小满,愿你手边的故事,像这时节的麦子,慢慢就熟了。"
+            issuedAt="2026-07-06"
+          />
+          <IdentityCard
+            name="夜游客"
+            taste=""
+            message="夜游客,灯我给你留着,想读到多晚都成。"
+            issuedAt="2026-07-06"
+          />
         </div>
       </section>
 

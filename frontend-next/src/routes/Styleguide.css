@@ -120,3 +120,14 @@
   text-align: center;
   padding: var(--sp-6) 0 0;
 }
+
+/* 身份卡预览:深色背衬,衬出暖夜卡面 */
+.sg-idcards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-6);
+  padding: var(--sp-6);
+  margin-top: var(--sp-3);
+  background: #1b160f;
+  border-radius: var(--r-lg);
+}
