@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "../lib/transitionNav";
 import { motion } from "motion/react";
 import { Button } from "../components/ui";
 import { getJSON, postJSON, newSessionId } from "../lib/api";
@@ -12,6 +12,7 @@ import "./Home.css";
 // 默认糖沐(取《新人入店》预设);换角色从我的角色卡库(/api/library/characters)、沿用该卡设定。
 // 主按钮:探索故事→/explore(常驻发现路径);继续故事(有进行中 game/存档才显)→存档窗口→/play。
 const HOME_KEY = "ais_home_v1";
+const PORTRAIT_KEY = "ais_home_portrait_v1"; // 立绘大小/位置(玩家可调,本机持久)
 const TANGMU_IMG = "/home/tangmu1.png";
 const BG_IMG = "/home/coffeeshop.png";
 const GREETING_NEW =
@@ -55,6 +56,16 @@ export default function Home() {
   const [logOpen, setLogOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const restoredRef = useRef(false);
+  const sessionIdRef = useRef(sessionId); // 镜像最新 sessionId,供 send 异步回调判定回来时是否已切会话
+  const [editMode, setEditMode] = useState(false); // 立绘编辑态(#6)
+  const [adjust, setAdjust] = useState(() => {
+    try {
+      const a = JSON.parse(localStorage.getItem(PORTRAIT_KEY));
+      return a && typeof a.scale === "number" ? a : { scale: 1, x: 0, y: 0 };
+    } catch (e) {
+      return { scale: 1, x: 0, y: 0 };
+    }
+  });
 
   const displayName = cardName(card) || (isTangmu ? "糖沐" : "角色");
   const image = isTangmu ? TANGMU_IMG : cardImageOf(card);
@@ -69,6 +80,23 @@ export default function Home() {
     }
     return greeting;
   }, [messages, greeting]);
+
+  // 流式打字:对话文字逐字浮现(galgame 台词感;/api/chat 非流式,前端模拟)。等回应时不打字、显状态。
+  const [typed, setTyped] = useState("");
+  useEffect(() => {
+    if (busy) return undefined;
+    const full = currentLine || "";
+    setTyped("");
+    if (!full) return undefined;
+    let i = 0;
+    const id = setInterval(() => {
+      i += 1;
+      setTyped(full.slice(0, i));
+      if (i >= full.length) clearInterval(id);
+    }, 32);
+    return () => clearInterval(id);
+  }, [currentLine, busy]);
+  const typing = !busy && typed.length < (currentLine || "").length;
 
   // 恢复本机首页会话(同步,先于 presets 落卡)。
   useEffect(() => {
@@ -124,6 +152,35 @@ export default function Home() {
     } catch (e) {}
   }, [card, isTangmu, sessionId, messages]);
 
+  // sessionId 同步到 ref:send 的异步回调据此判断回来时是否已切角色/重开,过期则丢弃回复。
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
+
+  // 持久化立绘调整(#6:大小 scale + 位移 x/y)。
+  useEffect(() => {
+    try {
+      localStorage.setItem(PORTRAIT_KEY, JSON.stringify(adjust));
+    } catch (e) {}
+  }, [adjust]);
+
+  // 编辑态:拖动立绘改位置(指针拖拽,window 级跟踪到松手)。
+  function onPortraitDown(e) {
+    if (!editMode) return;
+    e.preventDefault();
+    const sx = e.clientX,
+      sy = e.clientY;
+    const base = adjust;
+    const onMove = (ev) =>
+      setAdjust({ scale: base.scale, x: base.x + (ev.clientX - sx), y: base.y + (ev.clientY - sy) });
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
   // 全屏(截图态):隐藏一切 UI(含全局唤出钮),只留背景+立绘。
   // 退出方式:点击任意处 / 按 Esc / 角落按钮(细节⑧)。
   useEffect(() => {
@@ -143,25 +200,47 @@ export default function Home() {
     };
   }, [fullscreen]);
 
+  // 三个弹层(换角色 / 存档 / 记录)支持 Esc 关闭(镜像全屏的 Esc;同一时刻至多开一个)。
+  useEffect(() => {
+    if (!switcher && !savesModal && !logOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        setSwitcher(null);
+        setSavesModal(false);
+        setLogOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [switcher, savesModal, logOpen]);
+
   async function send() {
     const text = input.trim();
     if (!text || busy || !card) return;
+    const sid = sessionId; // 锁定本次发送所属会话
     setBusy(true);
     setMessages((m) => [...m, { who: "me", text, t: Date.now() }]);
     setInput("");
     try {
-      const r = await postJSON("/api/chat", { card, session_id: sessionId, user: text, world: null });
-      setMessages((m) => [...m, { who: displayName, text: (r && r.reply) || "(无回应)", t: Date.now() }]);
+      const r = await postJSON("/api/chat", { card, session_id: sid, user: text, world: null });
+      // 回来时若已切角色/重开(sessionId 变了),丢弃这条回复,避免旧回复落进新对话。
+      if (sessionIdRef.current === sid) {
+        setMessages((m) => [...m, { who: displayName, text: (r && r.reply) || "(无回应)", t: Date.now() }]);
+      }
     } catch (e) {
-      setMessages((m) => [...m, { who: displayName, text: "(连接出错:" + e.message + ")", t: Date.now() }]);
+      if (sessionIdRef.current === sid) {
+        setMessages((m) => [...m, { who: displayName, text: "(连接出错:" + e.message + ")", t: Date.now() }]);
+      }
     } finally {
       setBusy(false);
     }
   }
 
   // 重开(抄纯聊 newChat):清会话 + 清本地对话 → 回静态招呼。
+  // 是破坏性操作(清掉当前对话),有内容时二次确认防误触(M12)。
   function restart() {
     if (busy) return;
+    if (messages.length > 0 && !window.confirm("重开会清空当前和 " + displayName + " 的这段对话,确定?")) return;
     setMessages([]);
     setSessionId(newSessionId());
   }
@@ -196,23 +275,35 @@ export default function Home() {
   }
 
   return (
-    <div className={"home" + (fullscreen ? " is-fullscreen" : "")}>
+    <div className={"home" + (fullscreen ? " is-fullscreen" : "") + (editMode ? " is-editing" : "")}>
       {/* 背景层 */}
       <div className="home-bg" style={{ backgroundImage: `url("${BG_IMG}")` }} aria-hidden="true" />
       <div className="home-bg-scrim" aria-hidden="true" />
 
-      {/* 立绘层(换角色淡入:只动 opacity) */}
+      {/* 立绘层(换角色淡入:只动 opacity);编辑态可拖动改位置,transform 应用大小/位移(#6) */}
       <motion.div
-        className="home-portrait"
+        className={"home-portrait" + (editMode ? " is-editing" : "")}
         key={displayName}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+        onPointerDown={onPortraitDown}
       >
         {image ? (
-          <img src={image} alt={displayName} draggable="false" />
+          <img
+            src={image}
+            alt={displayName + "(立绘)"}
+            draggable="false"
+            style={{ transform: `translate(${adjust.x}px, ${adjust.y}px) scale(${adjust.scale})`, transformOrigin: "top center" }}
+          />
         ) : (
-          <span className="home-portrait-ph t-kai">{displayName.slice(0, 2)}</span>
+          <span
+            className="home-portrait-ph t-kai"
+            aria-hidden="true"
+            style={{ transform: `translate(${adjust.x}px, ${adjust.y}px) scale(${adjust.scale})` }}
+          >
+            {displayName.slice(0, 2)}
+          </span>
         )}
       </motion.div>
 
@@ -223,6 +314,35 @@ export default function Home() {
         <button className="home-exitfs t-meta" onClick={() => setFullscreen(false)} aria-label="退出全屏">
           ✕ 退出全屏
         </button>
+      )}
+
+      {/* 立绘编辑(#6):右下角图标 → 编辑态可拖动 + 滑杆调大小,持久到本机 */}
+      {!fullscreen && !editMode && (
+        <button className="home-edit-btn" onClick={() => setEditMode(true)} title="调整立绘大小 / 位置" aria-label="调整立绘大小和位置">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+          </svg>
+        </button>
+      )}
+      {editMode && (
+        <div className="home-edit-bar" role="group" aria-label="立绘调整">
+          <span className="home-edit-tip t-meta">拖动立绘移动 · 滑杆调大小</span>
+          <label className="home-edit-scale t-meta">
+            大小
+            <input
+              type="range"
+              min="0.5"
+              max="2.6"
+              step="0.02"
+              value={adjust.scale}
+              onChange={(e) => setAdjust((a) => ({ ...a, scale: parseFloat(e.target.value) }))}
+              aria-label="立绘大小"
+            />
+          </label>
+          <button className="home-edit-reset" onClick={() => setAdjust({ scale: 1, x: 0, y: 0 })}>重置</button>
+          <button className="home-edit-done" onClick={() => setEditMode(false)}>完成</button>
+        </div>
       )}
 
       {/* 前景 UI(全屏态隐藏) */}
@@ -261,10 +381,14 @@ export default function Home() {
                 <button className="home-tool" onClick={() => setFullscreen(true)} title="全屏(只留背景+立绘,方便截图)" aria-label="全屏">⛶</button>
               </div>
             </div>
-            <p className="home-dlg-line t-read">{busy ? `(${displayName}正在回应…)` : currentLine}</p>
+            <p className="home-dlg-line t-read">
+              {busy ? `(${displayName}正在回应…)` : typed}
+              {typing && <span className="home-dlg-caret" aria-hidden="true">▌</span>}
+            </p>
             <div className="home-composer">
               <input
                 className="home-input"
+                aria-label={"和 " + displayName + " 对话,输入消息"}
                 value={input}
                 disabled={busy || !card}
                 placeholder={card ? "和 " + displayName + " 说点什么…" : "正在把糖沐请出来…"}
@@ -288,7 +412,7 @@ export default function Home() {
       {/* 换角色 picker */}
       {switcher && (
         <div className="home-modal" onClick={() => setSwitcher(null)}>
-          <div className="home-modal-card" onClick={(e) => e.stopPropagation()}>
+          <div className="home-modal-card" role="dialog" aria-modal="true" aria-label="换个人聊" onClick={(e) => e.stopPropagation()}>
             <button className="home-modal-x" onClick={() => setSwitcher(null)} aria-label="关闭">×</button>
             <h2 className="t-h2">换个人聊</h2>
             <p className="t-meta home-modal-sub">挑一张你的角色卡,沿用 TA 自己的设定。</p>
@@ -321,7 +445,7 @@ export default function Home() {
       {/* 存档窗口(继续故事) */}
       {savesModal && (
         <div className="home-modal" onClick={() => setSavesModal(false)}>
-          <div className="home-modal-card" onClick={(e) => e.stopPropagation()}>
+          <div className="home-modal-card" role="dialog" aria-modal="true" aria-label="继续故事" onClick={(e) => e.stopPropagation()}>
             <button className="home-modal-x" onClick={() => setSavesModal(false)} aria-label="关闭">×</button>
             <h2 className="t-h2">继续故事</h2>
             <div className="home-saves">
@@ -355,7 +479,7 @@ export default function Home() {
       {/* 查看记录 */}
       {logOpen && (
         <div className="home-modal" onClick={() => setLogOpen(false)}>
-          <div className="home-modal-card" onClick={(e) => e.stopPropagation()}>
+          <div className="home-modal-card" role="dialog" aria-modal="true" aria-label={"和 " + displayName + " 的记录"} onClick={(e) => e.stopPropagation()}>
             <button className="home-modal-x" onClick={() => setLogOpen(false)} aria-label="关闭">×</button>
             <h2 className="t-h2">和 {displayName} 的记录</h2>
             <div className="home-log">

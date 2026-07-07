@@ -9,6 +9,7 @@
 
 /* 子分区 tab */
 .mine-tabs {
+  position: relative; /* 红线指示条的定位上下文(子按钮 offsetLeft/Top 相对它) */
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-2);
@@ -25,13 +26,25 @@
   padding: 8px 4px;
   margin-right: var(--sp-3);
   cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
 }
 .mine-tab:hover {
   color: var(--fg);
 }
 .mine-tab.is-on {
   color: var(--fg);
-  border-bottom-color: var(--accent);
+}
+/* 滑动红线:切 tab 时平移到当前项(替代生硬的下划线瞬切) */
+.mine-tab-underline {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+  transition: transform var(--dur-mid) var(--ease-out), width var(--dur-mid) var(--ease-out);
+  pointer-events: none;
+  will-change: transform, width;
 }
 
 .mine-section {

@@ -1,0 +1,127 @@
+/* /test · Pill Nav 顶部导航原型(手机)布局。 */
+.navtest {
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--fg);
+}
+.navtest-top {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  padding: 10px 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.navtest-body {
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.navtest-seg {
+  display: flex;
+  gap: var(--sp-2);
+}
+.navtest-seg button {
+  flex: 1;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-kai);
+  font-size: var(--fs-ui);
+  cursor: pointer;
+}
+.navtest-seg button.is-on {
+  background: var(--fg);
+  color: var(--bg);
+  border-color: var(--fg);
+}
+.navtest-hint {
+  color: var(--fg);
+  line-height: var(--lh-body);
+}
+.navtest-note {
+  color: var(--muted);
+  line-height: var(--lh-body);
+}
+.navtest-card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  padding: var(--sp-5);
+  color: var(--muted);
+}
+.navtest-card.tall {
+  min-height: 520px;
+}
+
+/* 汉堡变体顶栏 */
+.navtest-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  height: 44px;
+}
+.navtest-burger {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  cursor: pointer;
+}
+.navtest-burger span {
+  width: 18px;
+  height: 2px;
+  background: var(--fg);
+  border-radius: 1px;
+}
+.navtest-bar-active {
+  font-size: var(--fs-h3);
+  color: var(--fg);
+}
+
+/* Flowing Menu 全屏覆盖层 */
+.navtest-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+.navtest-menu-close {
+  flex: none;
+  align-self: flex-end;
+  margin: calc(10px + env(safe-area-inset-top)) 16px 8px;
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--panel);
+  color: var(--fg);
+  font-family: var(--font-kai);
+  cursor: pointer;
+  z-index: 2;
+}
+.navtest-menu-overlay .menu-wrap {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Dock 变体:底部居中浮动 */
+.navtest-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  z-index: 60;
+  pointer-events: none;
+}
