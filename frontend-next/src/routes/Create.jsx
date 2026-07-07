@@ -149,6 +149,7 @@ export default function Create() {
   const [builtView, setBuiltView] = useState(false); // 查看本台已建的卡(细节③)
   const [finalize, setFinalize] = useState(null); // 「完善角色卡」弹窗:null | {action:'desk'|'lib'}(收进本台 / 收入卡库)
   const [genBusy, setGenBusy] = useState(false); // 自动生成角色介绍中
+  const [savingCard, setSavingCard] = useState(false); // 收入卡库中(防重入 + 等待态,YOR-183)
   const [pub, setPub] = useState({ name: "", synopsis: "", cover: "", authorNote: "" });
   const [previewOpen, setPreviewOpen] = useState(false); // 「预览并发布」覆盖层(改文字 / 传封面 / 就地发布)
   const [previewChar, setPreviewChar] = useState(null); // 预览里角色「查看详情」
@@ -159,6 +160,7 @@ export default function Create() {
   const chatRef = useRef(null);
   const toastT = useRef(null);
   const quotaWarnedRef = useRef(false); // 草稿写盘失败(配额)只提醒一次,写成功后复位
+  const savingRef = useRef(false); // 入库同步锁:状态是异步的,同一 tick 连点会读到旧值,用 ref 同步挡(YOR-183)
 
   const kind = KINDS[ki].k;
   const desk = desks[kind];
@@ -319,6 +321,10 @@ export default function Create() {
     }
   }
   function removeBuilt(idx) {
+    // 破坏性且不可撤销:收进本台时该卡的聊天记录已清,没另存卡库就找不回。先确认(镜像纯聊 ⟳ 范式,YOR-184)。
+    const c = desks[kind].built[idx];
+    const nm = (c && (c.name || c.title)) || "这张卡";
+    if (!window.confirm("移除《" + nm + "》?它聊出来的对话已经清空,移除后找不回。确定?")) return;
     setDesks((ds) => ({ ...ds, [kind]: { ...ds[kind], built: ds[kind].built.filter((_, i) => i !== idx) } }));
     flash("已从本台移除");
   }
@@ -333,16 +339,22 @@ export default function Create() {
 
   // 真正入库(复用):收入卡库 · 私密。
   async function doSaveCard() {
+    if (savingRef.current) return; // 防重入:同步锁,同一 tick 连点也只发一次 save(YOR-183)
     const d = desks[kind].draft || {};
     if (!Object.keys(d).length) {
       flash("还没有可入库的卡,先聊几句");
       return;
     }
+    savingRef.current = true;
+    setSavingCard(true);
     try {
       await postJSON("/api/library/save", { kind, data: kind === "characters" ? { data: d } : d });
       flash("已收入卡库 · 私密");
     } catch (e) {
       flash("入库失败:" + e.message);
+    } finally {
+      savingRef.current = false;
+      setSavingCard(false);
     }
   }
   // 收入卡库入口:角色卡先走「完善角色卡」弹窗(可传图),其它卡直接入库。
@@ -615,7 +627,7 @@ export default function Create() {
             </div>
             <div className="ct-actions">
               <Button variant="line" onClick={nextCard} disabled={!hasDraft}>收进本台</Button>
-              <Button variant="line" onClick={saveCard} disabled={!hasDraft}>收入卡库</Button>
+              <Button variant="line" onClick={saveCard} disabled={!hasDraft || savingCard}>{savingCard ? "收入中…" : "收入卡库"}</Button>
               <button className={"ct-morebtn" + (moreOpen ? " is-on" : "")} onClick={() => setMoreOpen((v) => !v)} aria-label="更多">⋯ 更多</button>
             </div>
           </div>
@@ -710,8 +722,8 @@ export default function Create() {
               </div>
 
               <div className="create-actions">
-                <Button variant="line" onClick={saveCard} disabled={!hasDraft} title={hasDraft ? undefined : "先聊出一张卡再收入卡库"}>
-                  收入卡库 · 私密
+                <Button variant="line" onClick={saveCard} disabled={!hasDraft || savingCard} title={hasDraft ? undefined : "先聊出一张卡再收入卡库"}>
+                  {savingCard ? "收入中…" : "收入卡库 · 私密"}
                 </Button>
                 <Button variant="line" onClick={nextCard} disabled={!hasDraft} title={hasDraft ? undefined : "先聊出一张卡再收进本台"}>
                   收进本台 · 再建一张
