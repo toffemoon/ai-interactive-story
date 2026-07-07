@@ -229,6 +229,9 @@
 }
 .chat-composer input {
   flex: 1;
+  /* flex 子项默认 min-width:auto 不会缩到比 <input> 最小内容宽(默认 size=20≈20 字符)更窄 →
+     窄屏 / iOS 楷体更宽时输入框拒收缩,把发送钮顶出、整条横向溢出。min-width:0 解除下限,缩满可用宽(YOR-190;同 YOR-164 修 conv-name)。 */
+  min-width: 0;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
