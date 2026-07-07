@@ -91,6 +91,8 @@ export default function ImageCropField({
           </button>
         )}
         {hint && <span className="icf-hint t-meta">{hint}</span>}
+        {/* 选图失败(如非图片文件)时裁剪层不会打开,错误要在字段本体这里给人看见(YOR-156) */}
+        {err && !src && <span className="icf-err t-meta">{err}</span>}
       </div>
       <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPick} />
 
