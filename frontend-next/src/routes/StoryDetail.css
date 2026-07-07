@@ -7,6 +7,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  min-height: 36px; /* 触控下限(YOR-160),页面唯一显式返回 */
   color: var(--muted);
   background: var(--panel);
   border: 1px solid var(--line);

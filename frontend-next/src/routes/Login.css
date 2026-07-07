@@ -131,7 +131,9 @@
 .login-guest {
   display: block;
   width: 100%;
-  margin-top: 14px;
+  margin-top: 6px;
+  min-height: 36px; /* 触控下限(YOR-160) */
+  padding: 10px 0; /* 原 17px 命中高抬起;margin 14→6 视觉位置基本不动 */
   text-align: center;
   background: none;
   border: none;
