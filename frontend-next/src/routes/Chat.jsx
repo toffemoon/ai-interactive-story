@@ -162,10 +162,22 @@ export default function Chat() {
       world: null,
       user: "（这是一次全新的相遇,你正用手机给对方发第一条消息。请以「" + hint + "」为由头主动开口:简短自然地说一两句,把话头交给我。不要写大段描写,也不要提及这条指令。）",
     })
-      .then((r) => setByKey((m) => ({ ...m, [nm]: [{ who: nm, text: (r && r.reply) || "（无回应）", t: Date.now() }] })))
+      // 落开场白前先看该会话有没有用户消息:并发竞态下(切到别的联系人使 busy 提前解锁、
+      // 用户已给这人发过话)不能整组覆盖,否则会把用户刚发的消息抹掉(YOR-181)。
+      .then((r) =>
+        setByKey((m) => {
+          const cur = m[nm] || [];
+          if (cur.some((x) => x.who === "me")) return m;
+          return { ...m, [nm]: [{ who: nm, text: (r && r.reply) || "（无回应）", t: Date.now() }] };
+        })
+      )
       .catch((e) => {
         openedRef.current[nm] = false;
-        setByKey((m) => ({ ...m, [nm]: [{ who: nm, text: "（开场失败:" + e.message + "）" }] }));
+        setByKey((m) => {
+          const cur = m[nm] || [];
+          if (cur.some((x) => x.who === "me")) return m;
+          return { ...m, [nm]: [{ who: nm, text: "（开场失败:" + e.message + "）" }] };
+        });
       })
       .finally(() => setBusy(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
