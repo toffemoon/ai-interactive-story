@@ -240,7 +240,7 @@ export default function Explore() {
         ) : (
           <>
             <CardShelf
-              models={shown}
+              models={shown.map((m) => (isFav(m) ? { ...m, fav: true } : m))} /* 已收藏点亮书签(YOR-171) */
               actionsFor={actionsFor}
               onOpen={(m) => (m.kind === "story" ? goDetail(m) : setDetail(m))}
             />

@@ -393,6 +393,20 @@
   background-size: cover;
   background-position: center;
 }
+/* 已收藏书签(YOR-171):朱砂书签从封面右下「露出书底」,垂过封面与书名条的交界
+   (夹书签 = 收藏;顶部两角是 badge 位,底部才是书签真实露出的位置) */
+.card-fav-mark {
+  position: absolute;
+  right: 14px;
+  bottom: -8px;
+  width: 12px;
+  height: 26px;
+  background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 78%, #3a1510));
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 6px), 0 100%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+  z-index: 1;
+}
 .card-cover-ph {
   position: absolute;
   inset: 0;

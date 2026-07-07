@@ -21,6 +21,49 @@
   color: var(--fg);
   border-color: var(--accent);
 }
+/* 顶排:返回居左 + 收藏居右(YOR-171) */
+.detail-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-4);
+}
+.detail-topbar .detail-back {
+  margin-bottom: 0;
+}
+.detail-fav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  padding: 5px 14px;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+/* 书签小图:currentColor 随态变色 */
+.detail-fav::before {
+  content: "";
+  width: 8px;
+  height: 14px;
+  background: currentColor;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 4px), 0 100%);
+  opacity: 0.55;
+}
+.detail-fav:hover {
+  color: var(--fg);
+  border-color: var(--accent);
+}
+.detail-fav.is-on {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+.detail-fav.is-on::before {
+  opacity: 1;
+}
 
 /* 头 · hero:封面底纹铺底,治"单调"(细节②)。整块在内容列里满铺(负边距吃掉 .page 左右内边距)。 */
 .detail-hero {

@@ -7,6 +7,7 @@ import CardCarousel from "../components/CardCarousel";
 import StoryHero from "../components/StoryHero";
 import CharDetailModal from "../components/CharDetailModal";
 import { getJSON, postJSON, uploadFile } from "../lib/api";
+import { toCardModel } from "../lib/cardModel";
 import { useGame } from "../state/game";
 import "./StoryDetail.css";
 
@@ -52,6 +53,29 @@ export default function StoryDetail() {
       })
       .catch(() => setNotFound(true));
   }, [preset, name]);
+
+  // 收藏(YOR-171):与探索卡背共用同一份 ais_favorites_v1,按归一化 id 判重。
+  const [favs, setFavs] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("ais_favorites_v1")) || { stories: [], characters: [] };
+    } catch (e) {
+      return { stories: [], characters: [] };
+    }
+  });
+  const favId = preset ? toCardModel("story", preset).id : null;
+  const isFaved = !!(favId && (favs.stories || []).some((raw) => toCardModel("story", raw).id === favId));
+  function toggleFav() {
+    if (!preset) return;
+    setFavs((prev) => {
+      const arr = prev.stories || [];
+      const next = isFaved ? arr.filter((raw) => toCardModel("story", raw).id !== favId) : [...arr, preset];
+      const updated = { ...prev, stories: next };
+      try {
+        localStorage.setItem("ais_favorites_v1", JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  }
 
   const d = (preset && preset.data) || {};
   const bookName = d.name || (preset && preset.name) || "未命名故事";
@@ -147,9 +171,15 @@ export default function StoryDetail() {
   return (
     <>
       <div className="page detail">
-        <button className="detail-back t-ui-sm" onClick={() => navigate("/explore", { transition: "contract" })}>
-          ← 放回书架
-        </button>
+        <div className="detail-topbar">
+          <button className="detail-back t-ui-sm" onClick={() => navigate("/explore", { transition: "contract" })}>
+            ← 放回书架
+          </button>
+          {/* 详情页收藏入口(YOR-171):和探索卡背同一份数据,书架书签同步点亮 */}
+          <button className={"detail-fav t-ui-sm" + (isFaved ? " is-on" : "")} onClick={toggleFav} aria-pressed={isFaved}>
+            {isFaved ? "已收藏" : "收藏"}
+          </button>
+        </div>
 
         {/* 门面(封面/标题/简介/作者的话 + 角色卡轮播)= 共享组件,跟创作「预览成详情页」同一套 */}
         <StoryHero preset={preset} onOpenChar={setCharDetail} />

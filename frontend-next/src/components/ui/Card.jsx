@@ -38,6 +38,8 @@ function CoverFront({ model }) {
           {shortBadge && <span className="card-badge">{shortBadge}</span>}
           {meta.typeLabel ? <span className="card-type">{meta.typeLabel}</span> : null}
         </div>
+        {/* 已收藏 = 封面右上垂一枚书签(YOR-171);走 CardModel.fav,由用处决定亮不亮 */}
+        {model.fav ? <span className="card-fav-mark" title="已收藏" aria-label="已收藏" /> : null}
       </div>
       <div className="card-bar">
         <span className="card-bar-title t-kai">{title}</span>
