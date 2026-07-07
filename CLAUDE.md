@@ -22,13 +22,13 @@ updated: 2026-06-04
 
 ---
 
-## 当前状态 (2026-07-05)
+## 当前状态 (2026-07-08)
 
-> synced 2026-07-05 · 真源=本 repo `docs/` + `decisions/`（下面是快照,细节以真源为准）
+> synced 2026-07-08 · 真源=本 repo `docs/` + `decisions/`（下面是快照,细节以真源为准）
 
-- **前端有两套,未收敛(已知结构债)**:
-  - **线上实际服务的是 `frontend/`(零构建单文件 React)** —— `src/api.py` 挂载的是它(`FRONTEND = ROOT / "frontend"`,`app.mount("/", ...)`)。
-  - `frontend-next/`(Vite + React 重写,YOR-92..192)承载了近期几乎全部前端工作,但**尚未接管线上服务**。双前端未收敛,是待处理的结构债。
+- **双前端已收敛(2026-07-08,见 `decisions/2026-07-07-frontend-next-cutover.md`)**:
+  - **`frontend-next`(Vite + React + HashRouter)已作为唯一主前端合入 `main`(commit fc430b2)**;旧零构建 `frontend/` 已删除;`src/api.py` 现挂 `FRONTEND = ROOT / "frontend-next" / "dist"`,**dist 已提交进 git** 让 main 自包含可部署(Render 无 node build 也能 serve)。
+  - 57 条前端修复分支收敛:**56 合入**(48 批量 + 6 手动解冲突 + onboarding 看板 yor-205 + 发布清单 yor-192)、**yor-56 过时跳过**(改的是已删的 `frontend/`);另补 Story 存档续玩 + 实时 tail 轮询。⚠️ yor-205 onboarding 引导流程建议真机走查;主体 Home 微修复(yor-179/180)在 onboarding 版的回归待验。
 - **引擎主线(2026-06-27 战略会拍板)**:找 OC 用户 + 打磨 UX;token 三指标(用户数 / 总 token / 人均 token);**不加新功能**(成就系统已暂缓)。
 - **部署**:Render(`AUTH_ENABLED=1`、`COST_GUARD_ENABLED=1`)。Supabase prod=`hhrqxllcamdxqcoepwgx`、test=`yldfnbmpzkzjzjoyvfhb`。
 - 记忆 Phase 1–3 已上线;导演 / 运营台已发布;约 65 局 / 1090 回合真实使用。

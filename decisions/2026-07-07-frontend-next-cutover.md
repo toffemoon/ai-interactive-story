@@ -34,3 +34,10 @@ frontend-next(Vite + React + HashRouter)正式取代零构建单文件 frontend/
 
 ## 影响的旧记录
 README「前端 = 零构建单文件 app.jsx」、CLAUDE.md「线上实际服务的是 frontend/」需相应更新为 frontend-next。
+
+## 2026-07-08 更新:已合 main + 收敛完成
+- cutover + gap + 57 分支收敛**已合入 `main`(commit fc430b2)**;README / CLAUDE.md 已同步更新。
+- **收敛结果:56 合入 / 1 跳过**:48 批量 merge + 6 手动解冲突(yor-187/188/191/193/194/200)+ **yor-192**(⚠️纠正:它只改 `frontend-next/` 前端,不碰后端引擎 `src/`,当初误判为引擎跳过)+ **yor-205 onboarding**(采纳完整设计,`--theirs` 取 yor-205 版 Home/AppShell/Styleguide + 12 立绘 + IdentityCard);**yor-56 跳过**(改的是已删的 `frontend/`,过时)。
+- **dist 已提交进 git**:`frontend-next/.gitignore` 移除 `dist`,main 自包含,Render(无 node build)可直接 serve。
+- **待验(真机)**:yor-205 onboarding 引导流程需完整走查(无头 preview 未触发引导);主体 Home 微修复(yor-179 铅笔钮 / yor-180 对话坞)在 onboarding 版 Home 的回归待验。
+- PR #147(cutover)/ #148(收敛)已关闭,内容并入 main。

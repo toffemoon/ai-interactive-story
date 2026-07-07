@@ -25,9 +25,9 @@
 - 后端：Python 3.12 + FastAPI
 - LLM：DeepSeek(走 OpenAI 兼容协议，改 `.env` 即可换任意兼容提供商) + 模型适配层(DeepSeek / Claude)
 - 数据 / 记忆：**Supabase Postgres + pgvector**(会话 / 卡库 / 预设 / 向量统一上云)；embedding 用本地 `BAAI/bge-small-zh-v1.5`(512 维，对话 / 世界书 / 故事书向量化召回)
-- 前端：React + `@babel/standalone`(零构建，浏览器直接跑单文件 `app.jsx`)
+- 前端：**Vite + React + react-router(HashRouter)**,构建产物在 `frontend-next/dist`(旧零构建单文件 `frontend/` 已于 2026-07-08 退役,见 `decisions/2026-07-07-frontend-next-cutover.md`)
 - 评测：`eval/` 平台(player bot + Claude judge)
-- 部署：后端 Render(`render.yaml`) + 前端 Vercel(`frontend/vercel.json`)
+- 部署：后端 Render(`render.yaml`,同时 serve `frontend-next/dist`) + 前端 Vercel(`frontend-next/vercel.json`)
 
 ## 跑起来
 
@@ -61,10 +61,10 @@ src/
   memory.py     长期记忆:向量化 + 检索(bge + pgvector)
   storage.py    持久化:会话 / 卡库 / 故事预设(Supabase Postgres)
   db.py         Postgres 连接池(psycopg3) + pgvector 注册
-  api.py        FastAPI 端点 + serve 前端
-frontend/
-  index.html, app.jsx, styles.css   零构建前端(首页 / 游戏 / 建卡 / 卡库 四视图 + 预设选人页)
-  covers/                            预设封面图
+  api.py        FastAPI 端点 + serve 前端(挂 frontend-next/dist)
+frontend-next/    主前端(Vite + React + HashRouter):src/routes(探索/纯聊/创作/游玩/我的/看板/故事详情/登录/论坛) + src/components + src/state
+  dist/           构建产物(提交进 git,让 main 自包含可部署;改前端后 npm run build)
+  public/covers/  预设封面图
 eval/             评测平台(orchestrator / judge / harness / dimensions / 矩阵 runner)
 integrations/     MCP server + Claude Skill
 scripts/          一次性脚本(如 import_amphoreus.py)
