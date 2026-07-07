@@ -275,7 +275,8 @@
   padding: var(--sp-3) var(--sp-4);
   box-shadow: 0 14px 40px -14px rgba(0, 0, 0, 0.7);
   color: #f1e7d6;
-  animation: obBubbleIn 320ms var(--ease-out);
+  /* 380ms 延迟:每拍气泡 key 重挂后先按住不显,让立绘先换姿势(先动作、后气泡),错开更自然 */
+  animation: obBubbleIn 320ms var(--ease-out) 380ms both;
 }
 /* 气泡入场只淡不移:定位改由 JS 贴头(inline transform),避免关键帧动 transform 与之打架。 */
 @keyframes obBubbleIn {
@@ -308,6 +309,50 @@
 }
 .home-ob-skip:hover {
   color: #f1e7d6;
+}
+
+/* —— 身份卡收尾拍:糖沐左移让位,卡放右侧,从下方递上来入场 —— */
+.home-ob-card {
+  position: absolute;
+  right: 6vw;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 5;
+  animation: obCardIn 640ms var(--ease-out) both;
+}
+@keyframes obCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-50% + 44px)) scale(0.93) rotate(-2deg);
+  }
+}
+/* card 拍:糖沐稍向左让位,给右边的卡腾地方。瞬移(不做 transition):
+   气泡定位靠 layout effect 量立绘 rect,滑动会让它量到过渡中途的旧位置而滞后遮挡,故瞬移到位。 */
+.home.is-cardbeat .home-portrait {
+  transform: translateX(-8%);
+}
+/* 上传头像:虚线框(dropzone 感)文字钮 */
+.home-ob-upload {
+  align-self: flex-start;
+  padding: 8px 16px;
+  border: 1px dashed rgba(199, 154, 78, 0.6);
+  border-radius: var(--r-pill);
+  background: rgba(28, 22, 16, 0.5);
+  color: #e8dcc6;
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui-sm);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.home-ob-upload:hover {
+  border-color: #c79a4e;
+  background: rgba(28, 22, 16, 0.72);
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-ob-card {
+    animation: none;
+  }
 }
 
 /* 底部操作盘:纯输入框 + 选项 chip(无台词) */

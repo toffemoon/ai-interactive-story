@@ -5,6 +5,7 @@ import { getJSON, postJSON, newSessionId } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
 import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
+import { IdentityCard } from "../components/IdentityCard";
 import "./Home.css";
 
 // 立绘主页(家)· YOR-136 · galgame 式登录后首屏。
@@ -12,6 +13,11 @@ import "./Home.css";
 // 默认糖沐(取《新人入店》预设);换角色从我的角色卡库(/api/library/characters)、沿用该卡设定。
 // 主按钮:探索故事→/explore(常驻发现路径);继续故事(有进行中 game/存档才显)→存档窗口→/play。
 const HOME_KEY = "ais_home_v1";
+// 身份卡发卡日(本地日期 YYYY-MM-DD;用户机器为 UTC+8)
+function todayYmd() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 const TANGMU_IMG = "/home/tangmu01.png";
 const BG_IMG = "/home/background.png";
 const GREETING_NEW =
@@ -66,10 +72,13 @@ export default function Home({ testMode = false }) {
   const [obViaBack, setObViaBack] = useState(false); // 当前拍是否由回退进入 → 显反悔反应(backLine/backEmo)
   const [obThinking, setObThinking] = useState(false); // AI 自适应:提交后糖沐"思考态"(等 /api/chat)
   const [obAiLine, setObAiLine] = useState(null); // AI 生成的自适应台词(当前拍开场,替静态 line);null=用脚本
+  const [obCardMessage, setObCardMessage] = useState(null); // 身份卡上糖沐的 AI 寄语;null=卡组件用默认暖句
+  const [obCardAvatar, setObCardAvatar] = useState(null); // 身份卡头像(上传后 dataURL);null=用称呼字头
   const [obSlots, setObSlots] = useState([null, null]); // 立绘双层(交叉溶解)各层 src;null=空
   const [obLayer, setObLayer] = useState(0); // 当前在顶(不透明)的层索引
   const prevImageRef = useRef(null); // 上一帧立绘 src,供双层比对
   const obInputRef = useRef(null); // onboarding 输入框(选项 fill 后聚焦)
+  const obAvatarInputRef = useRef(null); // 身份卡头像上传的隐藏 file input
   const obBeat = obStep ? beatById(obStep) : null;
   const introFrame = obIntro >= 0 ? INTRO[obIntro] : null;
   const obActive = obIntro >= 0 || !!obBeat;
@@ -233,7 +242,13 @@ export default function Home({ testMode = false }) {
     };
     compute();
     window.addEventListener("resize", compute);
-    return () => window.removeEventListener("resize", compute);
+    // 立绘一旦有 transform 过渡(未来若做立绘滑动),过渡结束后重算气泡,保证「立绘一动就调气泡」不滞后
+    const portrait = document.querySelector(".home-portrait");
+    if (portrait) portrait.addEventListener("transitionend", compute);
+    return () => {
+      window.removeEventListener("resize", compute);
+      if (portrait) portrait.removeEventListener("transitionend", compute);
+    };
   }, [obActive, headAnchor, obStep, obIntro, image]);
 
   // 立绘双层交叉溶解(纯 CSS opacity 过渡,不依赖 Motion,任意切换频率都稳):
@@ -258,6 +273,29 @@ export default function Home({ testMode = false }) {
       prevImageRef.current = image;
     }
   }, [image, obLayer]);
+
+  // 身份卡 AI 寄语:进 card 拍时,糖沐现场为这位客人写一句话(卡背)。后台生成、不挡卡出现;失败留 null → 卡用默认暖句。
+  useEffect(() => {
+    if (!obBeat || !obBeat.card || !obBeat.msg || obCardMessage) return;
+    let alive = true;
+    (async () => {
+      let msg = null;
+      try {
+        const card = { spec: "chara_card_v2", spec_version: "2.0", data: { name: "糖沐", description: AI_PERSONA, scenario: obBeat.msg(obEcho) } };
+        const r = await Promise.race([
+          postJSON("/api/chat", { card, session_id: newSessionId(), user: obEcho.taste || obEcho.name || "新客", world: null }),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000)),
+        ]);
+        msg = ((r && r.reply) || "").trim() || null;
+      } catch (e) {
+        msg = null;
+      }
+      if (alive) setObCardMessage(msg);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [obStep]);
 
   async function send() {
     const text = input.trim();
@@ -291,6 +329,7 @@ export default function Home({ testMode = false }) {
     setObHistory([]);
     setObViaBack(false);
     setObAiLine(null);
+    setObCardMessage(null);
     setObThinking(false);
     setObStep(null);
   }
@@ -344,6 +383,7 @@ export default function Home({ testMode = false }) {
     setObHistory((h) => [...h, obStep]);
     setObViaBack(false);
     setObAiLine(aiLine);
+    setObCardMessage(null);
     setObInput("");
     setObStep(nextId);
   }
@@ -355,8 +395,28 @@ export default function Home({ testMode = false }) {
     setObHistory((h) => h.slice(0, -1));
     setObViaBack(true);
     setObAiLine(null);
+    setObCardMessage(null);
     setObInput(prev && prev.field ? obEcho[prev.field] || "" : "");
     setObStep(prevId);
+  }
+  // 身份卡头像上传:纯前端,读成 dataURL 贴上卡 + 存进 echo 持久化(不碰引擎/账号)。
+  function obPickAvatar() {
+    obAvatarInputRef.current && obAvatarInputRef.current.click();
+  }
+  function obAvatarChange(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = ""; // 允许重选同一文件
+    if (!file || !file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = String(reader.result || "");
+      if (!url) return;
+      setObCardAvatar(url);
+      const echo = { ...obEcho, avatar: url };
+      setObEcho(echo);
+      saveEcho(echo);
+    };
+    reader.readAsDataURL(file);
   }
 
   async function openSwitcher() {
@@ -389,7 +449,7 @@ export default function Home({ testMode = false }) {
   }
 
   return (
-    <div className={"home" + (fullscreen ? " is-fullscreen" : "")}>
+    <div className={"home" + (fullscreen ? " is-fullscreen" : "") + (obBeat && obBeat.card ? " is-cardbeat" : "")}>
       {/* 背景层 */}
       <div className="home-bg" style={{ backgroundImage: `url("${BG_IMG}")` }} aria-hidden="true" />
       <div className="home-bg-scrim" aria-hidden="true" />
@@ -434,6 +494,7 @@ export default function Home({ testMode = false }) {
           {/* 新手引导:糖沐台词气泡,贴在立绘头部一侧(galgame 式,台词随角色) */}
           {(obBeat || (introFrame && introFrame.line)) && (
             <div
+              key={obBeat ? "b-" + obBeat.id + (obViaBack ? "-back" : "") : "i-" + obIntro}
               className="home-ob-bubble"
               style={
                 obBubblePos
@@ -448,6 +509,19 @@ export default function Home({ testMode = false }) {
                 )}
               </div>
               <p className="home-ob-line t-read">{obLine}</p>
+            </div>
+          )}
+          {/* 身份卡收尾拍:糖沐递上的入店凭证(点一下翻面看她写的寄语) */}
+          {obBeat && obBeat.card && (
+            <div className="home-ob-card">
+              <IdentityCard
+                name={obEcho.name}
+                taste={obEcho.taste}
+                message={obCardMessage}
+                avatar={obCardAvatar || obEcho.avatar}
+                issuedAt={todayYmd()}
+              />
+              <input ref={obAvatarInputRef} type="file" accept="image/*" onChange={obAvatarChange} hidden />
             </div>
           )}
           {/* 底部交互坞:主按钮行(贴对话框上方右对齐)+ 对话框聚成一组,不再悬空 */}
@@ -480,6 +554,11 @@ export default function Home({ testMode = false }) {
                       {obThinking ? "…" : "好"}
                     </Button>
                   </div>
+                )}
+                {obBeat.card && (
+                  <button className="home-ob-upload" onClick={obPickAvatar}>
+                    {obCardAvatar || obEcho.avatar ? "换张头像" : "＋ 上传头像"}
+                  </button>
                 )}
                 {!!(obBeat.chips && obBeat.chips.length) && (
                   <div className="home-ob-chips">
