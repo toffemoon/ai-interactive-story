@@ -189,6 +189,10 @@
 .home-dlg-line {
   color: #20201d;
   min-height: 3.2em;
+  /* 长回复封顶 + 框内滚动:否则几百字会把对话框撑高、把角色名和工具钮顶出屏幕
+     且 .home overflow:hidden 找不回(YOR-180)。 */
+  max-height: 34vh;
+  overflow-y: auto;
   margin: 0 0 var(--sp-3);
 }
 /* 流式打字光标(逐字浮现时闪烁) */
@@ -285,7 +289,9 @@
   position: absolute;
   z-index: 5;
   right: clamp(14px, 3vw, 28px);
-  bottom: clamp(14px, 4vh, 36px);
+  /* 挪到右上、压过顶部导航下方的空白区:原来贴右下会盖住对话坞的「发送」按钮
+     (z-index 5 > dock 3),点发送右半边会误命中它进编辑态、对话坞整个隐掉(YOR-179)。 */
+  top: clamp(64px, 10vh, 84px);
   width: 40px;
   height: 40px;
   display: grid;
@@ -306,6 +312,14 @@
 }
 .home-edit-btn:active {
   transform: scale(0.94);
+}
+/* 桌面:放回右下角。dock 居中(≤920px)、铅笔在屏幕最右下,不会碰居中的「发送」;
+   移动端仍留右上(dock 近满宽,右下会撞发送,YOR-179)。 */
+@media (min-width: 721px) {
+  .home-edit-btn {
+    top: auto;
+    bottom: clamp(14px, 4vh, 36px);
+  }
 }
 
 /* 编辑态:立绘可拖动 + 虚线提示 */
