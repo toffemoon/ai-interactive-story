@@ -373,6 +373,8 @@ export default function Story() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing) {
                   e.preventDefault();
+                  // 对齐发送按钮的守卫:空输入按 Enter 不发空回合(否则会烧一轮 token 且无玩家气泡,YOR-182)。
+                  if (!input.trim() || loading) return;
                   runTurn({ text: input });
                 }
               }}
