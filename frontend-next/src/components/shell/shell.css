@@ -375,6 +375,15 @@ html[data-theme="paper"] .shell-pillnav {
 .shell[data-open="true"] .resume-bar {
   display: none;
 }
+/* 看板:浮条挪右上(顶导航下)——底部是 home-dock 主按钮区,右下会撞(YOR-168) */
+.resume-bar--home {
+  bottom: auto;
+  top: 64px;
+}
+/* 看板全屏态只留背景+立绘,浮条一并隐藏 */
+.ais-home-fullscreen .resume-bar {
+  display: none;
+}
 .resume-bar-dot {
   width: 8px;
   height: 8px;
