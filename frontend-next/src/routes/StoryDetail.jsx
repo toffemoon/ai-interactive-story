@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import { useNavigate } from "../lib/transitionNav";
+import { inkInto } from "../lib/inkTransition";
 import { Button } from "../components/ui";
 import CardCarousel from "../components/CardCarousel";
 import StoryHero from "../components/StoryHero";
@@ -90,7 +91,7 @@ export default function StoryDetail() {
       player: role || null,
       mode: d.mode || "standard",
     });
-    navigate("/play");
+    inkInto(navigate, "/play"); // 落墨入局(YOR-166):墨从点击点涨圆盖屏,/play 在墨下挂载
   }
 
   // 现场描述 → identify_player 识别成演出卡 → 入局。
