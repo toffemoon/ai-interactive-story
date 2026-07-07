@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button, Chip, Badge, Tag, Input, SearchField, ChatBubble, Card, CardShelf } from "../components/ui";
-import Stepper, { Step } from "../components/Stepper";
+import { IdentityCard } from "../components/IdentityCard";
 import { getJSON } from "../lib/api";
 import { toCardModel } from "../lib/cardModel";
 import "./Styleguide.css";
@@ -62,19 +62,9 @@ const ACTIONS = {
   ],
 };
 
-// 新卡面改版样例(合成,不依赖后端):封面 + 长/短书名 + 无封面 + 有无作者。
-const DEMO_CARDS = [
-  { id: "d1", kind: "story", title: "新人入店", cover: "/home/coffeeshop.png", blurb: "一家会回应你的书店咖啡馆。", badge: { label: "完整故事 · 可直接玩", tone: "pine" }, tags: ["日常", "治愈"], meta: { uploader: "太妃月", typeLabel: "官方" }, note: "" },
-  { id: "d2", kind: "character", title: "糖沐", cover: "/home/tangmu1.png", blurb: "沐言书坊的看板娘。", badge: { label: "角色卡", tone: "gilt" }, tags: ["温和", "店员"], meta: { uploader: "太妃月" }, note: "" },
-  { id: "d3", kind: "story", title: "高考后我助丞相北伐之星辰大海篇", cover: "", blurb: "一个名字很长、用来测两行省略的故事。", badge: { label: "完整故事 · 可直接玩", tone: "pine" }, tags: ["历史", "权谋"], meta: { uploader: "测试作者" }, note: "" },
-  { id: "d4", kind: "world", title: "翁法罗斯世界设定", cover: "", blurb: "可挂进任何故事的世界设定。", badge: { label: "世界书", tone: "gilt" }, tags: ["设定"], meta: {}, note: "创作素材" },
-];
-
 export default function Styleguide() {
   const [cards, setCards] = useState([]);
   const [err, setErr] = useState("");
-  const [sgName, setSgName] = useState("");
-  const [sgDone, setSgDone] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -226,17 +216,6 @@ export default function Styleguide() {
         </div>
       </section>
 
-      {/* 卡面改版预览(封面 + 白条)· 合成样例 */}
-      <section className="sg-section">
-        <h2 className="t-h2 sg-label">卡面改版 · 封面 + 下方白条(书名 / 作者)</h2>
-        <p className="t-ui-sm sg-sub">书名从压在立绘上挪到下方白条:立绘干净、书名最多 2 行、作者弱化。含有封面 / 无封面(书脊底色)/ 长书名 / 无作者 四种。点卡仍可翻面。</p>
-        <CardShelf
-          models={DEMO_CARDS}
-          actionsFor={(m) => ACTIONS[m.kind] || []}
-          onOpen={(m) => alert("详情:" + m.title)}
-        />
-      </section>
-
       {/* 统一 Card · 各 kind 各一张(真数据) */}
       <section className="sg-section">
         <h2 className="t-h2 sg-label">统一 Card · shelf(点卡翻面 · 各 kind 真数据)</h2>
@@ -262,38 +241,26 @@ export default function Styleguide() {
         </div>
       </section>
 
-      {/* React Bits Stepper · 暖夜配色 demo(评估用,未接创作流程) */}
+      {/* 身份卡 · IdentityCard(onboarding 收尾凭证,点一下翻面) */}
       <section className="sg-section">
-        <h2 className="t-h2 sg-label">Stepper · 分步向导(暖夜配色 demo)</h2>
-        <p className="t-ui-sm sg-sub">React Bits Stepper,配色已换暖夜 token(朱砂进度 + 纸面板)。仅 demo 看效果,未接创作主流程。</p>
-        <Stepper
-          backButtonText="上一步"
-          nextButtonText="下一步"
-          completeText="发布"
-          onFinalStepCompleted={() => setSgDone(true)}
-          onStepChange={() => setSgDone(false)}
-        >
-          <Step>
-            <h2>先选个主角</h2>
-            <p>造一张角色卡当主角——聊几句,卡就长出来了。这一步是必需的。</p>
-          </Step>
-          <Step>
-            <h2>给故事一个世界(可选)</h2>
-            <p>想要世界观 / 设定就加一张设定卡;不想加,直接下一步也行。</p>
-          </Step>
-          <Step>
-            <h2>起名,发布</h2>
-            <p>给故事起个名字,就能发到探索让人玩。</p>
-            <div style={{ marginTop: "var(--sp-3)" }}>
-              <Input value={sgName} onChange={(e) => setSgName(e.target.value)} placeholder="故事名…" />
-            </div>
-          </Step>
-        </Stepper>
-        {sgDone && (
-          <p className="t-ui sg-sub" style={{ marginTop: "var(--sp-3)", color: "var(--accent)" }}>
-            走到「发布」了{sgName ? " ·《" + sgName + "》" : ""}(demo,未真发布)
-          </p>
-        )}
+        <h2 className="t-h2 sg-label">身份卡 · IdentityCard(点一下翻面 · 入店凭证)</h2>
+        <p className="t-ui-sm sg-sub">
+          onboarding 收尾:糖沐递给新客的凭证。正面 = 字头头像 + 称呼;点一下翻到背面 = 最近在看 / 发卡 / 落款。暖夜金边,复用统一 Card 的翻转技术(两面各自 perspective+rotateY,背面可点)。
+        </p>
+        <div className="sg-idcards">
+          <IdentityCard
+            name="小满"
+            taste="最近在追《雾山五行》,重看《红楼梦》"
+            message="小满,愿你手边的故事,像这时节的麦子,慢慢就熟了。"
+            issuedAt="2026-07-06"
+          />
+          <IdentityCard
+            name="夜游客"
+            taste=""
+            message="夜游客,灯我给你留着,想读到多晚都成。"
+            issuedAt="2026-07-06"
+          />
+        </div>
       </section>
 
       <p className="sg-foot t-meta">沐言设计系统 v0 · YOR-92 · frontend-next</p>

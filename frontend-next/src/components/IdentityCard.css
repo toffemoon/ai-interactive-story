@@ -1,0 +1,272 @@
+/* 身份卡(入店凭证)· 横版 · 暖米白纸质 + 朱砂赭金 · 点一下翻面。配色取纸 paper register。 */
+.idcard {
+  --idcard-meta: #6a5730; /* 次要文字:暖深棕,在米白卡上过 WCAG AA(≈5.5:1) */
+  width: 460px;
+  height: 290px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: var(--r-lg);
+}
+.idcard:focus {
+  outline: none;
+}
+/* 键盘焦点:赭金焦点环(不再被 outline:none 抹掉) */
+.idcard:focus-visible {
+  outline: 2px solid rgba(173, 122, 36, 0.78);
+  outline-offset: 4px;
+}
+.idcard-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+/* 交互反馈:hover 抬起、active 轻按 */
+.idcard:hover .idcard-inner {
+  transform: translateY(-5px);
+}
+.idcard:active .idcard-inner {
+  transform: translateY(-1px) scale(0.99);
+}
+.idcard:hover .idcard-face {
+  box-shadow: 0 28px 58px -18px rgba(0, 0, 0, 0.6);
+}
+
+/* 翻转:两面各自 perspective()+rotateY(不用父级 preserve-3d),活动面落 0°/360° 平面 → Chromium 命中正常 */
+.idcard-face {
+  position: absolute;
+  inset: 0;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  transition: transform 0.6s var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+  padding: 22px 24px;
+  color: #2a231a;
+  /* 纸质:feTurbulence + feDiffuseLighting 打光浮雕纸纤维(开源配方) overlay 咬进 + 暖米白渐变 */
+  background-color: #efe4cd;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch' result='n'/%3E%3CfeDiffuseLighting in='n' lighting-color='%23ffffff' surfaceScale='1.4' diffuseConstant='1'%3E%3CfeDistantLight azimuth='60' elevation='58'/%3E%3C/feDiffuseLighting%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23p)' opacity='0.6'/%3E%3C/svg%3E"),
+    linear-gradient(152deg, #f8f1e3 0%, #efe4cd 62%, #e9dcc0 100%);
+  background-size: 200px 200px, cover;
+  background-repeat: repeat, no-repeat;
+  background-blend-mode: overlay, normal;
+  border: 1px solid #d9c39c;
+  box-shadow: 0 20px 46px -18px rgba(0, 0, 0, 0.5);
+}
+.idcard-front {
+  transform: perspective(1400px) rotateY(0deg);
+  display: flex;
+  flex-direction: column;
+}
+.idcard-back {
+  transform: perspective(1400px) rotateY(180deg);
+  display: flex;
+  flex-direction: column;
+}
+.idcard.is-flipped .idcard-front {
+  transform: perspective(1400px) rotateY(180deg);
+}
+.idcard.is-flipped .idcard-back {
+  transform: perspective(1400px) rotateY(360deg);
+}
+
+/* 朱砂内框(双线卡感) */
+.idcard-face::before {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  border: 1px solid rgba(143, 60, 50, 0.22);
+  border-radius: calc(var(--r-lg) - 5px);
+  pointer-events: none;
+}
+
+.idcard-eyebrow {
+  font-family: var(--font-serif);
+  font-size: var(--fs-ui-sm);
+  letter-spacing: 0.16em;
+  color: #8f3c32;
+}
+
+/* —— 正面:三区(眉标 / 头像+称呼 / 底行)—— */
+.idcard-front-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.idcard-avatar {
+  flex: none;
+  width: 84px;
+  height: 84px;
+  border-radius: var(--r-pill);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 35%, #fbf6ec, #eaddc2);
+  border: 2px solid rgba(173, 122, 36, 0.6);
+  box-shadow: inset 0 0 10px rgba(143, 60, 50, 0.12);
+}
+.idcard-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.idcard-avatar-mono {
+  font-size: 34px;
+  color: #6b3a2c;
+}
+.idcard-name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-display);
+  color: #241d14;
+  letter-spacing: 0.06em;
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.idcard-front-foot {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.idcard-issued {
+  font-size: var(--fs-meta);
+  color: var(--idcard-meta);
+  letter-spacing: 0.06em;
+}
+/* 朱砂真章(正面右上,multiply 咬进纸纹) */
+.idcard-seal-img {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  width: 66px;
+  height: 66px;
+  object-fit: contain;
+  transform: rotate(-4deg);
+  mix-blend-mode: multiply;
+  opacity: 0.94;
+  pointer-events: none;
+}
+
+/* —— 背面:寄语为主 —— */
+.idcard-message {
+  margin: 12px 0 0;
+  font-size: var(--fs-h3);
+  line-height: 1.7;
+  color: #33291b;
+  letter-spacing: 0.02em;
+  /* AI 现场生成、长度不可控:优雅截断到 4 行(生成侧另限字数) */
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.idcard-sign {
+  margin-top: 12px;
+  align-self: flex-end;
+  font-size: var(--fs-body);
+  color: #8f3c32;
+  letter-spacing: 0.06em;
+}
+/* 底部锚定:口味 + 归还语一起钉底(空口味也不飘) */
+.idcard-back-foot {
+  margin-top: auto;
+}
+.idcard-taste {
+  font-size: var(--fs-meta);
+  color: var(--idcard-meta);
+  letter-spacing: 0.04em;
+}
+.idcard-lost {
+  display: block;
+  margin-top: 6px;
+  color: var(--idcard-meta);
+  font-size: var(--fs-meta);
+  letter-spacing: 0.04em;
+}
+
+/* 翻面提示(正面底行右侧) */
+.idcard-hint {
+  font-size: var(--fs-meta);
+  color: var(--idcard-meta);
+  letter-spacing: 0.06em;
+}
+
+/* —— 登记态(边填边成形):不可翻、正面临时显口味行、字段报一句浮现一句 —— */
+.idcard.is-forming {
+  cursor: default;
+}
+/* 未办好:不抬起(登记态不可点)、朱砂章先淡淡浮着 */
+.idcard.is-forming:hover .idcard-inner {
+  transform: none;
+}
+.idcard.is-forming:hover .idcard-face {
+  box-shadow: 0 20px 46px -18px rgba(0, 0, 0, 0.5);
+}
+/* 登记态:完全没章(最开始卡上无印);办好(非登记态)时 idSealStamp 把章盖下来。 */
+.idcard.is-forming .idcard-seal-img {
+  opacity: 0;
+}
+/* 正面口味成形行(登记态用,占原发卡日底行的位) */
+.idcard-forming-line {
+  flex: none;
+  font-size: var(--fs-body);
+  color: var(--idcard-meta);
+  letter-spacing: 0.04em;
+}
+/* 空态占位:名字/口味淡灰 */
+.idcard-name.is-empty,
+.idcard-forming-taste.is-empty {
+  color: rgba(106, 87, 48, 0.48);
+}
+/* 报一行浮现一行:name/口味 span 用 key 重挂触发入场 */
+.idcard.is-forming .idcard-name,
+.idcard-forming-line .idcard-forming-taste {
+  animation: idFieldIn 440ms var(--ease-out) both;
+}
+@keyframes idFieldIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+    filter: blur(2px);
+  }
+}
+/* 办好落章:两行齐了,朱砂真章从上方盖下来(slam)。非登记态即办好 → 触发一次。 */
+.idcard:not(.is-forming) .idcard-seal-img {
+  animation: idSealStamp 520ms var(--ease-out) both;
+}
+@keyframes idSealStamp {
+  0% {
+    opacity: 0;
+    transform: rotate(-4deg) scale(2.1);
+  }
+  55% {
+    opacity: 0.98;
+    transform: rotate(-4deg) scale(0.9);
+  }
+  100% {
+    transform: rotate(-4deg) scale(1);
+    opacity: 0.94;
+  }
+}
+
+/* 无障碍:减弱动效偏好下,翻面/抬起即时,不做动画 */
+@media (prefers-reduced-motion: reduce) {
+  .idcard-inner,
+  .idcard-face {
+    transition: none;
+  }
+  .idcard.is-forming .idcard-name,
+  .idcard-forming-line .idcard-forming-taste,
+  .idcard:not(.is-forming) .idcard-seal-img {
+    animation: none;
+  }
+}

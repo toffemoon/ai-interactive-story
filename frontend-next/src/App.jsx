@@ -68,7 +68,7 @@ export default function App() {
 
   // 主题:当前故事 + 立绘主页 = 台(暖夜沉浸),其余 = 纸。
   useEffect(() => {
-    const stage = loc.pathname.startsWith("/play") || loc.pathname.startsWith("/home");
+    const stage = loc.pathname.startsWith("/play") || loc.pathname.startsWith("/home") || loc.pathname.startsWith("/test");
     document.documentElement.dataset.theme = stage ? "stage" : "paper";
   }, [loc.pathname]);
 
@@ -102,6 +102,7 @@ export default function App() {
             }
           >
             <Route path="/home" element={<Home />} />
+            <Route path="/test" element={<Home testMode />} />
             <Route path="/explore" element={<Explore />} />
             <Route path="/story/:name" element={<StoryDetail />} />
             <Route path="/chat" element={<Chat />} />
