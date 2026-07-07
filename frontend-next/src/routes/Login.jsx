@@ -57,7 +57,7 @@ export default function Login() {
               username: username.trim() || null,
             });
       onAuthed(data.user, data.token);
-      navigate("/explore");
+      navigate("/home"); // 方案 A:登录后落「立绘主页(家)」,与 App.jsx 根路由一致(YOR-161)
     } catch (e) {
       setErr(e.message || "失败");
     } finally {
@@ -113,7 +113,7 @@ export default function Login() {
         </Button>
 
         {!enabled && (
-          <button className="login-guest" onClick={() => navigate("/explore")}>
+          <button className="login-guest" onClick={() => navigate("/home")}>
             本地未开账号 · 以游客身份进入 →
           </button>
         )}
