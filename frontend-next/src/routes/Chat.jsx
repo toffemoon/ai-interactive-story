@@ -47,6 +47,18 @@ export default function Chat() {
   const uid = user ? user.id : "";
   const ROSTER_KEY = "ais_chat_roster_v1" + (uid ? "_u_" + uid : "");
   const CHAT_KEY = "ais_chat_hist_v1" + (uid ? "_u_" + uid : "");
+  const ACTIVE_KEY = "ais_chat_active_v1" + (uid ? "_u_" + uid : ""); // 记住当前选中的联系人(YOR-195)
+  // 恢复上次选中的联系人(切走再回来续上),校验仍在 roster 里,否则回空。
+  const readActiveName = () => {
+    try {
+      const saved = localStorage.getItem(ACTIVE_KEY) || "";
+      if (!saved) return "";
+      const rs = JSON.parse(localStorage.getItem(ROSTER_KEY)) || [];
+      return Array.isArray(rs) && rs.some((r) => r && r.name === saved) ? saved : "";
+    } catch (e) {
+      return "";
+    }
+  };
 
   const [roster, setRoster] = useState(() => {
     try {
@@ -67,14 +79,14 @@ export default function Chat() {
       return {};
     }
   });
-  const [activeName, setActiveName] = useState("");
+  const [activeName, setActiveName] = useState(readActiveName);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [addModal, setAddModal] = useState(null); // {items} | null
   const [addQ, setAddQ] = useState(""); // 添加联系人搜索(YOR-169)
   const [profileOpen, setProfileOpen] = useState(false);
   const [lightbox, setLightbox] = useState(null); // 头像放大照片(细节⑩)
-  const [mobileView, setMobileView] = useState("list"); // list | chat(窄屏单栏切换)
+  const [mobileView, setMobileView] = useState(() => (readActiveName() ? "chat" : "list")); // list | chat(恢复了联系人则直接进会话,YOR-195)
 
   const sidsRef = useRef(null);
   const openedRef = useRef(null);
@@ -106,6 +118,13 @@ export default function Chat() {
       localStorage.setItem(CHAT_KEY, JSON.stringify(out));
     } catch (e) {}
   }, [byKey]);
+
+  // 记住当前选中的联系人:切走再回来(路由重挂)时续上,不再掉回空白页(YOR-195)。
+  useEffect(() => {
+    try {
+      if (activeName) localStorage.setItem(ACTIVE_KEY, activeName);
+    } catch (e) {}
+  }, [activeName]);
 
   useEffect(() => {
     const el = feedRef.current;
