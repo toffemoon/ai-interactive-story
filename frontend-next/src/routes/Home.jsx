@@ -93,6 +93,79 @@ function DialogueReveal({ text }) {
   );
 }
 
+function demoText(value, echo, fallback = "") {
+  const raw = typeof value === "function" ? value(echo || {}) : value;
+  const text = raw == null ? "" : String(raw).trim();
+  return text || fallback;
+}
+
+function OnboardingDemo({ beat, echo }) {
+  const demo = beat && beat.demo;
+  if (!demo) return null;
+
+  if (demo.type === "story") {
+    const card = demo.card || {};
+    return (
+      <aside className={"home-ob-demo home-ob-demo--story" + (demo.result ? " is-result" : "")} aria-label="故事预演">
+        <div className="home-demo-story-cover">
+          <img src={card.cover} alt={card.title || "故事封面"} draggable="false" />
+          <span className="home-demo-badge t-meta">{card.badge || "故事"}</span>
+        </div>
+        <div className="home-demo-story-body">
+          <span className="home-demo-meta t-meta">{card.meta || "预演"}</span>
+          <h3 className="t-kai">{card.title}</h3>
+          <p className="t-read">{card.blurb}</p>
+          {demo.result && <p className="home-demo-echo t-read">你刚才推开的分叉:「{demoText(echo && echo.storyWish, echo, "我想走进故事里")}」</p>}
+        </div>
+      </aside>
+    );
+  }
+
+  if (demo.type === "character") {
+    const character = demo.character || {};
+    return (
+      <aside className="home-ob-demo home-ob-demo--character" aria-label="角色卡预演">
+        <img className="home-demo-character-img" src={character.image} alt={character.name || "角色"} draggable="false" />
+        <div className="home-demo-character-copy">
+          <span className="home-demo-badge t-meta">{character.badge || "角色"}</span>
+          <h3 className="t-kai">{character.name}</h3>
+          <p className="t-read">{character.blurb}</p>
+        </div>
+      </aside>
+    );
+  }
+
+  if (demo.type === "chat") {
+    const character = demo.character || {};
+    return (
+      <aside className="home-ob-demo home-ob-demo--chat" aria-label="看板聊天预演">
+        <img className="home-demo-xuan-img" src={character.image} alt={character.name || "宣"} draggable="false" />
+        <div className="home-demo-xuan-bubble">
+          <span className="home-demo-xuan-name t-kai">{character.name || "宣"}</span>
+          <p className="t-read">{character.line}</p>
+        </div>
+      </aside>
+    );
+  }
+
+  if (demo.type === "create") {
+    const seed = demoText(demo.seed, echo, "雨夜侦探");
+    const hook = demoText(demo.hook, echo, "从一个念头开始,长出角色和故事。");
+    return (
+      <aside className={"home-ob-demo home-ob-demo--create" + (demo.result ? " is-result" : "")} aria-label="创作预演">
+        <div className="home-demo-create-mark t-kai">种</div>
+        <div className="home-demo-create-copy">
+          <span className="home-demo-meta t-meta">{demo.title || "创作种子"}</span>
+          <h3 className="t-kai">{seed}</h3>
+          <p className="t-read">{hook}</p>
+        </div>
+      </aside>
+    );
+  }
+
+  return null;
+}
+
 export default function Home({ testMode = false }) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -139,6 +212,7 @@ export default function Home({ testMode = false }) {
   const obLineTimerRef = useRef(null);
   const obStepRef = useRef(null);
   const obBeat = obStep ? beatById(obStep) : null;
+  const obDemo = obBeat && obBeat.demo;
   const introFrame = obIntro >= 0 ? INTRO[obIntro] : null;
   const obActive = obIntro >= 0 || !!obBeat;
   // 当前有效 emo:回退进入且该拍有 backEmo → 用反悔姿势,否则常态 emo。
@@ -831,7 +905,14 @@ export default function Home({ testMode = false }) {
     : null;
 
   return (
-    <div className={"home" + (fullscreen ? " is-fullscreen" : "") + (obBeat && obBeat.showCard ? " is-cardbeat" : "")}>
+    <div
+      className={
+        "home" +
+        (fullscreen ? " is-fullscreen" : "") +
+        (obBeat && obBeat.showCard ? " is-cardbeat" : "") +
+        (obDemo ? ` is-ob-demo is-ob-demo-${obDemo.type}` : "")
+      }
+    >
       {/* 背景层 */}
       <div className="home-bg" style={{ backgroundImage: `url("${BG_IMG}")` }} aria-hidden="true" />
       <div className="home-bg-scrim" aria-hidden="true" />
@@ -930,6 +1011,7 @@ export default function Home({ testMode = false }) {
               <input ref={obAvatarInputRef} type="file" accept="image/*" onChange={obAvatarChange} hidden />
             </div>
           )}
+          {obDemo && <OnboardingDemo beat={obBeat} echo={obEcho} />}
           {/* 底部交互坞:主按钮行(贴对话框上方右对齐)+ 对话框聚成一组,不再悬空 */}
           <div className="home-dock">
             {obBeat ? (
@@ -954,6 +1036,8 @@ export default function Home({ testMode = false }) {
                         ? "输入你的称呼…"
                         : obBeat.field === "taste"
                         ? "随口说说…"
+                        : obBeat.placeholder
+                        ? obBeat.placeholder
                         : "想跟糖沐说点什么…"
                     }
                     onChange={(e) => setObInput(e.target.value)}
@@ -966,7 +1050,7 @@ export default function Home({ testMode = false }) {
                     }}
                   />
                   <Button variant="primary" onClick={() => (obBeat.field ? obFieldSubmit() : obChatSubmit())} disabled={!obInput.trim() || obThinking}>
-                    {obThinking ? "…" : obBeat.field ? "好" : "说"}
+                    {obThinking ? "…" : obBeat.submitLabel || (obBeat.field ? "好" : "说")}
                   </Button>
                 </div>
                 {!!obRenderChips.length && (
