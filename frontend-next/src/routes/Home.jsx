@@ -5,7 +5,7 @@ import { getJSON, postJSON, newSessionId } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
 import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
-import { analyzeNameInput, matchChipIntent } from "./onboardingLogic";
+import { analyzeNameCorrectionInput, analyzeNameInput, matchChipIntent, parseChipIntentReply } from "./onboardingLogic";
 import { IdentityCard } from "../components/IdentityCard";
 import "./Home.css";
 
@@ -38,10 +38,10 @@ const AVATAR_CROP_STAGE = 280;
 const AVATAR_OUT = 256;
 
 function saysYes(text) {
-  return /^(对|是|嗯|好|可以|没错|确认|就这个|就写这个|就叫这个|写这个|认真|真的)/.test(String(text || "").trim());
+  return /^(对|是|嗯|好|ok|okay|yes|可以|没错|确认|就这个|就写这个|就叫这个|写这个|认真|真的)/i.test(String(text || "").trim());
 }
 function saysNo(text) {
-  return /(换|重来|重新|不是|不对|算了|别写|不要|逗你|开玩笑)/.test(String(text || "").trim());
+  return /(换|重来|重新|不是|不对|算了|别写|不要|逗你|开玩笑|nope|not that)/i.test(String(text || "").trim());
 }
 function clamp(n, min, max) {
   return Math.min(max, Math.max(min, n));
@@ -468,6 +468,23 @@ export default function Home({ testMode = false }) {
     const beat = obBeat;
     if (!beat.next) return;
     if (obPendingConfirm && beat.field === "name") {
+      const correction = analyzeNameCorrectionInput(v);
+      if (correction.value) {
+        if (correction.needsConfirm) {
+          setObPendingConfirm({ field: "name", value: correction.value, reason: correction.reason });
+          setObEmoOverride("wry");
+          setObAiLine(`我先确认一下,你是认真要把「${correction.value}」写在卡上吗?`);
+          setObInput("");
+          return;
+        }
+        const echo = { ...obEcho, name: correction.value, nameOdd: false };
+        setObEcho(echo);
+        saveEcho(echo);
+        setObPendingConfirm(null);
+        setObEmoOverride(null);
+        obGoNext("avatar", `${correction.value},那我改写这个。头像要贴一张吗?`);
+        return;
+      }
       if (saysYes(v)) {
         confirmPendingName();
         return;
@@ -537,7 +554,31 @@ export default function Home({ testMode = false }) {
       obGoNext(beat.next);
     }
   }
-  // 导览期玩家插话:糖沐用店员口吻答一两句(不填卡、不推进当前导览拍)。自动连讲的定时器会因 obThinking 暂停、答完(obAiLine 变)重启。
+  async function obAskChipIntent(v, beat, chips, currentLine) {
+    if (!beat || !Array.isArray(chips) || !chips.length) return { chip: null, chat: null };
+    const actions = chips.map((c, i) => `${i}. ${c.label}`).join("\n");
+    const scenario =
+      "你是沐言书坊 onboarding 的意图判别器,同时用糖沐的店员口吻兜底回复。只能输出两种格式之一:\n" +
+      "1. [CHIP:n] —— 玩家是在确认、肯定、继续、跳过、或选择某个当前可见动作,n 是下面动作列表的索引。\n" +
+      "2. [CHAT]一句很短的糖沐回复 —— 玩家是在问问题、闲聊、搞怪、辱骂、试探边界、或没有明确选择当前动作。\n" +
+      "规则:\n" +
+      "- ok/okay/yes/好/好的/嗯/可以/继续/下一步/接着/带我看看/show me around,在上下文里通常是选择当前唯一的继续动作。\n" +
+      "- 有上传头像动作时,只有玩家明确说上传/传图/照片/avatar/photo 才选上传;说跳过/no avatar/continue/ok 则选继续或跳过头像的动作。\n" +
+      "- 不要创造动作,不要导航,不要解释格式。\n" +
+      `当前糖沐台词:${currentLine || ""}\n当前动作:\n${actions}`;
+    try {
+      const card = { spec: "chara_card_v2", spec_version: "2.0", data: { name: "糖沐", description: AI_PERSONA, scenario } };
+      const r = await Promise.race([
+        postJSON("/api/chat", { card, session_id: newSessionId(), user: v, world: null }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000)),
+      ]);
+      return parseChipIntentReply(((r && r.reply) || "").trim(), chips);
+    } catch (e) {
+      return { chip: null, chat: null };
+    }
+  }
+
+  // 导览期玩家插话:先判断是不是当前动作的自然说法;确实是闲聊才让糖沐接一句,不推进当前导览拍。
   async function obChatSubmit() {
     const v = obInput.trim();
     if (!v || obThinking) return;
@@ -551,6 +592,17 @@ export default function Home({ testMode = false }) {
     }
     setObInput("");
     setObThinking(true);
+    const intent = await obAskChipIntent(v, obBeat, obBeat && obBeat.chips, obLine);
+    if (intent.chip) {
+      setObThinking(false);
+      obChip(intent.chip);
+      return;
+    }
+    if (intent.chat) {
+      setObThinking(false);
+      setObAiLine(intent.chat);
+      return;
+    }
     let reply = null;
     try {
       const card = { spec: "chara_card_v2", spec_version: "2.0", data: { name: "糖沐", description: AI_PERSONA, scenario: CHAT_SCENARIO } };
