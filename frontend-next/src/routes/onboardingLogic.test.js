@@ -160,15 +160,17 @@ test("onboarding rehearses story chat and creation without route jumps", () => {
   assert.equal(beatById("cardDone").chips[0].next, "tryStory");
 
   const story = beatById("tryStory");
-  assert.equal(story.field, "storyWish");
-  assert.equal(story.next, "tryStoryResult");
+  assert.equal(story.field, undefined);
+  assert.equal(story.chips[0].next, "tryChatAsk");
   assert.equal(story.demo.type, "story");
   const storyModel = toCardModel("story", story.demo.preset);
   assert.equal(storyModel.title, "所以我出手了");
   assert.equal(storyModel.cover, "/covers/suoyiwochushoule.jpg");
-  assert.match(story.line({ taste: "三体" }), /真实地参与进故事里/);
+  assert.match(story.line({ taste: "三体" }), /探索/);
+  assert.equal(beatById("tryStoryResult"), null);
 
   const chat = beatById("tryChatDemo");
+  assert.equal(beatById("tryChatAsk").ai.optional, true);
   assert.equal(chat.demo.type, "chat");
   assert.equal(chat.demo.character.name, "宣");
   assert.equal(chat.demo.character.image, "/oc/xuan.png");
@@ -178,6 +180,7 @@ test("onboarding rehearses story chat and creation without route jumps", () => {
   const create = beatById("tryCreate");
   assert.equal(create.field, "createSeed");
   assert.equal(create.next, "tryCreateResult");
+  assert.equal(create.ai.optional, true);
   assert.equal(create.demo.type, "create");
   assert.equal(beatById("tryCreateResult").chips[0].to, "/explore");
 });
