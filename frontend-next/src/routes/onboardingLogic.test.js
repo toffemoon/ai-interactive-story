@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { beatById } from "./onboardingScript.js";
 import { analyzeNameCorrectionInput, analyzeNameInput, matchChipIntent, parseChipIntentReply, parseFieldIntentReply } from "./onboardingLogic.js";
 
 test("extracts the usable name from a sentence", () => {
@@ -152,4 +153,28 @@ test("parses field AI failures as retry instead of fabricated answers", () => {
   assert.deepEqual(parseFieldIntentReply("[NONE] 最近还没看。"), { intent: "none", text: "最近还没看。" });
   assert.deepEqual(parseFieldIntentReply("[OK] 写好了。"), { intent: "answer", text: "写好了。" });
   assert.deepEqual(parseFieldIntentReply("写好了。"), { intent: "answer", text: "写好了。" });
+});
+
+test("onboarding rehearses story chat and creation without route jumps", () => {
+  assert.equal(beatById("cardDone").chips[0].next, "tryStory");
+
+  const story = beatById("tryStory");
+  assert.equal(story.field, "storyWish");
+  assert.equal(story.next, "tryStoryResult");
+  assert.equal(story.demo.type, "story");
+  assert.equal(story.demo.card.cover, "/covers/suoyiwochushoule.jpg");
+  assert.match(story.line({ taste: "三体" }), /真实地参与进故事里/);
+
+  const chat = beatById("tryChatDemo");
+  assert.equal(chat.demo.type, "chat");
+  assert.equal(chat.demo.character.name, "宣");
+  assert.equal(chat.demo.character.image, "/oc/xuan.png");
+  assert.match(chat.line({ favoriteRole: "流萤" }), /看板里/);
+  assert.equal(chat.chips[0].next, "tryCreate");
+
+  const create = beatById("tryCreate");
+  assert.equal(create.field, "createSeed");
+  assert.equal(create.next, "tryCreateResult");
+  assert.equal(create.demo.type, "create");
+  assert.equal(beatById("tryCreateResult").chips[0].to, "/explore");
 });

@@ -100,11 +100,13 @@ const CHIP_SYNONYMS = [
   { key: "还没看什么", words: ["还没看", "没看什么", "没有", "暂时没有", "想不起来", "不知道", "没想好"] },
   { key: "＋ 传张头像", words: ["传头像", "上传头像", "传张头像", "传图", "上传图片", "上传照片", "照片", "photo", "upload avatar", "upload photo"] },
   { key: "用名字字头就好", words: ["字头", "用名字", "不用头像", "不传头像", "跳过头像", "头像跳过", "先不传", "好了继续", "好了", "继续", "no avatar", "skip avatar", "without avatar"] },
+  { key: "叫宣出来看看", words: ["叫宣", "宣出来", "叫角色", "叫她", "叫出来", "把人请出来", "角色聊天", "聊天看看", "叫她出来"] },
+  { key: "继续看创作", words: ["继续看创作", "看创作", "创作", "工坊", "继续", "下一步", "下一个", "然后", "next", "go on", "continue"] },
   { key: "带我进第一本书", words: ["进第一本", "第一本书", "开始看", "开始故事", "去探索", "带我进", "start the first story", "first story"] },
   { key: "我自己逛逛", words: ["自己逛", "自己看看", "我自己", "随便逛", "先不用"] },
 ];
 
-const PROGRESS_CHIP_KEYS = new Set(["带我认认这儿", "然后呢", "还有吗", "继续", "最后一个", "用名字字头就好", "带我进第一本书"].map(normalizeText));
+const PROGRESS_CHIP_KEYS = new Set(["带我认认这儿", "然后呢", "还有吗", "继续", "最后一个", "用名字字头就好", "叫宣出来看看", "继续看创作", "带我进第一本书"].map(normalizeText));
 const AFFIRM_CONTINUE_EXACT = new Set(["ok", "okay", "yes", "yep", "sure", "好", "好的", "好呀", "好啊", "嗯", "嗯嗯", "可以", "行", "了解", "知道了", "明白", "收到"].map(normalizeText));
 const AFFIRM_CONTINUE_WORDS = ["继续", "接着", "下一步", "下一个", "往下", "说下去", "继续说", "继续讲", "继续介绍", "带我看看", "带我逛", "带路", "show me around", "take me around", "next", "go on", "continue"];
 
