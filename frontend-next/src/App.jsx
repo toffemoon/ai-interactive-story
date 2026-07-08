@@ -13,7 +13,6 @@ import Forum from "./routes/Forum";
 import Story from "./routes/Story";
 import Home from "./routes/Home";
 import Styleguide from "./routes/Styleguide";
-import NavTest from "./routes/NavTest";
 import Preloader from "./components/preloader";
 import "./App.css";
 
@@ -91,7 +90,6 @@ export default function App() {
           <Route path="/" element={<Navigate to={home} replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/styleguide" element={<Styleguide />} />
-          <Route path="/test" element={<NavTest />} />
 
           {/* 登录后 app 壳(桌面 Rail / 移动 tab) */}
           <Route
