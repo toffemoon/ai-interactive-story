@@ -165,7 +165,8 @@ test("onboarding rehearses story chat and creation without route jumps", () => {
   assert.equal(story.demo.type, "story");
   const storyModel = toCardModel("story", story.demo.preset);
   assert.equal(storyModel.title, "所以我出手了");
-  assert.equal(storyModel.cover, "/covers/suoyiwochushoule.jpg");
+  assert.equal(storyModel.cover, "/onboarding/suoyiwochushoule.jpg");
+  assert.equal(storyModel.cover.startsWith("/covers/"), false);
   assert.match(story.line({ taste: "三体" }), /探索/);
   assert.equal(beatById("tryStoryResult"), null);
 

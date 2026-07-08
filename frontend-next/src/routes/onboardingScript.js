@@ -194,7 +194,7 @@ export const BEATS = [
           name: "所以我出手了",
           synopsis: "取一本书,推开门,你说的每句话都会把剧情推向不同方向。",
           author: "沐言书坊",
-          cover: "/covers/suoyiwochushoule.jpg",
+          cover: "/onboarding/suoyiwochushoule.jpg",
           tags: ["互动故事", "剧情分叉"],
         },
       },
