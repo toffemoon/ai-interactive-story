@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { toCardModel } from "../lib/cardModel.js";
 import { beatById } from "./onboardingScript.js";
 import { analyzeNameCorrectionInput, analyzeNameInput, matchChipIntent, parseChipIntentReply, parseFieldIntentReply } from "./onboardingLogic.js";
 
@@ -162,7 +163,9 @@ test("onboarding rehearses story chat and creation without route jumps", () => {
   assert.equal(story.field, "storyWish");
   assert.equal(story.next, "tryStoryResult");
   assert.equal(story.demo.type, "story");
-  assert.equal(story.demo.card.cover, "/covers/suoyiwochushoule.jpg");
+  const storyModel = toCardModel("story", story.demo.preset);
+  assert.equal(storyModel.title, "所以我出手了");
+  assert.equal(storyModel.cover, "/covers/suoyiwochushoule.jpg");
   assert.match(story.line({ taste: "三体" }), /真实地参与进故事里/);
 
   const chat = beatById("tryChatDemo");
