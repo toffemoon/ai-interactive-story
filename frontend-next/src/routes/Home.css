@@ -380,7 +380,6 @@
   color: var(--cinnabar);
   letter-spacing: 0.12em;
 }
-.home-ob-demo--story,
 .home-ob-demo--character,
 .home-ob-demo--create {
   border: 1px solid rgba(92, 58, 32, 0.22);
@@ -390,21 +389,16 @@
   color: #2c241c;
 }
 .home-ob-demo--story {
-  display: grid;
-  grid-template-columns: 150px minmax(0, 1fr);
-  align-items: center;
-  gap: 16px;
-  padding: 16px;
-  width: min(430px, 36vw);
+  width: 190px;
+  pointer-events: none;
 }
 .home-demo-story-card {
-  width: 150px;
+  width: 190px;
 }
 .home-demo-story-card .card--shelf {
-  width: 150px;
-  height: 226px;
+  width: 190px;
+  height: 286px;
 }
-.home-demo-story-copy,
 .home-demo-character-copy,
 .home-demo-create-copy {
   min-width: 0;
@@ -417,7 +411,6 @@
   line-height: 1.12;
   letter-spacing: 0;
 }
-.home-demo-story-copy p,
 .home-demo-character-copy p,
 .home-demo-create-copy p,
 .home-demo-xuan-bubble p {
@@ -657,23 +650,23 @@
     transform: none;
   }
   .home-ob-demo--story {
-    grid-template-columns: 112px 1fr;
-    gap: 10px;
-    padding: 10px;
+    left: auto;
+    right: 20px;
+    top: 72px;
+    width: 132px;
   }
   .home-demo-story-card {
-    width: 112px;
+    width: 132px;
   }
   .home-demo-story-card .card--shelf {
-    width: 112px;
-    height: 169px;
+    width: 132px;
+    height: 199px;
   }
   .home-demo-character-copy h3,
   .home-demo-create-copy h3 {
     font-size: 22px;
     margin-bottom: 5px;
   }
-  .home-demo-story-copy p,
   .home-demo-character-copy p,
   .home-demo-create-copy p,
   .home-demo-xuan-bubble p {

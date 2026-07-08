@@ -89,11 +89,6 @@ function OnboardingDemo({ beat, echo }) {
         <div className="home-demo-story-card">
           <Card model={model} variant="shelf" flipped={false} />
         </div>
-        <div className="home-demo-story-copy">
-          <span className="home-demo-meta t-meta">{demo.caption || "书页预演"}</span>
-          <p className="t-read">{model ? model.blurb : "取一本书,推开门,你说的话会推动故事。"}</p>
-          {demo.result && <p className="home-demo-echo t-read">你刚才推开的分叉:「{demoText(echo && echo.storyWish, echo, "我想走进故事里")}」</p>}
-        </div>
       </aside>
     );
   }
@@ -594,6 +589,13 @@ export default function Home({ testMode = false }) {
         reply = null; // 降级:请玩家重说,避免把闲聊/反问误写进身份卡。
       }
       setObThinking(false);
+      if (!reply && beat.ai.optional) {
+        const echo = { ...obEcho, [beat.field]: fieldValue };
+        setObEcho(echo);
+        persistEcho(echo);
+        obGoNext(beat.next);
+        return;
+      }
       const p = parseFieldIntentReply(reply);
       if (p.intent === "retry") {
         setObAiLine(beat.field === "name" ? "我刚才没听清。你直接报一个想写在卡上的称呼就行。" : "我刚才没听清。最近在看什么,或者说「没有」也行。");
@@ -611,7 +613,8 @@ export default function Home({ testMode = false }) {
       if (beat.field === "name") echo.nameOdd = false;
       setObEcho(echo);
       persistEcho(echo);
-      obGoNext(beat.next, beat.next === "cardDone" ? null : p.text);
+      const nextLine = beat.ai.optional && p.text && p.text.length > 72 ? p.text.slice(0, 72) + "…" : p.text;
+      obGoNext(beat.next, beat.next === "cardDone" ? null : nextLine);
     } else {
       const echo = { ...obEcho, [beat.field]: v };
       setObEcho(echo);

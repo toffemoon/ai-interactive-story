@@ -187,7 +187,6 @@ export const BEATS = [
     tour: "explore",
     demo: {
       type: "story",
-      caption: "书页预演",
       preset: {
         name: "所以我出手了",
         official: true,
@@ -202,42 +201,10 @@ export const BEATS = [
     },
     line: (e) => {
       const t = tasteQuote(e);
-      const hook = t ? `聊到「${t}」,我就想问你一句。` : "那我先问你一句。";
-      return hook + "有没有设想过,不是只隔着屏幕看故事,而是真实地参与进故事里,亲手影响故事的剧情?";
+      const hook = t ? `聊到「${t}」,先给你看这里最常用的入口。` : "先给你看这里最常用的入口。";
+      return hook + "主页和探索页里的书卡就是故事入口。点一张卡,就能进到会回应你的故事里。";
     },
-    backLine: () => "故事这件事再说一遍?——在沐言里,你不是旁观者,你说的话会改剧情。",
-    backEmo: "spark",
-    field: "storyWish",
-    next: "tryStoryResult",
-    placeholder: "比如:我想救那个角色…",
-    submitLabel: "推门",
-    chips: [{ label: "我想亲手改掉那个结局", fill: "我想亲手改掉那个结局" }],
-  },
-  {
-    id: "tryStoryResult",
-    emo: "spark",
-    tour: "explore",
-    demo: {
-      type: "story",
-      result: true,
-      caption: "剧情分叉",
-      preset: {
-        name: "所以我出手了",
-        official: true,
-        data: {
-          name: "所以我出手了",
-          synopsis: "你的输入会变成下一段剧情的方向,不是固定选项。",
-          author: "沐言书坊",
-          cover: "/covers/suoyiwochushoule.jpg",
-          tags: ["互动故事", "剧情分叉"],
-        },
-      },
-    },
-    line: (e) => {
-      const wish = echoQuote(e, "storyWish", "我想走进故事里");
-      return `如果这是书里的一页,「${wish}」就不是评论,而是一条剧情分叉。沐言里的故事,就是让你这样把剧情往前推。`;
-    },
-    backLine: () => "刚才那句会变成剧情分叉。这里的故事不是读完就算,是你能往里走。",
+    backLine: () => "故事入口再看一眼?——看到这样的书卡,点进去就能开始。",
     backEmo: "spark",
     chips: [{ label: "叫宣出来看看", next: "tryChatAsk" }],
   },
@@ -262,6 +229,16 @@ export const BEATS = [
     next: "tryChatDemo",
     placeholder: "输入一个角色名,或者写「宣」…",
     submitLabel: "叫她",
+    ai: {
+      optional: true,
+      scenario: () =>
+        "你是沐言书坊的店员糖沐。玩家正在 onboarding 里回答「想单独和哪个角色聊聊」。先判断:\n" +
+        "· 如果玩家说了角色名、人名、作品角色、或大概描述,回复以 [OK] 开头,自然接住这个名字,再说沐言也能在看板里把角色请出来轻量聊天,最后说先用宣示范。\n" +
+        "· 如果玩家说没有、想不起来、随便,回复以 [NONE] 开头,别追问,直接说那先用宣示范。\n" +
+        "· 如果玩家在闲聊、反问、搞怪或试探边界,回复以 [CHAT] 开头,短短接话,但把话题带回「想叫谁出来聊」。\n" +
+        "不要补充角色出处或作品设定,不要长评。台词控制在 55 字以内。\n" +
+        "只输出标记加糖沐台词,不要解释格式。",
+    },
     chips: [{ label: "就叫宣吧", fill: "宣" }],
   },
   {
@@ -302,6 +279,16 @@ export const BEATS = [
     next: "tryCreateResult",
     placeholder: "比如:雨夜侦探…",
     submitLabel: "生成",
+    ai: {
+      optional: true,
+      scenario: () =>
+        "你是沐言书坊的店员糖沐。玩家正在 onboarding 里给一个创作种子。先判断:\n" +
+        "· 如果玩家给了人物、设定、画面、题材、短句或故事念头,回复以 [OK] 开头,用一两句把这个念头接成可以继续创作的方向,但不要替玩家写长设定。\n" +
+        "· 如果玩家说没有、想不出、随便,回复以 [NONE] 开头,温和接住,说先拿一个种子示范。\n" +
+        "· 如果玩家闲聊、反问、搞怪或试探边界,回复以 [CHAT] 开头,短短接话,再请他给一个很短的设想。\n" +
+        "台词控制在 55 字以内。\n" +
+        "只输出标记加糖沐台词,不要解释格式。",
+    },
     chips: [{ label: "雨夜侦探", fill: "雨夜侦探" }],
   },
   {
