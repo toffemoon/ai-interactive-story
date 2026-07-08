@@ -5,7 +5,7 @@ import { getJSON, postJSON, newSessionId } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
 import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
-import { analyzeNameCorrectionInput, analyzeNameInput, matchChipIntent, parseChipIntentReply } from "./onboardingLogic";
+import { analyzeNameCorrectionInput, analyzeNameInput, matchChipIntent, parseChipIntentReply, parseFieldIntentReply } from "./onboardingLogic";
 import { IdentityCard } from "../components/IdentityCard";
 import StaggeredText from "../components/staggered-text";
 import AnimatedList from "../components/animated-list";
@@ -42,7 +42,7 @@ const AVATAR_CROP_STAGE = 280;
 const AVATAR_OUT = 256;
 
 function saysYes(text) {
-  return /^(对|是|嗯|好|ok|okay|yes|可以|没错|确认|就这个|就写这个|就叫这个|写这个|认真|真的)/i.test(String(text || "").trim());
+  return /^(?:对|是|嗯+|好|好的|好呀|好啊|ok|okay|yes|yep|可以|没错|确认|就这个|就写这个|就叫这个|写这个|认真|真的)(?:吧|啦|呀|啊|呢|哦)?[。.!！?？\s]*$/i.test(String(text || "").trim());
 }
 function saysNo(text) {
   return /(换|重来|重新|不是|不对|算了|别写|不要|逗你|开玩笑|nope|not that)/i.test(String(text || "").trim());
@@ -203,7 +203,7 @@ export default function Home({ testMode = false }) {
       setSessionId(r.sessionId || newSessionId());
       setMessages(Array.isArray(r.msgs) ? r.msgs : []);
     }
-  }, []);
+  }, [testMode]);
 
   // 首访引导:没被引导过 + 没恢复出历史会话 → 进新手引导(老用户 / 聊过的人不触发)。
   // testMode(/test/onboarding):每次进都强制从首拍开始、清空回声,方便反复测(不读写完成标记)。
@@ -443,12 +443,15 @@ export default function Home({ testMode = false }) {
     setObContinueHint(false);
     setObStep(null);
   }
+  function persistEcho(echo) {
+    if (!testMode) saveEcho(echo);
+  }
   function confirmPendingName() {
     if (!obPendingConfirm || obPendingConfirm.field !== "name") return;
     const name = obPendingConfirm.value;
     const echo = { ...obEcho, name, nameOdd: true };
     setObEcho(echo);
-    saveEcho(echo);
+    persistEcho(echo);
     setObPendingConfirm(null);
     setObInput("");
     obGoNext("avatar", `行……我真给你写「${name}」了。先说好,以后这张卡就这么叫你。头像要贴一张吗?`, { emo: "wry" });
@@ -484,22 +487,13 @@ export default function Home({ testMode = false }) {
     if (c.set) {
       echo = { ...obEcho, ...c.set };
       setObEcho(echo);
-      saveEcho(echo);
+      persistEcho(echo);
     }
     if (c.to) navigate(c.to);
     if (c.done) endOnboarding(echo);
     else if (c.next) obGoNext(c.next);
   }
-  // 解析糖沐回复的辨别标记:[CHAT]=玩家在闲聊/没正经回答(接话不填、停这拍) / [OK] 或无标记=当答案(填卡+推进)。
   // 解析糖沐回复的辨别标记:[CHAT]=闲聊(接话不填、停这拍) / [NONE]=明说没有(推进但卡上记空) / [OK]或无标记=当答案(填原话+推进)。
-  function parseIntent(reply) {
-    if (!reply) return { intent: "answer", text: null }; // AI 失败→保守当答案(回退旧行为,不卡新客)
-    const m = reply.match(/^\s*\[(OK|NONE|CHAT)\]\s*/i);
-    if (!m) return { intent: "answer", text: reply };
-    const tag = m[1].toUpperCase();
-    const intent = tag === "CHAT" ? "chat" : tag === "NONE" ? "none" : "answer";
-    return { intent, text: reply.slice(m[0].length).trim() || null };
-  }
   async function obFieldSubmit() {
     const v = obInput.trim();
     if (!v || !obBeat || !obBeat.field || obThinking) return;
@@ -517,18 +511,18 @@ export default function Home({ testMode = false }) {
         }
         const echo = { ...obEcho, name: correction.value, nameOdd: false };
         setObEcho(echo);
-        saveEcho(echo);
+        persistEcho(echo);
         setObPendingConfirm(null);
         setObEmoOverride(null);
         obGoNext("avatar", `${correction.value},那我改写这个。头像要贴一张吗?`);
         return;
       }
-      if (saysYes(v)) {
-        confirmPendingName();
-        return;
-      }
       if (saysNo(v)) {
         rejectPendingName();
+        return;
+      }
+      if (saysYes(v)) {
+        confirmPendingName();
         return;
       }
     }
@@ -562,20 +556,18 @@ export default function Home({ testMode = false }) {
         ]);
         reply = ((r && r.reply) || "").trim() || null;
       } catch (e) {
-        reply = null; // 降级:当答案,不卡新客
+        reply = null; // 降级:请玩家重说,避免把闲聊/反问误写进身份卡。
       }
       setObThinking(false);
-      const p = parseIntent(reply);
+      const p = parseFieldIntentReply(reply);
+      if (p.intent === "retry") {
+        setObAiLine(beat.field === "name" ? "我刚才没听清。你直接报一个想写在卡上的称呼就行。" : "我刚才没听清。最近在看什么,或者说「没有」也行。");
+        setObInput("");
+        return;
+      }
       if (p.intent === "chat") {
-        if (beat.field === "name" && localName && localName.value) {
-          const echo = { ...obEcho, name: fieldValue, nameOdd: false };
-          setObEcho(echo);
-          saveEcho(echo);
-          obGoNext(beat.next, `${fieldValue},我先这样写上。头像要贴一张吗?`, { emo: null });
-          return;
-        }
         // 闲聊/没正经回答:糖沐接话但不填卡、不推进,停这拍继续等真正的答案。
-        setObAiLine(p.text);
+        setObAiLine(p.text || (beat.field === "name" ? "这个不像称呼。那,我该怎么叫你?" : "这句我先当闲聊。那,最近都在看点什么?"));
         setObInput("");
         return;
       }
@@ -583,12 +575,12 @@ export default function Home({ testMode = false }) {
       const echo = { ...obEcho, [beat.field]: p.intent === "none" ? "" : fieldValue };
       if (beat.field === "name") echo.nameOdd = false;
       setObEcho(echo);
-      saveEcho(echo);
-      obGoNext(beat.next, p.text);
+      persistEcho(echo);
+      obGoNext(beat.next, beat.next === "cardDone" ? null : p.text);
     } else {
       const echo = { ...obEcho, [beat.field]: v };
       setObEcho(echo);
-      saveEcho(echo);
+      persistEcho(echo);
       obGoNext(beat.next);
     }
   }
@@ -633,6 +625,11 @@ export default function Home({ testMode = false }) {
     const intent = await obAskChipIntent(v, obBeat, obBeat && obBeat.chips, obLine);
     if (intent.chip) {
       setObThinking(false);
+      if (intent.chip.upload) {
+        setObAiLine("可以,点一下「＋ 传张头像」,我就帮你贴到卡上。");
+        setObContinueHint(true);
+        return;
+      }
       obChip(intent.chip);
       return;
     }
@@ -654,6 +651,10 @@ export default function Home({ testMode = false }) {
     }
     setObThinking(false);
     if (reply) setObAiLine(reply);
+    else {
+      setObAiLine("我刚才没听清。你可以再说一次,或者点下面的选项继续。");
+      setObContinueHint(true);
+    }
   }
   // 前进一拍:压历史(供回退),清回退态与输入框;aiLine=本次 AI 自适应台词(替下一拍静态开场),null=用脚本。
   function obGoNext(nextId, aiLine = null, opts = {}) {
@@ -753,7 +754,7 @@ export default function Home({ testMode = false }) {
     setObCardAvatar(url);
     const echo = { ...obEcho, avatar: url };
     setObEcho(echo);
-    saveEcho(echo);
+    persistEcho(echo);
     setObCrop(null);
     setObEmoOverride(obEcho.nameOdd ? "wry" : "spark");
     setObAiLine("诶,这张好看——给你嵌卡上了。");
