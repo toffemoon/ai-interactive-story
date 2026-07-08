@@ -4,7 +4,8 @@ import { Button } from "../components/ui";
 import { getJSON, postJSON, newSessionId } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
-import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, AUTO_MS, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
+import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
+import { analyzeNameInput, matchChipIntent } from "./onboardingLogic";
 import { IdentityCard } from "../components/IdentityCard";
 import StaggeredText from "../components/staggered-text";
 import AnimatedList from "../components/animated-list";
@@ -37,6 +38,33 @@ const FALLBACK_TANGMU = {
 };
 const LINE_REVEAL_FROM = { opacity: 0, y: 4 };
 const LINE_REVEAL_TO = { opacity: 1, y: 0 };
+const AVATAR_CROP_STAGE = 280;
+const AVATAR_OUT = 256;
+
+function saysYes(text) {
+  return /^(对|是|嗯|好|可以|没错|确认|就这个|就写这个|就叫这个|写这个|认真|真的)/.test(String(text || "").trim());
+}
+function saysNo(text) {
+  return /(换|重来|重新|不是|不对|算了|别写|不要|逗你|开玩笑)/.test(String(text || "").trim());
+}
+function clamp(n, min, max) {
+  return Math.min(max, Math.max(min, n));
+}
+function clampCropOffset(value, natural, baseScale, zoom, stage = AVATAR_CROP_STAGE) {
+  const display = natural * baseScale * zoom;
+  const max = Math.max(0, (display - stage) / 2);
+  return clamp(value, -max, max);
+}
+function clampCropState(crop) {
+  if (!crop) return crop;
+  const zoom = clamp(Number(crop.zoom) || 1, 1, 3);
+  return {
+    ...crop,
+    zoom,
+    x: clampCropOffset(Number(crop.x) || 0, crop.naturalW || 1, crop.baseScale || 1, zoom),
+    y: clampCropOffset(Number(crop.y) || 0, crop.naturalH || 1, crop.baseScale || 1, zoom),
+  };
+}
 
 function cardName(card) {
   const d = (card && card.data) || card || {};
@@ -97,16 +125,25 @@ export default function Home({ testMode = false }) {
   const [obAiLine, setObAiLine] = useState(null); // AI 生成的自适应台词(当前拍开场,替静态 line);null=用脚本
   const [obCardMessage, setObCardMessage] = useState(null); // 身份卡上糖沐的 AI 寄语;null=卡组件用默认暖句
   const [obCardAvatar, setObCardAvatar] = useState(null); // 身份卡头像(上传后 dataURL);null=用称呼字头
+  const [obPendingConfirm, setObPendingConfirm] = useState(null); // {field,value,reason}:奇怪/玩笑名先二次确认,不直接写卡
+  const [obEmoOverride, setObEmoOverride] = useState(null); // 临时覆盖立绘(如奇怪名字→流汗 wry)
+  const [obContinueHint, setObContinueHint] = useState(false); // 长时间不点 chip 时的弱提示
+  const [obCrop, setObCrop] = useState(null); // 头像裁剪弹窗状态
   // 立绘双层(交叉溶解):slots=两层各 src, layer=当前在顶(不透明)的层。合成一个 state 一次提交,避免换图/切层两次 setState 间的中间帧闪(重影根因之一)。
   const [obPortrait, setObPortrait] = useState({ slots: [null, null], layer: 0 });
   const prevImageRef = useRef(null); // 上一帧立绘 src,供双层比对
   const obInputRef = useRef(null); // onboarding 输入框(选项 fill 后聚焦)
   const obAvatarInputRef = useRef(null); // 身份卡头像上传的隐藏 file input
+  const obCropImgRef = useRef(null);
+  const obCropDragRef = useRef(null);
+  const obLineTimerRef = useRef(null);
+  const obStepRef = useRef(null);
   const obBeat = obStep ? beatById(obStep) : null;
   const introFrame = obIntro >= 0 ? INTRO[obIntro] : null;
   const obActive = obIntro >= 0 || !!obBeat;
   // 当前有效 emo:回退进入且该拍有 backEmo → 用反悔姿势,否则常态 emo。
-  const obEmo = obBeat ? (obViaBack && obBeat.backEmo ? obBeat.backEmo : obBeat.emo) : null;
+  const obEmoBase = obBeat ? (obViaBack && obBeat.backEmo ? obBeat.backEmo : obBeat.emo) : null;
+  const obEmo = obEmoOverride || (obBeat && obBeat.id === "avatar" && obEcho.nameOdd ? "wry" : obEmoBase);
   // 当前台词优先级:思考态 > 回退反悔(backLine) > 上传头像后的回应(avatarLine) > AI 自适应/闲聊(obAiLine) > 静态脚本(line)。
   const obHasAvatar = !!(obCardAvatar || (obEcho && obEcho.avatar));
   const obLine = obThinking
@@ -271,6 +308,32 @@ export default function Home({ testMode = false }) {
     return () => el.classList.remove("ais-onboarding");
   }, [obActive]);
 
+  useEffect(() => {
+    obStepRef.current = obStep;
+  }, [obStep]);
+
+  useEffect(() => {
+    return () => {
+      if (obLineTimerRef.current) clearTimeout(obLineTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const url = obCrop && obCrop.url;
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [obCrop && obCrop.url]);
+
+  useEffect(() => {
+    setObContinueHint(false);
+    if (!obBeat || obThinking || obInput.trim()) return undefined;
+    const hasContinue = (obBeat.chips || []).some((c) => c.next || c.to || c.done);
+    if (!hasContinue) return undefined;
+    const t = setTimeout(() => setObContinueHint(true), 6200);
+    return () => clearTimeout(t);
+  }, [obStep, obAiLine, obThinking, obInput]);
+
   // 台词气泡「贴头侧、齐头高」定位:按当前姿势头中心算屏幕坐标,把气泡右缘锚到头左侧一点、纵向中心对齐头高。
   // 立绘各姿势 CSS 尺寸一致,量任一张 img 盒即可(几何稳定)。窄屏/竖版走 CSS 底部布局 → 清空锚点。
   useLayoutEffect(() => {
@@ -337,15 +400,9 @@ export default function Home({ testMode = false }) {
     };
   }, [obStep]);
 
-  // 导览拍自动连讲:进导览拍(有 tour)后 AUTO_MS 自动进下一个功能介绍。obThinking(玩家插话中)暂停;插话答完 obAiLine 变→本 effect 重挂、重新计时。终点拍(tourForum,首 chip 无 next)不自动、停在出口等选。
-  useEffect(() => {
-    const beat = obStep ? beatById(obStep) : null;
-    if (!beat || !beat.tour || obThinking) return undefined;
-    const nextId = beat.chips && beat.chips[0] && beat.chips[0].next;
-    if (!nextId) return undefined;
-    const t = setTimeout(() => obGoNext(nextId), AUTO_MS);
-    return () => clearTimeout(t);
-  }, [obStep, obThinking, obAiLine]);
+  // 导览拍改「点 chip 推进」:原先有 tour 的拍会 AUTO_MS 自动连讲、自己往下跳,雨钦 2026-07-07 定去掉——
+  // 把控制权还给玩家:糖沐每拍讲完停下,等玩家点 chip(然后呢/还有吗…)再进下一个功能介绍。
+  // 插话(obChatSubmit)仍随时可用,只换台词不推进。点屏推进 / 去 chip / 糖沐连讲 留后续方案定了再做。
 
   async function send() {
     const text = input.trim();
@@ -381,9 +438,37 @@ export default function Home({ testMode = false }) {
     setObAiLine(null);
     setObCardMessage(null);
     setObThinking(false);
+    setObPendingConfirm(null);
+    setObEmoOverride(null);
+    setObContinueHint(false);
     setObStep(null);
   }
+  function confirmPendingName() {
+    if (!obPendingConfirm || obPendingConfirm.field !== "name") return;
+    const name = obPendingConfirm.value;
+    const echo = { ...obEcho, name, nameOdd: true };
+    setObEcho(echo);
+    saveEcho(echo);
+    setObPendingConfirm(null);
+    setObInput("");
+    obGoNext("avatar", `行……我真给你写「${name}」了。先说好,以后这张卡就这么叫你。头像要贴一张吗?`, { emo: "wry" });
+  }
+  function rejectPendingName() {
+    setObPendingConfirm(null);
+    setObEmoOverride(null);
+    setObAiLine("那我先不写。重新报一个你想被怎么称呼的名字就行。");
+    setObInput("");
+    requestAnimationFrame(() => obInputRef.current?.focus());
+  }
   function obChip(c) {
+    if (c.confirmName) {
+      confirmPendingName();
+      return;
+    }
+    if (c.retryName) {
+      rejectPendingName();
+      return;
+    }
     // 头像 chip:触发文件选择(不推进);上传后 obCardAvatar 变、气泡切到 avatarLine(像糖沐在回应)。
     if (c.upload) {
       obPickAvatar();
@@ -420,6 +505,34 @@ export default function Home({ testMode = false }) {
     if (!v || !obBeat || !obBeat.field || obThinking) return;
     const beat = obBeat;
     if (!beat.next) return;
+    if (obPendingConfirm && beat.field === "name") {
+      if (saysYes(v)) {
+        confirmPendingName();
+        return;
+      }
+      if (saysNo(v)) {
+        rejectPendingName();
+        return;
+      }
+    }
+    const chipMatch = matchChipIntent(v, beat.chips);
+    if (chipMatch) {
+      obChip(chipMatch);
+      return;
+    }
+    let fieldValue = v;
+    let localName = null;
+    if (beat.field === "name") {
+      localName = analyzeNameInput(v);
+      if (localName.value) fieldValue = localName.value;
+      if (localName.needsConfirm) {
+        setObPendingConfirm({ field: "name", value: localName.value, reason: localName.reason });
+        setObEmoOverride("wry");
+        setObAiLine(`我先确认一下,你是认真要把「${localName.value}」写在卡上吗?`);
+        setObInput("");
+        return;
+      }
+    }
     // AI 辨别:让糖沐判断这句是不是正经回答(报称呼/口味)。[OK]→填卡+推进;[CHAT]→接话但不填、停这拍继续等。失败/无标记→保守当答案。
     if (beat.ai) {
       setObThinking(true);
@@ -437,13 +550,21 @@ export default function Home({ testMode = false }) {
       setObThinking(false);
       const p = parseIntent(reply);
       if (p.intent === "chat") {
+        if (beat.field === "name" && localName && localName.value) {
+          const echo = { ...obEcho, name: fieldValue, nameOdd: false };
+          setObEcho(echo);
+          saveEcho(echo);
+          obGoNext(beat.next, `${fieldValue},我先这样写上。头像要贴一张吗?`, { emo: null });
+          return;
+        }
         // 闲聊/没正经回答:糖沐接话但不填卡、不推进,停这拍继续等真正的答案。
         setObAiLine(p.text);
         setObInput("");
         return;
       }
       // answer=填玩家原话 / none=明说没有→卡上记空(背面写暖句、不写书)。两者都推进,回复作下一拍开场。
-      const echo = { ...obEcho, [beat.field]: p.intent === "none" ? "" : v };
+      const echo = { ...obEcho, [beat.field]: p.intent === "none" ? "" : fieldValue };
+      if (beat.field === "name") echo.nameOdd = false;
       setObEcho(echo);
       saveEcho(echo);
       obGoNext(beat.next, p.text);
@@ -458,6 +579,14 @@ export default function Home({ testMode = false }) {
   async function obChatSubmit() {
     const v = obInput.trim();
     if (!v || obThinking) return;
+    if (obBeat) {
+      const chipMatch = matchChipIntent(v, obBeat.chips);
+      if (chipMatch) {
+        setObInput("");
+        obChip(chipMatch);
+        return;
+      }
+    }
     setObInput("");
     setObThinking(true);
     let reply = null;
@@ -475,11 +604,14 @@ export default function Home({ testMode = false }) {
     if (reply) setObAiLine(reply);
   }
   // 前进一拍:压历史(供回退),清回退态与输入框;aiLine=本次 AI 自适应台词(替下一拍静态开场),null=用脚本。
-  function obGoNext(nextId, aiLine = null) {
+  function obGoNext(nextId, aiLine = null, opts = {}) {
     setObHistory((h) => [...h, obStep]);
     setObViaBack(false);
     setObAiLine(aiLine);
     setObCardMessage(null);
+    setObPendingConfirm(null);
+    setObEmoOverride(opts.emo || null);
+    setObContinueHint(false);
     setObInput("");
     setObStep(nextId);
   }
@@ -492,6 +624,9 @@ export default function Home({ testMode = false }) {
     setObViaBack(true);
     setObAiLine(null);
     setObCardMessage(null);
+    setObPendingConfirm(null);
+    setObEmoOverride(prevId === "avatar" && obEcho.nameOdd ? "wry" : null);
+    setObContinueHint(false);
     setObInput(prev && prev.field ? obEcho[prev.field] || "" : "");
     setObStep(prevId);
   }
@@ -503,17 +638,79 @@ export default function Home({ testMode = false }) {
     const file = e.target.files && e.target.files[0];
     e.target.value = ""; // 允许重选同一文件
     if (!file || !file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const url = String(reader.result || "");
-      if (!url) return;
-      setObCardAvatar(url);
-      setObAiLine(null); // 清掉"引导贴头像"那句 AI 台词,让气泡切到 avatarLine(糖沐对上传的回应"这张好看")
-      const echo = { ...obEcho, avatar: url };
-      setObEcho(echo);
-      saveEcho(echo);
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const baseScale = Math.max(AVATAR_CROP_STAGE / img.width, AVATAR_CROP_STAGE / img.height);
+      setObCrop(
+        clampCropState({
+          url,
+          fileName: file.name,
+          naturalW: img.width,
+          naturalH: img.height,
+          baseScale,
+          zoom: 1,
+          x: 0,
+          y: 0,
+        })
+      );
+      setObEmoOverride(obEcho.nameOdd ? "wry" : "spark");
+      setObAiLine("这张我先拿来量一下,你框住最想放在卡上的部分就好。");
     };
-    reader.readAsDataURL(file);
+    img.onerror = () => URL.revokeObjectURL(url);
+    img.src = url;
+  }
+  function obCropDown(e) {
+    if (!obCrop) return;
+    obCropDragRef.current = { id: e.pointerId, sx: e.clientX, sy: e.clientY, x: obCrop.x, y: obCrop.y };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+  function obCropMove(e) {
+    const d = obCropDragRef.current;
+    if (!d || d.id !== e.pointerId) return;
+    setObCrop((c) => clampCropState({ ...c, x: d.x + e.clientX - d.sx, y: d.y + e.clientY - d.sy }));
+  }
+  function obCropUp(e) {
+    if (obCropDragRef.current && obCropDragRef.current.id === e.pointerId) obCropDragRef.current = null;
+  }
+  function obCropZoom(e) {
+    const zoom = Number(e.target.value) || 1;
+    setObCrop((c) => clampCropState({ ...c, zoom }));
+  }
+  function obCancelCrop() {
+    setObCrop(null);
+    setObAiLine("没关系,头像随时能换。");
+  }
+  function obUseCrop() {
+    const img = obCropImgRef.current;
+    if (!img || !obCrop) return;
+    const c = document.createElement("canvas");
+    c.width = AVATAR_OUT;
+    c.height = AVATAR_OUT;
+    const ctx = c.getContext("2d");
+    const factor = AVATAR_OUT / AVATAR_CROP_STAGE;
+    const scale = obCrop.baseScale * obCrop.zoom * factor;
+    const dw = obCrop.naturalW * scale;
+    const dh = obCrop.naturalH * scale;
+    const dx = AVATAR_OUT / 2 - dw / 2 + obCrop.x * factor;
+    const dy = AVATAR_OUT / 2 - dh / 2 + obCrop.y * factor;
+    ctx.fillStyle = "#efe4cd";
+    ctx.fillRect(0, 0, AVATAR_OUT, AVATAR_OUT);
+    ctx.drawImage(img, dx, dy, dw, dh);
+    const url = c.toDataURL("image/jpeg", 0.86);
+    setObCardAvatar(url);
+    const echo = { ...obEcho, avatar: url };
+    setObEcho(echo);
+    saveEcho(echo);
+    setObCrop(null);
+    setObEmoOverride(obEcho.nameOdd ? "wry" : "spark");
+    setObAiLine("诶,这张好看——给你嵌卡上了。");
+    if (obLineTimerRef.current) clearTimeout(obLineTimerRef.current);
+    obLineTimerRef.current = setTimeout(() => {
+      if (obStepRef.current === "avatar") {
+        setObAiLine("头像妥了。点一下「好了,继续」,我再给你补最后一行。");
+      }
+    }, 1500);
   }
 
   async function openSwitcher() {
@@ -565,6 +762,20 @@ export default function Home({ testMode = false }) {
       </button>
     );
   }
+
+  const obRenderChips = obPendingConfirm
+    ? [
+        { label: `就写「${obPendingConfirm.value}」`, confirmName: true },
+        { label: "我换一个", retryName: true },
+      ]
+    : (obBeat && obBeat.chips) || [];
+  const cropImgStyle = obCrop
+    ? {
+        width: Math.round(obCrop.naturalW * obCrop.baseScale * obCrop.zoom),
+        height: Math.round(obCrop.naturalH * obCrop.baseScale * obCrop.zoom),
+        transform: `translate(calc(-50% + ${Math.round(obCrop.x)}px), calc(-50% + ${Math.round(obCrop.y)}px))`,
+      }
+    : null;
 
   return (
     <div className={"home" + (fullscreen ? " is-fullscreen" : "") + (obBeat && obBeat.showCard ? " is-cardbeat" : "")}>
@@ -705,20 +916,21 @@ export default function Home({ testMode = false }) {
                     {obThinking ? "…" : obBeat.field ? "好" : "说"}
                   </Button>
                 </div>
-                {!!(obBeat.chips && obBeat.chips.length) && (
+                {!!obRenderChips.length && (
                   <div className="home-ob-chips">
-                    {obBeat.chips.map((c, i) => {
+                    {obRenderChips.map((c, i) => {
                       // 头像拍传了头像后,chip 文案随之变(＋传张头像→换一张 / 用字头就好→好了,继续)。
                       let label = c.label;
                       if (obBeat.id === "avatar" && (obCardAvatar || obEcho.avatar)) {
                         label = c.upload ? "换一张" : "好了,继续";
                       }
                       return (
-                        <button key={i} className="home-ob-chip" onClick={() => obChip(c)} disabled={obThinking}>
+                        <button key={i} className={"home-ob-chip" + (obContinueHint && i === 0 ? " is-hinted" : "")} onClick={() => obChip(c)} disabled={obThinking}>
                           {label}
                         </button>
                       );
                     })}
+                    {obContinueHint && <span className="home-ob-nexthint t-meta">点一下继续</span>}
                   </div>
                 )}
               </div>
@@ -779,6 +991,38 @@ export default function Home({ testMode = false }) {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {obCrop && (
+        <div className="home-crop-modal" onClick={obCancelCrop}>
+          <div className="home-crop-card" onClick={(e) => e.stopPropagation()}>
+            <div className="home-crop-head">
+              <div>
+                <h2 className="t-h2">框选头像</h2>
+                <p className="t-meta">拖动画面,把要放进卡面的部分留在方框里。</p>
+              </div>
+              <button className="home-modal-x" onClick={obCancelCrop} aria-label="取消头像裁剪">×</button>
+            </div>
+            <div
+              className="home-crop-stage"
+              onPointerDown={obCropDown}
+              onPointerMove={obCropMove}
+              onPointerUp={obCropUp}
+              onPointerCancel={obCropUp}
+            >
+              <img ref={obCropImgRef} src={obCrop.url} alt="" draggable="false" style={cropImgStyle} />
+              <div className="home-crop-mask" aria-hidden="true" />
+            </div>
+            <label className="home-crop-zoom t-meta">
+              缩放
+              <input type="range" min="1" max="3" step="0.01" value={obCrop.zoom} onChange={obCropZoom} />
+            </label>
+            <div className="home-crop-actions">
+              <Button variant="line" onClick={obCancelCrop}>先不传</Button>
+              <Button variant="primary" onClick={obUseCrop}>使用这块</Button>
+            </div>
           </div>
         </div>
       )}

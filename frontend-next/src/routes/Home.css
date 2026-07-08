@@ -430,6 +430,32 @@
   border-color: var(--cinnabar);
   color: #fff;
 }
+.home-ob-chip.is-hinted {
+  animation: obChipHint 1.8s ease-in-out infinite;
+}
+.home-ob-nexthint {
+  align-self: center;
+  color: rgba(241, 231, 214, 0.42);
+  letter-spacing: 0.08em;
+  padding: 8px 2px;
+  animation: obNextHintIn 480ms var(--ease-out) both;
+}
+@keyframes obChipHint {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(232, 181, 99, 0);
+    border-color: rgba(199, 154, 78, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(232, 181, 99, 0.11);
+    border-color: rgba(232, 181, 99, 0.9);
+  }
+}
+@keyframes obNextHintIn {
+  from {
+    opacity: 0;
+  }
+}
 /* 思考态:选项 / 上一步 / 输入框 禁用 */
 .home-ob-chip:disabled,
 .home-ob-back:disabled {
@@ -560,6 +586,93 @@
 .ais-onboarding .staggered-menu-header,
 .ais-onboarding .resume-bar {
   display: none !important;
+}
+
+/* onboarding 头像裁剪:本地压成 256 方图,避免超大图片直接塞卡。 */
+.home-crop-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: var(--sp-5);
+  background: rgba(10, 7, 5, 0.72);
+}
+.home-crop-card {
+  position: relative;
+  width: min(420px, 92vw);
+  border: 1px solid rgba(199, 154, 78, 0.42);
+  border-radius: var(--r-lg);
+  background: #f6eddb;
+  color: #2a231a;
+  box-shadow: 0 30px 90px -22px rgba(0, 0, 0, 0.72);
+  padding: var(--sp-5);
+}
+.home-crop-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+.home-crop-head .t-h2 {
+  color: #2a231a;
+}
+.home-crop-stage {
+  position: relative;
+  width: 280px;
+  height: 280px;
+  max-width: 100%;
+  margin: 0 auto var(--sp-4);
+  overflow: hidden;
+  border-radius: var(--r-md);
+  background: #271f17;
+  touch-action: none;
+  cursor: grab;
+  box-shadow: inset 0 0 0 1px rgba(143, 60, 50, 0.26), 0 16px 42px -24px rgba(0, 0, 0, 0.72);
+}
+.home-crop-stage:active {
+  cursor: grabbing;
+}
+.home-crop-stage img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  max-width: none;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+}
+.home-crop-mask {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 2px rgba(248, 241, 227, 0.92), inset 0 0 0 999px rgba(20, 14, 9, 0.1);
+}
+.home-crop-mask::before,
+.home-crop-mask::after {
+  content: "";
+  position: absolute;
+  inset: 33.333% 0 auto;
+  border-top: 1px solid rgba(248, 241, 227, 0.36);
+}
+.home-crop-mask::after {
+  inset: 66.666% 0 auto;
+}
+.home-crop-zoom {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  color: #6a5730;
+}
+.home-crop-zoom input {
+  flex: 1;
+  accent-color: var(--cinnabar);
+}
+.home-crop-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
 }
 
 /* —— modal(换角色 / 存档 / 记录)—— */
@@ -741,6 +854,9 @@
   }
   .home-dialogue {
     padding: var(--sp-3) var(--sp-4);
+  }
+  .home-input {
+    font-size: 16px;
   }
   .home-dlg-name {
     font-size: var(--fs-h3);
