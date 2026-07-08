@@ -6,6 +6,7 @@
   "description": "AI 互动故事 · 前端重构地基 (YOR-92) — Vite + React + 纯 CSS 变量",
   "scripts": {
     "dev": "vite",
+    "test": "node --test src/routes/onboardingLogic.test.js",
     "build": "vite build",
     "preview": "vite preview"
   },

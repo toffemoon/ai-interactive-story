@@ -32,6 +32,15 @@ function hasUsableNameShape(name) {
   return /[\p{Script=Han}a-z0-9]/iu.test(n);
 }
 
+function looksLikeNonNameCandidate(name) {
+  const n = normalizeText(name);
+  if (!n) return true;
+  if (/^(来看看|看看|随便看看|逛逛|路过|来逛逛|进来看看|先看看|看一下|来看书|进店|入店)$/.test(n)) return true;
+  if (/^(头像|照片|头图|传头像|上传头像|不传头像|跳过头像|用字头|用名字字头|avatar|photo)$/.test(n)) return true;
+  if (/^(好|好的|ok|okay|yes|no|不用|不要|跳过|继续|下一步|然后呢|还有吗)$/.test(n)) return true;
+  return false;
+}
+
 function looksOddName(name) {
   const n = normalizeText(name);
   const len = chars(n).length;
@@ -60,6 +69,7 @@ export function analyzeNameInput(raw) {
     return { value: "", needsConfirm: false, reason: null };
   }
   const candidate = cleanNameCandidate(prefixed ? prefixed[1] : text);
+  if (looksLikeNonNameCandidate(candidate)) return { value: "", needsConfirm: false, reason: null };
   if (!hasUsableNameShape(candidate)) return { value: "", needsConfirm: false, reason: null };
   const needsConfirm = looksOddName(candidate);
   return { value: candidate, needsConfirm, reason: needsConfirm ? "odd" : null };
@@ -68,6 +78,12 @@ export function analyzeNameInput(raw) {
 export function analyzeNameCorrectionInput(raw) {
   const text = String(raw || "").trim();
   if (!text) return { value: "", needsConfirm: false, reason: null };
+  const cueMatches = [...text.matchAll(/(?:叫我|叫|改成|换成|写成|写)\s*([^，,。.!！?？；;、]+)/g)];
+  if (cueMatches.length) {
+    const last = cueMatches[cueMatches.length - 1];
+    const parsed = analyzeNameInput(last[1]);
+    if (parsed.value) return parsed;
+  }
   const rest = text.replace(/^(?:不是|不是的|不对|换|重来|重新|别写|不要|算了|逗你|开玩笑)\s*[，,。.!！?？、-]?\s*/, "").trim();
   if (!rest || rest === text || /^(吧|啦|呀|啊|哦|呢|哈)$/.test(normalizeText(rest))) {
     return { value: "", needsConfirm: false, reason: null };
@@ -82,6 +98,7 @@ const CHIP_SYNONYMS = [
   { key: "继续", words: ["继续", "继续说", "继续讲", "接着", "下一步", "下一个", "往下", "next", "go on", "continue"] },
   { key: "最后一个", words: ["最后", "最后一个", "最后吧", "下一步", "下一个", "继续", "last one", "last"] },
   { key: "还没看什么", words: ["还没看", "没看什么", "没有", "暂时没有", "想不起来", "不知道", "没想好"] },
+  { key: "＋ 传张头像", words: ["传头像", "上传头像", "传张头像", "传图", "上传图片", "上传照片", "照片", "photo", "upload avatar", "upload photo"] },
   { key: "用名字字头就好", words: ["字头", "用名字", "不用头像", "不传头像", "跳过头像", "头像跳过", "先不传", "好了继续", "好了", "继续", "no avatar", "skip avatar", "without avatar"] },
   { key: "带我进第一本书", words: ["进第一本", "第一本书", "开始看", "开始故事", "去探索", "带我进", "start the first story", "first story"] },
   { key: "我自己逛逛", words: ["自己逛", "自己看看", "我自己", "随便逛", "先不用"] },
@@ -127,10 +144,20 @@ export function matchChipIntent(raw, chips) {
     const words = wordsForChip(chip && chip.label);
     for (const word of words) {
       const w = normalizeText(word);
-      if (w && (text.includes(w) || w.includes(text))) return chip;
+      if (w && text.includes(w)) return chip;
     }
   }
   return contextualProgressChip(raw, chips);
+}
+
+export function parseFieldIntentReply(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return { intent: "retry", text: null };
+  const m = text.match(/^\s*\[(OK|NONE|CHAT)\]\s*/i);
+  if (!m) return { intent: "answer", text };
+  const tag = m[1].toUpperCase();
+  const intent = tag === "CHAT" ? "chat" : tag === "NONE" ? "none" : "answer";
+  return { intent, text: text.slice(m[0].length).trim() || null };
 }
 
 export function parseChipIntentReply(raw, chips) {

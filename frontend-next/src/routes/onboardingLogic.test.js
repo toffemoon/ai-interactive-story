@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { analyzeNameCorrectionInput, analyzeNameInput, matchChipIntent, parseChipIntentReply } from "./onboardingLogic.js";
+import { analyzeNameCorrectionInput, analyzeNameInput, matchChipIntent, parseChipIntentReply, parseFieldIntentReply } from "./onboardingLogic.js";
 
 test("extracts the usable name from a sentence", () => {
   assert.deepEqual(analyzeNameInput("我的名字叫 叶叶"), {
@@ -58,6 +58,20 @@ test("does not treat casual chat as an unprefixed name", () => {
   assert.equal(analyzeNameInput("这店真好看").value, "");
 });
 
+test("does not treat broad self-introductions or avatar words as names", () => {
+  assert.equal(analyzeNameInput("我是来看看").value, "");
+  assert.equal(analyzeNameInput("我是路过").value, "");
+  assert.equal(analyzeNameInput("头像").value, "");
+});
+
+test("extracts the final corrected name after a rejected joke name", () => {
+  assert.deepEqual(analyzeNameCorrectionInput("不是炒股的爸妈，叫阿夜"), {
+    value: "阿夜",
+    needsConfirm: false,
+    reason: null,
+  });
+});
+
 test("matches free text that means the next tour chip", () => {
   const chips = [{ label: "然后呢", next: "tourChat" }];
   assert.equal(matchChipIntent("然后呢，继续说", chips), chips[0]);
@@ -102,10 +116,40 @@ test("matches natural and English avatar skip wording", () => {
   assert.equal(matchChipIntent("no avatar, continue", chips), chips[1]);
 });
 
+test("matches explicit avatar upload wording without broad short-token matches", () => {
+  const chips = [
+    { label: "＋ 传张头像", upload: true },
+    { label: "用名字字头就好", next: "taste" },
+  ];
+  assert.equal(matchChipIntent("我要传头像", chips), chips[0]);
+  assert.equal(matchChipIntent("photo", chips), chips[0]);
+  assert.equal(matchChipIntent("avatar", chips), null);
+  assert.equal(matchChipIntent("头像", chips), null);
+});
+
+test("does not match one-character fragments to action chips", () => {
+  const chips = [
+    { label: "带我进第一本书", to: "/explore", done: true },
+    { label: "我自己逛逛", done: true },
+  ];
+  assert.equal(matchChipIntent("带", chips), null);
+  assert.equal(matchChipIntent("我", chips), null);
+  assert.equal(matchChipIntent("一", chips), null);
+});
+
 test("parses AI chip intent replies conservatively", () => {
   const chips = [{ label: "带我认认这儿", next: "tourStory" }];
   assert.deepEqual(parseChipIntentReply("[CHIP:0]", chips), { chip: chips[0], chat: null });
   assert.deepEqual(parseChipIntentReply("[CHAT] 我先回答你一句。", chips), { chip: null, chat: "我先回答你一句。" });
   assert.deepEqual(parseChipIntentReply("随便聊聊", chips), { chip: null, chat: "随便聊聊" });
   assert.deepEqual(parseChipIntentReply("[CHIP:9]", chips), { chip: null, chat: null });
+});
+
+test("parses field AI failures as retry instead of fabricated answers", () => {
+  assert.deepEqual(parseFieldIntentReply(null), { intent: "retry", text: null });
+  assert.deepEqual(parseFieldIntentReply(""), { intent: "retry", text: null });
+  assert.deepEqual(parseFieldIntentReply("[CHAT] 先别急。"), { intent: "chat", text: "先别急。" });
+  assert.deepEqual(parseFieldIntentReply("[NONE] 最近还没看。"), { intent: "none", text: "最近还没看。" });
+  assert.deepEqual(parseFieldIntentReply("[OK] 写好了。"), { intent: "answer", text: "写好了。" });
+  assert.deepEqual(parseFieldIntentReply("写好了。"), { intent: "answer", text: "写好了。" });
 });
