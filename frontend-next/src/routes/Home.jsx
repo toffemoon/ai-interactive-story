@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "../components/ui";
+import { Button, Card } from "../components/ui";
 import { getJSON, postJSON, newSessionId } from "../lib/api";
+import { toCardModel } from "../lib/cardModel";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
 import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
@@ -104,17 +105,15 @@ function OnboardingDemo({ beat, echo }) {
   if (!demo) return null;
 
   if (demo.type === "story") {
-    const card = demo.card || {};
+    const model = demo.preset ? toCardModel("story", demo.preset) : null;
     return (
       <aside className={"home-ob-demo home-ob-demo--story" + (demo.result ? " is-result" : "")} aria-label="故事预演">
-        <div className="home-demo-story-cover">
-          <img src={card.cover} alt={card.title || "故事封面"} draggable="false" />
-          <span className="home-demo-badge t-meta">{card.badge || "故事"}</span>
+        <div className="home-demo-story-card">
+          <Card model={model} variant="shelf" flipped={false} />
         </div>
-        <div className="home-demo-story-body">
-          <span className="home-demo-meta t-meta">{card.meta || "预演"}</span>
-          <h3 className="t-kai">{card.title}</h3>
-          <p className="t-read">{card.blurb}</p>
+        <div className="home-demo-story-copy">
+          <span className="home-demo-meta t-meta">{demo.caption || "书页预演"}</span>
+          <p className="t-read">{model ? model.blurb : "取一本书,推开门,你说的话会推动故事。"}</p>
           {demo.result && <p className="home-demo-echo t-read">你刚才推开的分叉:「{demoText(echo && echo.storyWish, echo, "我想走进故事里")}」</p>}
         </div>
       </aside>

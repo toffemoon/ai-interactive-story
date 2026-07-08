@@ -187,12 +187,17 @@ export const BEATS = [
     tour: "explore",
     demo: {
       type: "story",
-      card: {
-        title: "所以我出手了",
-        cover: "/covers/suoyiwochushoule.jpg",
-        badge: "探索",
-        meta: "书页预演",
-        blurb: "取一本书,推开门,你说的每句话都会把剧情推向不同方向。",
+      caption: "书页预演",
+      preset: {
+        name: "所以我出手了",
+        official: true,
+        data: {
+          name: "所以我出手了",
+          synopsis: "取一本书,推开门,你说的每句话都会把剧情推向不同方向。",
+          author: "沐言书坊",
+          cover: "/covers/suoyiwochushoule.jpg",
+          tags: ["互动故事", "剧情分叉"],
+        },
       },
     },
     line: (e) => {
@@ -215,12 +220,17 @@ export const BEATS = [
     demo: {
       type: "story",
       result: true,
-      card: {
-        title: "所以我出手了",
-        cover: "/covers/suoyiwochushoule.jpg",
-        badge: "探索",
-        meta: "剧情分叉",
-        blurb: "你的输入会变成下一段剧情的方向,不是固定选项。",
+      caption: "剧情分叉",
+      preset: {
+        name: "所以我出手了",
+        official: true,
+        data: {
+          name: "所以我出手了",
+          synopsis: "你的输入会变成下一段剧情的方向,不是固定选项。",
+          author: "沐言书坊",
+          cover: "/covers/suoyiwochushoule.jpg",
+          tags: ["互动故事", "剧情分叉"],
+        },
       },
     },
     line: (e) => {
