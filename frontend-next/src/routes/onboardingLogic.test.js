@@ -210,19 +210,39 @@ test("onboarding rehearses story chat and creation without route jumps", () => {
 
   const talk = beatById("tryChatTalk");
   assert.equal(talk.speaker, "宣");
-  assert.equal(talk.field, "xuanLine");
-  assert.equal(talk.ai.optional, true);
-  assert.equal(talk.next, "tryChatLeave");
+  assert.equal(talk.field, undefined);
+  assert.match(talk.line({}), /怎么.*喊/);
+  assert.equal(talk.chips[0].next, "tryChatTangmuReply");
+
+  const tangmuReply = beatById("tryChatTangmuReply");
+  assert.equal(tangmuReply.speaker, "糖沐");
+  assert.equal(tangmuReply.demo.type, "chat");
+  assert.match(tangmuReply.line({}), /新客|演示/);
+  assert.equal(tangmuReply.chips[0].next, "tryChatIntro");
+
+  const introChat = beatById("tryChatIntro");
+  assert.equal(introChat.speaker, "糖沐");
+  assert.match(introChat.line({ name: "何人初见月" }), /介绍|宣|何人初见月/);
+  assert.equal(introChat.chips[0].next, "tryChatGreet");
+
+  const greet = beatById("tryChatGreet");
+  assert.equal(greet.speaker, "宣");
+  assert.equal(greet.field, "xuanLine");
+  assert.equal(greet.ai.optional, true);
+  assert.equal(greet.next, "tryChatLeave");
+  assert.match(greet.line({}), /你好|见过/);
 
   const leave = beatById("tryChatLeave");
   assert.equal(leave.speaker, "宣");
   assert.match(leave.line({}), /先回去了/);
   assert.equal(leave.chips[0].next, "tryCreate");
 
-  const chat = beatById("tryChatTalk");
-  assert.equal(chat.demo.type, "chat");
-  assert.equal(chat.demo.character.name, "宣");
-  assert.equal(chat.demo.character.image, "/oc/xuan.png");
+  for (const id of ["tryChatTalk", "tryChatTangmuReply", "tryChatIntro", "tryChatGreet", "tryChatLeave"]) {
+    const chat = beatById(id);
+    assert.equal(chat.demo.type, "chat");
+    assert.equal(chat.demo.character.name, "宣");
+    assert.equal(chat.demo.character.image, "/oc/xuan.png");
+  }
 
   const create = beatById("tryCreate");
   assert.equal(create.field, "createSeed");

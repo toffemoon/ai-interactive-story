@@ -946,6 +946,7 @@ export default function Home({ testMode = false }) {
         (fullscreen ? " is-fullscreen" : "") +
         (obBeat && obBeat.showCard ? " is-cardbeat" : "") +
         (obBeat && obBeat.speaker ? ` is-ob-speaker-${obBeat.speaker}` : "") +
+        (obBeat && obBeat.speaker === "糖沐" ? " is-ob-speaker-tangmu" : "") +
         (obBeat && obBeat.speaker === "宣" ? " is-ob-speaker-xuan" : "") +
         (obBeat && obBeat.centerBubble ? " is-ob-finale" : "") +
         (obDemo ? ` is-ob-demo is-ob-demo-${obDemo.type}` : "")
@@ -980,7 +981,8 @@ export default function Home({ testMode = false }) {
             key={obBeat ? "b-" + obBeat.id + (obViaBack ? "-back" : "") : "i-" + obIntro}
             className="home-ob-bubble"
             style={
-              obBubblePos && !(obBeat && (obBeat.centerBubble || obBeat.speaker))
+              obBubblePos &&
+              !(obBeat && (obBeat.centerBubble || obBeat.speaker === "宣" || (obDemo && obDemo.type === "chat" && obBeat.speaker === "糖沐")))
                 ? { left: obBubblePos.left, top: obBubblePos.top, right: "auto", bottom: "auto", transform: "translate(-100%, -50%)" }
                 : undefined
             }
