@@ -6,7 +6,7 @@ import { toCardModel } from "../lib/cardModel";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
 import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
-import { analyzeNameCorrectionInput, analyzeNameInput, extractNameFromAiFieldText, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply } from "./onboardingLogic";
+import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply } from "./onboardingLogic";
 import { IdentityCard } from "../components/IdentityCard";
 import StaggeredText from "../components/staggered-text";
 import AnimatedList from "../components/animated-list";
@@ -600,7 +600,12 @@ export default function Home({ testMode = false }) {
     const beat = obBeat;
     if (!beat.next) return;
     if (obPendingConfirm && beat.field === "name") {
-      const correction = analyzeNameCorrectionInput(v);
+      const pending = analyzePendingNameInput(v, obPendingConfirm.value);
+      if (pending.intent === "confirm") {
+        confirmPendingName();
+        return;
+      }
+      const correction = pending.intent === "change" ? pending : analyzeNameCorrectionInput(v);
       if (correction.value) {
         if (correction.needsConfirm) {
           setObPendingConfirm({ field: "name", value: correction.value, reason: correction.reason });

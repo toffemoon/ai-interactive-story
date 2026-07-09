@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { toCardModel } from "../lib/cardModel.js";
 import { beatById } from "./onboardingScript.js";
-import { analyzeNameCorrectionInput, analyzeNameInput, extractNameFromAiFieldText, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply } from "./onboardingLogic.js";
+import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply } from "./onboardingLogic.js";
 
 test("extracts the usable name from a sentence", () => {
   assert.deepEqual(analyzeNameInput("我的名字叫 叶叶"), {
@@ -76,6 +76,24 @@ test("does not treat broad self-introductions or avatar words as names", () => {
 
 test("extracts the final corrected name after a rejected joke name", () => {
   assert.deepEqual(analyzeNameCorrectionInput("不是炒股的爸妈，叫阿夜"), {
+    value: "阿夜",
+    needsConfirm: false,
+    reason: null,
+  });
+});
+
+test("confirms an odd pending name when the user repeats it with affirmation", () => {
+  assert.deepEqual(analyzePendingNameInput("对的 我就叫 Ratman0220", "Ratman0220"), {
+    intent: "confirm",
+    value: "Ratman0220",
+    needsConfirm: false,
+    reason: null,
+  });
+});
+
+test("treats a different name in pending confirmation as a change", () => {
+  assert.deepEqual(analyzePendingNameInput("不对，我叫阿夜", "Ratman0220"), {
+    intent: "change",
     value: "阿夜",
     needsConfirm: false,
     reason: null,

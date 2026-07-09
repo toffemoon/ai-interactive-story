@@ -91,6 +91,17 @@ export function analyzeNameCorrectionInput(raw) {
   return analyzeNameInput(rest);
 }
 
+export function analyzePendingNameInput(raw, pendingValue) {
+  const pending = cleanNameCandidate(pendingValue);
+  if (!pending) return { intent: "unknown", value: "", needsConfirm: false, reason: null };
+  const correction = analyzeNameCorrectionInput(raw);
+  if (!correction.value) return { intent: "unknown", value: "", needsConfirm: false, reason: null };
+  if (normalizeText(correction.value) === normalizeText(pending)) {
+    return { intent: "confirm", value: pending, needsConfirm: false, reason: null };
+  }
+  return { intent: "change", ...correction };
+}
+
 const CHIP_SYNONYMS = [
   { key: "带我认认这儿", words: ["带我认认", "认认这儿", "介绍一下", "逛逛", "看看这里", "认识这里", "带我看看", "带我逛", "带路", "show me around", "take me around"] },
   { key: "然后呢", words: ["然后", "然后呢", "接着", "继续说", "说下去", "往下", "下一步", "下一个", "还有呢", "next", "go on", "continue"] },
