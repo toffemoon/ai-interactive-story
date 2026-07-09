@@ -109,6 +109,7 @@
 /* 底部交互坞:主按钮行 + 对话框,垂直成一组贴底居中(按钮不再左上悬空) */
 .home-dock {
   position: absolute;
+  z-index: 6;
   left: 50%;
   transform: translateX(-50%);
   bottom: clamp(16px, 4vh, 40px);
@@ -398,13 +399,16 @@
   color: #2c241c;
 }
 .home-ob-demo--story {
-  right: clamp(34px, 9vw, 146px);
+  right: clamp(132px, 19vw, 300px);
   width: 210px;
   pointer-events: auto;
 }
-.home-ob-demo--character-card,
-.home-ob-demo--draft-card {
+.home-ob-demo--character-card {
   right: clamp(34px, 9vw, 146px);
+  width: 210px;
+}
+.home-ob-demo--draft-card {
+  right: clamp(116px, 17vw, 260px);
   width: 210px;
 }
 .home-demo-card {
@@ -462,11 +466,11 @@
   filter: drop-shadow(0 14px 22px rgba(48, 32, 20, 0.24));
 }
 .home-ob-demo--chat {
-  right: clamp(80px, 16vw, 260px);
+  right: clamp(150px, 22vw, 340px);
   top: auto;
-  bottom: 48px;
-  width: min(420px, 32vw);
-  height: min(700px, 84vh);
+  bottom: 58px;
+  width: min(340px, 26vw);
+  height: min(590px, 72vh);
   transform: none;
   pointer-events: none;
 }
@@ -480,12 +484,14 @@
   object-position: bottom right;
   filter: drop-shadow(0 18px 32px rgba(0, 0, 0, 0.42));
 }
+.home.is-ob-speaker-xuan .home-portrait-img,
 .home.is-ob-speaker-宣 .home-portrait-img {
   opacity: 0 !important;
 }
+.home.is-ob-speaker-xuan .home-ob-bubble,
 .home.is-ob-speaker-宣 .home-ob-bubble {
-  left: clamp(110px, 20vw, 340px);
-  top: clamp(34px, 9vh, 90px);
+  left: clamp(420px, 38vw, 560px);
+  top: clamp(70px, 13vh, 116px);
   width: min(360px, 30vw);
   transform: none;
 }

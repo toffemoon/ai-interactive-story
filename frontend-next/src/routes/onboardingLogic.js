@@ -1,5 +1,5 @@
 const NAME_PREFIX_RE =
-  /^(?:我(?:的)?名字(?:就)?(?:叫|是|写)|名字(?:就)?(?:叫|是|写)|我(?:就)?叫|叫我|称呼我(?:为)?|可以叫我|你可以叫我|我是|my name is|call me|i am|i'm)\s*[：:，,、-]?\s*(.+)$/i;
+  /^(?:我(?:的)?名字(?:就)?(?:叫|是|写)|名字(?:就)?(?:叫|是|写)|我(?:就)?叫|(?:就)?叫我|称呼我(?:为)?|可以叫我|你可以叫我|我是|my name is|call me|i am|i'm)\s*[：:，,、-]?\s*(.+)$/i;
 
 function chars(s) {
   return Array.from(String(s || "").trim());
@@ -97,7 +97,7 @@ const CHIP_SYNONYMS = [
   { key: "还有吗", words: ["还有", "还有吗", "接着", "继续", "下一步", "下一个", "next", "go on", "continue"] },
   { key: "继续", words: ["继续", "继续说", "继续讲", "接着", "下一步", "下一个", "往下", "next", "go on", "continue"] },
   { key: "最后一个", words: ["最后", "最后一个", "最后吧", "下一步", "下一个", "继续", "last one", "last"] },
-  { key: "还没看什么", words: ["还没看", "没看什么", "没有", "暂时没有", "想不起来", "不知道", "没想好"] },
+  { key: "还没看什么", words: ["还没看", "没看什么", "没读书", "没看书", "没在读", "没有读", "没有看", "没有", "暂时没有", "想不起来", "不知道", "没想好"] },
   { key: "＋ 传张头像", words: ["传头像", "上传头像", "传张头像", "传图", "上传图片", "上传照片", "照片", "photo", "upload avatar", "upload photo"] },
   { key: "用名字字头就好", words: ["字头", "用名字", "不用头像", "不传头像", "跳过头像", "头像跳过", "先不传", "好了继续", "好了", "继续", "no avatar", "skip avatar", "without avatar"] },
   { key: "拿一本看看", words: ["拿一本", "给我看", "下一本", "看一本", "拿书", "看看书卡", "看书卡"] },
@@ -126,6 +126,12 @@ function wordsForChip(label) {
 
 function isProgressChip(chip) {
   return chip && PROGRESS_CHIP_KEYS.has(normalizeText(chip.label));
+}
+
+export function isExactFillChipSubmission(raw, chip) {
+  if (!chip || chip.fill == null) return false;
+  if (chip.next || chip.set || chip.to || chip.done || chip.upload || chip.confirmName || chip.retryName) return false;
+  return String(raw || "").trim() === String(chip.fill || "").trim();
 }
 
 function isAffirmingContinue(raw) {
@@ -165,6 +171,20 @@ export function parseFieldIntentReply(raw) {
   const tag = m[1].toUpperCase();
   const intent = tag === "CHAT" ? "chat" : tag === "NONE" ? "none" : "answer";
   return { intent, text: text.slice(m[0].length).trim() || null };
+}
+
+export function extractNameFromAiFieldText(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return { value: "", text: "" };
+  const m = text.match(/(?:称呼|名字|name)\s*[=：:]\s*([^\n，,。.!！?？；;]+)/i);
+  if (!m) return { value: "", text };
+  const parsed = analyzeNameInput(m[1].trim());
+  if (!parsed.value) return { value: "", text };
+  const cleaned = (text.slice(0, m.index) + text.slice(m.index + m[0].length))
+    .replace(/^[\s，,。.!！?？；;：:-]+/, "")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+  return { value: parsed.value, text: cleaned || text };
 }
 
 export function parseChipIntentReply(raw, chips) {

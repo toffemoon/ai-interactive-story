@@ -117,7 +117,7 @@ export const BEATS = [
       // 辨别:糖沐判断这句是不是在正经报称呼。[OK]=是(填卡推进) / [CHAT]=闲聊(接话不填、停这拍)。
       scenario: () =>
         "你正在给刚进门的新客做登记,面前摊着他空白的身份卡。玩家这条消息本该是他报上的称呼。先判断这是不是在正经给自己起/报一个称呼:\n" +
-        "· 是(哪怕随意,只要能当名字用):回复以 [OK] 开头,随后自然确认、轻轻化用这个称呼、提一句已落到卡上,再顺势问他要不要给卡贴张头像(传一张,或用名字的字头也成)。\n" +
+        "· 是(哪怕随意,只要能当名字用):第一行回复 [OK] 称呼=你从玩家原话里抽出的称呼;第二行自然确认、轻轻化用这个称呼、提一句已落到卡上,再顺势问他要不要给卡贴张头像(传一张,或用名字的字头也成)。\n" +
         "· 不是(在反问你、闲聊、岔开话题、或空/乱码/一串符号/明显在捣乱):回复以 [CHAT] 开头,随后就着他的话温和聊一两句、别把这句当成名字,末了轻轻把话头引回「那,我该怎么称呼你」。\n" +
         "标记放在最前面,之后只跟台词本身,别解释标记。",
     },
@@ -186,7 +186,8 @@ export const BEATS = [
     emo: "spark",
     tour: "explore",
     line: (e) => {
-      const t = tasteQuote(e) || "剑来";
+      const t = tasteQuote(e);
+      if (!t) return "还没读什么也没关系。我们这里也有很多故事,你可以在主页和探索页找到。我去拿一本给你看。";
       return `说到「${t}」,我们这里也有很多的故事,你可以在主页和探索页找到。我去拿一本给你看。`;
     },
     backLine: () => "故事入口这段再听一遍?主页和探索页,都是找书卡的地方。",
@@ -200,14 +201,14 @@ export const BEATS = [
     demo: {
       type: "story",
       preset: {
-        name: "所以我出手了",
+        name: "灵魂摆渡人",
         official: true,
         data: {
-          name: "所以我出手了",
-          synopsis: "取一本书,推开门,你说的每句话都会把剧情推向不同方向。",
+          name: "灵魂摆渡人",
+          synopsis: "在雾河与旧镇之间,替没有归处的故事点一盏灯。",
           author: "沐言书坊",
-          cover: "/onboarding/suoyiwochushoule.jpg",
-          tags: ["互动故事", "剧情分叉"],
+          cover: "/onboarding/linghunbaiduren.jpg",
+          tags: ["志怪", "渡魂"],
         },
       },
     },
@@ -300,9 +301,9 @@ export const BEATS = [
     tour: "create",
     demo: {
       type: "draftCard",
-      title: "角色雏形",
-      seed: "雨夜侦探",
-      hook: "他每晚都会收到来自未来的委托。",
+      title: "角色卡",
+      seed: "半夜给自己写信的人",
+      hook: "说一个画面、一句话都行。聊着聊着,人就立起来了。",
     },
     line: () =>
       "刚刚你看到的卡,你也可以创造。不用担心你的想法只是零碎的,我们的执笔人会帮你一步一步把你脑海中的角色带到现实来。",
@@ -310,7 +311,7 @@ export const BEATS = [
     backEmo: "proud",
     field: "createSeed",
     next: "tryCreateResult",
-    placeholder: "比如:雨夜侦探…",
+    placeholder: "说一个画面、一句话都行…",
     submitLabel: "生成",
     ai: {
       optional: true,
@@ -322,7 +323,7 @@ export const BEATS = [
         "台词控制在 55 字以内。\n" +
         "只输出标记加糖沐台词,不要解释格式。",
     },
-    chips: [{ label: "雨夜侦探", fill: "雨夜侦探" }],
+    chips: [{ label: "半夜给自己写信的人", fill: "半夜给自己写信的人" }],
   },
   {
     id: "tryCreateResult",
@@ -330,14 +331,14 @@ export const BEATS = [
     tour: "create",
     demo: {
       type: "draftCard",
-      title: "角色雏形",
+      title: "角色卡",
       result: true,
-      seed: (e) => echoQuote(e, "createSeed", "雨夜侦探"),
-      hook: (e) => `从「${echoQuote(e, "createSeed", "雨夜侦探")}」开始,执笔人会先帮你补成一张能继续生长的角色卡。`,
+      seed: (e) => echoQuote(e, "createSeed", "半夜给自己写信的人"),
+      hook: (e) => `从「${echoQuote(e, "createSeed", "半夜给自己写信的人")}」开始,执笔人会先帮你补成一张能继续生长的角色卡。`,
     },
     line: (e) => {
-      const seed = echoQuote(e, "createSeed", "雨夜侦探");
-      return `像「${seed}」这样的念头,先不用完整。它可以先长成一张角色卡,再慢慢补出世界、关系和故事。`;
+      const seed = echoQuote(e, "createSeed", "半夜给自己写信的人");
+      return `像「${seed}」这样的念头,先不用完整。它已经可以先长成一张角色卡,再慢慢补出世界、关系和故事。`;
     },
     backLine: () => "创作不是一口气写完,先有一个种子就够了。",
     backEmo: "smile",
@@ -348,7 +349,7 @@ export const BEATS = [
     emo: "smile",
     centerBubble: true,
     line: (e) =>
-      `${e.name || "客人"},今天先认到这里。你的入店卡已经办好;想找现成的故事,去主页或探索页;想把脑海里的角色写出来,就去创作。`,
+      `${e.name || "客人"},今天先认到这里。你的入店卡已经办好;想找现成的故事,去主页或探索页;想把脑海里的角色一点点补出来,就去创作。`,
     backLine: () => "最后再说一遍:故事在主页和探索页,自己的角色从创作开始。",
     backEmo: "smile",
     chips: [

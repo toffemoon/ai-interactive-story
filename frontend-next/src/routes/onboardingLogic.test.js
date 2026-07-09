@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { toCardModel } from "../lib/cardModel.js";
 import { beatById } from "./onboardingScript.js";
-import { analyzeNameCorrectionInput, analyzeNameInput, matchChipIntent, parseChipIntentReply, parseFieldIntentReply } from "./onboardingLogic.js";
+import { analyzeNameCorrectionInput, analyzeNameInput, extractNameFromAiFieldText, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply } from "./onboardingLogic.js";
 
 test("extracts the usable name from a sentence", () => {
   assert.deepEqual(analyzeNameInput("我的名字叫 叶叶"), {
@@ -15,6 +15,14 @@ test("extracts the usable name from a sentence", () => {
 test("extracts names from you-can-call-me phrasing", () => {
   assert.deepEqual(analyzeNameInput("你可以叫我小雨"), {
     value: "小雨",
+    needsConfirm: false,
+    reason: null,
+  });
+});
+
+test("extracts names from just-call-me phrasing", () => {
+  assert.deepEqual(analyzeNameInput("就叫我 何人初见月"), {
+    value: "何人初见月",
     needsConfirm: false,
     reason: null,
   });
@@ -94,11 +102,18 @@ test("matches ok to the current tour continuation", () => {
 test("matches free text that means skipping taste", () => {
   const chips = [{ label: "还没看什么", set: { taste: "" }, next: "cardDone" }];
   assert.equal(matchChipIntent("我最近还没看什么", chips), chips[0]);
+  assert.equal(matchChipIntent("我没读书", chips), chips[0]);
 });
 
 test("does not treat ok as skipping the taste answer", () => {
   const chips = [{ label: "还没看什么", set: { taste: "" }, next: "cardDone" }];
   assert.equal(matchChipIntent("ok", chips), null);
+});
+
+test("distinguishes typed fill text from clicking a suggestion chip", () => {
+  const chip = { label: "半夜给自己写信的人", fill: "半夜给自己写信的人" };
+  assert.equal(isExactFillChipSubmission("半夜给自己写信的人", chip), true);
+  assert.equal(isExactFillChipSubmission("半夜给自己写信的人", { ...chip, next: "tryCreateResult" }), false);
 });
 
 test("matches the dynamic avatar continue wording to the original next chip", () => {
@@ -156,6 +171,13 @@ test("parses field AI failures as retry instead of fabricated answers", () => {
   assert.deepEqual(parseFieldIntentReply("写好了。"), { intent: "answer", text: "写好了。" });
 });
 
+test("extracts a name value from AI field replies", () => {
+  assert.deepEqual(extractNameFromAiFieldText("称呼=何人初见月\n记下了,我会这样叫你。"), {
+    value: "何人初见月",
+    text: "记下了,我会这样叫你。",
+  });
+});
+
 test("onboarding rehearses story chat and creation without route jumps", () => {
   assert.equal(beatById("cardDone").chips[0].next, "tryStoryIntro");
 
@@ -163,6 +185,8 @@ test("onboarding rehearses story chat and creation without route jumps", () => {
   assert.equal(intro.demo, undefined);
   assert.equal(intro.chips[0].next, "tryStoryCard");
   assert.match(intro.line({ taste: "剑来" }), /主页和探索页/);
+  assert.doesNotMatch(intro.line({ taste: "" }), /剑来/);
+  assert.match(intro.line({ taste: "" }), /还没读|没读|空着/);
 
   const story = beatById("tryStoryCard");
   assert.equal(story.field, undefined);
@@ -172,8 +196,8 @@ test("onboarding rehearses story chat and creation without route jumps", () => {
 
   assert.equal(story.demo.type, "story");
   const storyModel = toCardModel("story", story.demo.preset);
-  assert.equal(storyModel.title, "所以我出手了");
-  assert.equal(storyModel.cover, "/onboarding/suoyiwochushoule.jpg");
+  assert.equal(storyModel.title, "灵魂摆渡人");
+  assert.equal(storyModel.cover, "/onboarding/linghunbaiduren.jpg");
   assert.equal(storyModel.cover.startsWith("/covers/"), false);
 
   const characterCard = beatById("tryCharacterCard");
@@ -205,14 +229,18 @@ test("onboarding rehearses story chat and creation without route jumps", () => {
   assert.equal(create.next, "tryCreateResult");
   assert.equal(create.ai.optional, true);
   assert.equal(create.demo.type, "draftCard");
+  assert.doesNotMatch(JSON.stringify(create), /雨夜侦探/);
   assert.match(create.line({}), /刚刚你看到的卡/);
   assert.match(create.line({}), /执笔人/);
 
   const createResult = beatById("tryCreateResult");
   assert.equal(createResult.demo.type, "draftCard");
+  assert.doesNotMatch(createResult.demo.hook({ createSeed: "" }), /雨夜侦探/);
+  assert.match(createResult.line({ createSeed: "半夜给自己写信的人" }), /角色卡/);
   assert.equal(createResult.chips[0].next, "tryWrap");
 
   const wrap = beatById("tryWrap");
   assert.equal(wrap.centerBubble, true);
+  assert.match(wrap.line({ name: "何人初见月" }), /主页|探索页|创作/);
   assert.equal(wrap.chips[0].to, "/explore");
 });

@@ -6,7 +6,7 @@ import { toCardModel } from "../lib/cardModel";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
 import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
-import { analyzeNameCorrectionInput, analyzeNameInput, matchChipIntent, parseChipIntentReply, parseFieldIntentReply } from "./onboardingLogic";
+import { analyzeNameCorrectionInput, analyzeNameInput, extractNameFromAiFieldText, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply } from "./onboardingLogic";
 import { IdentityCard } from "../components/IdentityCard";
 import StaggeredText from "../components/staggered-text";
 import AnimatedList from "../components/animated-list";
@@ -110,8 +110,8 @@ function DemoCard({ model, className = "" }) {
 }
 
 function draftCardModel(demo, echo) {
-  const seed = demoText(demo.seed, echo, "雨夜侦探");
-  const hook = demoText(demo.hook, echo, "从一个念头开始,长出角色和故事。");
+  const seed = demoText(demo.seed, echo, "半夜给自己写信的人");
+  const hook = demoText(demo.hook, echo, "说一个画面、一句话都行。聊着聊着,人就立起来了。");
   return toCardModel("character", {
     name: seed,
     official: false,
@@ -612,7 +612,7 @@ export default function Home({ testMode = false }) {
       }
     }
     const chipMatch = matchChipIntent(v, beat.chips);
-    if (chipMatch) {
+    if (chipMatch && !isExactFillChipSubmission(v, chipMatch)) {
       obChip(chipMatch);
       return;
     }
@@ -626,6 +626,13 @@ export default function Home({ testMode = false }) {
         setObEmoOverride("wry");
         setObAiLine(`我先确认一下,你是认真要把「${localName.value}」写在卡上吗?`);
         setObInput("");
+        return;
+      }
+      if (localName.value) {
+        const echo = { ...obEcho, name: fieldValue, nameOdd: false };
+        setObEcho(echo);
+        persistEcho(echo);
+        obGoNext(beat.next);
         return;
       }
     }
@@ -663,12 +670,21 @@ export default function Home({ testMode = false }) {
         setObInput("");
         return;
       }
-      // answer=填玩家原话 / none=明说没有→卡上记空(背面写暖句、不写书)。两者都推进,回复作下一拍开场。
-      const echo = { ...obEcho, [beat.field]: p.intent === "none" ? "" : fieldValue };
+      // answer=填玩家答案 / none=明说没有→卡上记空(背面写暖句、不写书)。名字拍若 AI 明确抽出「称呼=...」,用抽出的值填卡。
+      let answerValue = fieldValue;
+      let answerLine = p.text;
+      if (beat.field === "name" && p.intent === "answer") {
+        const extracted = extractNameFromAiFieldText(p.text);
+        if (extracted.value) {
+          answerValue = extracted.value;
+          answerLine = extracted.text;
+        }
+      }
+      const echo = { ...obEcho, [beat.field]: p.intent === "none" ? "" : answerValue };
       if (beat.field === "name") echo.nameOdd = false;
       setObEcho(echo);
       persistEcho(echo);
-      const nextLine = beat.ai.optional && p.text && p.text.length > 72 ? p.text.slice(0, 72) + "…" : p.text;
+      const nextLine = beat.ai.optional && answerLine && answerLine.length > 72 ? answerLine.slice(0, 72) + "…" : answerLine;
       obGoNext(beat.next, beat.next === "cardDone" ? null : nextLine);
     } else {
       const echo = { ...obEcho, [beat.field]: v };
@@ -930,6 +946,7 @@ export default function Home({ testMode = false }) {
         (fullscreen ? " is-fullscreen" : "") +
         (obBeat && obBeat.showCard ? " is-cardbeat" : "") +
         (obBeat && obBeat.speaker ? ` is-ob-speaker-${obBeat.speaker}` : "") +
+        (obBeat && obBeat.speaker === "宣" ? " is-ob-speaker-xuan" : "") +
         (obBeat && obBeat.centerBubble ? " is-ob-finale" : "") +
         (obDemo ? ` is-ob-demo is-ob-demo-${obDemo.type}` : "")
       }
