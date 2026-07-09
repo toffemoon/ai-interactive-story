@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { toCardModel } from "../lib/cardModel.js";
 import { beatById } from "./onboardingScript.js";
-import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply } from "./onboardingLogic.js";
+import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, isExactFillChipSubmission, matchChipIntent, matchMemeReply, parseChipIntentReply, parseFieldIntentReply } from "./onboardingLogic.js";
 
 test("extracts the usable name from a sentence", () => {
   assert.deepEqual(analyzeNameInput("我的名字叫 叶叶"), {
@@ -170,6 +170,12 @@ test("does not match one-character fragments to action chips", () => {
   assert.equal(matchChipIntent("带", chips), null);
   assert.equal(matchChipIntent("我", chips), null);
   assert.equal(matchChipIntent("一", chips), null);
+});
+
+test("matches known internet meme shorthands to one-line replies", () => {
+  assert.equal(matchMemeReply("kskbl"), "zdjd");
+  assert.equal(matchMemeReply("KSKBL！"), "zdjd");
+  assert.equal(matchMemeReply("不是 kskbl 吧"), null);
 });
 
 test("parses AI chip intent replies conservatively", () => {

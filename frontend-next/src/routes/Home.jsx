@@ -6,7 +6,7 @@ import { toCardModel } from "../lib/cardModel";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
 import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
-import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply } from "./onboardingLogic";
+import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, isExactFillChipSubmission, matchChipIntent, matchMemeReply, parseChipIntentReply, parseFieldIntentReply } from "./onboardingLogic";
 import { IdentityCard } from "../components/IdentityCard";
 import StaggeredText from "../components/staggered-text";
 import AnimatedList from "../components/animated-list";
@@ -599,6 +599,12 @@ export default function Home({ testMode = false }) {
     if (!v || !obBeat || !obBeat.field || obThinking) return;
     const beat = obBeat;
     if (!beat.next) return;
+    const memeReply = matchMemeReply(v);
+    if (memeReply) {
+      setObAiLine(memeReply);
+      setObInput("");
+      return;
+    }
     if (obPendingConfirm && beat.field === "name") {
       const pending = analyzePendingNameInput(v, obPendingConfirm.value);
       if (pending.intent === "confirm") {
@@ -741,6 +747,12 @@ export default function Home({ testMode = false }) {
   async function obChatSubmit() {
     const v = obInput.trim();
     if (!v || obThinking) return;
+    const memeReply = matchMemeReply(v);
+    if (memeReply) {
+      setObAiLine(memeReply);
+      setObInput("");
+      return;
+    }
     if (obBeat) {
       const chipMatch = matchChipIntent(v, obBeat.chips);
       if (chipMatch) {

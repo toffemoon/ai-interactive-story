@@ -11,6 +11,15 @@ function normalizeText(s) {
     .replace(/[“”"'\s。？！?！,，、.·~～…—\-_:：；;（）()【】\[\]《》<>]/g, "");
 }
 
+const MEME_REPLIES = new Map([
+  ["kskbl", "zdjd"],
+]);
+
+export function matchMemeReply(raw) {
+  const text = normalizeText(raw);
+  return MEME_REPLIES.get(text) || null;
+}
+
 function cleanNameCandidate(s) {
   let out = String(s || "")
     .trim()
