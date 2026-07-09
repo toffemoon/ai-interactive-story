@@ -407,7 +407,7 @@
   pointer-events: auto;
 }
 .home-ob-demo--character-card {
-  right: clamp(34px, 9vw, 146px);
+  right: clamp(132px, 19vw, 300px);
   width: 210px;
 }
 .home-ob-demo--draft-card {
@@ -471,9 +471,9 @@
 .home-ob-demo--chat {
   right: clamp(150px, 22vw, 340px);
   top: auto;
-  bottom: 58px;
-  width: min(390px, 30vw);
-  height: min(650px, 82vh);
+  bottom: -27px;
+  width: min(430px, 32vw);
+  height: min(695px, 91vh);
   transform: none;
   pointer-events: none;
 }

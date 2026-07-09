@@ -210,6 +210,7 @@ test("onboarding rehearses story chat and creation without route jumps", () => {
 
   const talk = beatById("tryChatTalk");
   assert.equal(talk.speaker, "宣");
+  assert.equal(talk.emo, "smile");
   assert.equal(talk.field, undefined);
   assert.match(talk.line({}), /怎么.*喊/);
   assert.equal(talk.chips[0].next, "tryChatTangmuReply");
@@ -227,6 +228,7 @@ test("onboarding rehearses story chat and creation without route jumps", () => {
 
   const greet = beatById("tryChatGreet");
   assert.equal(greet.speaker, "宣");
+  assert.equal(greet.emo, "smile");
   assert.equal(greet.field, "xuanLine");
   assert.equal(greet.ai.optional, true);
   assert.equal(greet.next, "tryChatLeave");
@@ -234,6 +236,7 @@ test("onboarding rehearses story chat and creation without route jumps", () => {
 
   const leave = beatById("tryChatLeave");
   assert.equal(leave.speaker, "宣");
+  assert.equal(leave.emo, "smile");
   assert.match(leave.line({}), /先回去了/);
   assert.equal(leave.chips[0].next, "tryCreate");
 

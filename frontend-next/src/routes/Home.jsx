@@ -216,6 +216,7 @@ export default function Home({ testMode = false }) {
   // 立绘双层(交叉溶解):slots=两层各 src, layer=当前在顶(不透明)的层。合成一个 state 一次提交,避免换图/切层两次 setState 间的中间帧闪(重影根因之一)。
   const [obPortrait, setObPortrait] = useState({ slots: [null, null], layer: 0 });
   const prevImageRef = useRef(null); // 上一帧立绘 src,供双层比对
+  const portraitLoadSeqRef = useRef(0); // 立绘预加载序号,防止慢加载的旧图回写
   const obInputRef = useRef(null); // onboarding 输入框(选项 fill 后聚焦)
   const obAvatarInputRef = useRef(null); // 身份卡头像上传的隐藏 file input
   const obCropImgRef = useRef(null);
@@ -426,7 +427,7 @@ export default function Home({ testMode = false }) {
       if (!obActive || !headAnchor) return setObBubblePos(null);
       if (window.matchMedia("(max-width: 720px), (orientation: portrait)").matches) return setObBubblePos(null);
       const portrait = document.querySelector(".home-portrait");
-      const img = document.querySelector(".home-portrait img");
+      const img = document.querySelector(".home-portrait-img.is-on") || document.querySelector(".home-portrait img");
       if (!portrait || !img) return;
       const pr = portrait.getBoundingClientRect();
       const r = img.getBoundingClientRect();
@@ -446,19 +447,33 @@ export default function Home({ testMode = false }) {
   // 换图与切层合成一次 setObPortrait(原子提交),消掉两次 setState 间「新图挂在旧层判定上以 opacity:1 闪现」的中间帧(整图差分重影的根因之一)。
   useLayoutEffect(() => {
     if (!image) return;
+    const seq = ++portraitLoadSeqRef.current;
     if (prevImageRef.current === null) {
       setObPortrait({ slots: [image, image], layer: 0 }); // 首帧两层同图,首次换姿势也能淡入
       prevImageRef.current = image;
       return;
     }
     if (image !== prevImageRef.current) {
-      setObPortrait((p) => {
-        const next = p.layer === 0 ? 1 : 0;
-        const slots = [...p.slots];
-        slots[next] = image;
-        return { slots, layer: next };
-      });
-      prevImageRef.current = image;
+      const commit = () => {
+        if (portraitLoadSeqRef.current !== seq) return;
+        setObPortrait((p) => {
+          if (p.slots[p.layer] === image) return p;
+          const next = p.layer === 0 ? 1 : 0;
+          const slots = [...p.slots];
+          slots[next] = image;
+          return { slots, layer: next };
+        });
+        prevImageRef.current = image;
+      };
+      const nextImg = new Image();
+      nextImg.onload = commit;
+      nextImg.onerror = commit;
+      nextImg.src = image;
+      if (nextImg.complete) commit();
+      return () => {
+        nextImg.onload = null;
+        nextImg.onerror = null;
+      };
     }
   }, [image]);
 

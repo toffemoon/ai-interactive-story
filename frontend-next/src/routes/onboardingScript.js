@@ -249,7 +249,7 @@ export const BEATS = [
   {
     id: "tryChatTalk",
     speaker: "宣",
-    emo: "whisper",
+    emo: "smile",
     tour: "chat",
     demo: {
       type: "chat",
@@ -303,7 +303,7 @@ export const BEATS = [
   {
     id: "tryChatGreet",
     speaker: "宣",
-    emo: "whisper",
+    emo: "smile",
     tour: "chat",
     demo: {
       type: "chat",
@@ -315,7 +315,7 @@ export const BEATS = [
     },
     line: () => "你好。没写完的,也可以慢慢补。你想问我什么?",
     backLine: () => "我还在。你想问什么,可以再说一次。",
-    backEmo: "whisper",
+    backEmo: "smile",
     field: "xuanLine",
     next: "tryChatLeave",
     placeholder: "和宣说一句…",
@@ -334,7 +334,7 @@ export const BEATS = [
   {
     id: "tryChatLeave",
     speaker: "宣",
-    emo: "whisper",
+    emo: "smile",
     tour: "chat",
     demo: {
       type: "chat",
@@ -346,7 +346,7 @@ export const BEATS = [
     },
     line: () => "我还有事,先回去了。糖沐,客人交给你了。",
     backLine: () => "我只是暂时出来一会儿。没写完的,回头再补。",
-    backEmo: "whisper",
+    backEmo: "smile",
     chips: [{ label: "继续看创作", next: "tryCreate" }],
   },
   {
