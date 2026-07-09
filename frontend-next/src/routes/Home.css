@@ -870,6 +870,30 @@
   display: none !important;
 }
 
+/* onboarding 接管首屏时把 Home 锁在视口上。
+   否则快速点击 3D 书卡翻面时,Chromium 偶发把子层按缩短后的可视区重排,
+   背景/演示卡/底部操作栏会一起上跳并露出底部空白。 */
+.ais-onboarding .home {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  min-height: 100dvh;
+}
+
+.ais-onboarding .home-bg,
+.ais-onboarding .home-bg-scrim,
+.ais-onboarding .home-portrait,
+.ais-onboarding .home-ui {
+  position: fixed;
+}
+
+.ais-onboarding .home-bg,
+.ais-onboarding .home-bg-scrim,
+.ais-onboarding .home-ui {
+  inset: 0;
+}
+
 /* onboarding 头像裁剪:本地压成 256 方图,避免超大图片直接塞卡。 */
 .home-crop-modal {
   position: fixed;
