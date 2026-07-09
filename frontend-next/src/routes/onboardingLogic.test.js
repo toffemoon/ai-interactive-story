@@ -157,31 +157,62 @@ test("parses field AI failures as retry instead of fabricated answers", () => {
 });
 
 test("onboarding rehearses story chat and creation without route jumps", () => {
-  assert.equal(beatById("cardDone").chips[0].next, "tryStory");
+  assert.equal(beatById("cardDone").chips[0].next, "tryStoryIntro");
 
-  const story = beatById("tryStory");
+  const intro = beatById("tryStoryIntro");
+  assert.equal(intro.demo, undefined);
+  assert.equal(intro.chips[0].next, "tryStoryCard");
+  assert.match(intro.line({ taste: "剑来" }), /主页和探索页/);
+
+  const story = beatById("tryStoryCard");
   assert.equal(story.field, undefined);
-  assert.equal(story.chips[0].next, "tryChatAsk");
+  assert.equal(story.chips[0].next, "tryCharacterCard");
+  assert.match(story.line({}), /点一下/);
+  assert.match(story.line({}), /翻/);
+
   assert.equal(story.demo.type, "story");
   const storyModel = toCardModel("story", story.demo.preset);
   assert.equal(storyModel.title, "所以我出手了");
   assert.equal(storyModel.cover, "/onboarding/suoyiwochushoule.jpg");
   assert.equal(storyModel.cover.startsWith("/covers/"), false);
-  assert.match(story.line({ taste: "三体" }), /探索/);
-  assert.equal(beatById("tryStoryResult"), null);
 
-  const chat = beatById("tryChatDemo");
-  assert.equal(beatById("tryChatAsk").ai.optional, true);
+  const characterCard = beatById("tryCharacterCard");
+  assert.equal(characterCard.demo.type, "characterCard");
+  const characterModel = toCardModel("character", characterCard.demo.characterCard);
+  assert.equal(characterModel.title, "宣");
+  assert.equal(characterModel.cover, "/oc/xuan.png");
+  assert.match(characterCard.line({}), /角色从他们的世界/);
+  assert.equal(characterCard.chips[0].next, "tryChatTalk");
+
+  const talk = beatById("tryChatTalk");
+  assert.equal(talk.speaker, "宣");
+  assert.equal(talk.field, "xuanLine");
+  assert.equal(talk.ai.optional, true);
+  assert.equal(talk.next, "tryChatLeave");
+
+  const leave = beatById("tryChatLeave");
+  assert.equal(leave.speaker, "宣");
+  assert.match(leave.line({}), /先回去了/);
+  assert.equal(leave.chips[0].next, "tryCreate");
+
+  const chat = beatById("tryChatTalk");
   assert.equal(chat.demo.type, "chat");
   assert.equal(chat.demo.character.name, "宣");
   assert.equal(chat.demo.character.image, "/oc/xuan.png");
-  assert.match(chat.line({ favoriteRole: "流萤" }), /看板里/);
-  assert.equal(chat.chips[0].next, "tryCreate");
 
   const create = beatById("tryCreate");
   assert.equal(create.field, "createSeed");
   assert.equal(create.next, "tryCreateResult");
   assert.equal(create.ai.optional, true);
-  assert.equal(create.demo.type, "create");
-  assert.equal(beatById("tryCreateResult").chips[0].to, "/explore");
+  assert.equal(create.demo.type, "draftCard");
+  assert.match(create.line({}), /刚刚你看到的卡/);
+  assert.match(create.line({}), /执笔人/);
+
+  const createResult = beatById("tryCreateResult");
+  assert.equal(createResult.demo.type, "draftCard");
+  assert.equal(createResult.chips[0].next, "tryWrap");
+
+  const wrap = beatById("tryWrap");
+  assert.equal(wrap.centerBubble, true);
+  assert.equal(wrap.chips[0].to, "/explore");
 });

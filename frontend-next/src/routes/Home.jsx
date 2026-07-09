@@ -100,6 +100,34 @@ function demoText(value, echo, fallback = "") {
   return text || fallback;
 }
 
+function DemoCard({ model, className = "" }) {
+  const [flipped, setFlipped] = useState(false);
+  return (
+    <div className={["home-demo-card", className].filter(Boolean).join(" ")}>
+      <Card model={model} variant="shelf" flipped={flipped} onToggleFlip={() => setFlipped((v) => !v)} />
+    </div>
+  );
+}
+
+function draftCardModel(demo, echo) {
+  const seed = demoText(demo.seed, echo, "雨夜侦探");
+  const hook = demoText(demo.hook, echo, "从一个念头开始,长出角色和故事。");
+  return toCardModel("character", {
+    name: seed,
+    official: false,
+    data: {
+      spec: "chara_card_v2",
+      spec_version: "2.0",
+      data: {
+        name: seed,
+        description: hook,
+        look: hook,
+        tags: demo.result ? ["角色雏形", "可继续创作"] : ["创作中", "种子"],
+      },
+    },
+  });
+}
+
 function OnboardingDemo({ beat, echo }) {
   const demo = beat && beat.demo;
   if (!demo) return null;
@@ -108,23 +136,16 @@ function OnboardingDemo({ beat, echo }) {
     const model = demo.preset ? toCardModel("story", demo.preset) : null;
     return (
       <aside className={"home-ob-demo home-ob-demo--story" + (demo.result ? " is-result" : "")} aria-label="故事预演">
-        <div className="home-demo-story-card">
-          <Card model={model} variant="shelf" flipped={false} />
-        </div>
+        <DemoCard model={model} className="home-demo-story-card" />
       </aside>
     );
   }
 
-  if (demo.type === "character") {
-    const character = demo.character || {};
+  if (demo.type === "characterCard") {
+    const model = demo.characterCard ? toCardModel("character", demo.characterCard) : null;
     return (
-      <aside className="home-ob-demo home-ob-demo--character" aria-label="角色卡预演">
-        <img className="home-demo-character-img" src={character.image} alt={character.name || "角色"} draggable="false" />
-        <div className="home-demo-character-copy">
-          <span className="home-demo-badge t-meta">{character.badge || "角色"}</span>
-          <h3 className="t-kai">{character.name}</h3>
-          <p className="t-read">{character.blurb}</p>
-        </div>
+      <aside className="home-ob-demo home-ob-demo--character-card" aria-label="角色卡预演">
+        <DemoCard model={model} className="home-demo-character-card" />
       </aside>
     );
   }
@@ -134,25 +155,21 @@ function OnboardingDemo({ beat, echo }) {
     return (
       <aside className="home-ob-demo home-ob-demo--chat" aria-label="看板聊天预演">
         <img className="home-demo-xuan-img" src={character.image} alt={character.name || "宣"} draggable="false" />
-        <div className="home-demo-xuan-bubble">
-          <span className="home-demo-xuan-name t-kai">{character.name || "宣"}</span>
-          <p className="t-read">{character.line}</p>
-        </div>
+        {!beat.speaker && (
+          <div className="home-demo-xuan-bubble">
+            <span className="home-demo-xuan-name t-kai">{character.name || "宣"}</span>
+            <p className="t-read">{character.line}</p>
+          </div>
+        )}
       </aside>
     );
   }
 
-  if (demo.type === "create") {
-    const seed = demoText(demo.seed, echo, "雨夜侦探");
-    const hook = demoText(demo.hook, echo, "从一个念头开始,长出角色和故事。");
+  if (demo.type === "draftCard") {
+    const model = draftCardModel(demo, echo);
     return (
-      <aside className={"home-ob-demo home-ob-demo--create" + (demo.result ? " is-result" : "")} aria-label="创作预演">
-        <div className="home-demo-create-mark t-kai">种</div>
-        <div className="home-demo-create-copy">
-          <span className="home-demo-meta t-meta">{demo.title || "创作种子"}</span>
-          <h3 className="t-kai">{seed}</h3>
-          <p className="t-read">{hook}</p>
-        </div>
+      <aside className={"home-ob-demo home-ob-demo--draft-card" + (demo.result ? " is-result" : "")} aria-label="创作预演">
+        <DemoCard model={model} className="home-demo-draft-card" />
       </aside>
     );
   }
@@ -912,6 +929,8 @@ export default function Home({ testMode = false }) {
         "home" +
         (fullscreen ? " is-fullscreen" : "") +
         (obBeat && obBeat.showCard ? " is-cardbeat" : "") +
+        (obBeat && obBeat.speaker ? ` is-ob-speaker-${obBeat.speaker}` : "") +
+        (obBeat && obBeat.centerBubble ? " is-ob-finale" : "") +
         (obDemo ? ` is-ob-demo is-ob-demo-${obDemo.type}` : "")
       }
     >
@@ -944,13 +963,13 @@ export default function Home({ testMode = false }) {
             key={obBeat ? "b-" + obBeat.id + (obViaBack ? "-back" : "") : "i-" + obIntro}
             className="home-ob-bubble"
             style={
-              obBubblePos
+              obBubblePos && !(obBeat && (obBeat.centerBubble || obBeat.speaker))
                 ? { left: obBubblePos.left, top: obBubblePos.top, right: "auto", bottom: "auto", transform: "translate(-100%, -50%)" }
                 : undefined
             }
           >
             <div className="home-ob-bubble-head">
-              <span className="home-dlg-name t-kai">糖沐</span>
+              <span className="home-dlg-name t-kai">{obBeat && obBeat.speaker ? obBeat.speaker : "糖沐"}</span>
               {obBeat && (
                 <button className="home-ob-skip" onClick={() => endOnboarding()} disabled={obThinking} title="跳过引导,直接进店">跳过</button>
               )}
