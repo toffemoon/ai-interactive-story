@@ -1,6 +1,6 @@
 # Codex 本机反代模式
 
-> 状态:已于 2026-07-10 上线生产。当前自动安装面向 Windows 11。
+> 状态:已于 2026-07-10 上线生产,SSE 流式输出于同日上线。当前自动安装面向 Windows 11。
 
 ## 这是什么
 
@@ -84,6 +84,13 @@
 - 页面一直只在结束时显示全文:再次运行一键安装器升级连接助手;旧版仍可正常完成回合。
 - 需要重新安装:再次运行一键安装器即可,已有 OAuth 和 `bridge.env` 高级配置会保留。
 - 日志目录:`%LOCALAPPDATA%\AIStoryCodexBridge\data`。
+
+## 生产验证 (2026-07-10)
+
+- SSE 实现由 PR #154 合并,merge commit `8019f8b74973576a7559ab4735fab09b9d256a47`。
+- Render deploy `dep-d98bm4e7r5hc73cr6qh0` 已为 `live`;健康端点、首页、新 JS 和 4 个安装文件均返回 200。
+- 生产安装器 4 个文件的大小与 SHA-256 全部匹配清单;安装后的 `/health` 返回 `chat_completions_stream: true`。
+- 生产安装版本实测 `gpt-5.6-sol` 返回 `PROD_SSE_OK`:5 个内容分片,首字约 2.25 秒,总耗时约 2.43 秒。
 
 ## 官方参考
 
