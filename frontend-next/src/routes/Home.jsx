@@ -521,13 +521,16 @@ export default function Home({ testMode = false }) {
     schedule();
     window.addEventListener("resize", schedule);
     const portrait = document.querySelector(".home-portrait");
+    const chatStage = document.querySelector(".home-ob-demo--chat");
     const xuan = document.querySelector(".home-demo-xuan-img");
     portrait?.addEventListener("transitionend", schedule);
+    chatStage?.addEventListener("animationend", schedule);
     xuan?.addEventListener("load", schedule);
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener("resize", schedule);
       portrait?.removeEventListener("transitionend", schedule);
+      chatStage?.removeEventListener("animationend", schedule);
       xuan?.removeEventListener("load", schedule);
     };
   }, [obActive, obStep, obBeat && obBeat.speaker, obDemo && obDemo.type, headAnchor, image]);

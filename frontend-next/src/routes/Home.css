@@ -832,10 +832,10 @@
   .home-ob-demo--chat {
     left: 8px;
     right: auto;
-    top: 42px;
-    bottom: 300px;
-    width: min(164px, 42vw);
-    height: auto;
+    top: auto;
+    bottom: -27px;
+    width: min(240px, 42vw);
+    height: min(695px, 91vh);
   }
   .home-ob-demo--chat .home-demo-xuan-img {
     height: 100%;
@@ -872,7 +872,7 @@
     padding-top: 16px;
   }
   .home-create-projection-composer {
-    grid-template-columns: minmax(0, 1fr) 64px;
+    grid-template-columns: minmax(0, 1fr) 72px;
   }
   .home-demo-create-mark {
     width: 54px;
