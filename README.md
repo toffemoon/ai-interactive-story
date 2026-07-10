@@ -16,7 +16,7 @@
 - **纯聊**：单角色 1v1 直聊(不走故事引擎)。
 - **流式 + 并发**：回合叙事逐字输出，异步端点支持多人同时玩。
 - **模型适配层**：引擎产出模型无关的 `ContextBundle`，适配器(DeepSeek / Claude)按目标模型组装 messages + 按 call_type 路由，换模型不改引擎核心。
-- **受控本机反代**：operator 可按账户授权 Codex/OpenAI-compatible 本机反代；玩家浏览器负责模型调用，中央后端继续管理状态、记忆和存档。
+- **受控 Codex 本机模式**：operator 可按账户授权；Windows 玩家一键安装并完成 ChatGPT OAuth，无需自建 Render、填写 URL/模型或管理 token。玩家浏览器负责模型调用，中央后端继续管理状态、记忆和存档。
 - **接入**：MCP server(任意 MCP 客户端如 Claude Code / Desktop 直接驱动引擎) + Claude Skill。
 - **评测平台**：自动 playthrough(LLM player bot) + Claude 作 judge + 动态维度 + 回归检测，住 `eval/`。
 - **单对话重 roll**、**每轮 token 用量**、**会话续玩 / 存档**、**故事预设**(配好的卡组一键开新局 + 选人页)、**卡库**(建好 / 上传的卡集中管理)。
@@ -24,7 +24,7 @@
 ## 技术栈
 
 - 后端：Python 3.12 + FastAPI
-- LLM：DeepSeek(走 OpenAI 兼容协议，改 `.env` 即可换任意兼容提供商) + 模型适配层(DeepSeek / Claude)
+- LLM：默认 DeepSeek(OpenAI-compatible)；获授权用户可选自己的 Codex；模型适配层支持 DeepSeek / Claude
 - 数据 / 记忆：**Supabase Postgres + pgvector**(会话 / 卡库 / 预设 / 向量统一上云)；embedding 用本地 `BAAI/bge-small-zh-v1.5`(512 维，对话 / 世界书 / 故事书向量化召回)
 - 前端：**Vite + React + react-router(HashRouter)**,构建产物在 `frontend-next/dist`(旧零构建单文件 `frontend/` 已于 2026-07-08 退役,见 `decisions/2026-07-07-frontend-next-cutover.md`)
 - 评测：`eval/` 平台(player bot + Claude judge)

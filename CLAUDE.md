@@ -5,12 +5,12 @@ project: ai-interactive-story
 parent: YoRHa-A2 (yorha-a2-team)
 architecture_owner: gengyue
 content_frontend_owner: yufei
-updated: 2026-06-04
+updated: 2026-07-10
 ---
 
 # CLAUDE.md — ai-interactive-story (YoRHa-A2 卫星项目)
 
-> 你（Claude Code，跑在 Yufei 机器上的本 repo）每次新 session 自动读本文件。
+> 你（Claude Code，跑在主理人或协作者机器上的本 repo）每次新 session 自动读本文件。
 > **本 repo 是 YoRHa-A2 项目的卫星 repo** —— 既是一个独立的 AI 互动故事引擎代码库，也是 YoRHa-A2 团队生态的一员。
 
 > **两顶帽子**：(1) 给这个引擎写代码（这是真代码 repo，你要写 / 改 / 跑 / debug）；(2) 守 YoRHa-A2 团队治理规则（读团队决策、写 team-log、走 PR、自动记忆）。
@@ -22,16 +22,22 @@ updated: 2026-06-04
 
 ---
 
-## 当前状态 (2026-07-08)
+## 当前状态 (2026-07-10)
 
-> synced 2026-07-08 · 真源=本 repo `docs/` + `decisions/`（下面是快照,细节以真源为准）
+> synced 2026-07-10 · 真源=本 repo `docs/` + `decisions/`（下面是快照,细节以真源为准）
+
+- **受控 Codex 本机模式已上线**(见 `decisions/2026-07-10-browser-local-codex-proxy.md`、`docs/LOCAL-CODEX-PROXY.md`):
+  - 默认仍为 Render 后端 DeepSeek;operator 只向特定账户开放 Codex 本机选项。
+  - 唯一授权管理员为 `SUPERADMIN_EMAIL=gengyue081@gmail.com`;该账户固定拥有能力且不可撤销,数据库 role 不能产生第二个授权管理员。
+  - Windows 玩家一键安装本机桥接并走 Codex 官方 ChatGPT OAuth,无需自建 Render、手填 URL/模型或管理 token;凭证不进入 app/Render。
+  - 主流程 PR #150/#151;自动 OAuth/安装 PR #152,merge `e5b102a`;生产已验证 `live`。
 
 - **双前端已收敛(2026-07-08,见 `decisions/2026-07-07-frontend-next-cutover.md`)**:
   - **`frontend-next`(Vite + React + HashRouter)已作为唯一主前端合入 `main`(commit fc430b2)**;旧零构建 `frontend/` 已删除;`src/api.py` 现挂 `FRONTEND = ROOT / "frontend-next" / "dist"`,**dist 已提交进 git** 让 main 自包含可部署(Render 无 node build 也能 serve)。
   - 57 条前端修复分支收敛:**56 合入**(48 批量 + 6 手动解冲突 + onboarding 看板 yor-205 + 发布清单 yor-192)、**yor-56 过时跳过**(改的是已删的 `frontend/`);另补 Story 存档续玩 + 实时 tail 轮询。⚠️ yor-205 onboarding 引导流程建议真机走查;主体 Home 微修复(yor-179/180)在 onboarding 版的回归待验。
 - **引擎主线(2026-06-27 战略会拍板)**:找 OC 用户 + 打磨 UX;token 三指标(用户数 / 总 token / 人均 token);**不加新功能**(成就系统已暂缓)。
-- **部署**:Render(`AUTH_ENABLED=1`、`COST_GUARD_ENABLED=1`)。Supabase prod=`hhrqxllcamdxqcoepwgx`、test=`yldfnbmpzkzjzjoyvfhb`。
-- 记忆 Phase 1–3 已上线;导演 / 运营台已发布;约 65 局 / 1090 回合真实使用。
+- **部署**:`https://ai-interactive-story.onrender.com`,Render(`AUTH_ENABLED=1`、`COST_GUARD_ENABLED=1`)。Supabase prod=`hhrqxllcamdxqcoepwgx`、test=`yldfnbmpzkzjzjoyvfhb`。
+- 记忆 Phase 1–3 已上线;导演 / 运营台已发布;最新使用数据以 operator 看板为准。
 
 ---
 
@@ -52,7 +58,7 @@ updated: 2026-06-04
 
 **AI 互动故事引擎**：多角色卡 / 世界书 / 故事书 / 玩家卡 → 可玩的互动故事回合（叙事 + 角色发言 + 玩家选项 + 状态更新）。
 
-技术栈：Python 3.12 + FastAPI + DeepSeek（OpenAI 兼容）+ chromadb + bge-small-zh-v1.5 向量记忆 + 零构建单文件 React 前端。详见 [README.md](README.md)。
+技术栈：Python 3.12 + FastAPI + 默认 DeepSeek / 可选玩家 Codex + Supabase Postgres/pgvector + bge-small-zh-v1.5 向量记忆 + Vite/React/HashRouter 前端。详见 [README.md](README.md)。
 
 - **架构 / 技术 / 引擎核心 Owner：Gengyue**（主理人,GitHub `yorhagengyue`）—— 记忆系统、状态机、召回、abstention 等核心逻辑的设计/决策/合入归他
 - **内容 / 前端 / 素材 / 部署 开发：Yufei**（GitHub `toffemoon`）—— 故事、角色、世界书、UI、部署配置等不动核心逻辑的部分
@@ -100,7 +106,7 @@ updated: 2026-06-04
 
 | 决策类型 | 放哪 | 例子 |
 |---|---|---|
-| 引擎工程决策 | 本 repo `decisions/` | "记忆用 chromadb 不用 pgvector"、"流式用 SSE 不用 WebSocket" |
+| 引擎工程决策 | 本 repo `decisions/` | "记忆统一进 Supabase Postgres/pgvector"、"流式用 SSE 不用 WebSocket" |
 | YoRHa-A2 战略决策 | 父 repo `~/Desktop/yorha-a2-team/decisions/` | "这个引擎正式成为 conversion-site 的 AI 对话实现"、"互动故事拍成短视频系列" |
 
 本 repo 的 `decisions/` 格式跟父 repo 一致：`YYYY-MM-DD-<slug>.md`，frontmatter `date` / `updated` / `status`，只增不改，推翻要 supersede。
