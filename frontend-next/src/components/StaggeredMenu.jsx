@@ -284,25 +284,22 @@ export const StaggeredMenu = ({
     }
   }, [playClose, animateIcon, animateColor, animateText, onMenuClose]);
 
-  React.useEffect(() => {
-    if (!closeOnClickAway || !open) return;
+  const closeAndRestoreFocus = useCallback(() => {
+    closeMenu();
+    requestAnimationFrame(() => toggleBtnRef.current?.focus());
+  }, [closeMenu]);
 
-    const handleClickOutside = (event) => {
-      if (
-        panelRef.current &&
-        !panelRef.current.contains(event.target) &&
-        toggleBtnRef.current &&
-        !toggleBtnRef.current.contains(event.target)
-      ) {
-        closeMenu();
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeAndRestoreFocus();
       }
     };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [closeOnClickAway, open, closeMenu]);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, closeAndRestoreFocus]);
 
   const handleItemClick = (e, it) => {
     if (onItemClick) {
@@ -319,6 +316,13 @@ export const StaggeredMenu = ({
       data-position={position}
       data-open={open || undefined}
     >
+      {open && (
+        <div
+          className="sm-backdrop"
+          onClick={closeOnClickAway ? closeAndRestoreFocus : undefined}
+          aria-hidden="true"
+        />
+      )}
       <div ref={preLayersRef} className="sm-prelayers" aria-hidden="true">
         {(() => {
           const raw = colors && colors.length ? colors.slice(0, 4) : ["#1e1e22", "#35353c"];
@@ -367,6 +371,7 @@ export const StaggeredMenu = ({
                     className="sm-panel-item"
                     href={it.link}
                     aria-label={it.ariaLabel}
+                    tabIndex={open ? 0 : -1}
                     data-index={idx + 1}
                     onClick={(e) => handleItemClick(e, it)}
                   >
@@ -388,7 +393,7 @@ export const StaggeredMenu = ({
               <ul className="sm-socials-list" role="list">
                 {socialItems.map((s, i) => (
                   <li key={s.label + i} className="sm-socials-item">
-                    <a href={s.link} target="_blank" rel="noopener noreferrer" className="sm-socials-link">
+                    <a href={s.link} target="_blank" rel="noopener noreferrer" className="sm-socials-link" tabIndex={open ? 0 : -1}>
                       {s.label}
                     </a>
                   </li>

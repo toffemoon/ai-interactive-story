@@ -6,6 +6,8 @@ import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
 import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, AUTO_MS, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
 import { IdentityCard } from "../components/IdentityCard";
+import StaggeredText from "../components/staggered-text";
+import AnimatedList from "../components/animated-list";
 import "./Home.css";
 
 // 立绘主页(家)· YOR-136 · galgame 式登录后首屏。
@@ -33,6 +35,8 @@ const FALLBACK_TANGMU = {
     description: "这家「就是网站」的书店咖啡馆的店员,带你认识沐言。",
   },
 };
+const LINE_REVEAL_FROM = { opacity: 0, y: 4 };
+const LINE_REVEAL_TO = { opacity: 1, y: 0 };
 
 function cardName(card) {
   const d = (card && card.data) || card || {};
@@ -41,6 +45,24 @@ function cardName(card) {
 function cardImageOf(card) {
   const d = (card && card.data) || card || {};
   return d.image || d.avatar || "";
+}
+
+function DialogueReveal({ text }) {
+  return (
+    <StaggeredText
+      text={text}
+      as="span"
+      segmentBy="chars"
+      delay={8}
+      duration={0.28}
+      direction="bottom"
+      blur={false}
+      from={LINE_REVEAL_FROM}
+      to={LINE_REVEAL_TO}
+      respectReducedMotion
+      className="home-line-reveal"
+    />
+  );
 }
 
 export default function Home({ testMode = false }) {
@@ -115,6 +137,22 @@ export default function Home({ testMode = false }) {
     return greeting;
   }, [messages, greeting]);
 
+  const switchOptions = useMemo(() => {
+    if (!switcher) return [];
+    const libraryOptions = switcher.items.map((it, i) => {
+      const raw = (it && it.data && it.data.data) || (it && it.data) || {};
+      return {
+        id: `library-${it.id || raw.id || raw.name || i}-${i}`,
+        content: {
+          kind: "library",
+          item: it,
+          image: raw.image || raw.avatar || "",
+        },
+      };
+    });
+    return [{ id: "tangmu-default", content: { kind: "tangmu" } }, ...libraryOptions];
+  }, [switcher]);
+
   // 恢复本机首页会话(同步,先于 presets 落卡)。
   useEffect(() => {
     let r = null;
@@ -131,7 +169,7 @@ export default function Home({ testMode = false }) {
   }, []);
 
   // 首访引导:没被引导过 + 没恢复出历史会话 → 进新手引导(老用户 / 聊过的人不触发)。
-  // testMode(/test):每次进都强制从首拍开始、清空回声,方便反复测(不读写完成标记)。
+  // testMode(/test/onboarding):每次进都强制从首拍开始、清空回声,方便反复测(不读写完成标记)。
   useEffect(() => {
     if (testMode) {
       setObEcho({});
@@ -507,6 +545,27 @@ export default function Home({ testMode = false }) {
     return d.name || it.name || "未命名";
   }
 
+  function renderSwitchOption(entry) {
+    const option = entry.content;
+    if (option.kind === "tangmu") {
+      return (
+        <button type="button" className="home-switch-item" onClick={pickTangmu}>
+          <span className="home-switch-av" style={{ backgroundImage: `url("${TANGMU_IMG}")` }} />
+          <span className="t-ui-sm">糖沐 · 看板娘(默认)</span>
+        </button>
+      );
+    }
+    const name = libItemName(option.item);
+    return (
+      <button type="button" className="home-switch-item" onClick={() => pickChar(option.item)}>
+        <span className="home-switch-av" style={option.image ? { backgroundImage: `url("${option.image}")` } : undefined}>
+          {!option.image && (Array.from(name)[0] || "")}
+        </span>
+        <span className="t-ui-sm">{name}</span>
+      </button>
+    );
+  }
+
   return (
     <div className={"home" + (fullscreen ? " is-fullscreen" : "") + (obBeat && obBeat.showCard ? " is-cardbeat" : "")}>
       {/* 背景层 */}
@@ -549,14 +608,30 @@ export default function Home({ testMode = false }) {
                 <button className="home-ob-skip" onClick={() => endOnboarding()} disabled={obThinking} title="跳过引导,直接进店">跳过</button>
               )}
             </div>
-            <p className="home-ob-line t-read">{obLine}</p>
+            <p className="home-ob-line t-read" aria-live="polite" aria-busy={obThinking}>
+              {obThinking ? obLine : <DialogueReveal key={obLine} text={obLine} />}
+            </p>
           </div>
         )}
       </div>
 
       {/* 入场演出:点屏任意处加速推进当前帧(VN 式 tap-to-advance);只在入场存在。
           入场态无其它可交互元素,整屏捕获层置顶不抢占任何点击。 */}
-      {introFrame && <div className="home-ob-introcatch" onClick={advanceIntro} aria-hidden="true" />}
+      {introFrame && (
+        <button
+          type="button"
+          className="home-ob-introcatch"
+          onClick={advanceIntro}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              advanceIntro();
+            }
+          }}
+          aria-label="继续新手引导"
+          autoFocus
+        />
+      )}
       {/* 入场点击推进:太久没点冒出"点击继续"提示(闪烁),引导玩家点屏。 */}
       {introFrame && showIntroHint && (
         <div className="home-ob-clickhint t-meta" aria-hidden="true">点击继续 ▾</div>
@@ -680,7 +755,9 @@ export default function Home({ testMode = false }) {
                       <button className="home-tool" onClick={() => setFullscreen(true)} title="全屏(只留背景+立绘,方便截图)" aria-label="全屏">⛶</button>
                     </div>
                   </div>
-                  <p className="home-dlg-line t-read">{busy ? `(${displayName}正在回应…)` : currentLine}</p>
+                  <p className="home-dlg-line t-read" aria-live="polite" aria-busy={busy}>
+                    {busy ? `(${displayName}正在回应…)` : <DialogueReveal key={`${displayName}-${currentLine}`} text={currentLine} />}
+                  </p>
                   <div className="home-composer">
                     <input
                       className="home-input"
@@ -714,24 +791,20 @@ export default function Home({ testMode = false }) {
             <h2 className="t-h2">换个人聊</h2>
             <p className="t-meta home-modal-sub">挑一张你的角色卡,沿用 TA 自己的设定。</p>
             <div className="home-switch-list">
-              <button className="home-switch-item" onClick={pickTangmu}>
-                <span className="home-switch-av" style={{ backgroundImage: `url("${TANGMU_IMG}")` }} />
-                <span className="t-ui-sm">糖沐 · 看板娘(默认)</span>
-              </button>
-              {switcher.items.length ? (
-                switcher.items.map((it, i) => {
-                  const raw = (it && it.data && it.data.data) || (it && it.data) || {};
-                  const img = raw.image || raw.avatar;
-                  return (
-                    <button className="home-switch-item" key={i} onClick={() => pickChar(it)}>
-                      <span className="home-switch-av" style={img ? { backgroundImage: `url("${img}")` } : undefined}>
-                        {!img && (Array.from(libItemName(it))[0] || "")}
-                      </span>
-                      <span className="t-ui-sm">{libItemName(it)}</span>
-                    </button>
-                  );
-                })
-              ) : (
+              <AnimatedList
+                items={switchOptions}
+                renderItem={renderSwitchOption}
+                height={`min(${Math.min(switchOptions.length * 66, 360)}px, 48vh)`}
+                startFrom="top"
+                animationType="fade"
+                enterFrom="bottom"
+                duration={0.28}
+                autoAddDelay={0}
+                itemGap={8}
+                fadeEdges={false}
+                className="home-switch-animated"
+              />
+              {!switcher.items.length && (
                 <p className="t-ui home-modal-sub">{switcher.err ? "读库失败:" + switcher.err : "卡库里还没有你的角色卡。去创作造一张。"}</p>
               )}
             </div>

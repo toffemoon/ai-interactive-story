@@ -16,6 +16,15 @@
   overflow: hidden;
 }
 
+/* 菜单打开时由真实遮罩接住外部点击,避免先关闭菜单后同一次点击落到首页按钮。 */
+.sm-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: auto;
+  background: transparent;
+}
+
 .staggered-menu-header {
   position: absolute;
   top: 0;
