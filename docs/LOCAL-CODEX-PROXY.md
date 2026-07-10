@@ -17,12 +17,14 @@
 ## 玩家
 
 1. 在“我的 > 档案 > 模型来源”选择“Codex 本机”。
-2. 填写 API Base URL,例如 `http://127.0.0.1:端口/v1`。
-3. 填写该反代支持的 model 名。
+2. 在本项目目录运行 `.\tools\codex-local-proxy\manage.ps1 start`。
+3. 默认 API Base URL 为 `http://127.0.0.1:8765/v1`,model 为 `codex`。
 4. 如反代要求 Bearer token,填写 API Key。Key 只保存于当前浏览器会话,不会发送给 Render。
 5. 保存后进入故事。游玩页可随时在 DeepSeek / Codex 本机之间切换。
 
 反代必须实现 `POST /chat/completions`,返回 OpenAI-compatible 的 `choices[0].message.content`。JSON 模式调用还会携带 `response_format: {"type":"json_object"}`。
+
+项目自带桥接器会使用这台电脑当前登录的 Codex,无需玩家部署 Render。启动、停止和配置细节见 `tools/codex-local-proxy/README.md`。
 
 ## 浏览器要求
 
