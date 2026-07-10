@@ -4,6 +4,7 @@ const SETTINGS_KEY = "ais_local_proxy_settings_v1";
 const SESSION_KEY = "ais_local_proxy_key_v1";
 const DEFAULT_ENDPOINT = "http://127.0.0.1:8765/v1";
 const DEFAULT_MODEL = "codex";
+export const LOCAL_PROXY_SETUP_URL = "/downloads/codex-bridge/AIStory-Codex-Setup.cmd";
 const MAX_FLOW_STEPS = 12;
 const REQUEST_TIMEOUT_MS = 180_000;
 
@@ -76,6 +77,61 @@ function completionUrl(endpoint) {
   parsed.pathname = parsed.pathname.replace(/\/+$/, "");
   if (!/\/chat\/completions$/i.test(parsed.pathname)) parsed.pathname += "/chat/completions";
   return parsed.toString();
+}
+
+function controlUrl(endpoint, path) {
+  const parsed = new URL(completionUrl(endpoint));
+  return parsed.origin + path;
+}
+
+async function localControlRequest(path, { method = "GET", body, timeoutMs = 10_000 } = {}) {
+  const settings = loadLocalProxySettings();
+  const headers = {};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (settings.apiKey) headers.Authorization = "Bearer " + settings.apiKey;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(controlUrl(settings.endpoint, path), {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const detail = data && data.error && (data.error.message || data.error.code);
+      throw new Error(detail || `本机连接助手返回 ${response.status}`);
+    }
+    return data;
+  } catch (error) {
+    if (error && error.name === "AbortError") throw new Error("本机连接助手响应超时");
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function getLocalProxyConnection() {
+  const health = await localControlRequest("/health", { timeoutMs: 4_000 });
+  const account = await localControlRequest("/auth/status");
+  return { health, account };
+}
+
+export function startLocalProxyLogin(flow = "browser") {
+  return localControlRequest("/auth/login/start", { method: "POST", body: { flow } });
+}
+
+export function getLocalProxyLoginStatus(loginId) {
+  return localControlRequest(`/auth/login/status?login_id=${encodeURIComponent(loginId)}`);
+}
+
+export function cancelLocalProxyLogin(loginId) {
+  return localControlRequest("/auth/login/cancel", {
+    method: "POST",
+    body: { login_id: loginId },
+  });
 }
 
 function messageText(content) {

@@ -9,7 +9,7 @@ const readline = require("readline");
 const { spawn } = require("child_process");
 
 const ROOT = path.resolve(__dirname, "..", "..");
-const ENV_PATH = path.join(ROOT, ".env");
+const ENV_PATH = process.env.CODEX_LOCAL_PROXY_ENV_FILE || path.join(ROOT, ".env");
 const HOST = "127.0.0.1";
 const DEFAULT_PORT = 8765;
 const DEFAULT_ORIGIN = "https://ai-interactive-story.onrender.com";
@@ -36,16 +36,22 @@ function loadEnvFile(filePath) {
 
 loadEnvFile(ENV_PATH);
 
+function codexHomeDir() {
+  return process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
+}
+
 function readConfiguredModel() {
   if (process.env.CODEX_LOCAL_PROXY_MODEL) {
-    return process.env.CODEX_LOCAL_PROXY_MODEL.trim();
+    const configured = process.env.CODEX_LOCAL_PROXY_MODEL.trim();
+    if (/^(auto|default)$/i.test(configured)) return null;
+    return configured;
   }
-  const configPath = path.join(os.homedir(), ".codex", "config.toml");
+  const configPath = path.join(codexHomeDir(), "config.toml");
   if (fs.existsSync(configPath)) {
     const match = fs.readFileSync(configPath, "utf8").match(/^\s*model\s*=\s*["']([^"']+)["']/m);
     if (match) return match[1].trim();
   }
-  throw new Error("找不到 Codex 模型配置，请设置 CODEX_LOCAL_PROXY_MODEL");
+  return null;
 }
 
 function findCodexBinary() {
@@ -72,7 +78,7 @@ function findCodexBinary() {
 }
 
 function findConfiguredMcpServers() {
-  const configPath = path.join(os.homedir(), ".codex", "config.toml");
+  const configPath = path.join(codexHomeDir(), "config.toml");
   if (!fs.existsSync(configPath)) return [];
   const text = fs.readFileSync(configPath, "utf8");
   const names = new Set();
@@ -180,7 +186,7 @@ function isAllowedOrigin(origin, configuredOrigins) {
 
 function resolveRequestedModel(requested, configured) {
   const value = String(requested || "codex").trim();
-  if (value === "codex") return configured;
+  if (value === "codex") return configured || null;
   if (!/^[A-Za-z0-9._:-]{1,128}$/.test(value)) {
     throw new HttpError(400, "model 名称不合法", "invalid_model");
   }
@@ -205,6 +211,14 @@ class CodexAppServer {
     this.nextId = 1;
     this.pending = new Map();
     this.turns = new Map();
+    this.logins = new Map();
+    this.accountCache = {
+      authenticated: null,
+      auth_mode: null,
+      email_present: false,
+      plan_type: null,
+      requires_openai_auth: true,
+    };
     this.stderrTail = "";
     this.stopping = false;
   }
@@ -271,6 +285,12 @@ class CodexAppServer {
       capabilities: { experimentalApi: true },
     });
     this._send({ jsonrpc: "2.0", method: "initialized", params: {} });
+    try {
+      const account = await this._request("account/read", { refreshToken: false });
+      this._setAccountCache(account);
+    } catch (_error) {
+      this.accountCache.authenticated = null;
+    }
   }
 
   _send(message) {
@@ -325,6 +345,26 @@ class CodexAppServer {
   }
 
   _onNotification(method, params) {
+    if (method === "account/login/completed") {
+      const loginId = params.loginId == null ? "" : String(params.loginId);
+      const login = this.logins.get(loginId);
+      if (login) {
+        login.status = params.success ? "completed" : "failed";
+        login.error = params.error || null;
+        login.completed_at = new Date().toISOString();
+      }
+      return;
+    }
+    if (method === "account/updated") {
+      this.accountCache = {
+        ...this.accountCache,
+        authenticated: Boolean(params.authMode),
+        auth_mode: params.authMode || null,
+        plan_type: params.planType || null,
+        email_present: params.authMode ? this.accountCache.email_present : false,
+      };
+      return;
+    }
     const tracker = params.threadId ? this.turns.get(params.threadId) : null;
     if (!tracker) return;
     if (method === "item/completed" && params.item && params.item.type === "agentMessage") {
@@ -371,11 +411,113 @@ class CodexAppServer {
     }
   }
 
+  _setAccountCache(result) {
+    const account = result && result.account;
+    this.accountCache = {
+      authenticated: Boolean(account),
+      auth_mode: account && account.type || null,
+      email_present: Boolean(account && account.email),
+      plan_type: account && account.planType || null,
+      requires_openai_auth: Boolean(result && result.requiresOpenaiAuth),
+    };
+    return { ...this.accountCache };
+  }
+
+  async accountStatus(refreshToken = false) {
+    await this.ensureStarted();
+    const result = await this._request("account/read", { refreshToken: Boolean(refreshToken) });
+    return this._setAccountCache(result);
+  }
+
+  _publicLogin(login, account = this.accountCache) {
+    return {
+      status: login.status,
+      flow: login.flow,
+      login_id: login.loginId,
+      auth_url: login.authUrl || null,
+      verification_url: login.verificationUrl || null,
+      user_code: login.userCode || null,
+      error: login.error || null,
+      account: { ...account },
+    };
+  }
+
+  async startLogin(flow = "browser") {
+    const account = await this.accountStatus(false);
+    if (account.authenticated) {
+      return {
+        status: "authenticated",
+        flow: null,
+        login_id: null,
+        auth_url: null,
+        verification_url: null,
+        user_code: null,
+        error: null,
+        account,
+      };
+    }
+    if (!["browser", "device"].includes(flow)) {
+      throw new HttpError(400, "不支持的 OAuth 流程", "invalid_login_flow");
+    }
+    const params = flow === "device"
+      ? { type: "chatgptDeviceCode" }
+      : { type: "chatgpt", useHostedLoginSuccessPage: true, appBrand: "codex" };
+    const result = await this._request("account/login/start", params);
+    const loginId = String(result.loginId || "");
+    if (!loginId) throw new Error("Codex 没有返回 loginId");
+    const login = {
+      status: "pending",
+      flow,
+      loginId,
+      authUrl: result.authUrl || null,
+      verificationUrl: result.verificationUrl || null,
+      userCode: result.userCode || null,
+      error: null,
+      completed_at: null,
+    };
+    this.logins.set(loginId, login);
+    return this._publicLogin(login, account);
+  }
+
+  async loginStatus(loginId) {
+    const account = await this.accountStatus(false);
+    const login = this.logins.get(String(loginId || ""));
+    if (!login) {
+      if (account.authenticated) {
+        return {
+          status: "authenticated",
+          flow: null,
+          login_id: null,
+          auth_url: null,
+          verification_url: null,
+          user_code: null,
+          error: null,
+          account,
+        };
+      }
+      throw new HttpError(404, "找不到 OAuth 登录流程", "login_not_found");
+    }
+    if (account.authenticated && login.status === "pending") login.status = "completed";
+    return this._publicLogin(login, account);
+  }
+
+  async cancelLogin(loginId) {
+    await this.ensureStarted();
+    const login = this.logins.get(String(loginId || ""));
+    if (!login) throw new HttpError(404, "找不到 OAuth 登录流程", "login_not_found");
+    if (login.status === "pending") {
+      await this._request("account/login/cancel", { loginId: login.loginId });
+      login.status = "cancelled";
+      login.error = "cancelled";
+    }
+    return this._publicLogin(login);
+  }
+
   async complete({ messages, model, maxTokens, jsonMode }) {
     await this.ensureStarted();
     const { baseInstructions, input } = buildCodexInput(messages, maxTokens, jsonMode);
     const threadResult = await this._request("thread/start", {
-      model,
+      ...(model ? { model } : {}),
       cwd: this.workspace,
       approvalPolicy: "never",
       sandbox: "read-only",
@@ -408,7 +550,7 @@ class CodexAppServer {
       const turnResult = await this._request("turn/start", {
         threadId,
         input: [{ type: "text", text: input }],
-        model,
+        ...(model ? { model } : {}),
         effort: "none",
         summary: "none",
         personality: "none",
@@ -548,13 +690,44 @@ function createProxyServer(options = {}) {
       setImmediate(() => server.emit("proxy-shutdown-requested"));
       return;
     }
+    if (url.pathname.startsWith("/auth/")) {
+      if (token && req.headers.authorization !== `Bearer ${token}`) {
+        sendJson(res, 401, errorPayload(new HttpError(401, "本机反代 token 不正确", "unauthorized")));
+        return;
+      }
+      try {
+        if (req.method === "GET" && url.pathname === "/auth/status") {
+          sendJson(res, 200, await codex.accountStatus(false));
+          return;
+        }
+        if (req.method === "POST" && url.pathname === "/auth/login/start") {
+          const body = await readJson(req);
+          sendJson(res, 200, await codex.startLogin(String(body.flow || "browser")));
+          return;
+        }
+        if (req.method === "GET" && url.pathname === "/auth/login/status") {
+          sendJson(res, 200, await codex.loginStatus(url.searchParams.get("login_id")));
+          return;
+        }
+        if (req.method === "POST" && url.pathname === "/auth/login/cancel") {
+          const body = await readJson(req);
+          sendJson(res, 200, await codex.cancelLogin(body.login_id));
+          return;
+        }
+        sendJson(res, 404, errorPayload(new HttpError(404, "认证接口不存在", "not_found")));
+      } catch (error) {
+        sendJson(res, error.status || 502, errorPayload(error));
+      }
+      return;
+    }
     if (req.method === "GET" && url.pathname === "/health") {
       const address = server.address();
       const listeningPort = address && typeof address === "object" ? address.port : port;
       sendJson(res, 200, {
         status: "ok",
         codex_ready: Boolean(codex.child && codex.child.exitCode === null),
-        model: configuredModel,
+        authenticated: codex.accountCache && codex.accountCache.authenticated,
+        model: configuredModel || "codex-default",
         model_alias: "codex",
         api_base_url: `http://${HOST}:${listeningPort}/v1`,
         pid: process.pid,
@@ -564,7 +737,8 @@ function createProxyServer(options = {}) {
     if (req.method === "GET" && url.pathname === "/v1/models") {
       sendJson(res, 200, {
         object: "list",
-        data: ["codex", configuredModel].filter((value, index, all) => all.indexOf(value) === index)
+        data: ["codex", configuredModel].filter(Boolean)
+          .filter((value, index, all) => all.indexOf(value) === index)
           .map((id) => ({ id, object: "model", owned_by: "local-codex" })),
       });
       return;
@@ -600,7 +774,7 @@ function createProxyServer(options = {}) {
         id: `chatcmpl-codex-${requestId}`,
         object: "chat.completion",
         created: Math.floor(Date.now() / 1000),
-        model,
+        model: model || "codex",
         choices: [{
           index: 0,
           message: { role: "assistant", content },

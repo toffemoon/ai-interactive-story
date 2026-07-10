@@ -178,6 +178,91 @@
   background: var(--accent-2);
   color: var(--on-accent);
 }
+.mine-codex-connect {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.mine-codex-state {
+  width: 100%;
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.mine-codex-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: var(--r-pill);
+  background: var(--muted);
+}
+.mine-codex-state.is-connected .mine-codex-dot {
+  background: #2f8f5b;
+}
+.mine-codex-state.is-login_required .mine-codex-dot,
+.mine-codex-state.is-login_pending .mine-codex-dot {
+  background: #b47a19;
+}
+.mine-codex-state.is-missing .mine-codex-dot {
+  background: #b55252;
+}
+.mine-codex-state-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mine-codex-state-copy strong,
+.mine-codex-state-copy span {
+  overflow-wrap: anywhere;
+}
+.mine-codex-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.mine-codex-link {
+  color: var(--accent-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.mine-codex-device {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.mine-codex-code {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding: 8px 0;
+}
+.mine-codex-code strong {
+  font-size: 18px;
+  letter-spacing: 0;
+}
+.mine-model-advanced {
+  width: 100%;
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--line);
+}
+.mine-model-advanced summary {
+  width: fit-content;
+  cursor: pointer;
+}
+.mine-model-advanced[open] summary {
+  margin-bottom: var(--sp-3);
+}
 .mine-model-fields {
   width: 100%;
   display: flex;

@@ -70,6 +70,7 @@ test("normalizes messages and separates system instructions", () => {
 
 test("model alias resolves to the configured Codex model", () => {
   assert.equal(resolveRequestedModel("codex", "gpt-current"), "gpt-current");
+  assert.equal(resolveRequestedModel("codex", null), null);
   assert.equal(resolveRequestedModel("gpt-other", "gpt-current"), "gpt-other");
   assert.throws(() => resolveRequestedModel("bad model name", "gpt-current"));
 });
@@ -147,4 +148,75 @@ test("HTTP bridge enforces CORS, PNA, token, and OpenAI response shape", async (
     body: { model: "codex", messages: [{ role: "user", content: "ping" }] },
   });
   assert.equal(denied.status, 403);
+});
+
+test("HTTP bridge exposes managed ChatGPT OAuth without returning tokens", async (t) => {
+  const fakeCodex = {
+    child: { exitCode: null },
+    accountCache: { authenticated: false },
+    async accountStatus() {
+      return {
+        authenticated: false,
+        auth_mode: null,
+        email_present: false,
+        plan_type: null,
+        requires_openai_auth: true,
+      };
+    },
+    async startLogin(flow) {
+      assert.equal(flow, "browser");
+      return {
+        status: "pending",
+        flow,
+        login_id: "login-1",
+        auth_url: "https://chatgpt.com/oauth/authorize",
+        verification_url: null,
+        user_code: null,
+        error: null,
+        account: { authenticated: false },
+      };
+    },
+    async loginStatus(loginId) {
+      assert.equal(loginId, "login-1");
+      return { status: "completed", login_id: loginId, account: { authenticated: true } };
+    },
+  };
+  const proxy = createProxyServer({
+    port: 0,
+    model: null,
+    codex: fakeCodex,
+    token: "",
+    allowedOrigins: new Set([PROD_ORIGIN]),
+  });
+  await new Promise((resolve, reject) => {
+    proxy.server.once("error", reject);
+    proxy.server.listen(0, "127.0.0.1", resolve);
+  });
+  t.after(() => new Promise((resolve) => proxy.server.close(resolve)));
+  const port = proxy.server.address().port;
+
+  const status = await request(port, {
+    path: "/auth/status",
+    headers: { Origin: PROD_ORIGIN },
+  });
+  assert.equal(status.status, 200);
+  assert.equal(status.body.authenticated, false);
+
+  const started = await request(port, {
+    method: "POST",
+    path: "/auth/login/start",
+    headers: { Origin: PROD_ORIGIN },
+    body: { flow: "browser" },
+  });
+  assert.equal(started.status, 200);
+  assert.equal(started.body.login_id, "login-1");
+  assert.equal(started.body.auth_url.startsWith("https://chatgpt.com/"), true);
+  assert.equal(JSON.stringify(started.body).includes("access_token"), false);
+
+  const completed = await request(port, {
+    path: "/auth/login/status?login_id=login-1",
+    headers: { Origin: PROD_ORIGIN },
+  });
+  assert.equal(completed.body.status, "completed");
+  assert.equal(completed.body.account.authenticated, true);
 });

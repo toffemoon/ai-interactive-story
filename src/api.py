@@ -48,6 +48,7 @@ from . import auth
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend-next" / "dist"  # 主前端 = frontend-next 构建产物(2026-07-07 cutover;旧零构建 frontend/ 已退役,HashRouter 无需 SPA fallback)
 OC_DIR = ROOT / "oc"  # OC 集:用户 OC 的设定/世界观/立绘/地图(operator 控制台「OC集」用)
+CODEX_BRIDGE_DIR = ROOT / "tools" / "codex-local-proxy"
 
 # prod 排障基建:此前全仓无 logging 配置,story_turn 异常被保底回合吞掉后无任何痕迹。
 logging.basicConfig(
@@ -1438,6 +1439,45 @@ def operator_console():
     if not auth.enabled():
         raise HTTPException(404, "未启用")
     return HTMLResponse(_load_console_html())
+
+
+_CODEX_BRIDGE_DOWNLOADS = {
+    "AIStory-Codex-Setup.cmd": "application/octet-stream",
+    "install.ps1": "text/plain; charset=utf-8",
+    "launcher.ps1": "text/plain; charset=utf-8",
+    "server.js": "text/javascript; charset=utf-8",
+}
+
+
+@app.get("/downloads/codex-bridge/manifest.json")
+def codex_bridge_manifest():
+    files = {}
+    for name in _CODEX_BRIDGE_DOWNLOADS:
+        path = CODEX_BRIDGE_DIR / name
+        if not path.is_file():
+            raise HTTPException(503, "Codex connector package is incomplete")
+        files[name] = {
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            "size": path.stat().st_size,
+        }
+    return JSONResponse(
+        {"version": 1, "files": files},
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+@app.get("/downloads/codex-bridge/{name}")
+def codex_bridge_download(name: str):
+    media_type = _CODEX_BRIDGE_DOWNLOADS.get(name)
+    path = CODEX_BRIDGE_DIR / name
+    if media_type is None or not path.is_file():
+        raise HTTPException(404, "not found")
+    return FileResponse(
+        path,
+        media_type=media_type,
+        filename=name,
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 # 前端静态文件挂在根路径(html=True 让 / 返回 index.html)。
