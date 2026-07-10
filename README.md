@@ -17,6 +17,7 @@
 - **流式 + 并发**：回合叙事逐字输出，异步端点支持多人同时玩。
 - **模型适配层**：引擎产出模型无关的 `ContextBundle`，适配器(DeepSeek / Claude)按目标模型组装 messages + 按 call_type 路由，换模型不改引擎核心。
 - **受控 Codex 本机模式**：operator 可按账户授权；Windows 玩家一键安装并完成 ChatGPT OAuth，无需自建 Render、填写 URL/模型或管理 token。玩家浏览器负责模型调用，中央后端继续管理状态、记忆和存档。
+- **沉浸首页**：React Bits 台词与角色列表动效；点击火花空闲零 RAF；支持减少动态效果、键盘推进和防菜单点击穿透。
 - **接入**：MCP server(任意 MCP 客户端如 Claude Code / Desktop 直接驱动引擎) + Claude Skill。
 - **评测平台**：自动 playthrough(LLM player bot) + Claude 作 judge + 动态维度 + 回归检测，住 `eval/`。
 - **单对话重 roll**、**每轮 token 用量**、**会话续玩 / 存档**、**故事预设**(配好的卡组一键开新局 + 选人页)、**卡库**(建好 / 上传的卡集中管理)。
@@ -74,7 +75,7 @@ schema.sql        数据库表结构
 data/             运行时临时数据(gitignore)
 ```
 
-完整 API 参考(给 AI / 调用方)见 `docs/AI-API.md`；Codex 本机反代配置见 `docs/LOCAL-CODEX-PROXY.md`。
+完整 API 参考(给 AI / 调用方)见 `docs/AI-API.md`；Codex 本机反代配置见 `docs/LOCAL-CODEX-PROXY.md`；首页 UI / 性能第一批见 `docs/2026-07-10-home-ui-performance-pass-1.md`。
 
 ## 状态与路线
 

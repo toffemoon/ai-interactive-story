@@ -15,21 +15,48 @@ export default function ClickSpark({
 }) {
   const canvasRef = useRef(null);
   const sparksRef = useRef([]);
+  const rafRef = useRef(null);
+  const reducedMotionRef = useRef(false);
 
-  // 画布跟随视口尺寸(含 DPR 清晰度)。
-  useEffect(() => {
+  // 只在火花实际播放时分配画布;动画结束后缩回 1x1,避免首页空闲时常驻大块显存。
+  const sizeCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const width = Math.max(1, Math.round(window.innerWidth * dpr));
+    const height = Math.max(1, Math.round(window.innerHeight * dpr));
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+    const ctx = canvas.getContext("2d");
+    if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }, []);
+
+  const releaseCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.width = 1;
+    canvas.height = 1;
+  }, []);
+
+  // 动画活跃时才跟随视口尺寸;空闲画布保持 1x1。
+  useEffect(() => {
     const resize = () => {
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = window.innerWidth * dpr;
-      canvas.height = window.innerHeight * dpr;
-      const ctx = canvas.getContext("2d");
-      if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (rafRef.current !== null) sizeCanvas();
     };
-    resize();
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
+  }, [sizeCanvas]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => {
+      reducedMotionRef.current = media.matches;
+    };
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
   }, []);
 
   const easeFunc = useCallback(
@@ -48,42 +75,54 @@ export default function ClickSpark({
     [easing]
   );
 
-  // 绘制循环。
-  useEffect(() => {
+  // 事件驱动绘制:没有火花时不再安排下一帧。
+  const draw = useCallback(function drawFrame(now) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    let raf;
-    const draw = (now) => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      sparksRef.current = sparksRef.current.filter((s) => {
-        const elapsed = now - s.startTime;
-        if (elapsed >= duration) return false;
-        const eased = easeFunc(elapsed / duration);
-        const distance = eased * sparkRadius * extraScale;
-        const lineLength = sparkSize * (1 - eased);
-        const x1 = s.x + distance * Math.cos(s.angle);
-        const y1 = s.y + distance * Math.sin(s.angle);
-        const x2 = s.x + (distance + lineLength) * Math.cos(s.angle);
-        const y2 = s.y + (distance + lineLength) * Math.sin(s.angle);
-        ctx.strokeStyle = sparkColor;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-        return true;
-      });
-      raf = requestAnimationFrame(draw);
+    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    sparksRef.current = sparksRef.current.filter((s) => {
+      const elapsed = now - s.startTime;
+      if (elapsed >= duration) return false;
+      const eased = easeFunc(elapsed / duration);
+      const distance = eased * sparkRadius * extraScale;
+      const lineLength = sparkSize * (1 - eased);
+      const x1 = s.x + distance * Math.cos(s.angle);
+      const y1 = s.y + distance * Math.sin(s.angle);
+      const x2 = s.x + (distance + lineLength) * Math.cos(s.angle);
+      const y2 = s.y + (distance + lineLength) * Math.sin(s.angle);
+      ctx.strokeStyle = sparkColor;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      return true;
+    });
+
+    if (sparksRef.current.length) {
+      rafRef.current = requestAnimationFrame(drawFrame);
+    } else {
+      rafRef.current = null;
+      releaseCanvas();
+    }
+  }, [sparkColor, sparkSize, sparkRadius, duration, easeFunc, extraScale, releaseCanvas]);
+
+  useEffect(() => {
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+      sparksRef.current = [];
+      releaseCanvas();
     };
-    raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
-  }, [sparkColor, sparkSize, sparkRadius, duration, easeFunc, extraScale]);
+  }, [draw, releaseCanvas]);
 
   // 任意点击 → 在该点迸出一圈火花(坐标即视口坐标,与固定画布对齐)。
   useEffect(() => {
     const onClick = (e) => {
+      if (reducedMotionRef.current || e.detail === 0 || sparkCount <= 0 || duration <= 0) return;
+      sizeCanvas();
       const now = performance.now();
       for (let i = 0; i < sparkCount; i++) {
         sparksRef.current.push({
@@ -93,14 +132,19 @@ export default function ClickSpark({
           startTime: now,
         });
       }
+      if (rafRef.current === null) {
+        rafRef.current = requestAnimationFrame(draw);
+      }
     };
     window.addEventListener("click", onClick);
     return () => window.removeEventListener("click", onClick);
-  }, [sparkCount]);
+  }, [sparkCount, duration, draw, sizeCanvas]);
 
   return (
     <canvas
       ref={canvasRef}
+      width="1"
+      height="1"
       aria-hidden="true"
       style={{
         position: "fixed",

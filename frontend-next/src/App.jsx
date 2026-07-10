@@ -85,6 +85,7 @@ export default function App() {
       zIndex={300}
       bgColor="#221c16"
       loadingText="沐言"
+      respectReducedMotion
     >
       {ready && (
         <Routes>
@@ -102,7 +103,7 @@ export default function App() {
             }
           >
             <Route path="/home" element={<Home />} />
-            <Route path="/test" element={<Home testMode />} />
+            <Route path="/test/onboarding" element={<Home testMode />} />
             <Route path="/explore" element={<Explore />} />
             <Route path="/story/:name" element={<StoryDetail />} />
             <Route path="/chat" element={<Chat />} />

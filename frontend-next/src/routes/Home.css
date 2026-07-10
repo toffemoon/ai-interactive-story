@@ -251,6 +251,10 @@
   min-height: 3.2em;
   margin: 0 0 var(--sp-3);
 }
+.home-line-reveal {
+  width: 100%;
+  align-content: flex-start;
+}
 .home-composer {
   display: flex;
   gap: var(--sp-3);
@@ -506,7 +510,15 @@
   position: absolute;
   inset: 0;
   z-index: 6;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
   cursor: pointer;
+}
+.home-ob-introcatch:focus-visible {
+  outline: 2px solid rgba(232, 181, 99, 0.72);
+  outline-offset: -6px;
 }
 
 /* 全屏:整屏点击捕获层(点任意处退出);z 在立绘之上、退出角标之下 */
@@ -536,7 +548,9 @@
   opacity: 1;
 }
 
-/* 全屏态:隐藏全局唤出钮(只留背景+立绘) */
+/* 全屏态:隐藏实际菜单头与续玩浮条(兼容旧 shell-toggle),只留背景+立绘。 */
+.ais-home-fullscreen .staggered-menu-header,
+.ais-home-fullscreen .resume-bar,
 .ais-home-fullscreen .shell-toggle {
   display: none !important;
 }
@@ -593,6 +607,23 @@
   flex-direction: column;
   gap: var(--sp-2);
   margin-top: var(--sp-4);
+}
+.home-switch-animated .animated-list-items {
+  padding: 0;
+}
+.home-switch-animated .animated-list-item-card {
+  overflow: visible;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.home-switch-animated .animated-list-item-content,
+.home-switch-animated .home-switch-item {
+  width: 100%;
+}
+.home-switch-animated .home-switch-item {
+  min-height: 58px;
 }
 .home-switch-item {
   display: flex;
