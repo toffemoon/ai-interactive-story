@@ -2,6 +2,8 @@ import { postJSON } from "./api";
 
 const SETTINGS_KEY = "ais_local_proxy_settings_v1";
 const SESSION_KEY = "ais_local_proxy_key_v1";
+const DEFAULT_ENDPOINT = "http://127.0.0.1:8765/v1";
+const DEFAULT_MODEL = "codex";
 const MAX_FLOW_STEPS = 12;
 const REQUEST_TIMEOUT_MS = 180_000;
 
@@ -20,8 +22,8 @@ export function loadLocalProxySettings() {
   } catch (e) {}
   return {
     source: saved.source === "local_proxy" ? "local_proxy" : "deepseek",
-    endpoint: String(saved.endpoint || ""),
-    model: String(saved.model || ""),
+    endpoint: String(saved.endpoint || DEFAULT_ENDPOINT),
+    model: String(saved.model || DEFAULT_MODEL),
     apiKey: storageGet(sessionStorage, SESSION_KEY),
   };
 }
