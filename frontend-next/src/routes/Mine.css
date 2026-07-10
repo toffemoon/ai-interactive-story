@@ -140,6 +140,65 @@
   gap: var(--sp-3);
 }
 
+/* 模型来源(仅 operator 授权账户可见) */
+.mine-model {
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--line);
+}
+.mine-model .mine-sec-title {
+  margin-bottom: 0;
+}
+.mine-model-segment {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(104px, 1fr));
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.mine-model-segment button {
+  min-height: 36px;
+  padding: 7px 13px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.mine-model-segment button:last-child {
+  border-right: 0;
+}
+.mine-model-segment button.is-on {
+  background: var(--accent-2);
+  color: var(--on-accent);
+}
+.mine-model-fields {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.mine-model-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.mine-model-fields .input {
+  width: 100%;
+}
+.mine-model-fields .btn {
+  align-self: flex-start;
+}
+.mine-model-status {
+  color: var(--accent-2);
+}
+
 /* 存档 */
 .mine-saves {
   display: flex;

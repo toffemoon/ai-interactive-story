@@ -13,7 +13,12 @@ export function getToken() {
 }
 export function setToken(t) {
   try {
-    t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY);
+    if (t) {
+      localStorage.setItem(TOKEN_KEY, t);
+    } else {
+      localStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem("ais_local_proxy_key_v1");
+    }
   } catch (e) {}
 }
 

@@ -371,6 +371,7 @@
 .story-composer {
   flex: none;
   display: flex;
+  flex-wrap: wrap;
   gap: var(--sp-3);
   align-items: stretch; /* 输入框与发送等高,不一高一低(细节⑦) */
   padding: var(--sp-3) var(--sp-5) calc(var(--sp-5) + env(safe-area-inset-bottom));
@@ -378,6 +379,56 @@
   max-width: 760px;
   width: 100%;
   margin: 0 auto;
+}
+.story-model-bar {
+  flex: 0 0 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 32px;
+}
+.story-model-bar > .t-meta {
+  color: var(--muted);
+}
+.story-model-segment {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(82px, 1fr));
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.story-model-segment button {
+  min-height: 30px;
+  padding: 4px 9px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: var(--fs-meta);
+  cursor: pointer;
+}
+.story-model-segment button:last-child {
+  border-right: 0;
+}
+.story-model-segment button.is-on {
+  background: var(--accent-2);
+  color: var(--on-accent);
+}
+.story-model-segment button:disabled,
+.story-model-settings:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.story-model-settings {
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--accent-2);
+  font-family: var(--font-sans);
+  font-size: var(--fs-meta);
+  cursor: pointer;
 }
 .story-composer textarea {
   flex: 1;

@@ -37,17 +37,28 @@ def enabled() -> bool:
 
 # ── 角色:super/admin/user ──────────────────────────────────────────
 # superadmin 由 .env SUPERADMIN_EMAIL 钉死(保证只有一个);admin 由 super 用 set_user_role 提。
+def configured_superadmin_email() -> str:
+    return os.getenv("SUPERADMIN_EMAIL", "").strip().lower()
+
+
+def is_configured_superadmin(row) -> bool:
+    su = configured_superadmin_email()
+    try:
+        email = (row["email"] or "").strip().lower()
+    except (KeyError, TypeError, AttributeError):
+        return False
+    return bool(su) and email == su
+
+
 def effective_role(row) -> str:
-    """按 .env SUPERADMIN_EMAIL 钉 super,否则取库里的 role 列。"""
-    su = os.getenv("SUPERADMIN_EMAIL", "").strip().lower()
-    email = (row["email"] or "").strip().lower() if row["email"] else ""
-    if su and email == su:
+    """只有 .env 指定邮箱是 superadmin;数据库只能授予 admin / user。"""
+    if is_configured_superadmin(row):
         return "superadmin"
     try:
         role = row["role"]
     except (KeyError, TypeError):
         role = "user"
-    return role if role in _ROLE_RANK else "user"
+    return role if role in ("admin", "user") else "user"
 
 
 def role_at_least(role: str, minimum: str) -> bool:
@@ -64,6 +75,29 @@ def set_user_role(identifier: str, role: str) -> bool:
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute("update users set role = %s where id = %s::uuid", (role, uid))
+        return cur.rowcount > 0
+
+
+def set_local_proxy_enabled(identifier: str, enabled: bool) -> bool:
+    """指定 superadmin 用:授权/撤销某用户从浏览器调用自己本机的模型反代。"""
+    identifier = (identifier or "").strip()
+    if not identifier:
+        return False
+    pool = get_pool()
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            "select id, email from users where username = %s or email = %s or id::text = %s limit 1",
+            (identifier, identifier.lower(), identifier),
+        )
+        target = cur.fetchone()
+        if not target:
+            return False
+        if is_configured_superadmin(target) and not enabled:
+            raise HTTPException(400, "superadmin 的 Codex 本机反代权限不可撤销")
+        cur.execute(
+            "update users set local_proxy_enabled = %s where id = %s::uuid",
+            (bool(enabled), str(target["id"])),
+        )
         return cur.rowcount > 0
 
 
@@ -93,15 +127,23 @@ def _token_hash(token: str) -> str:
 
 def _row_to_user(r) -> dict:
     role = effective_role(r)
+    local_proxy_enabled = (
+        role == "superadmin"
+        or (bool(r["local_proxy_enabled"]) if "local_proxy_enabled" in r.keys() else False)
+    )
     return {"id": str(r["id"]), "username": r["username"], "email": r["email"],
             "display_name": r["display_name"], "role": role,
             "is_admin": role in ("admin", "superadmin"),
+            "local_proxy_enabled": local_proxy_enabled,
             "email_verified": bool(r["email_verified_at"]) if "email_verified_at" in r.keys() else True,
             "avatar": (r["avatar"] if "avatar" in r.keys() else None),
             "status": r["status"]}
 
 
-_USER_COLS = "id, username, email, display_name, role, email_verified_at, status, avatar"
+_USER_COLS = (
+    "id, username, email, display_name, role, email_verified_at, status, avatar, "
+    "local_proxy_enabled"
+)
 
 
 # ── 用户 CRUD / 认证 ─────────────────────────────────────────────────
@@ -182,7 +224,8 @@ def resolve_token(token: str) -> dict | None:
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(
-            """select u.id, u.username, u.email, u.display_name, u.role, u.email_verified_at, u.status
+            """select u.id, u.username, u.email, u.display_name, u.role, u.email_verified_at, u.status,
+                      u.local_proxy_enabled
                from auth_tokens t join users u on u.id = t.user_id
                where t.token_hash = %s and t.revoked_at is null and t.expires_at > now()""",
             (_token_hash(token),),
@@ -258,7 +301,7 @@ def list_users() -> list[dict]:
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(
             """select u.id, u.username, u.email, u.display_name, u.role, u.email_verified_at, u.status,
-                      u.created_at,
+                      u.local_proxy_enabled, u.created_at,
                       (select count(*) from sessions s where s.user_id = u.id) as sessions
                from users u order by u.created_at"""
         )

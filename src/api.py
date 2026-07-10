@@ -6,6 +6,7 @@
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -13,11 +14,12 @@ import re
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .identify import (
     build_card,
@@ -29,7 +31,12 @@ from .identify import (
     identify_worldbook,
 )
 from .chat import reply
-from .llm import collect_usage
+from .llm import (
+    DeferredLLMCall,
+    DeferredReplayMismatch,
+    collect_usage,
+    deferred_backend,
+)
 from .models import CharacterCard, PlayerCard, RuntimeState, StoryBook, WorldBook
 from .parsers import parse_character
 from .story import story_turn
@@ -129,6 +136,31 @@ class ReRollReq(BaseModel):
     session_id: str
 
 
+class LocalProxyAnswer(BaseModel):
+    request_id: str = Field(min_length=64, max_length=64)
+    content: str = Field(max_length=200_000)
+    usage: dict[str, Any] = Field(default_factory=dict)
+
+
+class LocalProxyTurnReq(BaseModel):
+    turn: StoryTurnReq
+    answers: list[LocalProxyAnswer] = Field(default_factory=list)
+    revision: str = Field(default="", max_length=64)
+    flow_id: str = Field(default="", max_length=64)
+
+
+class LocalProxyRerollReq(BaseModel):
+    session_id: str
+    answers: list[LocalProxyAnswer] = Field(default_factory=list)
+    revision: str = Field(default="", max_length=64)
+    flow_id: str = Field(default="", max_length=64)
+
+
+class LocalProxyAccessReq(BaseModel):
+    user: str
+    enabled: bool
+
+
 # ── 账户系统(AUTH_ENABLED 门控;关时全程不影响现有行为)──────────────────
 async def current_user_dep(authorization: str | None = Header(None),
                            x_auth_token: str | None = Header(None)) -> dict | None:
@@ -174,6 +206,76 @@ def require_role(min_role: str):
             raise HTTPException(403, f"需要 {min_role} 权限")
         return user
     return dep
+
+
+async def require_configured_superadmin(
+    authorization: str | None = Header(None),
+    x_auth_token: str | None = Header(None),
+) -> dict:
+    """只允许 SUPERADMIN_EMAIL 指定的唯一账户执行敏感授权。"""
+    user = await asyncio.to_thread(auth.current_user, authorization, x_auth_token)
+    if user is None:
+        raise HTTPException(401, "请先登录")
+    if not auth.is_configured_superadmin(user):
+        raise HTTPException(403, "只有指定 superadmin 可以管理 Codex 本机反代授权")
+    return user
+
+
+_LOCAL_PROXY_MAX_STEPS = 12
+_LOCAL_PROXY_MAX_OUTPUT_CHARS = 200_000
+
+
+def _require_local_proxy(user: dict | None) -> dict:
+    if user is None:
+        raise HTTPException(401, "请先登录")
+    if not user.get("local_proxy_enabled"):
+        raise HTTPException(403, "该账户未开通 Codex 本机反代")
+    return user
+
+
+def _session_revision(data: dict[str, Any]) -> str:
+    raw = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _local_flow_id(kind: str, user_id: str, revision: str, payload: dict[str, Any]) -> str:
+    raw = json.dumps(
+        {"kind": kind, "user_id": user_id, "revision": revision, "payload": payload},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _local_flow_context(kind: str, user: dict, snapshot: dict[str, Any], payload: dict[str, Any],
+                        revision: str, flow_id: str, answers: list[LocalProxyAnswer]) -> tuple[str, str]:
+    current_revision = _session_revision(snapshot)
+    expected_flow = _local_flow_id(kind, user["id"], current_revision, payload)
+    if bool(revision) != bool(flow_id):
+        raise HTTPException(409, "本机模型回合凭据不完整,请重新发送")
+    if revision:
+        if revision != current_revision:
+            raise HTTPException(409, "该存档已发生变化,请重新生成本轮")
+        if flow_id != expected_flow:
+            raise HTTPException(409, "本机模型回合与当前输入不匹配,请重新发送")
+    elif answers:
+        raise HTTPException(400, "缺少本机模型回合凭据")
+    if len(answers) > _LOCAL_PROXY_MAX_STEPS:
+        raise HTTPException(422, "本机模型调用步骤过多,已停止本轮")
+    total_chars = 0
+    for answer in answers:
+        if len(answer.content) > _LOCAL_PROXY_MAX_OUTPUT_CHARS:
+            raise HTTPException(413, "本机模型单次输出过大")
+        total_chars += len(answer.content)
+    if total_chars > 600_000:
+        raise HTTPException(413, "本机模型本轮累计输出过大")
+    return current_revision, expected_flow
+
+
+def _local_answers(answers: list[LocalProxyAnswer]) -> list[dict[str, Any]]:
+    return [answer.model_dump() for answer in answers]
 
 
 class SendCodeReq(BaseModel):
@@ -270,6 +372,17 @@ def api_set_role(req: SetRoleReq, actor: dict = Depends(require_role("superadmin
     if not auth.set_user_role(req.user, req.role):
         raise HTTPException(404, f"找不到用户:{req.user}")
     return {"ok": True, "user": req.user, "role": req.role}
+
+
+@app.post("/api/operator/local_proxy_access")
+def api_operator_local_proxy_access(
+    req: LocalProxyAccessReq,
+    _actor: dict = Depends(require_configured_superadmin),
+):
+    """仅指定 superadmin 可按账户开关 Codex 本机反代能力;默认关闭。"""
+    if not auth.set_local_proxy_enabled(req.user, req.enabled):
+        raise HTTPException(404, f"找不到用户:{req.user}")
+    return {"ok": True, "user": req.user, "enabled": req.enabled}
 
 
 @app.post("/api/auth/logout")
@@ -720,6 +833,108 @@ async def api_story_turn_stream(req: StoryTurnReq, request: Request,
 
     return StreamingResponse(event_stream(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.post("/api/local_proxy/story_turn")
+async def api_local_proxy_story_turn(req: LocalProxyTurnReq,
+                                     user: dict | None = Depends(current_user_dep)):
+    """授权用户专用:服务端编排故事引擎,每个 LLM 调用交给浏览器去请求玩家本机反代。"""
+    actor = _require_local_proxy(user)
+    if not req.turn.characters:
+        raise HTTPException(400, "至少需要一个角色卡")
+    await asyncio.to_thread(auth.authorize_session, req.turn.session_id, actor)
+    snapshot = await asyncio.to_thread(storage.load_session, req.turn.session_id)
+    turn_payload = req.turn.model_dump(mode="json")
+    revision, flow_id = _local_flow_context(
+        "story_turn", actor, snapshot, turn_payload,
+        req.revision, req.flow_id, req.answers,
+    )
+    try:
+        with deferred_backend(_local_answers(req.answers)):
+            out = await story_turn(
+                session_id=req.turn.session_id,
+                characters=req.turn.characters,
+                user=req.turn.user,
+                selected_choice=req.turn.selected_choice,
+                world=req.turn.world,
+                story=req.turn.story,
+                player=req.turn.player,
+                mode=req.turn.mode,
+                session_data=snapshot,
+            )
+    except DeferredLLMCall as call:
+        if call.index >= _LOCAL_PROXY_MAX_STEPS:
+            raise HTTPException(422, "本机模型调用步骤过多,已停止本轮")
+        return {
+            "status": "needs_llm",
+            "revision": revision,
+            "flow_id": flow_id,
+            "call": call.as_dict(),
+        }
+    except DeferredReplayMismatch as e:
+        raise HTTPException(409, str(e))
+    except Exception:
+        log.exception("local proxy story_turn failed (session=%s)", req.turn.session_id)
+        raise HTTPException(502, "本机模型回合处理失败,请重试")
+    return {"status": "done", "turn": _display_clean(out.model_dump())}
+
+
+@app.post("/api/local_proxy/reroll")
+async def api_local_proxy_reroll(req: LocalProxyRerollReq,
+                                 user: dict | None = Depends(current_user_dep)):
+    """授权用户专用:重生成也完整走玩家本机反代,不会回落到 Render 的 DeepSeek。"""
+    actor = _require_local_proxy(user)
+    await asyncio.to_thread(auth.authorize_session, req.session_id, actor)
+    current = await asyncio.to_thread(storage.load_session, req.session_id)
+    reroll = current.get("_reroll")
+    if not isinstance(reroll, dict) or not isinstance(reroll.get("snapshot"), dict):
+        raise HTTPException(400, "当前没有可重新生成的回合")
+    art = current.get("artifacts") or reroll["snapshot"].get("artifacts") or {}
+    raw_chars = art.get("characters") or []
+    if not raw_chars:
+        raise HTTPException(400, "缺少角色卡快照,无法重新生成")
+    try:
+        characters = [CharacterCard(**c) for c in raw_chars]
+        world = WorldBook(**art["world"]) if art.get("world") else None
+        story_book = StoryBook(**art["story"]) if art.get("story") else None
+        player = PlayerCard(**art["player"]) if art.get("player") else None
+    except Exception:
+        log.exception("local proxy reroll 卡组快照解析失败 (session=%s)", req.session_id)
+        raise HTTPException(500, "卡组快照解析失败,请稍后再试")
+
+    payload = {"session_id": req.session_id}
+    revision, flow_id = _local_flow_context(
+        "reroll", actor, current, payload,
+        req.revision, req.flow_id, req.answers,
+    )
+    try:
+        with deferred_backend(_local_answers(req.answers)):
+            out = await story_turn(
+                session_id=req.session_id,
+                characters=characters,
+                user=reroll.get("user", ""),
+                selected_choice=reroll.get("choice", ""),
+                world=world,
+                story=story_book,
+                player=player,
+                mode=reroll.get("mode") or art.get("mode") or "standard",
+                session_data=reroll["snapshot"],
+            )
+    except DeferredLLMCall as call:
+        if call.index >= _LOCAL_PROXY_MAX_STEPS:
+            raise HTTPException(422, "本机模型调用步骤过多,已停止重生成")
+        return {
+            "status": "needs_llm",
+            "revision": revision,
+            "flow_id": flow_id,
+            "call": call.as_dict(),
+        }
+    except DeferredReplayMismatch as e:
+        raise HTTPException(409, str(e))
+    except Exception:
+        log.exception("local proxy reroll failed (session=%s)", req.session_id)
+        raise HTTPException(502, "本机模型重生成处理失败,请重试")
+    return {"status": "done", "turn": _display_clean(out.model_dump())}
 
 
 @app.post("/api/reroll")

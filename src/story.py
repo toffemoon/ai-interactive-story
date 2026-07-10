@@ -18,7 +18,14 @@ _TZ8 = timezone(timedelta(hours=8))  # 存档时间戳走北京时间
 
 from . import memory, storage
 from .adapters import ContextBundle, get_adapter
-from .llm import achat_messages, achat_messages_stream, chat_messages, collect_usage, current_usage
+from .llm import (
+    DeferredLLMControl,
+    achat_messages,
+    achat_messages_stream,
+    chat_messages,
+    collect_usage,
+    current_usage,
+)
 from .models import (
     CharacterCard,
     EventTimelineItem,
@@ -685,6 +692,8 @@ async def _extract_long_memory(session_id: str, short_items: list[dict],
             model=get_adapter().select_model("memory_extract"),
         )
         obj = _json_obj(raw)
+    except DeferredLLMControl:
+        raise
     except Exception:
         return _local_long_memory(short_items)
     out = []
@@ -1366,6 +1375,8 @@ async def _rolling_summary(session_id: str, data: dict[str, Any], older_messages
             max_tokens=600,
             model=get_adapter().select_model("summary"),
         )).strip()
+    except DeferredLLMControl:
+        raise
     except Exception:
         summary = cached or "(早前剧情摘要暂不可用,以下仅凭最近剧情推进。)"
     summary = summary[:SUMMARY_MAX_CHARS]
@@ -1459,6 +1470,10 @@ async def _save_turn(
     user_msg = {"role": "user", "content": action}
     assistant_msg = {"role": "assistant", "content": assistant_text}
     messages.extend([user_msg, assistant_msg])
+    short_memory.extend([user_msg, assistant_msg])
+    # 本机代理的记忆抽取可能暂停 HTTP 流程。先完成这一步,再写向量副作用,
+    # 保证浏览器续跑时仍从同一份外部状态重放,不会召回半个未落盘回合。
+    short_memory = await _flush_short_memory(session_id, data, short_memory, mode, roster, entity_labels)
     # Phase 3:把"本轮在场"随对话轮存进向量 meta(供召回时标注 [当时在场:…],让缺席角色认忘)。
     pres = (data.get("_present_names") or []) if PHASE3_KNOWERS else None
     idx_u, idx_a = len(messages) - 2, len(messages) - 1
@@ -1468,9 +1483,7 @@ async def _save_turn(
         tp[str(idx_a)] = pres
     await asyncio.to_thread(memory.add_turn, session_id, idx_u, "user", action, pres)
     await asyncio.to_thread(memory.add_turn, session_id, idx_a, "assistant", assistant_text, pres)
-    short_memory.extend([user_msg, assistant_msg])
     await asyncio.to_thread(_store_memory_writes, session_id, data, turn)
-    short_memory = await _flush_short_memory(session_id, data, short_memory, mode, roster, entity_labels)
     data["messages"] = messages
     data["short_memory"] = short_memory
     data["state"] = state.model_dump()
@@ -1515,6 +1528,7 @@ async def story_turn(
     selected_choice: str = "",
     mode: str = "standard",
     on_delta=None,
+    session_data: dict[str, Any] | None = None,
 ) -> StoryTurn:
     """对外入口(异步):在 token 用量收集上下文内执行一回合(本轮内部多次 LLM 调用都会累加)。
 
@@ -1531,6 +1545,7 @@ async def story_turn(
             selected_choice=selected_choice,
             mode=mode,
             on_delta=on_delta,
+            session_data=session_data,
         )
 
 
@@ -1603,10 +1618,12 @@ async def _story_turn_impl(
     selected_choice: str = "",
     mode: str = "standard",
     on_delta=None,
+    session_data: dict[str, Any] | None = None,
 ) -> StoryTurn:
     # 角色卡 > DEEP_AUTO_CHAR_COUNT(群像剧)→ 自动深度模式;调用方已指定 deep 时保持不降级。
     mode = "deep" if (mode == "deep" or len(characters) > DEEP_AUTO_CHAR_COUNT) else "standard"
-    data = await asyncio.to_thread(storage.load_session, session_id)
+    data = (copy.deepcopy(session_data) if session_data is not None
+            else await asyncio.to_thread(storage.load_session, session_id))
     # 重 roll 快照:回合落盘前先存一份「上一轮之后」的完整会话镜像(排除 _reroll 本身防嵌套膨胀)。
     # 重 roll = 恢复这份镜像 + 用相同输入重跑;覆盖 messages/state/short_memory/long_memory/摘要/累计用量等。
     pre_snapshot = copy.deepcopy({k: v for k, v in data.items() if k != "_reroll"})
@@ -1786,6 +1803,8 @@ async def _story_turn_impl(
         # 2400 给三角色满状态回合留出余量:1800 时大场面会把 JSON 截断在中途,导致解析失败掉保底。
         # 流式:逐块 await on_delta(供前端逐字显示叙事);on_delta 为 None 时纯累计,逻辑与非流式一致。
         raw = await adapter.complete_main(bundle, json_mode=True, max_tokens=2400, on_delta=on_delta)
+    except DeferredLLMControl:
+        raise
     except Exception as e:
         turn = _local_continuation_turn(action, state, characters, reason=f"LLM 调用失败:{e}")
         state = _apply_state_update(state, turn.state_update, player.name if player else "")
@@ -1806,6 +1825,8 @@ async def _story_turn_impl(
             data.setdefault("debug", []).append({"turn": len(messages), "raw": retry_raw[:4000], "retry": True})
             data["debug"] = data["debug"][-8:]
             raw = retry_raw
+        except DeferredLLMControl:
+            raise
         except Exception as e:
             turn = _local_continuation_turn(action, state, characters, reason=f"空白输出且重试失败:{e}")
             state = _apply_state_update(state, turn.state_update, player.name if player else "")
@@ -1815,6 +1836,8 @@ async def _story_turn_impl(
                             player_input=(raw_user or raw_choice), roster=roster, entity_labels=ent_labels)
     try:
         obj = await _repair_json(raw)
+    except DeferredLLMControl:
+        raise
     except Exception:
         obj = None
     if not isinstance(obj, dict):
@@ -1831,6 +1854,8 @@ async def _story_turn_impl(
             data.setdefault("debug", []).append({"turn": len(messages), "raw": raw2[:4000], "reparse": True})
             data["debug"] = data["debug"][-8:]
             obj = await _repair_json(raw2)
+        except DeferredLLMControl:
+            raise
         except Exception as e:
             obj = None
             reason = f"重生成后仍解析失败:{e}"

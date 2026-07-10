@@ -85,7 +85,8 @@ create table if not exists users (
   status            text          not null default 'active',  -- active / blocked
   created_at        timestamptz   not null default now(),
   last_seen_at      timestamptz,
-  avatar            text                                       -- data URI jpeg/png/webp <=200KB(见 migrations/2026-06-10-users-avatar.sql;PROD 已建)
+  avatar            text,                                      -- data URI jpeg/png/webp <=200KB(见 migrations/2026-06-10-users-avatar.sql;PROD 已建)
+  local_proxy_enabled boolean       not null default false      -- operator 按账户授权浏览器本机反代
 );
 
 -- 不透明 token 会话(登出/吊销=UPDATE;库里只存 sha256(token+pepper))
