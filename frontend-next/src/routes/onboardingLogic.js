@@ -244,7 +244,7 @@ export function extractNameFromAiFieldText(raw) {
 
 export function sanitizeCardMessage(raw) {
   let text = String(raw || "").trim();
-  const actionCue = /(抬头|低头|回头|看你|望向|笑|弯弯|眨眼|歪头|点头|摇头|递|凑|轻声|眼角|耳朵|尾巴|手指)/;
+  const actionCue = /(抬头|低头|回头|看你|望向|眨眼|歪头|点头|摇头|递|凑|轻声|眼角|耳朵|尾巴|手指|(?:^|[，,、\s])(?:微笑|轻笑|笑(?:了笑|着|起来|了一下)?)(?=$|[，,。！？!?\s]))/;
   while (text) {
     const match = text.match(/^(?:[（(]([^（）()\n]{1,48})[）)]|[*＊]([^*＊\n]{1,48})[*＊])\s*/);
     if (!match || !actionCue.test(match[1] || match[2] || "")) break;

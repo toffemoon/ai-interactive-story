@@ -262,6 +262,7 @@ test("removes consecutive leading action spans from card messages", () => {
     sanitizeCardMessage("（抬头看你）*轻声笑了笑* 月客,愿你总能遇见想读的故事。"),
     "月客,愿你总能遇见想读的故事。",
   );
+  assert.equal(sanitizeCardMessage("（抬头看你，眼角弯弯）愿你读得尽兴。"), "愿你读得尽兴。");
   assert.equal(sanitizeCardMessage("（点头）＊轻声笑了笑＊"), "");
 });
 
@@ -271,6 +272,10 @@ test("preserves ordinary and internal parentheses in card messages", () => {
     "愿你总能找到那本书（也找到自己）。",
   );
   assert.equal(sanitizeCardMessage("（第一版）愿你读得尽兴。"), "（第一版）愿你读得尽兴。");
+});
+
+test("preserves a parenthesized book title at the start of a card message", () => {
+  assert.equal(sanitizeCardMessage("（笑傲江湖）愿你读得尽兴。"), "（笑傲江湖）愿你读得尽兴。");
 });
 
 test("extracts structured taste metadata only from the first line", () => {
