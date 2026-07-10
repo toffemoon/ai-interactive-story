@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useNavigate } from "../lib/transitionNav";
 import { Chip, SearchField, Button, Badge, Tag, CardShelf } from "../components/ui";
 import { getJSON } from "../lib/api";
@@ -23,13 +24,74 @@ const SORTS = [
   { key: "heat", label: "热度", live: false },
   { key: "clicks", label: "点击", live: false },
 ];
+const LIVE_SORTS = SORTS.filter((item) => item.live);
 
 const PAGE_SIZE = 15;
+const SKELETON_COUNT = 12;
+
+function SegmentedControl({ id, items, value, onChange, label, reducedMotion }) {
+  return (
+    <div className="explore-segmented" role="group" aria-label={label}>
+      {items.map((item) => {
+        const active = value === item.key;
+        return (
+          <button
+            key={item.key}
+            type="button"
+            className={active ? "is-active" : ""}
+            aria-pressed={active}
+            onClick={() => onChange(item.key)}
+          >
+            {active ? (
+              <motion.span
+                className="explore-segmented-active"
+                layoutId={`explore-segmented-${id}`}
+                transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 38, mass: 0.62 }}
+              />
+            ) : null}
+            <span className="explore-segmented-label">{item.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function AnimatedNumber({ value, reducedMotion }) {
+  return (
+    <AnimatePresence initial={false} mode="popLayout">
+      <motion.b
+        key={value}
+        initial={reducedMotion ? false : { opacity: 0, y: 5 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={reducedMotion ? { opacity: 1 } : { opacity: 0, y: -5 }}
+        transition={{ duration: reducedMotion ? 0 : 0.18 }}
+      >
+        {value}
+      </motion.b>
+    </AnimatePresence>
+  );
+}
+
+function ExploreSkeleton() {
+  return (
+    <div className="card-shelf explore-skeleton" aria-hidden="true">
+      {Array.from({ length: SKELETON_COUNT }, (_, index) => (
+        <div className="explore-skeleton-card" key={index}>
+          <span className="explore-skeleton-cover" />
+          <span className="explore-skeleton-line" />
+          <span className="explore-skeleton-line is-short" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function Explore() {
   const navigate = useNavigate();
   const [presets, setPresets] = useState([]);
   const [chars, setChars] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState(false);
   const [track, setTrack] = useState("all");
   const [q, setQ] = useState("");
@@ -37,6 +99,11 @@ export default function Explore() {
   const [sort, setSort] = useState("composite");
   const [page, setPage] = useState(1);
   const [detail, setDetail] = useState(null); // CardModel | null
+  const deferredQ = useDeferredValue(q);
+  const reducedMotion = Boolean(useReducedMotion());
+  const resultsRef = useRef(null);
+  const dialogRef = useRef(null);
+  const dialogCloseRef = useRef(null);
   // 收藏(本机;个人中心「收藏」读同一份)。存原始项,按归一化 id 去重。
   const [favs, setFavs] = useState(() => {
     try {
@@ -46,19 +113,67 @@ export default function Explore() {
     }
   });
 
-  function refresh() {
+  async function refresh() {
     setLoadErr(false);
-    getJSON("/api/presets")
-      .then((rows) => setPresets(Array.isArray(rows) ? rows : []))
-      .catch(() => setLoadErr(true));
+    setLoading(true);
+    const [presetResult, charResult] = await Promise.allSettled([
+      getJSON("/api/presets"),
+      getJSON("/api/library/characters"),
+    ]);
+
+    if (presetResult.status === "fulfilled") {
+      setPresets(Array.isArray(presetResult.value) ? presetResult.value : []);
+    } else {
+      setPresets([]);
+      setLoadErr(true);
+    }
     // 角色卡轨道:库读取失败不致命(故事轨仍可用),静默退回空。
-    getJSON("/api/library/characters")
-      .then((rows) => setChars(Array.isArray(rows) ? rows : []))
-      .catch(() => setChars([]));
+    setChars(charResult.status === "fulfilled" && Array.isArray(charResult.value) ? charResult.value : []);
+    setLoading(false);
   }
   useEffect(() => {
     refresh();
   }, []);
+
+  useEffect(() => {
+    if (!detail) return undefined;
+
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    const focusRaf = requestAnimationFrame(() => dialogCloseRef.current?.focus());
+    document.body.style.overflow = "hidden";
+
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setDetail(null);
+        return;
+      }
+      if (event.key !== "Tab" || !dialogRef.current) return;
+
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])')
+      ).filter((element) => element.getClientRects().length > 0);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      cancelAnimationFrame(focusRaf);
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus && typeof previousFocus.focus === "function") previousFocus.focus();
+    };
+  }, [detail]);
 
   // 两轨归一化为统一 CardModel(角标/竖卡/翻面全由统一 Card 负责)。
   const storyModels = useMemo(() => toCardModels("story", presets), [presets]);
@@ -87,7 +202,7 @@ export default function Explore() {
   }, [trackModels]);
 
   const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
+    const s = deferredQ.trim().toLowerCase();
     let xs = trackModels.filter((m) => {
       const inGenre = genre === "全部" || (m.tags || []).includes(genre);
       const inQ =
@@ -106,15 +221,24 @@ export default function Explore() {
       });
     }
     return xs;
-  }, [trackModels, q, genre, sort]);
+  }, [trackModels, deferredQ, genre, sort]);
 
   // 分页(卡数限制 YOR-39:一页固定张数,翻页;不再一页平铺全部)。
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const curPage = Math.min(page, pageCount);
   const shown = filtered.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
+  const resultMotionKey = `${track}:${genre}:${sort}:${curPage}`;
+  const searchPending = q !== deferredQ;
   useEffect(() => {
     setPage(1);
   }, [track, q, genre, sort]);
+
+  function changePage(nextPage) {
+    setPage(nextPage);
+    requestAnimationFrame(() => {
+      resultsRef.current?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+    });
+  }
 
   // —— 卡片去向 ——
   // 完整故事 → 介绍页(选主角三选一 + 涟漪入局);直接开玩的捷径收敛进详情页。
@@ -177,136 +301,171 @@ export default function Explore() {
             <h1 className="t-display">探索</h1>
             <p className="t-ui explore-sub">取下一本书,或挑一张角色卡,走进会回应你的故事世界。</p>
           </div>
-          <div className="explore-count t-ui-sm">
-            {filtering ? (
+          <div className="explore-count t-ui-sm" aria-live="polite" aria-atomic="true">
+            {loading ? (
+              <span>正在整理书架</span>
+            ) : filtering ? (
               <>
-                匹配 <b>{filtered.length}</b> / 共 {totalCount} 个
+                匹配 <AnimatedNumber value={filtered.length} reducedMotion={reducedMotion} /> / 共 {totalCount} 个
               </>
             ) : (
               <>
-                共 <b>{totalCount}</b> 个故事 / 角色
+                共 <AnimatedNumber value={totalCount} reducedMotion={reducedMotion} /> 个故事 / 角色
               </>
             )}
           </div>
         </div>
 
-        {/* 双轨切换。切轨道时标签重置回「全部」:旧标签常不在新轨道的标签条里,
-            留着会变成看不见的过滤器把列表筛空(YOR-178)。 */}
-        <div className="explore-tracks">
-          {TRACKS.map((t) => (
-            <Chip key={t.key} active={track === t.key} onClick={() => { setTrack(t.key); setGenre("全部"); }}>
-              {t.label}
-            </Chip>
-          ))}
-        </div>
-
-        <div className="explore-bar">
-          <SearchField
-            placeholder="搜:名字 / 简介 / 作者 / 标签"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-          <div className="explore-sorts">
-            {SORTS.map((s) => (
-              <Chip
-                key={s.key}
-                active={sort === s.key}
-                disabled={!s.live}
-                title={s.live ? undefined : "还在攒数据,暂未开放"}
-                className={s.live ? "" : "is-disabled"}
-                onClick={s.live ? () => setSort(s.key) : undefined}
-              >
-                {s.label}
-              </Chip>
-            ))}
+        <section className="explore-controls" aria-label="探索筛选">
+          <div className="explore-primary-controls">
+            <SegmentedControl
+              id="track"
+              items={TRACKS}
+              value={track}
+              label="内容类型"
+              reducedMotion={reducedMotion}
+              onChange={(nextTrack) => {
+                setTrack(nextTrack);
+                setGenre("全部");
+              }}
+            />
+            <SearchField
+              className="explore-search"
+              aria-label="搜索故事或角色"
+              placeholder="搜索名字、简介、作者或标签"
+              value={q}
+              onChange={(event) => setQ(event.target.value)}
+              onClear={() => setQ("")}
+            />
+            <SegmentedControl
+              id="sort"
+              items={LIVE_SORTS}
+              value={sort}
+              label="排序方式"
+              reducedMotion={reducedMotion}
+              onChange={setSort}
+            />
           </div>
-          {/* 禁用排序的解释:title 在触屏上不可见,补一行可见说明;live 全开后自动消失 */}
-          {SORTS.some((s) => !s.live) && (
-            <span className="explore-sorts-note t-meta">热度 / 点击 还在攒数据,暂未开放</span>
+
+          {genreChips.length > 1 ? (
+            <div className="explore-genres" role="group" aria-label="题材筛选">
+              {genreChips.map((item) => (
+                <Chip key={item} active={genre === item} onClick={() => setGenre(item)}>
+                  {item === "全部" ? "所有题材" : item}
+                </Chip>
+              ))}
+            </div>
+          ) : null}
+        </section>
+
+        <div ref={resultsRef} className="explore-results" aria-busy={loading || searchPending}>
+          <span className="explore-status-sr" role="status" aria-live="polite">
+            {loading ? "正在加载探索内容" : searchPending ? "正在筛选" : `显示 ${shown.length} 条内容`}
+          </span>
+          {loading ? (
+            <ExploreSkeleton />
+          ) : loadErr && !totalCount ? (
+            <div className="explore-empty">
+              <h3 className="t-h2">书架加载失败</h3>
+              <p className="t-ui explore-sub">没能从服务器取到列表,可能是网络抖动或服务暂不可用。</p>
+              <Button variant="primary" onClick={refresh}>点击重试</Button>
+            </div>
+          ) : !filtered.length ? (
+            <div className="explore-empty">
+              <h3 className="t-h2">{totalCount ? "没有匹配的内容" : "书架还空着"}</h3>
+              <p className="t-ui explore-sub">{totalCount ? "换个关键词、标签或类型试试。" : "去创作从一张角色卡开始。"}</p>
+            </div>
+          ) : (
+            <>
+              <AnimatePresence initial={false} mode="wait">
+                <motion.div
+                  key={resultMotionKey}
+                  className="explore-grid-motion"
+                  initial={reducedMotion ? false : { opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={reducedMotion ? { opacity: 1 } : { opacity: 0, y: -6 }}
+                  transition={{ duration: reducedMotion ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <CardShelf
+                    models={shown.map((model) => (isFav(model) ? { ...model, fav: true } : model))}
+                    actionsFor={actionsFor}
+                    onOpen={(model) => (model.kind === "story" ? goDetail(model) : setDetail(model))}
+                    eagerCount={2}
+                  />
+                </motion.div>
+              </AnimatePresence>
+              {pageCount > 1 ? (
+                <div className="explore-pager">
+                  <Button variant="line" disabled={curPage <= 1} onClick={() => changePage(Math.max(1, curPage - 1))}>
+                    上一页
+                  </Button>
+                  <span className="explore-pager-info t-ui-sm" aria-label={`第 ${curPage} 页,共 ${pageCount} 页`}>
+                    {curPage} / {pageCount}
+                  </span>
+                  <Button variant="line" disabled={curPage >= pageCount} onClick={() => changePage(Math.min(pageCount, curPage + 1))}>
+                    下一页
+                  </Button>
+                </div>
+              ) : null}
+            </>
           )}
         </div>
-
-        {/* 标签筛选(真实存在的标签) */}
-        {genreChips.length > 1 && (
-          <div className="explore-genres">
-            {genreChips.map((c) => (
-              <Chip key={c} active={genre === c} onClick={() => setGenre(c)}>
-                {c}
-              </Chip>
-            ))}
-          </div>
-        )}
-
-        <div className="explore-rule" aria-hidden="true" />
-
-        {loadErr && !presets.length ? (
-          <div className="explore-empty">
-            <h3 className="t-h2">书架加载失败</h3>
-            <p className="t-ui explore-sub">没能从服务器取到列表,可能是网络抖动或服务暂不可用。</p>
-            <Button variant="primary" onClick={refresh}>
-              点击重试
-            </Button>
-          </div>
-        ) : !filtered.length ? (
-          <div className="explore-empty">
-            <h3 className="t-h2">{totalCount ? "没有匹配的内容" : "书架还空着"}</h3>
-            <p className="t-ui explore-sub">{totalCount ? "换个关键词、标签或类型试试。" : "去创作从一张角色卡开始。"}</p>
-          </div>
-        ) : (
-          <>
-            <CardShelf
-              models={shown.map((m) => (isFav(m) ? { ...m, fav: true } : m))} /* 已收藏点亮书签(YOR-171) */
-              actionsFor={actionsFor}
-              onOpen={(m) => (m.kind === "story" ? goDetail(m) : setDetail(m))}
-            />
-            {pageCount > 1 && (
-              <div className="explore-pager">
-                <Button variant="line" disabled={curPage <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                  上一页
-                </Button>
-                <span className="explore-pager-info t-ui-sm">
-                  {curPage} / {pageCount}
-                </span>
-                <Button variant="line" disabled={curPage >= pageCount} onClick={() => setPage((p) => Math.min(pageCount, p + 1))}>
-                  下一页
-                </Button>
-              </div>
-            )}
-          </>
-        )}
       </div>
 
-      {detail && (
-        <div className="explore-modal" onClick={() => setDetail(null)}>
-          <div className="explore-modal-card" onClick={(e) => e.stopPropagation()}>
-            <button className="explore-modal-x" onClick={() => setDetail(null)} aria-label="关闭">
-              ×
-            </button>
-            <Badge tone={detail.badge.tone}>{detail.badge.label}</Badge>
-            <h2 className="t-h1 explore-modal-title">{detail.title}</h2>
-            <p className="t-read explore-modal-blurb">{detail.blurb}</p>
-            {(detail.tags || []).length > 0 && (
-              <div className="explore-modal-tags">
-                {(detail.tags || []).map((t, i) => (
-                  <Tag key={i}>{t}</Tag>
-                ))}
+      <AnimatePresence>
+        {detail ? (
+          <motion.div
+            className="explore-modal"
+            onClick={() => setDetail(null)}
+            initial={reducedMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reducedMotion ? 0 : 0.2 }}
+          >
+            <motion.div
+              ref={dialogRef}
+              className="explore-modal-card"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="explore-dialog-title"
+              onClick={(event) => event.stopPropagation()}
+              initial={reducedMotion ? false : { opacity: 0, y: 18, scale: 0.975 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.985 }}
+              transition={{ duration: reducedMotion ? 0 : 0.26, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <button ref={dialogCloseRef} className="explore-modal-x" onClick={() => setDetail(null)} aria-label="关闭" title="关闭">
+                ×
+              </button>
+              <div className={`explore-modal-layout${detail.cover ? " has-cover" : ""}`}>
+                {detail.cover ? <img className="explore-modal-cover" src={detail.cover} alt="" decoding="async" /> : null}
+                <div className="explore-modal-copy">
+                  <Badge tone={detail.badge.tone}>{detail.badge.label}</Badge>
+                  <h2 id="explore-dialog-title" className="t-h1 explore-modal-title">{detail.title}</h2>
+                  <p className="t-read explore-modal-blurb">{detail.blurb}</p>
+                  {(detail.tags || []).length > 0 ? (
+                    <div className="explore-modal-tags">
+                      {(detail.tags || []).map((tag, index) => <Tag key={`${tag}-${index}`}>{tag}</Tag>)}
+                    </div>
+                  ) : null}
+                </div>
               </div>
-            )}
-            <div className="explore-modal-actions">
-              <Button
-                variant="primary"
-                full
-                onClick={() => {
-                  setDetail(null);
-                  chatWith(detail); // 不传角色的话预载永远没写,用户会落到空联系人列表(YOR-167)
-                }}
-              >
-                和 TA 纯聊
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+              <div className="explore-modal-actions">
+                <Button
+                  variant="primary"
+                  full
+                  onClick={() => {
+                    setDetail(null);
+                    chatWith(detail);
+                  }}
+                >
+                  和 TA 纯聊
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </>
   );
 }

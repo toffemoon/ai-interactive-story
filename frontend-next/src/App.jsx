@@ -1,21 +1,26 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from "react";
 import { Routes, Route, Navigate, Outlet, useLocation } from "react-router-dom";
 import { getLastPoint, consumeSuppressReveal } from "./lib/transitionNav";
 import { useAuth } from "./state/auth";
 import AppShell from "./components/shell/AppShell";
-import Login from "./routes/Login";
-import Explore from "./routes/Explore";
-import StoryDetail from "./routes/StoryDetail";
-import Chat from "./routes/Chat";
-import Create from "./routes/Create";
-import Mine from "./routes/Mine";
-import Forum from "./routes/Forum";
-import Story from "./routes/Story";
-import Home from "./routes/Home";
-import Styleguide from "./routes/Styleguide";
-import NavTest from "./routes/NavTest";
 import Preloader from "./components/preloader";
 import "./App.css";
+
+const Login = lazy(() => import("./routes/Login"));
+const Explore = lazy(() => import("./routes/Explore"));
+const StoryDetail = lazy(() => import("./routes/StoryDetail"));
+const Chat = lazy(() => import("./routes/Chat"));
+const Create = lazy(() => import("./routes/Create"));
+const Mine = lazy(() => import("./routes/Mine"));
+const Forum = lazy(() => import("./routes/Forum"));
+const Story = lazy(() => import("./routes/Story"));
+const Home = lazy(() => import("./routes/Home"));
+const Styleguide = lazy(() => import("./routes/Styleguide"));
+const NavTest = lazy(() => import("./routes/NavTest"));
+
+function RouteFallback() {
+  return <div className="route-loading" role="status" aria-label="正在加载页面" />;
+}
 
 // AUTH 关时(本地 dev)= 游客直通,不拦;AUTH 开且未登录 = 去登录。
 function RequireAuth({ children }) {
@@ -88,33 +93,35 @@ export default function App() {
       respectReducedMotion
     >
       {ready && (
-        <Routes>
-          <Route path="/" element={<Navigate to={home} replace />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/styleguide" element={<Styleguide />} />
-          <Route path="/test" element={<NavTest />} />
+        <Suspense fallback={<RouteFallback />}>
+          <Routes>
+            <Route path="/" element={<Navigate to={home} replace />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/styleguide" element={<Styleguide />} />
+            <Route path="/test" element={<NavTest />} />
 
-          {/* 登录后 app 壳(桌面 Rail / 移动 tab) */}
-          <Route
-            element={
-              <RequireAuth>
-                <ShellLayout />
-              </RequireAuth>
-            }
-          >
-            <Route path="/home" element={<Home />} />
-            <Route path="/test/onboarding" element={<Home testMode />} />
-            <Route path="/explore" element={<Explore />} />
-            <Route path="/story/:name" element={<StoryDetail />} />
-            <Route path="/chat" element={<Chat />} />
-            <Route path="/create" element={<Create />} />
-            <Route path="/mine" element={<Mine />} />
-            <Route path="/forum" element={<Forum />} />
-            <Route path="/play" element={<Story />} />
-          </Route>
+            {/* 登录后 app 壳(桌面 Rail / 移动 tab) */}
+            <Route
+              element={
+                <RequireAuth>
+                  <ShellLayout />
+                </RequireAuth>
+              }
+            >
+              <Route path="/home" element={<Home />} />
+              <Route path="/test/onboarding" element={<Home testMode />} />
+              <Route path="/explore" element={<Explore />} />
+              <Route path="/story/:name" element={<StoryDetail />} />
+              <Route path="/chat" element={<Chat />} />
+              <Route path="/create" element={<Create />} />
+              <Route path="/mine" element={<Mine />} />
+              <Route path="/forum" element={<Forum />} />
+              <Route path="/play" element={<Story />} />
+            </Route>
 
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       )}
     </Preloader>
   );
