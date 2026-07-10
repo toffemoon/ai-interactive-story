@@ -7,7 +7,7 @@ import ImageCropField from "../components/ImageCropField";
 import StoryHero from "../components/StoryHero";
 import CharDetailModal from "../components/CharDetailModal";
 import StaggeredText from "../components/staggered-text";
-import DepthCard from "../components/react-bits/depth-card";
+// DepthCard 暂下场:C0 画布是大编辑面不倾斜;C4 本台架 mini 卡再请回来。
 import { BlurHighlight } from "../components/react-bits/blur-highlight";
 import { useAuth } from "../state/auth";
 import "./Create.css";
@@ -725,103 +725,60 @@ export default function Create() {
             })}
           </div>
 
-          {/* key=kind:切卡种时整个主体重挂,吃同一段入场动效当作切换转场 */}
-          <div className="create-body" key={kind}>
-            {/* 对话区 */}
-            <div className="create-chat">
-              <div className="create-msgs" ref={chatRef}>
-                {desk.messages.map((m, i) => (
-                  <div key={i} className={"create-msg" + (m.who === "你" ? " is-me" : "")}>
-                    <span className="create-msg-who t-meta">{m.who === "你" ? "你" : "助手"}</span>
-                    <p className="create-msg-text t-ui">{m.text}</p>
-                  </div>
-                ))}
-                {/* 空台引子:还没聊起来时给三条可点的起手句(点了只进输入框,不代发) */}
-                {desk.messages.length <= 1 && !busy && (
-                  <div className="create-starters">
-                    <span className="create-starters-h t-meta">起个头</span>
-                    <div className="create-starters-row">
-                      {(SUGGESTS[kind] || []).map((s, i) => (
-                        <button
-                          key={s}
-                          className="create-starter t-ui-sm"
-                          style={{ "--ci": i }}
-                          onClick={() => patch(kind, { input: s })}
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
+          {/* C0 骨架(卡即界面,方案 docs/2026-07-11-create-card-canvas-plan.md):
+              中央卡画布 = 页面本体;右栏 = 产出侧(收纳/发布,本台架 C4 补);
+              底部信笺坞 = 消息条(临时,C2 换叙述条+手记)+ 命令条(原 composer 原样搬家)。
+              key=kind:切卡种整段重挂,吃入场动效当转场。 */}
+          <div className="create-stage" key={kind}>
+            {/* 卡画布:正在长的这张卡铺在中央 */}
+            <div className="create-canvas-col">
+              <section className="create-canvas" aria-label="卡画布">
+                <div className="create-card-kind t-meta">{KINDS[ki].zh}{desk.built.length > 0 && ` · 本台已建 ${desk.built.length}`}</div>
+                <div className="create-card-name t-kai">{draftName}</div>
+                {kind === "characters" && (avatar || portrait) && (
+                  <div className="create-pics-preview">
+                    {avatar && <span className="create-pics-av" style={{ backgroundImage: `url("${avatar}")` }} aria-label="头像" />}
+                    {portrait && <span className="create-pics-portrait" style={{ backgroundImage: `url("${portrait}")` }} aria-label="立绘" />}
                   </div>
                 )}
-                {busy && (
-                  <div className="create-msg">
-                    <span className="create-msg-who t-meta">助手</span>
-                    <p className="create-msg-text t-ui create-msg-typing">
-                      <span className="create-dot" aria-hidden="true" />
-                      <span className="create-dot" aria-hidden="true" />
-                      <span className="create-dot" aria-hidden="true" />
-                      正在想……
-                    </p>
-                  </div>
-                )}
-              </div>
-              <div className="create-composer">
-                <textarea
-                  rows={2}
-                  value={desk.input}
-                  disabled={busy}
-                  placeholder={KINDS[ki].ph}
-                  onChange={(e) => patch(kind, { input: e.target.value })}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
-                      e.preventDefault();
-                      send();
-                    }
-                  }}
-                />
-                <div className="create-composer-actions">
-                  <button className="create-upload" onClick={() => fileRef.current && fileRef.current.click()} disabled={busy}>
-                    上传文档
-                  </button>
-                  <input ref={fileRef} type="file" accept=".txt,.md,.docx" hidden onChange={onUpload} />
-                  <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim()}>
-                    发送
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            {/* 实时卡预览(卡片化 YOR-55;YOR-211 reskin:DepthCard 视差 + 空态改宣纸空卡) */}
-            <aside className="create-preview">
-              <DepthCard className="create-card-tilt">
-                <div className={"create-card" + (fields.length ? "" : " is-blank")}>
-                  <div className="create-card-kind t-meta">{KINDS[ki].zh}{desk.built.length > 0 && ` · 本台已建 ${desk.built.length}`}</div>
-                  <div className="create-card-name t-kai">{draftName}</div>
-                  {kind === "characters" && (avatar || portrait) && (
-                    <div className="create-pics-preview">
-                      {avatar && <span className="create-pics-av" style={{ backgroundImage: `url("${avatar}")` }} aria-label="头像" />}
-                      {portrait && <span className="create-pics-portrait" style={{ backgroundImage: `url("${portrait}")` }} aria-label="立绘" />}
+                <div className="create-card-fields">
+                  {fields.length ? (
+                    fields.map((f, i) => (
+                      <div className={"create-field" + (f.fresh ? " is-fresh" : "")} key={i}>
+                        <span className="create-field-k t-meta">{f.k}</span>
+                        <span className="create-field-v t-ui-sm">{f.hidden ? "(隐藏真相,玩家不可见)" + f.v : f.v}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="create-card-blank">
+                      <span className="create-card-blank-seal t-kai" aria-hidden="true">卡</span>
+                      <span className="create-card-blank-tx t-meta">{OPENINGS[kind]}</span>
+                      {/* 空台引子:起手句进画布空卡里(点了只进输入框,不代发) */}
+                      {desk.messages.length <= 1 && !busy && (
+                        <div className="create-starters">
+                          <span className="create-starters-h t-meta">起个头</span>
+                          <div className="create-starters-row">
+                            {(SUGGESTS[kind] || []).map((s, i) => (
+                              <button
+                                key={s}
+                                className="create-starter t-ui-sm"
+                                style={{ "--ci": i }}
+                                onClick={() => patch(kind, { input: s })}
+                              >
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
-                  <div className="create-card-fields">
-                    {fields.length ? (
-                      fields.map((f, i) => (
-                        <div className={"create-field" + (f.fresh ? " is-fresh" : "")} key={i}>
-                          <span className="create-field-k t-meta">{f.k}</span>
-                          <span className="create-field-v t-ui-sm">{f.hidden ? "(隐藏真相,玩家不可见)" + f.v : f.v}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="create-card-blank">
-                        <span className="create-card-blank-seal t-kai" aria-hidden="true">卡</span>
-                        <span className="create-card-blank-tx t-meta">聊着聊着,卡就长出来了。</span>
-                      </div>
-                    )}
-                  </div>
                 </div>
-              </DepthCard>
+              </section>
+            </div>
 
+            {/* 产出侧 */}
+            <aside className="create-side">
               <div className="create-actions">
                 <Button variant="line" onClick={saveCard} disabled={!hasDraft || savingCard} title={hasDraft ? undefined : "先聊出一张卡再收入卡库"}>
                   {savingCard ? "收入中…" : "收入卡库 · 私密"}
@@ -845,6 +802,53 @@ export default function Create() {
                 </Button>
               </div>
             </aside>
+          </div>
+
+          {/* 信笺坞:消息条(临时,C2 换叙述条+手记抽屉)+ 命令条(原 composer 逻辑原样) */}
+          <div className="create-dock">
+            <div className="create-dock-msgs" ref={chatRef}>
+              {desk.messages.map((m, i) => (
+                <div key={i} className={"create-msg" + (m.who === "你" ? " is-me" : "")}>
+                  <span className="create-msg-who t-meta">{m.who === "你" ? "你" : "助手"}</span>
+                  <p className="create-msg-text t-ui">{m.text}</p>
+                </div>
+              ))}
+              {busy && (
+                <div className="create-msg">
+                  <span className="create-msg-who t-meta">助手</span>
+                  <p className="create-msg-text t-ui create-msg-typing">
+                    <span className="create-dot" aria-hidden="true" />
+                    <span className="create-dot" aria-hidden="true" />
+                    <span className="create-dot" aria-hidden="true" />
+                    正在想……
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="create-composer">
+              <textarea
+                rows={1}
+                value={desk.input}
+                disabled={busy}
+                placeholder={KINDS[ki].ph}
+                onChange={(e) => patch(kind, { input: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
+              />
+              <div className="create-composer-actions">
+                <button className="create-upload" onClick={() => fileRef.current && fileRef.current.click()} disabled={busy}>
+                  上传文档
+                </button>
+                <input ref={fileRef} type="file" accept=".txt,.md,.docx" hidden onChange={onUpload} />
+                <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim()}>
+                  发送
+                </Button>
+              </div>
+            </div>
           </div>
         </>
       )}

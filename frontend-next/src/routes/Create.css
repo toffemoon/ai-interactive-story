@@ -1315,3 +1315,90 @@
     animation: none !important;
   }
 }
+
+/* ————————————————————————————————————————————————————————————
+   C0 骨架(卡即界面,2026-07-11 方案):画布 | 产出侧 + 底部信笺坞。
+   旧 .create-body/.create-chat/.create-preview/.create-card 布局类自此不再被
+   桌面 JSX 引用(样式暂留,C5 清理);.create-msg/.create-composer/字段/空卡/
+   起个头等内容类原样复用。
+   ———————————————————————————————————————————————————————————— */
+@media (min-width: 861px) {
+  .create {
+    height: calc(100dvh - 52px);
+    overflow: hidden;
+  }
+  .create-stage {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: var(--sp-5);
+    animation: createRise 0.45s var(--ease-out) both;
+    animation-delay: 0.1s;
+  }
+  .create-canvas-col {
+    min-height: 0;
+    display: flex;
+  }
+  /* 卡画布 = 一张摊开的宣纸大卡:居中 ~680,自己滚,页面不滚 */
+  .create-canvas {
+    width: min(680px, 100%);
+    margin: 0 auto;
+    min-height: 0;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--r-card);
+    background: var(--panel);
+    box-shadow: var(--shadow-card);
+    padding: var(--sp-5) var(--sp-6) var(--sp-6);
+  }
+  .create-canvas .create-card-name {
+    font-size: var(--fs-display);
+  }
+  .create-canvas .create-card-blank {
+    min-height: 320px;
+  }
+  .create-side {
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+    padding-top: var(--sp-2);
+  }
+  /* 信笺坞:消息条(临时)+ 命令条 */
+  .create-dock {
+    flex: none;
+    width: min(680px, 100%);
+    margin: var(--sp-4) auto 0;
+  }
+  .create-dock-msgs {
+    max-height: 124px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    padding: 0 var(--sp-2) var(--sp-3);
+  }
+  .create-dock .create-composer {
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    background: var(--panel);
+    padding: var(--sp-3);
+    box-shadow: var(--shadow-card);
+  }
+  .create-dock .create-composer textarea:focus {
+    border-color: var(--accent);
+  }
+  /* 起个头挪进画布空卡:居中排,和印章一体 */
+  .create-card-blank .create-starters {
+    margin-top: var(--sp-2);
+    align-items: center;
+  }
+  .create-card-blank .create-starters-row {
+    justify-content: center;
+  }
+  .create-card-blank .create-starters-h {
+    text-align: center;
+  }
+}
