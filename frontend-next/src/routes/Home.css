@@ -548,18 +548,25 @@
   opacity: 1;
 }
 
-/* 全屏态:隐藏实际菜单头与续玩浮条(兼容旧 shell-toggle),只留背景+立绘。 */
-.ais-home-fullscreen .staggered-menu-header,
+/* 全屏态:隐藏整套导航 chrome(含半常驻 rail),只留背景+立绘。 */
+.ais-home-fullscreen .staggered-menu-wrapper,
+.ais-home-fullscreen .shell-pillnav,
 .ais-home-fullscreen .resume-bar,
 .ais-home-fullscreen .shell-toggle {
   display: none !important;
 }
 
-/* onboarding 全屏接管:隐藏导航壳 chrome(菜单头条「沐言」+ 续玩浮条),
+/* onboarding 全屏接管:隐藏导航壳 chrome(桌面 rail / 手机 Pill Nav + 续玩浮条),
    新客引导期间不露导航;引导结束自动恢复。 */
-.ais-onboarding .staggered-menu-header,
+.ais-onboarding .staggered-menu-wrapper,
+.ais-onboarding .shell-pillnav,
 .ais-onboarding .resume-bar {
   display: none !important;
+}
+
+.ais-home-fullscreen .shell--semi-nav,
+.ais-onboarding .shell--semi-nav {
+  padding-left: 0;
 }
 
 /* —— modal(换角色 / 存档 / 记录)—— */

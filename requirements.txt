@@ -4,7 +4,7 @@ openai>=1.30
 python-dotenv>=1.0
 # 数据层:Supabase Postgres (psycopg3 + 连接池) + pgvector
 psycopg[binary]>=3.2
-psycopg-pool>=3.2
+psycopg-pool>=3.2.8,<4
 pgvector>=0.3
 # 长期记忆 embedding:对话/世界书/故事书向量化 (向量存进 pgvector,见上)
 sentence-transformers>=3.0

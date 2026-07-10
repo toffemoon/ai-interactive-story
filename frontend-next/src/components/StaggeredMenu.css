@@ -309,6 +309,290 @@
   opacity: var(--sm-num-opacity, 0);
 }
 
+/* ————————————————————————————————————————————————————————————————
+   桌面半常驻 rail(YOR-211):闭合 = 72px 极简栏,悬停/点「沐」= 原错层大字面板。
+   记号语言沿用沐言底 tab / 一代竖栏:纸面 --panel 底 + 墨线右边、
+   楷体「沐」印章(虚线印匣)、图标 + 11px 宋体小字、当前页 = 朱字 + 鎏金短栓。
+   颜色全部吃语义 token,stage(立绘主页)只另调底色为半透明暖夜 + 毛玻璃。
+   ———————————————————————————————————————————————————————————————— */
+/* 头宽由 gsap 内联驱动(与面板同一条 tween,免接缝);CSS 只负责 padding / 配色 morph。 */
+.sm-hover-rail .staggered-menu-header {
+  width: var(--sm-rail-width, 72px);
+  height: 76px;
+  padding: 14px 0 0;
+  justify-content: center;
+  align-items: flex-start;
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+  transition: padding 0.34s var(--ease-out), background 0.3s var(--ease-out), border-color 0.2s var(--ease-out);
+}
+
+.sm-hover-rail[data-open] .staggered-menu-header {
+  height: auto;
+  padding: 0.4em 1.6em 1.4em;
+  justify-content: flex-start;
+  align-items: center;
+  border-right-color: transparent;
+  background: transparent;
+}
+
+.sm-toggle-railMark {
+  display: none;
+}
+
+.sm-hover-rail .sm-toggle {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+  transition: color var(--dur-mid) var(--ease-out), gap 0.28s var(--ease-out);
+}
+
+.sm-hover-rail[data-open] .sm-toggle {
+  width: auto;
+  margin: 0 -6px;
+  padding: 0 6px;
+  justify-content: flex-start;
+  gap: 0.45rem;
+}
+
+/* 「沐」印章:40px 虚线印匣(旧 .shell-logo-box 的记号),朱色楷体。 */
+.sm-hover-rail .sm-toggle-railMark {
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--line));
+  border-radius: var(--r-sm);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--accent);
+  opacity: 1;
+  transform: translateY(0);
+  transition: width 0.28s var(--ease-out), opacity 0.18s var(--ease-out), transform 0.28s var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+.sm-hover-rail .sm-toggle:hover .sm-toggle-railMark,
+.sm-hover-rail .sm-toggle:focus-visible .sm-toggle-railMark {
+  border-color: var(--accent);
+}
+
+.sm-hover-rail .sm-toggle-textWrap {
+  width: 0;
+  min-width: 0;
+  opacity: 0;
+  transform: translateX(-7px);
+  transition: width 0.34s var(--ease-out), min-width 0.34s var(--ease-out), opacity 0.18s var(--ease-out), transform 0.34s var(--ease-out);
+}
+
+.sm-hover-rail .sm-icon {
+  width: 0;
+  flex-basis: 0;
+  opacity: 0;
+  transition: width 0.26s var(--ease-out), flex-basis 0.26s var(--ease-out), opacity 0.18s var(--ease-out);
+}
+
+/* 展开后印匣收拢让位给「沐言 · 关闭 ✕」品牌行 */
+.sm-hover-rail[data-open] .sm-toggle-railMark {
+  width: 0;
+  border-width: 0;
+  opacity: 0;
+  transform: translateY(-5px);
+}
+
+.sm-hover-rail[data-open] .sm-toggle-textWrap {
+  width: 2.5em;
+  min-width: 2.5em;
+  opacity: 1;
+  transform: translateX(0);
+  transition-delay: 0.08s, 0.08s, 0.1s, 0s;
+}
+
+.sm-hover-rail[data-open] .sm-icon {
+  width: 14px;
+  flex-basis: 14px;
+  opacity: 1;
+}
+
+/* 面板即 rail:常驻左缘、宽度由 gsap 内联驱动(72px ↔ clamp 宽),同一块表面原地生长。
+   padding 清零、overflow 裁切;大字内容住在固定 clamp 宽的 .sm-panel-inner 里,展宽只做揭示不回流。 */
+.sm-hover-rail .staggered-menu-panel {
+  left: 0;
+  right: auto;
+  width: var(--sm-rail-width, 72px);
+  padding: 0;
+  overflow: hidden;
+  opacity: 1;
+  pointer-events: auto;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  transition: background 0.3s var(--ease-out), border-color 0.2s var(--ease-out),
+    box-shadow 0.3s var(--ease-out);
+}
+
+.sm-hover-rail .sm-panel-inner {
+  position: absolute;
+  inset: 0;
+  z-index: 4; /* 大字在暖纸盖层之上 */
+  width: clamp(210px, 24vw, 300px);
+  box-sizing: border-box;
+  padding: 6em 2em 2em;
+  overflow-y: auto;
+}
+
+/* 收起态大字层不接点击:它在 DOM 里盖在图标列之上,不让位会截走图标的点击/hover。 */
+.sm-hover-rail:not([data-open]) .sm-panel-inner {
+  pointer-events: none;
+}
+
+/* rail 模式色层:住在面板内部,宽度取展开终宽,静止时整叠停在左外被裁掉;
+   z 序 = 图标列(2) < 色层(3) < 大字(4):扫入时盖过图标,落定后垫在大字下。 */
+.sm-hover-rail .sm-prelayers {
+  z-index: 3;
+  width: clamp(210px, 24vw, 300px);
+  opacity: 1;
+}
+.sm-hover-rail .sm-prelayer {
+  opacity: 1;
+}
+/* 暖纸盖层 = 原版菜单的纸底(#fbf8f2),最后落定后就是展开菜单的底色 */
+.sm-prelayer--cover {
+  background: #fbf8f2;
+}
+
+/* 图标列:面板内的收起态内容,占住 rail 条(展开时 gsap 让位、收回时归位;
+   z 抬到大字层之上,展开后 autoAlpha→visibility:hidden 自然不挡点击)。 */
+.sm-hover-rail .sm-rail-list {
+  position: absolute;
+  top: 76px;
+  left: 0;
+  z-index: 2;
+  width: var(--sm-rail-width, 72px);
+  padding-top: 4px;
+}
+
+/* 印章头与项列表之间的短墨线 */
+.sm-hover-rail .sm-rail-list::before {
+  content: "";
+  display: block;
+  width: 28px;
+  height: 1px;
+  margin: 0 auto 10px;
+  background: var(--line);
+}
+
+/* stage(立绘主页):收起的 rail 条叠在画面上,半透明暖夜底 + 毛玻璃,月白记号由语义 token 自带;
+   展开时面板随 background transition 亮回暖纸(大字是墨色,须纸底)。 */
+[data-theme="stage"] .sm-hover-rail:not([data-open]) .staggered-menu-panel,
+[data-theme="stage"] .sm-hover-rail:not([data-open]) .staggered-menu-header {
+  background: color-mix(in srgb, var(--stage-bg) 58%, transparent);
+  border-right-color: rgba(236, 227, 210, 0.14);
+  -webkit-backdrop-filter: blur(14px) saturate(1.08);
+  backdrop-filter: blur(14px) saturate(1.08);
+}
+[data-theme="stage"] .sm-hover-rail[data-open] .staggered-menu-panel {
+  background: #fbf8f2;
+}
+[data-theme="stage"] .sm-hover-rail .sm-rail-list::before {
+  background: rgba(236, 227, 210, 0.2);
+}
+[data-theme="stage"] .sm-hover-rail .sm-toggle-railMark {
+  color: var(--fg);
+  border-color: rgba(236, 227, 210, 0.38);
+}
+
+/* 从折叠 rail 到完整面板的入场桥：展宽尚未到位时先守住最终 300px 区域，
+   避免鼠标自然向右移动时落到 backdrop 而闪开即关。低于 panel，入场后不挡菜单。 */
+.sm-hover-bridge {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 9;
+  width: clamp(210px, 24vw, 300px);
+  pointer-events: auto;
+}
+
+.sm-rail-list {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+}
+
+.sm-rail-item {
+  width: 100%;
+}
+
+/* 项 = 图标 + 小字竖排,占满 72px 全宽(命中区大、贴边短栓才有处落) */
+.sm-rail-link {
+  position: relative;
+  width: 100%;
+  min-height: 58px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 9px 0 8px;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+
+.sm-rail-link svg {
+  width: 22px;
+  height: 22px;
+  flex: none;
+}
+
+.sm-rail-label {
+  font-family: var(--font-serif);
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.06em;
+}
+
+.sm-rail-link:hover,
+.sm-rail-link:focus-visible {
+  background: color-mix(in srgb, var(--fg) 5%, transparent);
+  color: var(--fg);
+  outline: none;
+}
+
+/* 当前页:朱字 + 左侧鎏金短栓 + 一层极淡朱晕(底 tab / 一代竖栏记号的合体) */
+.sm-rail-link.is-active {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--accent);
+}
+
+.sm-rail-link.is-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: var(--r-pill);
+  background: var(--accent-3);
+}
+
+[data-position="left"] .staggered-menu-panel {
+  box-shadow: 24px 0 60px -30px rgba(0, 0, 0, 0.5);
+}
+
+/* 面板移到屏外后不让其右投影残留在 icon rail 上。 */
+.sm-hover-rail:not([data-open]) .staggered-menu-panel {
+  box-shadow: none;
+}
+
+.sm-panel-item.is-active {
+  color: var(--sm-accent, #8f3c32);
+}
+
 /* 只在真·窄屏(≤480)才整屏铺;中等屏保持收窄侧栏,不一上来就占半屏 */
 @media (max-width: 480px) {
   .staggered-menu-panel {
@@ -320,5 +604,17 @@
     width: 100%;
     left: 0;
     right: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sm-hover-rail .staggered-menu-header,
+  .sm-hover-rail .sm-toggle,
+  .sm-hover-rail .sm-toggle-railMark,
+  .sm-hover-rail .sm-toggle-textWrap,
+  .sm-hover-rail .sm-icon,
+  .sm-hover-rail .staggered-menu-panel {
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
   }
 }

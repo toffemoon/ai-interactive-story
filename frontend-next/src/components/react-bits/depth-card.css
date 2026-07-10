@@ -1,0 +1,26 @@
+/* React Bits · DepthCard(-css)适配沐言:通用容器版,投影 / 圆角吃语义 token。 */
+.depth-card-wrapper {
+  perspective: 1000px;
+}
+.depth-card {
+  position: relative;
+  border-radius: var(--r-card);
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: transform;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--dur-mid) var(--ease-out);
+}
+.depth-card-hovered {
+  box-shadow: var(--shadow-pop);
+}
+.depth-card-spotlight {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  pointer-events: none;
+  mix-blend-mode: soft-light;
+  transition: opacity var(--dur-mid) var(--ease-out);
+}
