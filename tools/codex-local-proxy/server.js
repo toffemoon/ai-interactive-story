@@ -367,10 +367,37 @@ class CodexAppServer {
     }
     const tracker = params.threadId ? this.turns.get(params.threadId) : null;
     if (!tracker) return;
+    if (method === "item/started" && params.item && params.item.type === "agentMessage") {
+      tracker.agentPhases.set(String(params.item.id || ""), params.item.phase || null);
+      return;
+    }
+    if (method === "item/agentMessage/delta") {
+      const phase = tracker.agentPhases.get(String(params.itemId || ""));
+      if (phase === "commentary") return;
+      const delta = typeof params.delta === "string" ? params.delta : "";
+      if (!delta) return;
+      tracker.streamedText += delta;
+      if (tracker.onDelta) {
+        try {
+          tracker.onDelta(delta);
+        } catch (_error) {
+          tracker.onDelta = null;
+        }
+      }
+      return;
+    }
     if (method === "item/completed" && params.item && params.item.type === "agentMessage") {
       const phase = params.item.phase;
       if (phase === "final_answer" || phase === "final" || phase == null) {
         tracker.finalText = params.item.text || tracker.finalText;
+        if (tracker.onDelta && !tracker.streamedText && tracker.finalText) {
+          try {
+            tracker.onDelta(tracker.finalText);
+            tracker.streamedText = tracker.finalText;
+          } catch (_error) {
+            tracker.onDelta = null;
+          }
+        }
       }
       return;
     }
@@ -388,14 +415,21 @@ class CodexAppServer {
   _finishTurn(threadId, turn) {
     const tracker = this.turns.get(threadId);
     if (!tracker) return;
-    this.turns.delete(threadId);
-    clearTimeout(tracker.timer);
+    this._cleanupTurn(threadId, tracker);
     if (turn && turn.status === "completed" && tracker.finalText) {
       tracker.resolve(tracker.finalText);
       return;
     }
     const detail = turn && turn.error ? JSON.stringify(turn.error) : "Codex 未返回最终文本";
     tracker.reject(new Error(detail));
+  }
+
+  _cleanupTurn(threadId, tracker) {
+    if (this.turns.get(threadId) === tracker) this.turns.delete(threadId);
+    clearTimeout(tracker.timer);
+    if (tracker.signal && tracker.abortListener) {
+      tracker.signal.removeEventListener("abort", tracker.abortListener);
+    }
   }
 
   _failAll(error) {
@@ -405,9 +439,8 @@ class CodexAppServer {
     }
     this.pending.clear();
     for (const [threadId, tracker] of this.turns.entries()) {
-      clearTimeout(tracker.timer);
+      this._cleanupTurn(threadId, tracker);
       tracker.reject(error);
-      this.turns.delete(threadId);
     }
   }
 
@@ -513,8 +546,14 @@ class CodexAppServer {
     return this._publicLogin(login);
   }
 
-  async complete({ messages, model, maxTokens, jsonMode }) {
+  async complete({ messages, model, maxTokens, jsonMode, onDelta = null, signal = null }) {
+    if (signal && signal.aborted) {
+      throw new HttpError(499, "客户端已断开", "client_disconnected");
+    }
     await this.ensureStarted();
+    if (signal && signal.aborted) {
+      throw new HttpError(499, "客户端已断开", "client_disconnected");
+    }
     const { baseInstructions, input } = buildCodexInput(messages, maxTokens, jsonMode);
     const threadResult = await this._request("thread/start", {
       ...(model ? { model } : {}),
@@ -535,9 +574,14 @@ class CodexAppServer {
         resolve,
         reject,
         finalText: "",
+        streamedText: "",
+        agentPhases: new Map(),
+        onDelta: typeof onDelta === "function" ? onDelta : null,
         turnId: null,
+        signal,
+        abortListener: null,
         timer: setTimeout(() => {
-          this.turns.delete(threadId);
+          this._cleanupTurn(threadId, tracker);
           if (tracker.turnId) {
             this._request("turn/interrupt", { threadId, turnId: tracker.turnId }).catch(() => {});
           }
@@ -546,6 +590,19 @@ class CodexAppServer {
       };
       this.turns.set(threadId, tracker);
     });
+    completion.catch(() => {});
+    if (signal) {
+      tracker.abortListener = () => {
+        if (this.turns.get(threadId) !== tracker) return;
+        this._cleanupTurn(threadId, tracker);
+        if (tracker.turnId) {
+          this._request("turn/interrupt", { threadId, turnId: tracker.turnId }).catch(() => {});
+        }
+        tracker.reject(new HttpError(499, "客户端已断开", "client_disconnected"));
+      };
+      if (signal.aborted) tracker.abortListener();
+      else signal.addEventListener("abort", tracker.abortListener, { once: true });
+    }
     try {
       const turnResult = await this._request("turn/start", {
         threadId,
@@ -559,11 +616,13 @@ class CodexAppServer {
         outputSchema: null,
       });
       tracker.turnId = turnResult.turn.id;
+      if (signal && signal.aborted) {
+        this._request("turn/interrupt", { threadId, turnId: tracker.turnId }).catch(() => {});
+      }
       return await completion;
     } catch (error) {
       if (this.turns.get(threadId) === tracker) {
-        this.turns.delete(threadId);
-        clearTimeout(tracker.timer);
+        this._cleanupTurn(threadId, tracker);
       }
       throw error;
     }
@@ -607,6 +666,23 @@ function sendJson(res, status, payload) {
     "Cache-Control": "no-store",
   });
   res.end(body);
+}
+
+function sendSse(res, payload) {
+  const data = typeof payload === "string" ? payload : JSON.stringify(payload);
+  res.write(`data: ${data}\n\n`);
+}
+
+function completionChunk(id, created, model, delta, finishReason = null, usage = undefined) {
+  const payload = {
+    id,
+    object: "chat.completion.chunk",
+    created,
+    model,
+    choices: delta === null ? [] : [{ index: 0, delta, finish_reason: finishReason }],
+  };
+  if (usage !== undefined) payload.usage = usage;
+  return payload;
 }
 
 function errorPayload(error) {
@@ -729,6 +805,7 @@ function createProxyServer(options = {}) {
         authenticated: codex.accountCache && codex.accountCache.authenticated,
         model: configuredModel || "codex-default",
         model_alias: "codex",
+        chat_completions_stream: true,
         api_base_url: `http://${HOST}:${listeningPort}/v1`,
         pid: process.pid,
       });
@@ -754,11 +831,11 @@ function createProxyServer(options = {}) {
 
     const requestId = crypto.randomUUID();
     const started = Date.now();
+    let streamResponse = false;
+    let abortController = null;
+    let closeListener = null;
     try {
       const body = await readJson(req);
-      if (body.stream === true) {
-        throw new HttpError(400, "当前桥接器暂不支持 stream=true", "stream_not_supported");
-      }
       const messages = normalizeMessages(body.messages);
       const model = resolveRequestedModel(body.model, configuredModel);
       const requestedMaxTokens = Number(body.max_tokens || 1024);
@@ -767,30 +844,88 @@ function createProxyServer(options = {}) {
       }
       const maxTokens = Math.min(32_000, Math.max(64, Math.floor(requestedMaxTokens)));
       const jsonMode = body.response_format && body.response_format.type === "json_object";
-      const content = await enqueue(() => codex.complete({ messages, model, maxTokens, jsonMode }));
+      const responseModel = model || "codex";
+      const stream = body.stream === true;
+      const includeUsage = Boolean(body.stream_options && body.stream_options.include_usage);
+      const chunkId = `chatcmpl-codex-${requestId}`;
+      const created = Math.floor(Date.now() / 1000);
+      let firstDeltaAt = null;
+      let onDelta = null;
+      if (stream) {
+        streamResponse = true;
+        abortController = new AbortController();
+        closeListener = () => {
+          if (!res.writableEnded) abortController.abort();
+        };
+        res.once("close", closeListener);
+        res.writeHead(200, {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache, no-store",
+          "Connection": "keep-alive",
+          "X-Accel-Buffering": "no",
+        });
+        res.flushHeaders();
+        sendSse(res, completionChunk(chunkId, created, responseModel, { role: "assistant" }));
+        onDelta = (delta) => {
+          if (res.destroyed || res.writableEnded) return;
+          if (firstDeltaAt === null) firstDeltaAt = Date.now();
+          sendSse(res, completionChunk(chunkId, created, responseModel, { content: delta }));
+        };
+      }
+      const content = await enqueue(() => codex.complete({
+        messages,
+        model,
+        maxTokens,
+        jsonMode,
+        onDelta,
+        signal: abortController && abortController.signal,
+      }));
       const promptTokens = estimateTokens(messages.map((message) => message.content).join("\n"));
       const completionTokens = estimateTokens(content);
-      sendJson(res, 200, {
-        id: `chatcmpl-codex-${requestId}`,
-        object: "chat.completion",
-        created: Math.floor(Date.now() / 1000),
-        model: model || "codex",
-        choices: [{
-          index: 0,
-          message: { role: "assistant", content },
-          finish_reason: "stop",
-        }],
-        usage: {
-          prompt_tokens: promptTokens,
-          completion_tokens: completionTokens,
-          total_tokens: promptTokens + completionTokens,
-        },
-      });
-      console.log(`[${new Date().toISOString()}] ${requestId} ok ${Date.now() - started}ms model=${model}`);
+      const usage = {
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+        total_tokens: promptTokens + completionTokens,
+      };
+      if (stream) {
+        if (!res.destroyed && !res.writableEnded) {
+          sendSse(res, completionChunk(chunkId, created, responseModel, {}, "stop"));
+          if (includeUsage) {
+            sendSse(res, completionChunk(chunkId, created, responseModel, null, null, usage));
+          }
+          sendSse(res, "[DONE]");
+          res.end();
+        }
+      } else {
+        sendJson(res, 200, {
+          id: chunkId,
+          object: "chat.completion",
+          created,
+          model: responseModel,
+          choices: [{
+            index: 0,
+            message: { role: "assistant", content },
+            finish_reason: "stop",
+          }],
+          usage,
+        });
+      }
+      const first = firstDeltaAt === null ? "n/a" : `${firstDeltaAt - started}ms`;
+      console.log(`[${new Date().toISOString()}] ${requestId} ok ${Date.now() - started}ms first_delta=${first} stream=${stream} model=${responseModel}`);
     } catch (error) {
       const status = error.status || 502;
       console.error(`[${new Date().toISOString()}] ${requestId} failed ${Date.now() - started}ms: ${error.message}`);
-      sendJson(res, status, errorPayload(error));
+      if (streamResponse) {
+        if (!res.destroyed && !res.writableEnded) {
+          sendSse(res, errorPayload(error));
+          sendSse(res, "[DONE]");
+          res.end();
+        }
+      } else {
+        sendJson(res, status, errorPayload(error));
+      }
+    } finally {
+      if (closeListener) res.off("close", closeListener);
     }
   });
 

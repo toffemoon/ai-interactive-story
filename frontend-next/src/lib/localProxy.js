@@ -144,7 +144,88 @@ function messageText(content) {
   return "";
 }
 
-async function callBrowserLocalProxy(call, settings) {
+function responseError(response, data) {
+  const payloadError = data && data.error;
+  const detail =
+    (payloadError && (payloadError.message || payloadError.code)) ||
+    (data && data.detail) ||
+    response.statusText;
+  const error = new Error("本机反代返回 " + response.status + (detail ? ": " + detail : ""));
+  error.status = response.status;
+  error.proxyCode = payloadError && payloadError.code;
+  return error;
+}
+
+function completionContent(data) {
+  return messageText(
+    data && data.choices && data.choices[0] && data.choices[0].message
+      ? data.choices[0].message.content
+      : ""
+  );
+}
+
+function consumeSseEvent(block, state, onDelta) {
+  const dataText = block
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).replace(/^ /, ""))
+    .join("\n");
+  if (!dataText) return;
+  if (dataText === "[DONE]") {
+    state.done = true;
+    return;
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(dataText);
+  } catch (e) {
+    throw new Error("本机反代返回了无法解析的 SSE 数据");
+  }
+  if (payload && payload.error) {
+    const error = new Error(payload.error.message || payload.error.code || "本机 Codex 流式生成失败");
+    error.proxyCode = payload.error.code;
+    throw error;
+  }
+  if (payload && payload.usage) state.usage = payload.usage;
+  const delta = messageText(
+    payload && payload.choices && payload.choices[0] && payload.choices[0].delta
+      ? payload.choices[0].delta.content
+      : ""
+  );
+  if (!delta) return;
+  state.content += delta;
+  if (onDelta) onDelta(delta);
+}
+
+async function readSseCompletion(response, onDelta) {
+  if (!response.body || !response.body.getReader) {
+    throw new Error("当前浏览器不支持读取本机 Codex 流式响应");
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const state = { content: "", usage: {}, done: false };
+  let buffer = "";
+
+  while (!state.done) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+    let boundary = /\r?\n\r?\n/.exec(buffer);
+    while (boundary) {
+      const block = buffer.slice(0, boundary.index);
+      buffer = buffer.slice(boundary.index + boundary[0].length);
+      consumeSseEvent(block, state, onDelta);
+      if (state.done) break;
+      boundary = /\r?\n\r?\n/.exec(buffer);
+    }
+    if (done) break;
+  }
+  if (!state.done && buffer.trim()) consumeSseEvent(buffer, state, onDelta);
+  if (!state.content) throw new Error("本机反代没有返回 assistant 文本");
+  return state;
+}
+
+async function requestBrowserLocalProxy(call, settings, { stream, onDelta }) {
   const model = String(settings.model || "").trim();
   if (!model) throw new Error("请先填写本机反代模型名");
 
@@ -154,49 +235,66 @@ async function callBrowserLocalProxy(call, settings) {
     model,
     messages: call.messages || [],
     max_tokens: call.max_tokens || 1024,
-    stream: false,
+    stream,
   };
+  if (stream) body.stream_options = { include_usage: true };
   if (call.json_mode) body.response_format = { type: "json_object" };
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  let response;
   try {
-    response = await fetch(completionUrl(settings.endpoint), {
+    const response = await fetch(completionUrl(settings.endpoint), {
       method: "POST",
       headers,
       body: JSON.stringify(body),
       signal: controller.signal,
     });
+    const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw responseError(response, data);
+    }
+
+    let content = "";
+    let usage = {};
+    if (stream && contentType.includes("text/event-stream")) {
+      const result = await readSseCompletion(response, onDelta);
+      content = result.content;
+      usage = result.usage;
+    } else {
+      const data = await response.json().catch(() => ({}));
+      content = completionContent(data);
+      usage = data.usage || {};
+      if (content && onDelta) onDelta(content);
+    }
+    if (!content) throw new Error("本机反代没有返回 assistant 文本");
+    return {
+      request_id: call.request_id,
+      content,
+      usage,
+    };
   } catch (e) {
     if (e && e.name === "AbortError") throw new Error("本机反代响应超时");
+    if (e && (e.status || e.proxyCode || /^本机反代/.test(e.message))) throw e;
     throw new Error("无法连接本机反代,请检查地址、CORS 与 Private Network Access");
   } finally {
     clearTimeout(timer);
   }
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const detail =
-      (data && data.error && (data.error.message || data.error.code)) ||
-      data.detail ||
-      response.statusText;
-    throw new Error("本机反代返回 " + response.status + (detail ? ": " + detail : ""));
-  }
-  const content = messageText(
-    data && data.choices && data.choices[0] && data.choices[0].message
-      ? data.choices[0].message.content
-      : ""
-  );
-  if (!content) throw new Error("本机反代没有返回 assistant 文本");
-  return {
-    request_id: call.request_id,
-    content,
-    usage: data.usage || {},
-  };
 }
 
-async function runFlow(path, seed, settings, onStep) {
+async function callBrowserLocalProxy(call, settings, onDelta) {
+  try {
+    return await requestBrowserLocalProxy(call, settings, { stream: true, onDelta });
+  } catch (error) {
+    const unsupported =
+      error.proxyCode === "stream_not_supported" ||
+      (error.status === 400 && /stream/i.test(error.message || ""));
+    if (!unsupported) throw error;
+    return requestBrowserLocalProxy(call, settings, { stream: false, onDelta });
+  }
+}
+
+async function runFlow(path, seed, settings, { onStep, onDelta } = {}) {
   const request = { ...seed, answers: [], revision: "", flow_id: "" };
   for (let step = 0; step < MAX_FLOW_STEPS; step++) {
     const result = await postJSON(path, request);
@@ -207,15 +305,16 @@ async function runFlow(path, seed, settings, onStep) {
     request.revision = result.revision || "";
     request.flow_id = result.flow_id || "";
     if (onStep) onStep(result.call, step);
-    request.answers.push(await callBrowserLocalProxy(result.call, settings));
+    const streamDelta = result.call.kind === "stream" ? onDelta : null;
+    request.answers.push(await callBrowserLocalProxy(result.call, settings, streamDelta));
   }
   throw new Error("本轮需要的模型调用过多,已停止");
 }
 
-export function runLocalProxyTurn(turn, settings, { onStep } = {}) {
-  return runFlow("/api/local_proxy/story_turn", { turn }, settings, onStep);
+export function runLocalProxyTurn(turn, settings, options = {}) {
+  return runFlow("/api/local_proxy/story_turn", { turn }, settings, options);
 }
 
-export function runLocalProxyReroll(sessionId, settings, { onStep } = {}) {
-  return runFlow("/api/local_proxy/reroll", { session_id: sessionId }, settings, onStep);
+export function runLocalProxyReroll(sessionId, settings, options = {}) {
+  return runFlow("/api/local_proxy/reroll", { session_id: sessionId }, settings, options);
 }

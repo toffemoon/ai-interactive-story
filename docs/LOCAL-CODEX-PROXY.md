@@ -24,7 +24,9 @@
 
 正常情况下不需要填写 API Base URL、Model、API Key,也不需要打开终端。浏览器不能自动执行下载文件,所以首次仍需手动打开一次 `AIStory-Codex-Setup.cmd`。
 
-反代必须实现 `POST /chat/completions`,返回 OpenAI-compatible 的 `choices[0].message.content`。JSON 模式调用还会携带 `response_format: {"type":"json_object"}`。
+反代必须实现 `POST /chat/completions`。连接助手支持 OpenAI-compatible SSE:请求携带 `stream: true`,正文通过 `choices[0].delta.content` 分片返回,最后发送 `[DONE]`。JSON 模式调用还会携带 `response_format: {"type":"json_object"}`。
+
+故事正文会边生成边显示;摘要、记忆抽取、JSON 修复等内部步骤不会显示在玩家画面。浏览器会自动兼容旧版连接助手:旧版明确返回 `stream_not_supported` 时,本次调用退回 `stream: false`。重新运行一键安装器即可升级并获得 SSE,原有 OAuth 与 `bridge.env` 配置会保留。
 
 连接助手会自动复用电脑上已有的 Codex 和 Node.js;缺失时自动安装官方 Codex CLI 和便携 Node.js。它还会注册当前用户的开机启动和 `aistory-codex://` 唤醒协议。OAuth token 由 Codex 自己保存和刷新,不会进入网页或 Render。
 
@@ -49,7 +51,16 @@
 - `GET http://127.0.0.1:8765/health`
 - `GET http://127.0.0.1:8765/auth/status`
 
-不会返回邮箱正文、access token 或 refresh token。
+`/health` 的 `chat_completions_stream: true` 表示当前连接助手支持 SSE。状态接口不会返回邮箱正文、access token 或 refresh token。
+
+## 流式链路
+
+1. Codex app-server 发出 `item/agentMessage/delta`。
+2. 本机连接助手只转发最终回答阶段,过滤 commentary。
+3. 浏览器解析 SSE,只把主故事步骤实时渲染到叙事区。
+4. 完成后浏览器把完整回答交还中央后端,由后端照常校验、更新状态并存档。
+
+若 Codex 版本没有发出 delta,连接助手会在 `item/completed` 时返回一次完整文本。玩家关闭页面或请求中断时,连接助手会调用 `turn/interrupt`,不让已经无客户端接收的生成继续运行。
 
 ## 浏览器要求
 
@@ -70,7 +81,8 @@
 
 - 页面显示“尚未连接”:先点击“启动已安装助手”,再点“重新检测”。
 - 页面显示“等待 ChatGPT 登录”:点击“连接 ChatGPT”;浏览器回调不可用时改用设备码。
-- 需要重新安装:再次运行一键安装器即可,已有 `bridge.env` 高级配置会保留。
+- 页面一直只在结束时显示全文:再次运行一键安装器升级连接助手;旧版仍可正常完成回合。
+- 需要重新安装:再次运行一键安装器即可,已有 OAuth 和 `bridge.env` 高级配置会保留。
 - 日志目录:`%LOCALAPPDATA%\AIStoryCodexBridge\data`。
 
 ## 官方参考

@@ -166,6 +166,10 @@ export default function Story() {
           onStep: (call) => setPendingLabel(
             call.index === 0 ? "本机 Codex 推演中…" : `本机 Codex 处理步骤 ${call.index + 1}…`
           ),
+          onDelta: (text) => {
+            raw += text;
+            setStreaming(extractStream(raw));
+          },
         });
       } else {
         try {
@@ -239,16 +243,22 @@ export default function Story() {
     if (idx === -1) return;
     const prevChoices = choices; // 失败时恢复:reroll 被拒(如开场无可重生回合,后端 400)别把选项清没了留下死状态
     setLoading(true);
+    setStreaming(null);
     setError("");
     setChoices([]);
     try {
       let out;
+      let raw = "";
       if (localProxyAllowed && modelSource === "local_proxy") {
         setPendingLabel("连接本机 Codex…");
         out = await runLocalProxyReroll(game.sessionId, loadLocalProxySettings(), {
           onStep: (call) => setPendingLabel(
             call.index === 0 ? "本机 Codex 重生成中…" : `本机 Codex 处理步骤 ${call.index + 1}…`
           ),
+          onDelta: (text) => {
+            raw += text;
+            setStreaming(extractStream(raw));
+          },
         });
       } else {
         out = await postJSON("/api/reroll", { session_id: game.sessionId });
@@ -256,8 +266,10 @@ export default function Story() {
       setTurns((xs) => xs.map((t, i) => (i === idx ? { kind: "story", data: out } : t)));
       setChoices(out.choices || []);
       setState(out.state || null);
+      setStreaming(null);
       setCanUndo(true);
     } catch (e) {
+      setStreaming(null);
       setError("重新生成失败:" + e.message);
       setChoices(prevChoices); // 恢复原选项,避免无选项可点
     } finally {

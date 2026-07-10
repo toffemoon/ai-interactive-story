@@ -33,16 +33,27 @@ status: accepted
 - 前端统一请求模型别名 `codex`;未指定具体模型时使用用户 Codex 当前默认模型。
 - 浏览器安全策略不允许网页直接执行下载文件,因此玩家仍需手动打开一次 `.cmd` 并确认一次 ChatGPT OAuth。这是当前最小人工步骤。
 
+### SSE 补充
+
+- 本机连接助手订阅 Codex app-server 的 `item/agentMessage/delta`,只转发最终回答阶段并过滤 commentary。
+- `/v1/chat/completions` 支持 OpenAI-compatible SSE,包括增量正文、结束原因、可选 usage 和 `[DONE]`。
+- 前端默认请求 SSE,但只把后端标记为 `kind=stream` 的主故事步骤显示给玩家;规划、记忆和修复步骤继续静默执行。
+- 旧版连接助手明确返回 `stream_not_supported` 时,前端自动退回非流式请求,避免已安装用户因前端升级而中断。
+- 客户端断开时连接助手中断对应 Codex turn;Codex 不提供 delta 时以 `item/completed` 完整文本兜底。
+
 ## 影响
 
 - 玩家只需在 app 选择“Codex 本机”、运行一次安装器并确认 OAuth,不需要自行部署 Render 或配置反代参数。
 - 浏览器会看到完整模型上下文,包括隐藏卡内容和 operator 注入;因此能力只给可信用户。
 - 本机反代必须支持 CORS、Private Network Access 预检和 `/chat/completions`。
+- 更新后的官方连接助手支持真实 SSE;已有安装继续兼容,重新运行安装器即可升级。
 - 玩家可控制模型输出,所以该模式不适用于有对抗性或排名价值的公开玩法。
 
 ## 上线记录
 
+- SSE 增强任务:[YOR-208](https://linear.app/yorha/issue/YOR-208/功能-为-codex-本机模式增加真实-sse-流式输出)。
 - 受控本机反代主流程:PR #150、#151。
 - OAuth 与一键安装:PR #152,merge commit `e5b102a23676e6840db95a6c024752a94a018795`。
 - 生产地址:`https://ai-interactive-story.onrender.com`,Render deploy `dep-d985n5favr4c738uq3i0` 已为 `live`。
 - 验证:Python 18 tests、Node bridge 6 tests、Vite production build、线上 4 个安装文件哈希、真实生产安装、协议停止后重启、真实 Codex completion `PROD_INSTALL_OK`。
+- SSE 实测:模型 `gpt-5.6-sol`,最终文本 `STREAM_LIVE_OK`,4 个内容分片,首字约 3.68 秒、总耗时约 3.83 秒。
