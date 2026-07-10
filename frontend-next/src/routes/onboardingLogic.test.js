@@ -386,14 +386,15 @@ test("onboarding rehearses story chat and creation without route jumps", () => {
   assert.equal(create.field, "createSeed");
   assert.equal(create.next, "tryCreateResult");
   assert.equal(create.ai.optional, true);
-  assert.equal(create.demo.type, "draftCard");
+  assert.equal(create.demo.type, "createProjection");
+  assert.doesNotMatch(JSON.stringify(create.demo), /draftCard|角色卡/);
   assert.doesNotMatch(JSON.stringify(create), /雨夜侦探/);
   assert.match(create.line({}), /刚刚你看到的卡/);
   assert.match(create.line({}), /执笔人/);
 
   const createResult = beatById("tryCreateResult");
-  assert.equal(createResult.demo.type, "draftCard");
-  assert.doesNotMatch(createResult.demo.hook({ createSeed: "" }), /雨夜侦探/);
+  assert.equal(createResult.demo.type, "createProjection");
+  assert.doesNotMatch(createResult.demo.result({ createSeed: "" }), /雨夜侦探/);
   assert.match(createResult.line({ createSeed: "半夜给自己写信的人" }), /角色卡/);
   assert.equal(createResult.chips[0].next, "tryWrap");
 

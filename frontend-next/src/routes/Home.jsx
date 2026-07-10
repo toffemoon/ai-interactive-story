@@ -10,6 +10,7 @@ import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, 
 import { IdentityCard } from "../components/IdentityCard";
 import StaggeredText from "../components/staggered-text";
 import AnimatedList from "../components/animated-list";
+import { OnboardingCreateProjection } from "../components/OnboardingCreateProjection";
 import "./Home.css";
 
 // 立绘主页(家)· YOR-136 · galgame 式登录后首屏。
@@ -109,26 +110,25 @@ function DemoCard({ model, className = "" }) {
   );
 }
 
-function draftCardModel(demo, echo) {
-  const seed = demoText(demo.seed, echo, "半夜给自己写信的人");
-  const hook = demoText(demo.hook, echo, "说一个画面、一句话都行。聊着聊着,人就立起来了。");
-  return toCardModel("character", {
-    name: seed,
-    official: false,
-    data: {
-      spec: "chara_card_v2",
-      spec_version: "2.0",
-      data: {
-        name: seed,
-        description: hook,
-        look: hook,
-        tags: demo.result ? ["角色雏形", "可继续创作"] : ["创作中", "种子"],
-      },
-    },
-  });
+function OnboardingBubble({ beat, line, disabled, onSkip, className = "", style }) {
+  return (
+    <div className={["home-ob-bubble", className].filter(Boolean).join(" ")} style={style}>
+      <div className="home-ob-bubble-head">
+        <span className="home-dlg-name t-kai">{beat && beat.speaker ? beat.speaker : "糖沐"}</span>
+        {beat && (
+          <button type="button" className="home-ob-skip" onClick={onSkip} disabled={disabled} title="跳过引导,直接进店">
+            跳过
+          </button>
+        )}
+      </div>
+      <p className="home-ob-line t-read" aria-live="polite" aria-busy={disabled}>
+        {disabled ? line : <DialogueReveal key={line} text={line} />}
+      </p>
+    </div>
+  );
 }
 
-function OnboardingDemo({ beat, echo }) {
+function OnboardingDemo({ beat, echo, value, busy, inputRef, onChange, onSubmit }) {
   const demo = beat && beat.demo;
   if (!demo) return null;
 
@@ -165,12 +165,19 @@ function OnboardingDemo({ beat, echo }) {
     );
   }
 
-  if (demo.type === "draftCard") {
-    const model = draftCardModel(demo, echo);
+  if (demo.type === "createProjection") {
     return (
-      <aside className={"home-ob-demo home-ob-demo--draft-card" + (demo.result ? " is-result" : "")} aria-label="创作预演">
-        <DemoCard model={model} className="home-demo-draft-card" />
-      </aside>
+      <OnboardingCreateProjection
+        value={value}
+        seed={demoText(demo.seed, echo)}
+        result={demoText(demo.result, echo)}
+        busy={busy}
+        placeholder={beat.placeholder}
+        submitLabel={beat.submitLabel}
+        inputRef={inputRef}
+        onChange={onChange}
+        onSubmit={onSubmit}
+      />
     );
   }
 
@@ -203,6 +210,7 @@ export default function Home({ testMode = false }) {
   const [obEcho, setObEcho] = useState({});
   const [obInput, setObInput] = useState("");
   const [obBubblePos, setObBubblePos] = useState(null); // 台词气泡贴头定位 {left,top}(px);null=走 CSS(窄屏/竖版底部)
+  const [obChatBubblePos, setObChatBubblePos] = useState(null); // chat 拍前景气泡,坐标相对 .home-ui
   const [obHistory, setObHistory] = useState([]); // 已访拍栈(不含当前),供「上一步」回退
   const [obViaBack, setObViaBack] = useState(false); // 当前拍是否由回退进入 → 显反悔反应(backLine/backEmo)
   const [obThinking, setObThinking] = useState(false); // AI 自适应:提交后糖沐"思考态"(等 /api/chat)
@@ -453,6 +461,76 @@ export default function Home({ testMode = false }) {
     window.addEventListener("resize", compute);
     return () => window.removeEventListener("resize", compute);
   }, [obActive, headAnchor, obStep, obIntro, image]);
+
+  // chat 拍气泡在 .home-ui 前景层：宣说话时从宣的真实 rect 右侧起排；糖沐说话时回到糖沐头侧。
+  // 位置在首轮 layout、视口 resize、立绘位移结束及宣图片加载后重算，始终 clamp 在 UI/viewport 内。
+  useLayoutEffect(() => {
+    if (!obActive || !obBeat || !obDemo || obDemo.type !== "chat") {
+      setObChatBubblePos(null);
+      return undefined;
+    }
+
+    let frame = 0;
+    const compute = () => {
+      const ui = document.querySelector(".home-ui");
+      const xuan = ui && ui.querySelector(".home-demo-xuan-img");
+      if (!ui || !xuan) return;
+      const uiRect = ui.getBoundingClientRect();
+      const xuanRect = xuan.getBoundingClientRect();
+      if (!uiRect.width || !xuanRect.width) return;
+
+      const narrow = window.matchMedia("(max-width: 720px), (orientation: portrait)").matches;
+      const pad = narrow ? 12 : 24;
+      const gap = narrow ? 8 : 16;
+      const preferredWidth = narrow ? clamp(uiRect.width * 0.46, 156, 210) : clamp(uiRect.width * 0.25, 280, 350);
+      const dock = ui.querySelector(".home-dock");
+      const dockTop = dock ? dock.getBoundingClientRect().top - uiRect.top : uiRect.height - pad;
+      let left;
+      let top;
+      let width = preferredWidth;
+
+      if (obBeat.speaker === "宣") {
+        const naturalLeft = xuanRect.right - uiRect.left + gap;
+        const available = uiRect.width - pad - naturalLeft;
+        width = Math.min(preferredWidth, Math.max(144, available));
+        left = clamp(naturalLeft, pad, Math.max(pad, uiRect.width - pad - width));
+        top = xuanRect.top - uiRect.top + Math.min(72, xuanRect.height * 0.12);
+      } else {
+        const tangmu = document.querySelector(".home-portrait-img.is-on") || document.querySelector(".home-portrait img");
+        const tangmuRect = tangmu && tangmu.getBoundingClientRect();
+        if (!tangmuRect || !tangmuRect.width || !headAnchor) return;
+        const headX = tangmuRect.left - uiRect.left + headAnchor.edge * tangmuRect.width;
+        const headY = tangmuRect.top - uiRect.top + headAnchor.y * tangmuRect.height;
+        const maxLeft = Math.max(pad, uiRect.width - pad - width);
+        left = narrow ? clamp(headX + gap, pad, maxLeft) : clamp(headX - gap - width, pad, maxLeft);
+        top = headY - (narrow ? 56 : 76);
+      }
+
+      const maxTop = Math.max(pad, Math.min(uiRect.height - 170, dockTop - 154));
+      setObChatBubblePos({
+        left: Math.round(left),
+        top: Math.round(clamp(top, pad, maxTop)),
+        width: Math.round(width),
+      });
+    };
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(compute);
+    };
+
+    schedule();
+    window.addEventListener("resize", schedule);
+    const portrait = document.querySelector(".home-portrait");
+    const xuan = document.querySelector(".home-demo-xuan-img");
+    portrait?.addEventListener("transitionend", schedule);
+    xuan?.addEventListener("load", schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", schedule);
+      portrait?.removeEventListener("transitionend", schedule);
+      xuan?.removeEventListener("load", schedule);
+    };
+  }, [obActive, obStep, obBeat && obBeat.speaker, obDemo && obDemo.type, headAnchor, image]);
 
   // 立绘双层交叉溶解:image 变 → 把新图放「非当前层」+ 切当前层到它 = 新层淡入、旧层淡出。
   // 换图与切层合成一次 setObPortrait(原子提交),消掉两次 setState 间「新图挂在旧层判定上以 opacity:1 闪现」的中间帧(整图差分重影的根因之一)。
@@ -1015,28 +1093,21 @@ export default function Home({ testMode = false }) {
         ) : (
           <span className="home-portrait-ph t-kai">{Array.from(displayName).slice(0, 2).join("")}</span>
         )}
-        {/* 台词气泡:渲染在 .home-portrait 内 → 立绘 -8% 滑动时随容器 transform 一起走(零重量、不卡)。坐标相对 portrait(见 compute)。窄屏 obBubblePos=null 走 CSS 底部。 */}
-        {(obBeat || (introFrame && introFrame.line)) && (
-          <div
+        {/* 普通拍气泡跟随糖沐立绘；chat 拍改在 .home-ui 前景层渲染。 */}
+        {(obBeat || (introFrame && introFrame.line)) && !(obDemo && obDemo.type === "chat") && (
+          <OnboardingBubble
             key={obBeat ? "b-" + obBeat.id + (obViaBack ? "-back" : "") : "i-" + obIntro}
-            className="home-ob-bubble"
+            beat={obBeat}
+            line={obLine}
+            disabled={obThinking}
+            onSkip={() => endOnboarding()}
             style={
               obBubblePos &&
-              !(obBeat && (obBeat.centerBubble || obBeat.speaker === "宣" || (obDemo && obDemo.type === "chat" && obBeat.speaker === "糖沐")))
+              !(obBeat && obBeat.centerBubble)
                 ? { left: obBubblePos.left, top: obBubblePos.top, right: "auto", bottom: "auto", transform: "translate(-100%, -50%)" }
                 : undefined
             }
-          >
-            <div className="home-ob-bubble-head">
-              <span className="home-dlg-name t-kai">{obBeat && obBeat.speaker ? obBeat.speaker : "糖沐"}</span>
-              {obBeat && (
-                <button className="home-ob-skip" onClick={() => endOnboarding()} disabled={obThinking} title="跳过引导,直接进店">跳过</button>
-              )}
-            </div>
-            <p className="home-ob-line t-read" aria-live="polite" aria-busy={obThinking}>
-              {obThinking ? obLine : <DialogueReveal key={obLine} text={obLine} />}
-            </p>
-          </div>
+          />
         )}
       </div>
 
@@ -1091,7 +1162,28 @@ export default function Home({ testMode = false }) {
               <input ref={obAvatarInputRef} type="file" accept="image/*" onChange={obAvatarChange} hidden />
             </div>
           )}
-          {obDemo && <OnboardingDemo beat={obBeat} echo={obEcho} />}
+          {obDemo && (
+            <OnboardingDemo
+              beat={obBeat}
+              echo={obEcho}
+              value={obInput}
+              busy={obThinking}
+              inputRef={obInputRef}
+              onChange={(event) => setObInput(event.target.value)}
+              onSubmit={obFieldSubmit}
+            />
+          )}
+          {obBeat && obDemo && obDemo.type === "chat" && (
+            <OnboardingBubble
+              key={"chat-" + obBeat.id + (obViaBack ? "-back" : "")}
+              beat={obBeat}
+              line={obLine}
+              disabled={obThinking}
+              onSkip={() => endOnboarding()}
+              className={"home-ob-bubble--chat " + (obBeat.speaker === "宣" ? "is-xuan" : "is-tangmu")}
+              style={obChatBubblePos ? { left: obChatBubblePos.left, top: obChatBubblePos.top, width: obChatBubblePos.width } : undefined}
+            />
+          )}
           {/* 底部交互坞:主按钮行(贴对话框上方右对齐)+ 对话框聚成一组,不再悬空 */}
           <div className="home-dock">
             {obBeat ? (
@@ -1103,7 +1195,7 @@ export default function Home({ testMode = false }) {
                   </button>
                 )}
                 {/* 输入框:自动播放拍隐藏;其余 field 拍=回答登记(走 AI 辨别),导览/办卡拍=跟糖沐说话。 */}
-                {!obBeat.autoNext && <div className="home-composer">
+                {!obBeat.autoNext && (!obDemo || obDemo.type !== "createProjection") && <div className="home-composer">
                   <input
                     ref={obInputRef}
                     className="home-input"

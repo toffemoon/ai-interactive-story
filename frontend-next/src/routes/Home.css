@@ -286,19 +286,19 @@
 }
 
 /* —— 新手引导(onboarding):头侧台词气泡 + 底部操作盘 —— */
-/* 台词气泡:贴立绘头部一侧,深色半透明沉浸(暖褐黑 + 琥珀金边 + 浅字,呼应木质书店暖夜;白色版可回退) */
+/* 台词气泡:暖纸悬在立绘头侧；chat 拍会把同一组件提到 .home-ui 前景层。 */
 .home-ob-bubble {
   position: absolute;
   z-index: 4;
   top: clamp(36px, 8vh, 96px);
   left: clamp(20px, 4vw, 56px);
   width: min(320px, 38vw);
-  background: rgba(28, 22, 16, 0.82);
-  border: 1px solid rgba(199, 154, 78, 0.5);
+  background: rgba(250, 247, 241, 0.8);
+  border: 1px solid rgba(34, 26, 18, 0.14);
   border-radius: var(--r-lg);
   padding: var(--sp-3) var(--sp-4);
   box-shadow: 0 14px 40px -14px rgba(0, 0, 0, 0.7);
-  color: #f1e7d6;
+  color: #20201d;
   /* 380ms 延迟:每拍气泡 key 重挂后先按住不显,让立绘先换姿势(先动作、后气泡),错开更自然 */
   pointer-events: auto; /* 气泡现渲染在 .home-portrait(pointer-events:none)内,需恢复可点,否则"跳过"按钮失效 */
   animation: obBubbleIn 320ms var(--ease-out) 380ms both;
@@ -317,23 +317,23 @@
   margin-bottom: 4px;
 }
 .home-ob-bubble .home-dlg-name {
-  color: #e8b563;
+  color: var(--cinnabar);
 }
 .home-ob-line {
   margin: 0;
-  color: #f1e7d6;
+  color: #20201d;
   line-height: var(--lh-body);
 }
 .home-ob-skip {
   border: none;
   background: transparent;
-  color: rgba(241, 231, 214, 0.6);
+  color: rgba(32, 32, 29, 0.5);
   font-size: var(--fs-ui-sm);
   cursor: pointer;
   padding: 2px 6px;
 }
 .home-ob-skip:hover {
-  color: #f1e7d6;
+  color: #20201d;
 }
 
 /* —— 身份卡收尾拍:糖沐左移让位,卡放右侧,从下方递上来入场 —— */
@@ -360,7 +360,7 @@
 .home.is-ob-demo-character .home-portrait,
 .home.is-ob-demo-characterCard .home-portrait,
 .home.is-ob-demo-create .home-portrait,
-.home.is-ob-demo-draftCard .home-portrait {
+.home.is-ob-demo-createProjection .home-portrait {
   transform: translateX(-10%);
 }
 .home.is-ob-demo-chat .home-portrait {
@@ -408,10 +408,6 @@
 }
 .home-ob-demo--character-card {
   right: clamp(132px, 19vw, 300px);
-  width: 210px;
-}
-.home-ob-demo--draft-card {
-  right: clamp(116px, 17vw, 260px);
   width: 210px;
 }
 .home-demo-card {
@@ -487,19 +483,11 @@
   object-position: bottom right;
   filter: drop-shadow(0 18px 32px rgba(0, 0, 0, 0.42));
 }
-.home.is-ob-speaker-xuan .home-ob-bubble,
-.home.is-ob-speaker-宣 .home-ob-bubble {
-  position: fixed;
-  left: clamp(1020px, 96vw, 1310px);
-  top: clamp(10px, 3vh, 32px);
-  width: min(340px, 28vw);
-  transform: none;
-}
-.home.is-ob-demo-chat.is-ob-speaker-tangmu .home-ob-bubble {
-  position: fixed;
-  left: clamp(700px, 55vw, 860px);
-  top: clamp(10px, 3vh, 32px);
-  width: min(350px, 28vw);
+.home-ob-bubble--chat {
+  position: absolute;
+  z-index: 7;
+  right: auto;
+  bottom: auto;
   transform: none;
 }
 .home.is-ob-finale .home-ob-bubble {
@@ -533,6 +521,106 @@
   grid-template-columns: 76px 1fr;
   gap: 14px;
   padding: 18px;
+}
+.home-ob-demo--create-projection {
+  right: clamp(48px, 8vw, 132px);
+  width: min(440px, 38vw);
+  padding: clamp(20px, 2.4vw, 30px);
+  overflow: hidden;
+  background: rgba(250, 247, 241, 0.8);
+  border: 1px solid rgba(34, 26, 18, 0.14);
+  border-radius: var(--r-lg);
+  color: #20201d;
+  box-shadow: 0 24px 64px -28px rgba(0, 0, 0, 0.72);
+}
+.home-create-projection-head {
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid rgba(34, 26, 18, 0.14);
+}
+.home-create-projection-kicker,
+.home-create-projection-label {
+  color: var(--cinnabar);
+  letter-spacing: 0.12em;
+}
+.home-create-projection-title {
+  margin: 5px 0 0;
+  color: #20201d;
+  font-size: clamp(27px, 2.5vw, 38px);
+  font-weight: 500;
+  line-height: 1.12;
+}
+.home-create-projection-form,
+.home-create-projection-result {
+  display: grid;
+  gap: var(--sp-4);
+  padding-top: var(--sp-5);
+}
+.home-create-projection-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-2);
+  padding: 8px;
+  background: rgba(250, 247, 241, 0.8);
+  border: 1px solid rgba(34, 26, 18, 0.14);
+  border-radius: var(--r-md);
+  color: #20201d;
+}
+.home-create-projection-composer input {
+  min-width: 0;
+  height: 46px;
+  padding: 0 13px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid #d8d2c7;
+  border-radius: calc(var(--r-md) - 3px);
+  color: #20201d;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  outline: none;
+}
+.home-create-projection-composer input::placeholder {
+  color: #91897e;
+}
+.home-create-projection-composer input:focus {
+  border-color: var(--cinnabar);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cinnabar) 14%, transparent);
+}
+.home-create-projection-composer button {
+  min-width: 72px;
+  border: 1px solid var(--cinnabar);
+  border-radius: calc(var(--r-md) - 3px);
+  background: var(--cinnabar);
+  color: #fffaf1;
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui);
+  cursor: pointer;
+}
+.home-create-projection-composer button:disabled {
+  opacity: 0.48;
+  cursor: default;
+}
+.home-create-projection-note {
+  margin: -4px 0 0;
+  color: rgba(32, 32, 29, 0.58);
+}
+.home-create-projection-block {
+  min-width: 0;
+}
+.home-create-projection-seed {
+  margin: 7px 0 0;
+  color: #20201d;
+  font-family: var(--font-kai);
+  font-size: clamp(22px, 2.1vw, 31px);
+  line-height: 1.35;
+}
+.home-create-projection-copy {
+  margin: 7px 0 0;
+  color: #20201d;
+}
+.home-create-projection-thread {
+  width: 44px;
+  height: 1px;
+  background: var(--cinnabar);
+  opacity: 0.52;
 }
 .home-demo-create-mark {
   width: 70px;
@@ -578,6 +666,14 @@
   flex-direction: column;
   gap: var(--sp-3);
 }
+.home-ob-tray > .home-composer {
+  padding: 8px;
+  background: rgba(250, 247, 241, 0.8);
+  border: 1px solid rgba(34, 26, 18, 0.14);
+  border-radius: var(--r-lg);
+  color: #20201d;
+  box-shadow: 0 14px 38px -22px rgba(0, 0, 0, 0.72);
+}
 /* 上一步(回退键):低调文字钮,贴操作盘左上 */
 .home-ob-back {
   align-self: flex-start;
@@ -595,14 +691,13 @@
   color: #f1e7d6;
 }
 .home-ob-tray .home-input {
-  background: rgba(16, 12, 9, 0.86);
-  border-color: rgba(232, 181, 99, 0.58);
-  color: #fff4df;
-  box-shadow: 0 10px 28px -20px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 244, 223, 0.06) inset;
-  backdrop-filter: blur(8px);
+  background: rgba(255, 255, 255, 0.85);
+  border-color: #d8d2c7;
+  color: #20201d;
+  box-shadow: none;
 }
 .home-ob-tray .home-input::placeholder {
-  color: rgba(255, 244, 223, 0.62);
+  color: #91897e;
 }
 .home-ob-chips {
   display: flex;
@@ -666,7 +761,7 @@
    头侧只在宽横版留得住;竖版(orientation: portrait)立绘按高度放大会横向铺满,
    721–900 的竖版平板会把左上气泡压到人物身上(实测 820×1180 重叠~130px),故一并下沉。 */
 @media (max-width: 720px), (orientation: portrait) {
-  .home-ob-bubble {
+  .home-ob-bubble:not(.home-ob-bubble--chat) {
     left: 12px;
     right: 12px;
     width: auto;
@@ -674,17 +769,6 @@
     top: auto;
     bottom: 168px;
     animation-name: obBubbleInM;
-  }
-  .home.is-ob-speaker-xuan .home-ob-bubble,
-  .home.is-ob-speaker-宣 .home-ob-bubble,
-  .home.is-ob-demo-chat.is-ob-speaker-tangmu .home-ob-bubble {
-    position: absolute;
-    left: 12px;
-    right: 12px;
-    width: auto;
-    top: auto;
-    bottom: 168px;
-    transform: none;
   }
   /* 登记态/办好态身份卡:竖屏 460px 宽会横向溢出,故缩小居中、放气泡上方(立绘腰腹处、露脸),
      取消入场位移动画(其 translateY transform 与这里的缩放 transform 冲突)。 */
@@ -746,11 +830,11 @@
     height: 178px;
   }
   .home-ob-demo--chat {
-    left: auto;
-    right: 10px;
+    left: 8px;
+    right: auto;
     top: 42px;
     bottom: 300px;
-    width: min(178px, 46vw);
+    width: min(164px, 42vw);
     height: auto;
   }
   .home-ob-demo--chat .home-demo-xuan-img {
@@ -771,6 +855,24 @@
     grid-template-columns: 58px 1fr;
     gap: 10px;
     padding: 14px;
+  }
+  .home-ob-demo--create-projection {
+    left: 12px;
+    right: 12px;
+    top: 56px;
+    width: auto;
+    padding: 18px;
+  }
+  .home-create-projection-title {
+    font-size: 28px;
+  }
+  .home-create-projection-form,
+  .home-create-projection-result {
+    gap: 12px;
+    padding-top: 16px;
+  }
+  .home-create-projection-composer {
+    grid-template-columns: minmax(0, 1fr) 64px;
   }
   .home-demo-create-mark {
     width: 54px;

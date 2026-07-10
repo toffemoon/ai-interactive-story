@@ -363,10 +363,7 @@ export const BEATS = [
     emo: "proud",
     tour: "create",
     demo: {
-      type: "draftCard",
-      title: "角色卡",
-      seed: "半夜给自己写信的人",
-      hook: "说一个画面、一句话都行。聊着聊着,人就立起来了。",
+      type: "createProjection",
     },
     line: () =>
       "刚刚你看到的卡,你也可以创造。不用担心你的想法只是零碎的,我们的执笔人会帮你一步一步把你脑海中的角色带到现实来。",
@@ -393,11 +390,9 @@ export const BEATS = [
     emo: "smile",
     tour: "create",
     demo: {
-      type: "draftCard",
-      title: "角色卡",
-      result: true,
+      type: "createProjection",
       seed: (e) => echoQuote(e, "createSeed", "半夜给自己写信的人"),
-      hook: (e) => `从「${echoQuote(e, "createSeed", "半夜给自己写信的人")}」开始,执笔人会先帮你补成一张能继续生长的角色卡。`,
+      result: (e) => `从「${echoQuote(e, "createSeed", "半夜给自己写信的人")}」开始,先补出人物的渴望、阻力与第一场相遇。`,
     },
     line: (e) => {
       const seed = echoQuote(e, "createSeed", "半夜给自己写信的人");
