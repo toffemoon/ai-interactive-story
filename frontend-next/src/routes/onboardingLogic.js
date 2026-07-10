@@ -1,5 +1,10 @@
 const NAME_PREFIX_RE =
   /^(?:我(?:的)?名字(?:就)?(?:叫|是|写)|名字(?:就)?(?:叫|是|写)|我(?:就)?叫|(?:就)?叫我|称呼我(?:为)?|可以叫我|你可以叫我|我是|my name is|call me|i am|i'm)\s*[：:，,、-]?\s*(.+)$/i;
+const NAME_AS_NAME_RE = /^(?:我(?:就)?用\s*)?(.+?)\s*作为(?:我(?:的)?)?名字(?:吧|啦|了|啊|呀|呢)?[。！？!?，,；;]*$/i;
+const NAME_POSITIVE_USE_RE = /^我(?:就)?用\s*/;
+const NAME_REJECTION_RE = /^(?:请\s*)?(?:我\s*)?(?:(?:不要|不想|不愿|不能|不准|不应该)(?:再)?\s*(?:用|把|叫|写|拿|将|让)?|别(?:再)?\s*(?:用|把|叫|写|拿|将|让))/;
+const NAME_REJECTED_CANDIDATE_START_RE = /^(?:请)?(?:我)?(?:可)?(?:不是要|不要|不想|不愿|不能|不准|不应该|别(?:再|把)?)/;
+const NAME_REJECTED_CANDIDATE_END_RE = /不(?:是|应(?:该)?|想|愿|能|准)?$/;
 
 function chars(s) {
   return Array.from(String(s || "").trim());
@@ -11,13 +16,22 @@ function normalizeText(s) {
     .replace(/[“”"'\s。？！?！,，、.·~～…—\-_:：；;（）()【】\[\]《》<>]/g, "");
 }
 
-const MEME_REPLIES = new Map([
-  ["kskbl", "zdjd"],
-]);
+function isRejectedNameStatement(text) {
+  if (NAME_REJECTION_RE.test(text)) return true;
+  const suffix = text.match(NAME_AS_NAME_RE);
+  if (!suffix || NAME_POSITIVE_USE_RE.test(text)) return false;
+  const candidate = suffix[1].replace(/\s/g, "");
+  return NAME_REJECTED_CANDIDATE_START_RE.test(candidate) || NAME_REJECTED_CANDIDATE_END_RE.test(candidate);
+}
 
-export function matchMemeReply(raw) {
-  const text = normalizeText(raw);
-  return MEME_REPLIES.get(text) || null;
+function explicitNameMatch(raw) {
+  const text = String(raw || "").trim();
+  if (isRejectedNameStatement(text)) return null;
+  return text.match(NAME_PREFIX_RE) || text.match(NAME_AS_NAME_RE);
+}
+
+export function isExplicitNameSubmission(raw) {
+  return Boolean(explicitNameMatch(raw));
 }
 
 function cleanNameCandidate(s) {
@@ -50,30 +64,34 @@ function looksLikeNonNameCandidate(name) {
   return false;
 }
 
-function looksOddName(name) {
+function looksStructurallyOddName(name) {
   const n = normalizeText(name);
-  const len = chars(n).length;
   if (!n) return false;
-  if (len > 8) return true;
   if (/^\d+$/.test(n)) return true;
+  if (/[a-z]/i.test(n) && /\d/.test(n)) return true;
   if (/^(.)\1{2,}$/.test(n)) return true;
   if (/[!！?？~～…]{2,}/.test(name)) return true;
   if (/(炒股|暴富|发财|韭菜|爸爸|爸妈|妈妈|你爹|爹|老公|老婆|主人|全世界|最帅|最美|傻|笨|屎|尿|屁|滚|杀|死|sb|傻逼)/i.test(n)) {
     return true;
   }
-  if (n.includes("的") && len >= 5) return true;
+  if (n.includes("的") && chars(n).length >= 5) return true;
   return false;
+}
+
+function looksOddName(name) {
+  return chars(normalizeText(name)).length > 8 || looksStructurallyOddName(name);
 }
 
 export function analyzeNameInput(raw) {
   const text = String(raw || "").trim();
   if (!text) return { value: "", needsConfirm: false, reason: null };
+  if (isRejectedNameStatement(text)) return { value: "", needsConfirm: false, reason: null };
   const compact = normalizeText(text);
   if (/你.*叫.*(什么|啥|吗|呀|啊)$/.test(compact) || /糖沐.*叫/.test(compact)) {
     return { value: "", needsConfirm: false, reason: null };
   }
 
-  const prefixed = text.match(NAME_PREFIX_RE);
+  const prefixed = explicitNameMatch(text);
   if (!prefixed && /(这|那|店|好看|谢谢|你好|嗨|哈|什么|怎么|为啥|可以|能不能|呀|呢|吗|啊)/.test(compact)) {
     return { value: "", needsConfirm: false, reason: null };
   }
@@ -82,6 +100,16 @@ export function analyzeNameInput(raw) {
   if (!hasUsableNameShape(candidate)) return { value: "", needsConfirm: false, reason: null };
   const needsConfirm = looksOddName(candidate);
   return { value: candidate, needsConfirm, reason: needsConfirm ? "odd" : null };
+}
+
+export function shouldAcceptNameLocally(raw) {
+  const parsed = analyzeNameInput(raw);
+  return Boolean(parsed.value && isExplicitNameSubmission(raw));
+}
+
+export function shouldConfirmBareNameLocally(raw) {
+  const parsed = analyzeNameInput(raw);
+  return Boolean(parsed.value && !isExplicitNameSubmission(raw) && looksStructurallyOddName(parsed.value));
 }
 
 export function analyzeNameCorrectionInput(raw) {
@@ -186,12 +214,16 @@ export function matchChipIntent(raw, chips) {
   return contextualProgressChip(raw, chips);
 }
 
-export function parseFieldIntentReply(raw) {
+export function parseFieldIntentReply(raw, { requireTag = false, allowNone = true } = {}) {
   const text = String(raw || "").trim();
   if (!text) return { intent: "retry", text: null };
-  const m = text.match(/^\s*\[(OK|NONE|CHAT)\]\s*/i);
-  if (!m) return { intent: "answer", text };
+  const m = text.match(/^\s*\[(OK|NONE|CHAT|MEME)\]\s*/i);
+  if (!m) return requireTag ? { intent: "retry", text: null } : { intent: "answer", text };
   const tag = m[1].toUpperCase();
+  if (tag === "NONE" && !allowNone) return { intent: "retry", text: null };
+  if (tag === "MEME") {
+    return { intent: "chat", text: text.slice(m[0].length).trim() || null, meme: true };
+  }
   const intent = tag === "CHAT" ? "chat" : tag === "NONE" ? "none" : "answer";
   return { intent, text: text.slice(m[0].length).trim() || null };
 }

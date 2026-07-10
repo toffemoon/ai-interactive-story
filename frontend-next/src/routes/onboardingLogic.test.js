@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { toCardModel } from "../lib/cardModel.js";
 import { beatById } from "./onboardingScript.js";
-import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, isExactFillChipSubmission, matchChipIntent, matchMemeReply, parseChipIntentReply, parseFieldIntentReply } from "./onboardingLogic.js";
+import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, isExactFillChipSubmission, isExplicitNameSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, shouldAcceptNameLocally, shouldConfirmBareNameLocally } from "./onboardingLogic.js";
 
 test("extracts the usable name from a sentence", () => {
   assert.deepEqual(analyzeNameInput("我的名字叫 叶叶"), {
@@ -50,6 +50,49 @@ test("extracts English call-me names without odd-name confirmation", () => {
     needsConfirm: false,
     reason: null,
   });
+});
+
+test("distinguishes bare meme-like text from an explicit name declaration", () => {
+  assert.equal(isExplicitNameSubmission("kskbl"), false);
+  assert.equal(isExplicitNameSubmission("宫廷玉液酒"), false);
+  assert.equal(isExplicitNameSubmission("我就用 kskbl 作为我的名字"), true);
+  assert.equal(isExplicitNameSubmission("宫廷玉液酒作为我的名字"), true);
+  assert.equal(isExplicitNameSubmission("我就用 kskbl 作为我的名字。"), true);
+  assert.equal(isExplicitNameSubmission("宫廷玉液酒作为我的名字吧！"), true);
+  assert.equal(analyzeNameInput("我就用 kskbl 作为我的名字").value, "kskbl");
+  assert.equal(analyzeNameInput("宫廷玉液酒作为我的名字").value, "宫廷玉液酒");
+  assert.equal(analyzeNameInput("宫廷玉液酒作为我的名字吧！").value, "宫廷玉液酒");
+});
+
+test("does not treat a rejected name as an explicit declaration", () => {
+  assert.equal(isExplicitNameSubmission("不要用张三作为我的名字"), false);
+  assert.equal(isExplicitNameSubmission("别把张三作为我的名字"), false);
+  assert.equal(isExplicitNameSubmission("我不想用张三作为我的名字"), false);
+  assert.equal(isExplicitNameSubmission("请不要用张三作为我的名字"), false);
+  assert.equal(isExplicitNameSubmission("我可不想用张三作为我的名字"), false);
+  assert.equal(isExplicitNameSubmission("我不是要用张三作为我的名字"), false);
+  assert.equal(isExplicitNameSubmission("宫廷玉液酒不作为我的名字"), false);
+  assert.equal(isExplicitNameSubmission("张三不应该作为我的名字"), false);
+  assert.equal(isExplicitNameSubmission("我就用不想长大作为我的名字"), true);
+  assert.equal(analyzeNameInput("不要用张三作为我的名字").value, "");
+  assert.equal(analyzeNameInput("宫廷玉液酒不作为我的名字").value, "");
+});
+
+test("accepts explicit names locally before odd-name confirmation and defers bare names", () => {
+  assert.equal(shouldAcceptNameLocally("kskbl"), false);
+  assert.equal(shouldAcceptNameLocally("宫廷玉液酒"), false);
+  assert.equal(shouldAcceptNameLocally("月客"), false);
+  assert.equal(shouldAcceptNameLocally("我就用 kskbl 作为我的名字"), true);
+  assert.equal(shouldAcceptNameLocally("宫廷玉液酒作为我的名字"), true);
+  assert.equal(shouldAcceptNameLocally("我就用奇变偶不变符号看象限作为我的名字"), true);
+  assert.equal(shouldAcceptNameLocally("Ratman0220"), false);
+});
+
+test("keeps structural odd handles local but sends long natural-language memes to AI", () => {
+  assert.equal(shouldConfirmBareNameLocally("Ratman0220"), true);
+  assert.equal(shouldConfirmBareNameLocally("炒股的爸妈"), true);
+  assert.equal(shouldConfirmBareNameLocally("奇变偶不变符号看象限"), false);
+  assert.equal(shouldConfirmBareNameLocally("我就用Ratman0220作为我的名字"), false);
 });
 
 test("asks for confirmation when the extracted name looks like a joke", () => {
@@ -172,12 +215,6 @@ test("does not match one-character fragments to action chips", () => {
   assert.equal(matchChipIntent("一", chips), null);
 });
 
-test("matches known internet meme shorthands to one-line replies", () => {
-  assert.equal(matchMemeReply("kskbl"), "zdjd");
-  assert.equal(matchMemeReply("KSKBL！"), "zdjd");
-  assert.equal(matchMemeReply("不是 kskbl 吧"), null);
-});
-
 test("parses AI chip intent replies conservatively", () => {
   const chips = [{ label: "带我认认这儿", next: "tourStory" }];
   assert.deepEqual(parseChipIntentReply("[CHIP:0]", chips), { chip: chips[0], chat: null });
@@ -189,10 +226,28 @@ test("parses AI chip intent replies conservatively", () => {
 test("parses field AI failures as retry instead of fabricated answers", () => {
   assert.deepEqual(parseFieldIntentReply(null), { intent: "retry", text: null });
   assert.deepEqual(parseFieldIntentReply(""), { intent: "retry", text: null });
+  assert.deepEqual(parseFieldIntentReply("zdjd", { requireTag: true }), { intent: "retry", text: null });
+  assert.deepEqual(parseFieldIntentReply("[NONE] 没有名字", { requireTag: true, allowNone: false }), { intent: "retry", text: null });
   assert.deepEqual(parseFieldIntentReply("[CHAT] 先别急。"), { intent: "chat", text: "先别急。" });
   assert.deepEqual(parseFieldIntentReply("[NONE] 最近还没看。"), { intent: "none", text: "最近还没看。" });
   assert.deepEqual(parseFieldIntentReply("[OK] 写好了。"), { intent: "answer", text: "写好了。" });
   assert.deepEqual(parseFieldIntentReply("写好了。"), { intent: "answer", text: "写好了。" });
+});
+
+test("keeps an AI-recognized meme in chat mode and exposes its portrait cue", () => {
+  assert.deepEqual(parseFieldIntentReply("[MEME] 符号看象限。"), {
+    intent: "chat",
+    text: "符号看象限。",
+    meme: true,
+  });
+});
+
+test("name intent prompt defaults plausible nicknames to names and only catches known memes", () => {
+  const scenario = beatById("name").ai.scenario();
+  assert.match(scenario, /短称呼.*默认.*\[OK\]/);
+  assert.match(scenario, /明确知道.*接梗.*\[MEME\]/);
+  assert.match(scenario, /玩家只说 kskbl 时必须回复 \[MEME\] zdjd/);
+  assert.match(scenario, /玩家只说「宫廷玉液酒」时必须回复 \[MEME\] 一百八一杯/);
 });
 
 test("extracts a name value from AI field replies", () => {

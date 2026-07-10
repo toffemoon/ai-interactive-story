@@ -6,7 +6,7 @@ import { toCardModel } from "../lib/cardModel";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
 import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
-import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, isExactFillChipSubmission, matchChipIntent, matchMemeReply, parseChipIntentReply, parseFieldIntentReply } from "./onboardingLogic";
+import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, shouldAcceptNameLocally, shouldConfirmBareNameLocally } from "./onboardingLogic";
 import { IdentityCard } from "../components/IdentityCard";
 import StaggeredText from "../components/staggered-text";
 import AnimatedList from "../components/animated-list";
@@ -210,7 +210,7 @@ export default function Home({ testMode = false }) {
   const [obCardMessage, setObCardMessage] = useState(null); // 身份卡上糖沐的 AI 寄语;null=卡组件用默认暖句
   const [obCardAvatar, setObCardAvatar] = useState(null); // 身份卡头像(上传后 dataURL);null=用称呼字头
   const [obPendingConfirm, setObPendingConfirm] = useState(null); // {field,value,reason}:奇怪/玩笑名先二次确认,不直接写卡
-  const [obEmoOverride, setObEmoOverride] = useState(null); // 临时覆盖立绘(如奇怪名字→流汗 wry)
+  const [obEmoOverride, setObEmoOverride] = useState(null); // 临时覆盖立绘(如奇怪名字→流汗 wry、接梗→惊讶 surprise)
   const [obContinueHint, setObContinueHint] = useState(false); // 长时间不点 chip 时的弱提示
   const [obCrop, setObCrop] = useState(null); // 头像裁剪弹窗状态
   // 立绘双层(交叉溶解):slots=两层各 src, layer=当前在顶(不透明)的层。合成一个 state 一次提交,避免换图/切层两次 setState 间的中间帧闪(重影根因之一)。
@@ -593,18 +593,12 @@ export default function Home({ testMode = false }) {
     if (c.done) endOnboarding(echo);
     else if (c.next) obGoNext(c.next);
   }
-  // 解析糖沐回复的辨别标记:[CHAT]=闲聊(接话不填、停这拍) / [NONE]=明说没有(推进但卡上记空) / [OK]或无标记=当答案(填原话+推进)。
+  // 解析糖沐回复的辨别标记:[CHAT]/[MEME]=接话不填 / [NONE]=无偏好 / [OK]=填答案。名字拍强制要求标记,避免漏标时误写卡。
   async function obFieldSubmit() {
     const v = obInput.trim();
     if (!v || !obBeat || !obBeat.field || obThinking) return;
     const beat = obBeat;
     if (!beat.next) return;
-    const memeReply = matchMemeReply(v);
-    if (memeReply) {
-      setObAiLine(memeReply);
-      setObInput("");
-      return;
-    }
     if (obPendingConfirm && beat.field === "name") {
       const pending = analyzePendingNameInput(v, obPendingConfirm.value);
       if (pending.intent === "confirm") {
@@ -647,23 +641,24 @@ export default function Home({ testMode = false }) {
     if (beat.field === "name") {
       localName = analyzeNameInput(v);
       if (localName.value) fieldValue = localName.value;
-      if (localName.needsConfirm) {
-        setObPendingConfirm({ field: "name", value: localName.value, reason: localName.reason });
-        setObEmoOverride("wry");
-        setObAiLine(`我先确认一下,你是认真要把「${localName.value}」写在卡上吗?`);
-        setObInput("");
-        return;
-      }
-      if (localName.value) {
+      if (localName.value && shouldAcceptNameLocally(v)) {
         const echo = { ...obEcho, name: fieldValue, nameOdd: false };
         setObEcho(echo);
         persistEcho(echo);
         obGoNext(beat.next);
         return;
       }
+      if (localName.value && shouldConfirmBareNameLocally(v)) {
+        setObPendingConfirm({ field: "name", value: localName.value, reason: localName.reason });
+        setObEmoOverride("wry");
+        setObAiLine(`我先确认一下,你是认真要把「${localName.value}」写在卡上吗?`);
+        setObInput("");
+        return;
+      }
     }
-    // AI 辨别:让糖沐判断这句是不是正经回答(报称呼/口味)。[OK]→填卡+推进;[CHAT]→接话但不填、停这拍继续等。失败/无标记→保守当答案。
+    // AI 辨别:[OK]→填卡+推进;[MEME]/[CHAT]→接话不填。名字拍失败/漏标时重说,其他字段保留旧的无标记答案降级。
     if (beat.ai) {
+      setObEmoOverride(null);
       setObThinking(true);
       let reply = null;
       try {
@@ -684,7 +679,8 @@ export default function Home({ testMode = false }) {
         obGoNext(beat.next);
         return;
       }
-      const p = parseFieldIntentReply(reply);
+      const isNameField = beat.field === "name";
+      const p = parseFieldIntentReply(reply, { requireTag: isNameField, allowNone: !isNameField });
       if (p.intent === "retry") {
         setObAiLine(beat.field === "name" ? "我刚才没听清。你直接报一个想写在卡上的称呼就行。" : "我刚才没听清。最近在看什么,或者说「没有」也行。");
         setObInput("");
@@ -692,6 +688,7 @@ export default function Home({ testMode = false }) {
       }
       if (p.intent === "chat") {
         // 闲聊/没正经回答:糖沐接话但不填卡、不推进,停这拍继续等真正的答案。
+        setObEmoOverride(p.meme ? "surprise" : null);
         setObAiLine(p.text || (beat.field === "name" ? "这个不像称呼。那,我该怎么叫你?" : "这句我先当闲聊。那,最近都在看点什么?"));
         setObInput("");
         return;
@@ -747,12 +744,6 @@ export default function Home({ testMode = false }) {
   async function obChatSubmit() {
     const v = obInput.trim();
     if (!v || obThinking) return;
-    const memeReply = matchMemeReply(v);
-    if (memeReply) {
-      setObAiLine(memeReply);
-      setObInput("");
-      return;
-    }
     if (obBeat) {
       const chipMatch = matchChipIntent(v, obBeat.chips);
       if (chipMatch) {
