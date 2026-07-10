@@ -242,6 +242,24 @@ export function extractNameFromAiFieldText(raw) {
   return { value: parsed.value, text: cleaned || text };
 }
 
+export function sanitizeCardMessage(raw) {
+  let text = String(raw || "").trim();
+  const actionCue = /(抬头|低头|回头|看你|望向|笑|弯弯|眨眼|歪头|点头|摇头|递|凑|轻声|眼角|耳朵|尾巴|手指)/;
+  while (text) {
+    const match = text.match(/^(?:[（(]([^（）()\n]{1,48})[）)]|[*＊]([^*＊\n]{1,48})[*＊])\s*/);
+    if (!match || !actionCue.test(match[1] || match[2] || "")) break;
+    text = text.slice(match[0].length).trim();
+  }
+  return text;
+}
+
+export function extractTasteFromAiFieldText(raw) {
+  const text = String(raw || "").trim();
+  const match = text.match(/^(?:口味|最近在看|taste)\s*[=：:]\s*([^\r\n]+)/i);
+  if (!match) return { value: "", text };
+  return { value: match[1].trim(), text: text.slice(match[0].length).replace(/^\s+/, "").trim() || text };
+}
+
 export function parseChipIntentReply(raw, chips) {
   const text = String(raw || "").trim();
   if (!text) return { chip: null, chat: null };

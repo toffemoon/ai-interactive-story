@@ -6,7 +6,7 @@ import { toCardModel } from "../lib/cardModel";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
 import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
-import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, shouldAcceptNameLocally, shouldConfirmBareNameLocally } from "./onboardingLogic";
+import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, sanitizeCardMessage, shouldAcceptNameLocally, shouldConfirmBareNameLocally } from "./onboardingLogic";
 import { IdentityCard } from "../components/IdentityCard";
 import StaggeredText from "../components/staggered-text";
 import AnimatedList from "../components/animated-list";
@@ -489,7 +489,7 @@ export default function Home({ testMode = false }) {
           postJSON("/api/chat", { card, session_id: newSessionId(), user: obEcho.taste || obEcho.name || "新客", world: null }),
           new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000)),
         ]);
-        msg = ((r && r.reply) || "").trim() || null;
+        msg = sanitizeCardMessage((r && r.reply) || "") || null;
       } catch (e) {
         msg = null;
       }
@@ -698,6 +698,12 @@ export default function Home({ testMode = false }) {
       let answerLine = p.text;
       if (beat.field === "name" && p.intent === "answer") {
         const extracted = extractNameFromAiFieldText(p.text);
+        if (extracted.value) {
+          answerValue = extracted.value;
+          answerLine = extracted.text;
+        }
+      } else if (beat.field === "taste" && p.intent === "answer") {
+        const extracted = extractTasteFromAiFieldText(p.text);
         if (extracted.value) {
           answerValue = extracted.value;
           answerLine = extracted.text;

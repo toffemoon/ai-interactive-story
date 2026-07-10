@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { toCardModel } from "../lib/cardModel.js";
 import { beatById } from "./onboardingScript.js";
-import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, isExactFillChipSubmission, isExplicitNameSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, shouldAcceptNameLocally, shouldConfirmBareNameLocally } from "./onboardingLogic.js";
+import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, isExactFillChipSubmission, isExplicitNameSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, sanitizeCardMessage, shouldAcceptNameLocally, shouldConfirmBareNameLocally } from "./onboardingLogic.js";
 
 test("extracts the usable name from a sentence", () => {
   assert.deepEqual(analyzeNameInput("我的名字叫 叶叶"), {
@@ -255,6 +255,49 @@ test("extracts a name value from AI field replies", () => {
     value: "何人初见月",
     text: "记下了,我会这样叫你。",
   });
+});
+
+test("removes consecutive leading action spans from card messages", () => {
+  assert.equal(
+    sanitizeCardMessage("（抬头看你）*轻声笑了笑* 月客,愿你总能遇见想读的故事。"),
+    "月客,愿你总能遇见想读的故事。",
+  );
+  assert.equal(sanitizeCardMessage("（点头）＊轻声笑了笑＊"), "");
+});
+
+test("preserves ordinary and internal parentheses in card messages", () => {
+  assert.equal(
+    sanitizeCardMessage("愿你总能找到那本书（也找到自己）。"),
+    "愿你总能找到那本书（也找到自己）。",
+  );
+  assert.equal(sanitizeCardMessage("（第一版）愿你读得尽兴。"), "（第一版）愿你读得尽兴。");
+});
+
+test("extracts structured taste metadata only from the first line", () => {
+  for (const key of ["口味", "最近在看", "taste"]) {
+    assert.deepEqual(extractTasteFromAiFieldText(`${key}=灵魂摆渡人\n这部很适合夜里慢慢看。`), {
+      value: "灵魂摆渡人",
+      text: "这部很适合夜里慢慢看。",
+    });
+  }
+  assert.deepEqual(extractTasteFromAiFieldText("这部很适合夜里慢慢看。\n口味=灵魂摆渡人"), {
+    value: "",
+    text: "这部很适合夜里慢慢看。\n口味=灵魂摆渡人",
+  });
+});
+
+test("taste prompt requires structured high-confidence titles and preserves uncertain originals", () => {
+  const scenario = beatById("taste").ai.scenario({ name: "何人初见月" });
+  assert.match(scenario, /\[OK\].*第一行.*口味=高置信度规范值/s);
+  assert.match(scenario, /只.*纠正.*明显.*高置信度.*错/);
+  assert.match(scenario, /不确定.*保留.*原文/);
+});
+
+test("card message prompt forbids action and emotion stage directions", () => {
+  const prompt = beatById("cardDone").msg({ name: "何人初见月", taste: "灵魂摆渡人" });
+  assert.match(prompt, /不要.*动作描述/);
+  assert.match(prompt, /不要.*情绪描述/);
+  assert.match(prompt, /不要.*括号.*动作/);
 });
 
 test("onboarding rehearses story chat and creation without route jumps", () => {
