@@ -30,7 +30,8 @@ updated: 2026-07-10
   - 默认仍为 Render 后端 DeepSeek;operator 只向特定账户开放 Codex 本机选项。
   - 唯一授权管理员为 `SUPERADMIN_EMAIL=gengyue081@gmail.com`;该账户固定拥有能力且不可撤销,数据库 role 不能产生第二个授权管理员。
   - Windows 玩家一键安装本机桥接并走 Codex 官方 ChatGPT OAuth,无需自建 Render、手填 URL/模型或管理 token;凭证不进入 app/Render。
-  - 主流程 PR #150/#151;自动 OAuth/安装 PR #152,merge `e5b102a`;生产已验证 `live`。
+  - 主故事支持真实 SSE;内部步骤不显示,旧桥接自动退回非流式,浏览器断开会中断 Codex turn。
+  - 主流程 PR #150/#151;自动 OAuth/安装 PR #152;SSE PR #154,merge `8019f8b`,Render deploy `dep-d98bm4e7r5hc73cr6qh0` 已验证 `live`。
 
 - **双前端已收敛(2026-07-08,见 `decisions/2026-07-07-frontend-next-cutover.md`)**:
   - **`frontend-next`(Vite + React + HashRouter)已作为唯一主前端合入 `main`(commit fc430b2)**;旧零构建 `frontend/` 已删除;`src/api.py` 现挂 `FRONTEND = ROOT / "frontend-next" / "dist"`,**dist 已提交进 git** 让 main 自包含可部署(Render 无 node build 也能 serve)。

@@ -54,6 +54,8 @@ status: accepted
 - SSE 增强任务:[YOR-208](https://linear.app/yorha/issue/YOR-208/功能-为-codex-本机模式增加真实-sse-流式输出)。
 - 受控本机反代主流程:PR #150、#151。
 - OAuth 与一键安装:PR #152,merge commit `e5b102a23676e6840db95a6c024752a94a018795`。
+- SSE 流式输出:PR #154,merge commit `8019f8b74973576a7559ab4735fab09b9d256a47`;Render deploy `dep-d98bm4e7r5hc73cr6qh0` 已为 `live`。
 - 生产地址:`https://ai-interactive-story.onrender.com`,Render deploy `dep-d985n5favr4c738uq3i0` 已为 `live`。
 - 验证:Python 18 tests、Node bridge 6 tests、Vite production build、线上 4 个安装文件哈希、真实生产安装、协议停止后重启、真实 Codex completion `PROD_INSTALL_OK`。
 - SSE 实测:模型 `gpt-5.6-sol`,最终文本 `STREAM_LIVE_OK`,4 个内容分片,首字约 3.68 秒、总耗时约 3.83 秒。
+- SSE 生产安装复验:Node bridge 9 tests、Python 18 tests、Vite production build;4 个线上安装文件哈希匹配,最终文本 `PROD_SSE_OK`,5 个内容分片,首字约 2.25 秒、总耗时约 2.43 秒。
