@@ -201,6 +201,25 @@
 .search-input::placeholder {
   color: var(--muted);
 }
+.search-clear {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.search-clear:hover {
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  color: var(--fg);
+}
 
 /* ───── ChatBubble(微信式)───── */
 .bubble-row {
@@ -330,6 +349,14 @@
 }
 .card--shelf .card-front {
   transform: perspective(1300px) rotateY(0deg);
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  appearance: none;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
 }
 .card--shelf .card-back {
   transform: perspective(1300px) rotateY(180deg);
@@ -355,6 +382,9 @@
 }
 .card--shelf:hover .card-inner {
   transform: scale(1.025);
+}
+.card--shelf:hover .card-cover-image {
+  transform: scale(1.035);
 }
 .card-front::after {
   content: "";
@@ -390,8 +420,35 @@
   position: relative;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
   background-size: cover;
   background-position: center;
+}
+.card-cover.no-cover {
+  background-image:
+    linear-gradient(135deg, transparent 0 48%, rgba(236, 227, 210, 0.055) 48% 52%, transparent 52%),
+    repeating-linear-gradient(90deg, transparent 0 18px, rgba(236, 227, 210, 0.035) 18px 19px);
+}
+.card-cover.no-cover::after {
+  content: "";
+  position: absolute;
+  inset: 14px;
+  border: 1px solid rgba(224, 207, 164, 0.2);
+  border-radius: 8px;
+  pointer-events: none;
+}
+.card-cover-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transform: scale(1.01);
+  transition: opacity 0.28s var(--ease-out), transform 0.42s var(--ease-out);
+}
+.card-cover-image.is-loaded {
+  opacity: 1;
 }
 /* 已收藏书签(YOR-171):朱砂书签从封面右下「露出书底」,垂过封面与书名条的交界
    (夹书签 = 收藏;顶部两角是 badge 位,底部才是书签真实露出的位置) */
@@ -413,13 +470,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 30px;
+  z-index: 1;
+  font-size: clamp(24px, 2vw, 30px);
   line-height: 1.1;
   color: #ece3d2;
-  opacity: 0.5;
+  opacity: 0.64;
   text-align: center;
-  padding: 0 10px;
+  padding: 0 18px;
   word-break: break-word;
+  letter-spacing: 0;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.22);
 }
 /* 角标行:浮在封面左上(kind 角标)+ 右上(官方) */
 .card-cover-top {
@@ -453,8 +513,10 @@
   font-size: 11px;
   padding: 3px 9px;
   border-radius: var(--r-sm);
-  background: color-mix(in srgb, var(--cinnabar) 88%, transparent);
-  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(255, 253, 250, 0.82);
+  color: var(--cinnabar);
+  backdrop-filter: blur(8px);
   white-space: nowrap;
 }
 /* 白条:封面下方实底,放书名(楷,≤2 行)+ 作者(弱);书名不再压立绘 */
@@ -489,11 +551,34 @@
   flex-direction: column;
   padding: 16px;
 }
+.card-back-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1;
+  z-index: 2;
+  transition: border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.card-back-close:hover {
+  border-color: var(--muted);
+  color: var(--fg);
+}
 .card-back-title {
   font-family: var(--font-serif);
   font-size: 17px;
   font-weight: 500;
   color: var(--fg);
+  padding-right: 34px;
 }
 .card-back-blurb {
   color: var(--muted);

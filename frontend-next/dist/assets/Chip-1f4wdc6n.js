@@ -1,0 +1,1 @@
+import{j as e}from"./index-MbkXM11F.js";function n({active:s=!1,className:r="",children:a,...o}){return e.jsx("button",{className:["chip",s?"is-on":"",r].filter(Boolean).join(" "),"aria-pressed":o["aria-pressed"]??s,...o,children:a})}export{n as C};

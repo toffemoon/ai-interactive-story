@@ -1,11 +1,15 @@
+.explore {
+  max-width: 1400px;
+}
+
 .explore-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--sp-4);
-  padding-bottom: var(--sp-4);
+  padding-bottom: var(--sp-3);
   border-bottom: 1px solid var(--line);
-  margin-bottom: var(--sp-5);
+  margin-bottom: var(--sp-4);
 }
 /* 页标题前置朱砂竖纹 motif(细节⑦,与故事详情章节标记一致)*/
 .explore-head h1 {
@@ -32,67 +36,154 @@
   padding-top: var(--sp-2);
 }
 .explore-count b {
+  display: inline-block;
   font-family: var(--font-serif);
   font-size: var(--fs-h3);
   color: var(--accent-2);
   margin: 0 4px;
 }
-.explore-bar {
+.explore-controls {
+  padding-bottom: var(--sp-4);
+  margin-bottom: var(--sp-5);
+  border-bottom: 1px solid var(--line);
+}
+.explore-primary-controls {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--sp-3);
-  margin-bottom: var(--sp-4);
+  gap: var(--sp-3) var(--sp-4);
 }
-.explore-bar .search {
-  width: 320px;
-  max-width: 100%;
+.explore-search {
+  flex: 1 1 340px;
+  min-width: 260px;
+  max-width: 560px;
+  height: 42px;
 }
-.explore-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2);
-}
-
-/* 双轨切换 */
-.explore-tracks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2);
-  margin-bottom: var(--sp-4);
+.explore-search .search-input {
+  font-size: 15px;
 }
 
-/* 排序 */
-.explore-sorts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2);
-  margin-left: auto;
+.explore-segmented {
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  align-items: stretch;
+  min-height: 42px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 68%, transparent);
 }
-.explore-sorts .chip.is-disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+.explore-segmented button {
+  position: relative;
+  isolation: isolate;
+  min-width: 58px;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui-sm);
+  white-space: nowrap;
+  transition: color var(--dur-fast) var(--ease-out);
 }
-/* 禁用排序的可见解释(触屏看不到 title,YOR-173) */
-.explore-sorts-note {
-  flex: 0 0 100%;
-  text-align: right;
-  opacity: 0.55;
+.explore-segmented button:hover {
+  color: var(--fg);
+}
+.explore-segmented button.is-active {
+  color: var(--bg);
+}
+.explore-segmented-active {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 6px;
+  background: var(--fg);
+  box-shadow: 0 5px 14px -9px rgba(0, 0, 0, 0.55);
+}
+.explore-segmented-label {
+  position: relative;
+  z-index: 1;
 }
 
-/* 标签筛选 */
 .explore-genres {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: var(--sp-2);
-  margin-bottom: var(--sp-4);
+  margin-top: var(--sp-3);
+  padding: 1px 1px 3px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.explore-genres::-webkit-scrollbar {
+  display: none;
+}
+.explore-genres > * {
+  flex: none;
+}
+.explore-genres .chip.is-on {
+  background: color-mix(in srgb, var(--accent-2) 14%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent-2) 45%, var(--line));
+  color: var(--accent-2);
 }
 
-/* 分割线(做减法后页面偏空,用细金线分段) */
-.explore-rule {
+.explore-results {
+  min-height: 360px;
+  scroll-margin-top: 20px;
+}
+.explore-status-sr {
+  position: absolute;
+  width: 1px;
   height: 1px;
-  margin: var(--sp-3) 0 var(--sp-6);
-  background: linear-gradient(90deg, transparent, var(--line) 8%, var(--line) 92%, transparent);
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.explore-grid-motion {
+  min-height: 1px;
+}
+
+@keyframes explore-skeleton-pulse {
+  0%, 100% { opacity: 0.52; }
+  50% { opacity: 0.86; }
+}
+.explore-skeleton > * {
+  animation: none;
+}
+.explore-skeleton-card {
+  aspect-ratio: 190 / 286;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--panel);
+}
+.explore-skeleton-cover {
+  flex: 1;
+  min-height: 0;
+  background: color-mix(in srgb, var(--sunk) 72%, var(--panel));
+  animation: explore-skeleton-pulse 1.2s ease-in-out infinite;
+}
+.explore-skeleton-line {
+  display: block;
+  width: 68%;
+  height: 9px;
+  margin: 10px 10px 0;
+  border-radius: var(--r-pill);
+  background: var(--line);
+  animation: explore-skeleton-pulse 1.2s ease-in-out infinite;
+}
+.explore-skeleton-line.is-short {
+  width: 42%;
+  margin-top: 7px;
+  margin-bottom: 11px;
 }
 
 /* 继续游玩 rail */
@@ -159,6 +250,7 @@
 .explore-modal-actions {
   display: flex;
   gap: var(--sp-3);
+  margin-top: var(--sp-5);
 }
 .explore-modal-actions .btn {
   flex: 1;
@@ -185,13 +277,14 @@
 }
 .explore-modal-card {
   position: relative;
-  width: min(520px, 92vw);
+  width: min(680px, 92vw);
+  max-height: min(88dvh, 720px);
+  overflow-y: auto;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   padding: var(--sp-6);
   box-shadow: var(--shadow-pop);
-  animation: login-in 0.32s var(--ease-out) both;
 }
 .explore-modal-x {
   position: absolute;
@@ -205,9 +298,34 @@
   font-size: 18px;
   border-radius: var(--r-sm);
   cursor: pointer;
+  z-index: 2;
+  transition: border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.explore-modal-x:hover {
+  border-color: var(--muted);
+  color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+.explore-modal-layout.has-cover {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--sp-5);
+}
+.explore-modal-cover {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--sunk);
+}
+.explore-modal-copy {
+  min-width: 0;
 }
 .explore-modal-title {
   margin: var(--sp-3) 0 var(--sp-3);
+  padding-right: 30px;
 }
 .explore-modal-blurb {
   color: var(--fg);
@@ -221,7 +339,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: var(--sp-5);
 }
 
 /* C4(2026-06-30 真机反馈):底部「继续游玩」ResumeBar 浮在右下会盖住分页「下一页」。
@@ -230,30 +347,58 @@
   .explore {
     padding-bottom: calc(76px + env(safe-area-inset-bottom));
   }
-
-  /* D3(2026-06-30 真机反馈):轨道 / 排序 / 标签筛选别折行成一坨,各自成一行、横向可滑(挤了往左滑)。 */
-  .explore-tracks,
-  .explore-sorts,
-  .explore-genres {
-    flex-wrap: nowrap;
+  .explore-head {
+    align-items: flex-end;
+  }
+  .explore-primary-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .explore-search {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    flex-basis: auto;
+  }
+  .explore-segmented {
+    width: max-content;
+    max-width: 100%;
     overflow-x: auto;
     scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
   }
-  .explore-tracks::-webkit-scrollbar,
-  .explore-sorts::-webkit-scrollbar,
-  .explore-genres::-webkit-scrollbar {
+  .explore-segmented::-webkit-scrollbar {
     display: none;
   }
-  .explore-tracks > *,
-  .explore-sorts > *,
-  .explore-genres > * {
-    flex: none; /* chip 不压缩,撑出宽度才能横滑 */
+  .explore-modal-card {
+    padding: var(--sp-5);
   }
-  .explore-sorts {
-    margin-left: 0; /* 桌面 margin-left:auto 推右,手机单行不需要 */
+  .explore-modal-layout.has-cover {
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: var(--sp-4);
   }
-  .explore-sorts-note {
-    text-align: left; /* 手机排序行靠左横滑,说明行跟着靠左 */
+}
+
+@media (max-width: 520px) {
+  .explore-head {
+    display: grid;
+    gap: var(--sp-2);
+  }
+  .explore-count {
+    padding-top: 0;
+  }
+  .explore-modal-layout.has-cover {
+    display: block;
+  }
+  .explore-modal-cover {
+    width: 100%;
+    max-height: 210px;
+    margin-bottom: var(--sp-4);
+    object-position: center 24%;
+  }
+  .explore-modal-title {
+    padding-right: 0;
+  }
+  .explore-pager {
+    gap: var(--sp-2);
   }
 }

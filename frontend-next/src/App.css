@@ -23,6 +23,25 @@
   padding: var(--sp-4) clamp(20px, 4vw, 40px) var(--sp-8);
 }
 
+/* 路由 chunk 首次加载时保留稳定画布，不让壳和内容突然塌缩。 */
+@keyframes route-loading-mark {
+  0%, 100% { transform: scaleY(0.45); opacity: 0.38; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+.route-loading {
+  min-height: min(60vh, 560px);
+  display: grid;
+  place-items: center;
+}
+.route-loading::before {
+  content: "";
+  width: 4px;
+  height: 42px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  animation: route-loading-mark 0.8s var(--ease-out) infinite;
+}
+
 /* 页面切换 = 涟漪圆形揭示(切路由 key 变 → 重跑)。
    circle(75%) ≈ 全覆盖任意尺寸/可滚动页;动画无 fill,结束回退到无裁切 → 对页内 fixed 弹层安全。
    用 clip-path 不用 transform(transform 会成 fixed 后代包含块);动画跑不跑页面都可见(基态无裁切)。 */

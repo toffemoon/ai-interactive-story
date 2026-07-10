@@ -10,7 +10,7 @@ import ClickSpark from "./components/ClickSpark";
 
 // 不用 StrictMode:dev 下它会二次触发 effect,故事页的「自动开场」会重复打一次流式回合(烧 key)。
 createRoot(document.getElementById("root")).render(
-  <HashRouter>
+  <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
     <AuthProvider>
       <GameProvider>
         <App />
