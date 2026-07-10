@@ -399,6 +399,17 @@ export default function Home({ testMode = false }) {
   }, [obStep]);
 
   useEffect(() => {
+    if (!obBeat || !obBeat.autoNext) return undefined;
+    const beatId = obBeat.id;
+    const timer = setTimeout(() => {
+      if (obStepRef.current === beatId) {
+        obGoNext(obBeat.autoNext, null, { history: false });
+      }
+    }, obBeat.autoMs);
+    return () => clearTimeout(timer);
+  }, [obBeat]);
+
+  useEffect(() => {
     return () => {
       if (obLineTimerRef.current) clearTimeout(obLineTimerRef.current);
     };
@@ -796,7 +807,7 @@ export default function Home({ testMode = false }) {
   }
   // 前进一拍:压历史(供回退),清回退态与输入框;aiLine=本次 AI 自适应台词(替下一拍静态开场),null=用脚本。
   function obGoNext(nextId, aiLine = null, opts = {}) {
-    setObHistory((h) => [...h, obStep]);
+    if (opts.history !== false) setObHistory((h) => [...h, obStep]);
     setObViaBack(false);
     setObAiLine(aiLine);
     setObCardMessage(null);
@@ -1091,8 +1102,8 @@ export default function Home({ testMode = false }) {
                     ← 上一步
                   </button>
                 )}
-                {/* 输入框:所有引导拍常驻。field 拍=回答登记(走 AI 辨别);其余(导览/办卡)=跟糖沐说话(闲聊,不填卡、不推进导览)。 */}
-                <div className="home-composer">
+                {/* 输入框:自动播放拍隐藏;其余 field 拍=回答登记(走 AI 辨别),导览/办卡拍=跟糖沐说话。 */}
+                {!obBeat.autoNext && <div className="home-composer">
                   <input
                     ref={obInputRef}
                     className="home-input"
@@ -1121,8 +1132,8 @@ export default function Home({ testMode = false }) {
                   <Button variant="primary" onClick={() => (obBeat.field ? obFieldSubmit() : obChatSubmit())} disabled={!obInput.trim() || obThinking}>
                     {obThinking ? "…" : obBeat.submitLabel || (obBeat.field ? "好" : "说")}
                   </Button>
-                </div>
-                {!!obRenderChips.length && (
+                </div>}
+                {!obBeat.autoNext && !!obRenderChips.length && (
                   <div className="home-ob-chips">
                     {obRenderChips.map((c, i) => {
                       // 头像拍传了头像后,chip 文案随之变(＋传张头像→换一张 / 用字头就好→好了,继续)。

@@ -249,6 +249,8 @@ export const BEATS = [
   },
   {
     id: "tryChatTalk",
+    autoNext: "tryChatTangmuReply",
+    autoMs: 3200,
     speaker: "宣",
     emo: "smile",
     tour: "chat",
@@ -267,6 +269,8 @@ export const BEATS = [
   },
   {
     id: "tryChatTangmuReply",
+    autoNext: "tryChatIntro",
+    autoMs: 4200,
     speaker: "糖沐",
     emo: "smile",
     tour: "chat",
@@ -285,6 +289,8 @@ export const BEATS = [
   },
   {
     id: "tryChatIntro",
+    autoNext: "tryChatGreet",
+    autoMs: 4200,
     speaker: "糖沐",
     emo: "smile",
     tour: "chat",
@@ -334,6 +340,8 @@ export const BEATS = [
   },
   {
     id: "tryChatLeave",
+    autoNext: "tryCreate",
+    autoMs: 3200,
     speaker: "宣",
     emo: "smile",
     tour: "chat",

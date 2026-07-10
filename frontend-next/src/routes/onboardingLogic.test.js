@@ -305,6 +305,14 @@ test("card message prompt forbids action and emotion stage directions", () => {
   assert.match(prompt, /不要.*括号.*动作/);
 });
 
+test("only the NPC exchange auto-advances", () => {
+  assert.equal(beatById("tryChatTalk").autoNext, "tryChatTangmuReply");
+  assert.equal(beatById("tryChatTangmuReply").autoNext, "tryChatIntro");
+  assert.equal(beatById("tryChatIntro").autoNext, "tryChatGreet");
+  assert.equal(beatById("tryChatGreet").autoNext, undefined);
+  assert.equal(beatById("tryChatLeave").autoNext, "tryCreate");
+});
+
 test("onboarding rehearses story chat and creation without route jumps", () => {
   assert.equal(beatById("cardDone").chips[0].next, "tryStoryIntro");
 
