@@ -1402,3 +1402,111 @@
     text-align: center;
   }
 }
+
+/* ————————————————————————————————————————————————————————————
+   C1 字段块化(卡即界面):hover 动作条 + 就地手改。
+   纯文本字段 ✎ 行内编辑;结构化字段(entries/timeline/tags…)「聊」跳命令条。
+   ———————————————————————————————————————————————————————————— */
+@media (min-width: 861px) {
+  .create-canvas .create-field {
+    position: relative;
+    padding-right: 44px;
+    border-radius: var(--r-sm);
+    transition: background var(--dur-fast) var(--ease-out);
+  }
+  .create-canvas .create-field:hover {
+    background: color-mix(in srgb, var(--fg) 3%, transparent);
+  }
+  .create-field-acts {
+    position: absolute;
+    top: 6px;
+    right: 4px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity var(--dur-fast) var(--ease-out);
+  }
+  .create-canvas .create-field:hover .create-field-acts,
+  .create-canvas .create-field:focus-within .create-field-acts {
+    opacity: 1;
+  }
+  .create-field-act {
+    display: grid;
+    place-items: center;
+    min-width: 26px;
+    height: 26px;
+    padding: 0 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    background: var(--panel);
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+  }
+  .create-field-act:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .create-field-edit {
+    flex: 1;
+    min-width: 0;
+    resize: vertical;
+    background: var(--bg);
+    border: 1px solid var(--accent);
+    border-radius: var(--r-sm);
+    padding: 8px 10px;
+    font-family: var(--font-kai);
+    font-size: 14px;
+    line-height: var(--lh-body);
+    color: var(--fg);
+    outline: none;
+  }
+  .create-field.is-editing {
+    background: color-mix(in srgb, var(--accent-3) 6%, transparent);
+  }
+  /* 卡名:静态是按钮(hover 出 ✎ 提示),点开变虚线底输入 */
+  .create-name-btn {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: text;
+    text-align: left;
+  }
+  .create-name-hint {
+    font-size: 14px;
+    color: var(--muted);
+    opacity: 0;
+    transition: opacity var(--dur-fast) var(--ease-out);
+  }
+  .create-name-btn:hover .create-name-hint,
+  .create-name-btn:focus-visible .create-name-hint {
+    opacity: 1;
+  }
+  .create-name-edit {
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed var(--accent);
+    outline: none;
+    color: var(--fg);
+    padding: 0 0 2px;
+  }
+  /* 「密」印:隐藏真相字段的内联标记 */
+  .create-field-seal {
+    display: inline-grid;
+    place-items: center;
+    margin-left: 6px;
+    width: 16px;
+    height: 16px;
+    border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    border-radius: 3px;
+    color: var(--accent);
+    font-size: 10px;
+    line-height: 1;
+  }
+}

@@ -174,6 +174,10 @@ export default function Create() {
   const [previewChar, setPreviewChar] = useState(null); // 预览里角色「查看详情」
   const [cardExpanded, setCardExpanded] = useState(false); // 手机草稿细条展开看立绘 + 全部字段
   const [moreOpen, setMoreOpen] = useState(false); // 手机底部「更多」动作面板
+  // C1 字段块就地手改(桌面画布):editingKey = 字段原始 key | "__name"(卡名) | null。
+  const [editingKey, setEditingKey] = useState(null);
+  const [editVal, setEditVal] = useState("");
+  const dockInputRef = useRef(null); // 命令条输入框(「聊着改」把光标带过去)
   const fileRef = useRef(null);
   const coverRef = useRef(null);
   const chatRef = useRef(null);
@@ -550,12 +554,66 @@ export default function Create() {
     return Object.keys(d)
       .filter((k) => !NON_FIELD_KEYS.includes(k))
       .map((k) => ({
+        k0: k, // 原始 key(就地手改回写用)
         k: LABELS[k] || k,
         v: fmtVal(d[k]),
+        // 纯文本字段可就地手改;对象/数组(世界书 entries、故事 timeline、tags…)v1 只读走「聊着改」
+        editable: typeof d[k] === "string",
         fresh: (desk.filled || []).includes(k),
         hidden: /secret|隐藏|真相/i.test(k),
       }));
   }, [desk.draft, desk.filled]);
+
+  // 切卡种时丢弃未提交的就地编辑(编辑目标已不在场)。
+  useEffect(() => {
+    setEditingKey(null);
+  }, [kind]);
+
+  // —— C1 就地手改:手改直接写 draft(draft 即共享真相,AI 下轮基于改后内容继续长) ——
+  function startFieldEdit(f) {
+    if (!f.editable) return;
+    setEditingKey(f.k0);
+    setEditVal(desk.draft[f.k0] || "");
+  }
+  function commitFieldEdit() {
+    if (editingKey === null) return;
+    const key = editingKey;
+    const val = editVal;
+    setEditingKey(null);
+    if (key === "__name") {
+      const v = val.trim();
+      if (!v) return; // 名字不许清空成空串,留旧值
+      // 写到卡名实际所在的键:故事书等用 title(且没有 name)就写 title,其余写 name。
+      patch(kind, (d0) => {
+        const useTitle = "title" in (d0.draft || {}) && !("name" in (d0.draft || {}));
+        return { draft: { ...d0.draft, [useTitle ? "title" : "name"]: v } };
+      });
+      return;
+    }
+    patch(kind, (d0) => ({ draft: { ...d0.draft, [key]: val } }));
+  }
+  function cancelFieldEdit() {
+    setEditingKey(null);
+  }
+  // 复杂字段(对象/数组)不就地改:预填一句定向指令、光标带到命令条,聊着改。
+  function chatAboutField(f) {
+    patch(kind, { input: `把「${f.k}」这部分改一下:` });
+    requestAnimationFrame(() => dockInputRef.current && dockInputRef.current.focus());
+  }
+  function startNameEdit() {
+    setEditingKey("__name");
+    setEditVal(draftName === "未命名" ? "" : draftName);
+  }
+  // 编辑框通用键位:⌘/Ctrl+Enter 或 Enter(单行语义的名字)提交,Esc 取消。
+  function editKeys(e, single = false) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      cancelFieldEdit();
+    } else if ((e.key === "Enter" && (e.metaKey || e.ctrlKey)) || (single && e.key === "Enter" && !(e.nativeEvent || e).isComposing)) {
+      e.preventDefault();
+      commitFieldEdit();
+    }
+  }
 
   const portrait = desk.draft.image || ""; // 立绘
   const avatar = desk.draft.avatar || ""; // 头像
@@ -734,7 +792,23 @@ export default function Create() {
             <div className="create-canvas-col">
               <section className="create-canvas" aria-label="卡画布">
                 <div className="create-card-kind t-meta">{KINDS[ki].zh}{desk.built.length > 0 && ` · 本台已建 ${desk.built.length}`}</div>
-                <div className="create-card-name t-kai">{draftName}</div>
+                {editingKey === "__name" ? (
+                  <input
+                    className="create-card-name create-name-edit t-kai"
+                    autoFocus
+                    value={editVal}
+                    placeholder="起个名字…"
+                    onChange={(e) => setEditVal(e.target.value)}
+                    onKeyDown={(e) => editKeys(e, true)}
+                    onBlur={commitFieldEdit}
+                    aria-label="卡名"
+                  />
+                ) : (
+                  <button className="create-card-name create-name-btn t-kai" onClick={startNameEdit} title="点击改名">
+                    {draftName}
+                    <span className="create-name-hint" aria-hidden="true">✎</span>
+                  </button>
+                )}
                 {kind === "characters" && (avatar || portrait) && (
                   <div className="create-pics-preview">
                     {avatar && <span className="create-pics-av" style={{ backgroundImage: `url("${avatar}")` }} aria-label="头像" />}
@@ -743,10 +817,46 @@ export default function Create() {
                 )}
                 <div className="create-card-fields">
                   {fields.length ? (
-                    fields.map((f, i) => (
-                      <div className={"create-field" + (f.fresh ? " is-fresh" : "")} key={i}>
-                        <span className="create-field-k t-meta">{f.k}</span>
-                        <span className="create-field-v t-ui-sm">{f.hidden ? "(隐藏真相,玩家不可见)" + f.v : f.v}</span>
+                    fields.map((f) => (
+                      <div
+                        className={
+                          "create-field" +
+                          (f.fresh ? " is-fresh" : "") +
+                          (editingKey === f.k0 ? " is-editing" : "")
+                        }
+                        key={f.k0}
+                      >
+                        <span className="create-field-k t-meta">
+                          {f.k}
+                          {f.hidden && <span className="create-field-seal" title="隐藏真相,玩家不可见">密</span>}
+                        </span>
+                        {editingKey === f.k0 ? (
+                          <textarea
+                            className="create-field-edit t-ui-sm"
+                            autoFocus
+                            rows={Math.min(8, Math.max(2, Math.ceil((editVal.length + 1) / 26)))}
+                            value={editVal}
+                            onChange={(e) => setEditVal(e.target.value)}
+                            onKeyDown={(e) => editKeys(e)}
+                            onBlur={commitFieldEdit}
+                            aria-label={"编辑" + f.k}
+                          />
+                        ) : (
+                          <span className="create-field-v t-ui-sm">{f.hidden ? "(隐藏真相,玩家不可见)" + f.v : f.v}</span>
+                        )}
+                        {editingKey !== f.k0 && (
+                          <span className="create-field-acts">
+                            {f.editable ? (
+                              <button className="create-field-act" title="就地手改" aria-label={"手改" + f.k} onClick={() => startFieldEdit(f)}>
+                                ✎
+                              </button>
+                            ) : (
+                              <button className="create-field-act" title="这块是结构化内容,到命令条聊着改" aria-label={"聊着改" + f.k} onClick={() => chatAboutField(f)}>
+                                聊
+                              </button>
+                            )}
+                          </span>
+                        )}
                       </div>
                     ))
                   ) : (
@@ -827,6 +937,7 @@ export default function Create() {
             </div>
             <div className="create-composer">
               <textarea
+                ref={dockInputRef}
                 rows={1}
                 value={desk.input}
                 disabled={busy}

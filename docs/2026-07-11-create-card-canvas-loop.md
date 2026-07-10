@@ -8,8 +8,8 @@ plan: docs/2026-07-11-create-card-canvas-plan.md
 
 ## 切片状态
 
-- [ ] C0 骨架:画布+右栏+底部命令条,旧功能全搬家不丢
-- [ ] C1 字段块化:块渲染+hover 动作条+就地手改落 draft
+- [x] C0 骨架:画布+右栏+底部命令条,旧功能全搬家不丢(R1,6e21bde)
+- [x] C1 字段块化:块渲染+hover 动作条+就地手改落 draft(R2)
 - [ ] C2 命令条+叙述条+手记抽屉(聊天栏退役)
 - [ ] C3 字段级 AI 动作(⟳/✦ 定向指令)
 - [ ] C4 本台架+装订区
@@ -31,3 +31,18 @@ plan: docs/2026-07-11-create-card-canvas-plan.md
 - console 零报错;`npm run build` 1.92s 过(Create chunk 59.1kB);手机 390 回归:`.ct` 4 tab/草稿条/composer 全在,桌面骨架无泄漏(preview 模拟器 resize 不派发事件,手动 dispatch 后验证——工具环境怪癖非代码问题;preview_screenshot 30s 超时=本环境已知,证据走计算样式+交互实测)。
 - 遗留观察:①卡名暂"未命名"(AI 追问阶段未起名,行为同现状);②世界书 known_public/versions 等键无 LABELS 中文映射,现状既有,C5 顺手补;③旧 .create-body/.create-chat/.create-preview/.create-card 样式已无引用,C5 清理。
 - ⚠️ 并行会话注意:同工作树有另一会话活动(yor-211 已推成 PR #158;本分支被叠了 docs commit 8654805)。本轮提交只收 C0 自己的文件。
+
+## R2 · 2026-07-11 07:49
+
+本轮:C1 字段块化 ✅(5199 preview 实测)
+
+- 实现:字段=块(hover 出动作条),纯文本字段 ✎ 就地手改(textarea,blur/⌘Enter 提交、Esc 取消),结构化字段(entries/timeline/tags…)「聊」= 预填定向指令跳命令条;卡名点击就地改(Enter 提交,写 name/title 所在键);「密」印内联标记隐藏真相字段;切卡种丢弃未提交编辑。手机 .ct 分支零改动(同名字段渲染出现 2 处匹配时用桌面空卡分支锚点精确替换,红线守住)。
+- 验收证据:
+  - 手改「性格」→ store draft.personality=改后值,画布同步渲染,编辑器关闭;
+  - **刷新不丢**:reload 后 14 字段仍在、性格=手改值;
+  - **AI 下轮基于改后 draft**:fetch 透传拦截实捕 /api/build_card 载荷,draft.personality=手改值、messages 尾=新输入(真发真回,AI 顺着继续聊名字);
+  - 卡名就地改:「未命名」→「苏晚棠」,store+显示同步;
+  - 「聊着改」:点「说话规则」的聊 → 命令条预填「把「说话规则」这部分改一下:」;
+  - console 零报错;build 1.93s(Create chunk 60.9kB)。
+- 环境备注:无头 preview 里 autoFocus 拿不到真焦点,element.blur() 无事件 → 测试用 focusout 手动派发走通提交;真浏览器 blur 自然触发,代码无改动必要。
+- 遗留观察:AI 骨架会带一批空串字段(name/first_mes/anchor…)在画布上渲染成空行——现状既有;C3 把空的可编辑字段做成 ✦「补写」目标顺手收掉。
