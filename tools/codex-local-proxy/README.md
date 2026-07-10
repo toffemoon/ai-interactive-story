@@ -13,6 +13,12 @@
 
 浏览器 OAuth 不经过 app 后端。账号 token 由 Codex app-server 自己保存和刷新。
 
+## 接口与流式输出
+
+`POST /v1/chat/completions` 同时支持 OpenAI-compatible 的非流式 JSON 和 `stream: true` SSE。SSE 正文使用 `choices[0].delta.content`,可通过 `stream_options: {"include_usage": true}` 在结束帧取得 usage,最后以 `data: [DONE]` 收尾。
+
+连接助手从 Codex app-server 的 `item/agentMessage/delta` 读取最终回答,不转发 commentary。若当前 Codex 只给最终事件,会自动用 `item/completed` 的完整文本兜底。浏览器断开后会中断对应 Codex turn。`GET /health` 返回 `chat_completions_stream: true` 时表示这些能力可用。
+
 ## 开发者手动使用
 
 先确认 Codex 桌面端已经登录,然后在项目根目录运行:
