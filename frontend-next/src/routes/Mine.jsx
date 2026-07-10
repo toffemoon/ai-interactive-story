@@ -4,6 +4,7 @@ import { Button, Input, CardShelf } from "../components/ui";
 import CharDetailModal from "../components/CharDetailModal";
 import { getJSON, postJSON, delJSON } from "../lib/api";
 import { toCardModels } from "../lib/cardModel";
+import { loadLocalProxySettings, saveLocalProxySettings } from "../lib/localProxy";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
 import "./Mine.css";
@@ -33,6 +34,8 @@ export default function Mine() {
   const [me, setMe] = useState(user); // 本地档案副本(头像/昵称改后即时反映)
   const [nameEdit, setNameEdit] = useState("");
   const [saving, setSaving] = useState(false);
+  const [proxySettings, setProxySettings] = useState(loadLocalProxySettings);
+  const [proxyStatus, setProxyStatus] = useState("");
   const [created, setCreated] = useState([]);
   const [createdPage, setCreatedPage] = useState(1);
   const [saves, setSaves] = useState(null); // null=未取 / []=空 / [...]
@@ -181,6 +184,18 @@ export default function Mine() {
     }
   }
 
+  function selectModelSource(source) {
+    const next = saveLocalProxySettings({ ...proxySettings, source });
+    setProxySettings(next);
+    setProxyStatus(source === "local_proxy" ? "已选择 Codex 本机反代" : "已选择 DeepSeek");
+  }
+
+  function saveProxySettings() {
+    const next = saveLocalProxySettings(proxySettings);
+    setProxySettings(next);
+    setProxyStatus("本机反代设置已保存");
+  }
+
   const displayName = (me && (me.display_name || me.username)) || "游客";
   const loggedIn = !!(enabled && user);
 
@@ -251,6 +266,60 @@ export default function Mine() {
               </div>
             )}
           </div>
+
+          {loggedIn && me && me.local_proxy_enabled && (
+            <div className="mine-model">
+              <h2 className="t-h3 mine-sec-title">模型来源</h2>
+              <div className="mine-model-segment" aria-label="模型来源">
+                <button
+                  className={proxySettings.source === "deepseek" ? "is-on" : ""}
+                  onClick={() => selectModelSource("deepseek")}
+                >
+                  DeepSeek
+                </button>
+                <button
+                  className={proxySettings.source === "local_proxy" ? "is-on" : ""}
+                  onClick={() => selectModelSource("local_proxy")}
+                >
+                  Codex 本机
+                </button>
+              </div>
+              {proxySettings.source === "local_proxy" && (
+                <div className="mine-model-fields">
+                  <label>
+                    <span className="t-meta">API Base URL</span>
+                    <Input
+                      value={proxySettings.endpoint}
+                      onChange={(e) => setProxySettings((s) => ({ ...s, endpoint: e.target.value }))}
+                      placeholder="http://127.0.0.1:端口/v1"
+                      spellCheck={false}
+                    />
+                  </label>
+                  <label>
+                    <span className="t-meta">Model</span>
+                    <Input
+                      value={proxySettings.model}
+                      onChange={(e) => setProxySettings((s) => ({ ...s, model: e.target.value }))}
+                      placeholder="反代支持的模型名"
+                      spellCheck={false}
+                    />
+                  </label>
+                  <label>
+                    <span className="t-meta">API Key（可选）</span>
+                    <Input
+                      type="password"
+                      value={proxySettings.apiKey}
+                      onChange={(e) => setProxySettings((s) => ({ ...s, apiKey: e.target.value }))}
+                      placeholder="仅保留到本次浏览器会话"
+                      autoComplete="off"
+                    />
+                  </label>
+                  <Button variant="line" onClick={saveProxySettings}>保存模型设置</Button>
+                </div>
+              )}
+              {proxyStatus && <span className="mine-model-status t-meta">{proxyStatus}</span>}
+            </div>
+          )}
         </section>
       )}
 

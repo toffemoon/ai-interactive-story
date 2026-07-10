@@ -3,6 +3,13 @@ import { Navigate } from "react-router-dom";
 import { useNavigate } from "../lib/transitionNav";
 import { Button } from "../components/ui";
 import { streamTurn, postJSON, getJSON, extractStream } from "../lib/api";
+import {
+  loadLocalProxySettings,
+  runLocalProxyReroll,
+  runLocalProxyTurn,
+  saveModelSource,
+} from "../lib/localProxy";
+import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
 import "./Story.css";
 
@@ -70,14 +77,18 @@ const EMPTY = <span className="status-empty t-meta">暂无</span>;
 
 export default function Story() {
   const { game } = useGame();
+  const { user } = useAuth();
   const navigate = useNavigate();
+  const localProxyAllowed = !!(user && user.local_proxy_enabled);
   const [turns, setTurns] = useState([]);
   const [choices, setChoices] = useState([]);
   const [state, setState] = useState(null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [streaming, setStreaming] = useState(null);
+  const [pendingLabel, setPendingLabel] = useState("");
   const [error, setError] = useState("");
+  const [modelSource, setModelSource] = useState(() => loadLocalProxySettings().source);
   const [canUndo, setCanUndo] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
   // 右状态栏:默认收起(抽屉),点「世界状态」从右侧平移出来,叙事区常驻满宽 → 中间正文位置固定(细节 8)。
@@ -103,6 +114,19 @@ export default function Story() {
     const el = feedRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [turns, streaming]);
+
+  function selectModelSource(source) {
+    saveModelSource(source);
+    setModelSource(source);
+    if (source === "local_proxy") {
+      const settings = loadLocalProxySettings();
+      if (!settings.endpoint || !settings.model) {
+        setError("请先在「我的」里填写本机反代地址和模型名");
+        return;
+      }
+    }
+    setError("");
+  }
 
   function toggleDev() {
     setDev((v) => {
@@ -136,15 +160,24 @@ export default function Story() {
     try {
       let raw = "";
       let finalTurn = null;
-      try {
-        finalTurn = await streamTurn(body, {
-          onDelta: (t) => {
-            raw += t;
-            setStreaming(extractStream(raw));
-          },
+      if (localProxyAllowed && modelSource === "local_proxy") {
+        setPendingLabel("连接本机 Codex…");
+        finalTurn = await runLocalProxyTurn(body, loadLocalProxySettings(), {
+          onStep: (call) => setPendingLabel(
+            call.index === 0 ? "本机 Codex 推演中…" : `本机 Codex 处理步骤 ${call.index + 1}…`
+          ),
         });
-      } catch (streamErr) {
-        finalTurn = await postJSON("/api/story_turn", body);
+      } else {
+        try {
+          finalTurn = await streamTurn(body, {
+            onDelta: (t) => {
+              raw += t;
+              setStreaming(extractStream(raw));
+            },
+          });
+        } catch (streamErr) {
+          finalTurn = await postJSON("/api/story_turn", body);
+        }
       }
       if (!finalTurn) throw new Error("没有拿到回合结果");
       setStreaming(null);
@@ -157,6 +190,7 @@ export default function Story() {
       setStreaming(null);
       setError("本轮生成失败:" + e.message);
     } finally {
+      setPendingLabel("");
       setLoading(false);
     }
   }
@@ -208,7 +242,17 @@ export default function Story() {
     setError("");
     setChoices([]);
     try {
-      const out = await postJSON("/api/reroll", { session_id: game.sessionId });
+      let out;
+      if (localProxyAllowed && modelSource === "local_proxy") {
+        setPendingLabel("连接本机 Codex…");
+        out = await runLocalProxyReroll(game.sessionId, loadLocalProxySettings(), {
+          onStep: (call) => setPendingLabel(
+            call.index === 0 ? "本机 Codex 重生成中…" : `本机 Codex 处理步骤 ${call.index + 1}…`
+          ),
+        });
+      } else {
+        out = await postJSON("/api/reroll", { session_id: game.sessionId });
+      }
       setTurns((xs) => xs.map((t, i) => (i === idx ? { kind: "story", data: out } : t)));
       setChoices(out.choices || []);
       setState(out.state || null);
@@ -217,6 +261,7 @@ export default function Story() {
       setError("重新生成失败:" + e.message);
       setChoices(prevChoices); // 恢复原选项,避免无选项可点
     } finally {
+      setPendingLabel("");
       setLoading(false);
     }
   }
@@ -396,7 +441,7 @@ export default function Story() {
                 <Dialogue messages={streaming.messages} />
               </div>
             ) : loading ? (
-              <div className="story-pending t-ui-sm">推演中…</div>
+              <div className="story-pending t-ui-sm">{pendingLabel || "推演中…"}</div>
             ) : null}
 
             {/* 选项并入叙事流、随内容滚动(细节③:不再单独固定底栏占空间) */}
@@ -422,6 +467,30 @@ export default function Story() {
           </div>
 
           <div className="story-composer">
+            {localProxyAllowed && (
+              <div className="story-model-bar">
+                <span className="t-meta">模型</span>
+                <div className="story-model-segment" aria-label="模型来源">
+                  <button
+                    className={modelSource === "deepseek" ? "is-on" : ""}
+                    onClick={() => selectModelSource("deepseek")}
+                    disabled={loading}
+                  >
+                    DeepSeek
+                  </button>
+                  <button
+                    className={modelSource === "local_proxy" ? "is-on" : ""}
+                    onClick={() => selectModelSource("local_proxy")}
+                    disabled={loading}
+                  >
+                    Codex 本机
+                  </button>
+                </div>
+                <button className="story-model-settings" onClick={() => navigate("/mine")} disabled={loading}>
+                  设置
+                </button>
+              </div>
+            )}
             <textarea
               rows={2}
               value={input}

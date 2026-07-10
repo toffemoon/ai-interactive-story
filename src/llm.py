@@ -6,7 +6,11 @@
 
 import contextlib
 import contextvars
+import hashlib
+import json
 import os
+from typing import Any
+
 from openai import OpenAI, AsyncOpenAI
 from dotenv import load_dotenv
 
@@ -86,10 +90,63 @@ _scripted_backend: contextvars.ContextVar = contextvars.ContextVar("scripted_bac
 class _SimpleUsage:
     """脚本后端的合成 usage(按字符粗估 token),让离线模式下 usage plumbing 不为空。"""
 
-    def __init__(self, prompt_tokens: int, completion_tokens: int) -> None:
+    def __init__(self, prompt_tokens: int, completion_tokens: int, total_tokens: int | None = None) -> None:
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
-        self.total_tokens = prompt_tokens + completion_tokens
+        self.total_tokens = total_tokens if total_tokens is not None else prompt_tokens + completion_tokens
+
+
+class DeferredLLMControl(Exception):
+    """本机代理多步执行使用的控制流异常。"""
+
+
+class DeferredLLMCall(DeferredLLMControl):
+    """浏览器本机代理模式下,引擎运行到尚未回答的 LLM 调用时暂停并带出请求。"""
+
+    def __init__(self, index: int, kind: str, messages: list[dict], *,
+                 model: str | None, max_tokens: int, json_mode: bool) -> None:
+        self.index = index
+        self.kind = kind
+        self.messages = messages
+        self.model = model
+        self.max_tokens = max_tokens
+        self.json_mode = json_mode
+        raw = json.dumps(
+            {
+                "index": index,
+                "kind": kind,
+                "messages": messages,
+                "model": model,
+                "max_tokens": max_tokens,
+                "json_mode": json_mode,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        self.request_id = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+        super().__init__(f"deferred LLM call {index}:{kind}")
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "index": self.index,
+            "request_id": self.request_id,
+            "kind": self.kind,
+            "messages": self.messages,
+            "model": self.model,
+            "max_tokens": self.max_tokens,
+            "json_mode": self.json_mode,
+        }
+
+
+class DeferredReplayMismatch(DeferredLLMControl):
+    """浏览器回传的回答不属于本次引擎运行中的对应调用。"""
+
+
+class _ScriptedOutput:
+    def __init__(self, content: str, usage: dict[str, Any] | None = None) -> None:
+        self.content = content
+        self.usage = usage or {}
 
 
 @contextlib.contextmanager
@@ -105,12 +162,70 @@ def scripted_backend(fn):
         _scripted_backend.reset(token)
 
 
+@contextlib.contextmanager
+def deferred_backend(answers: list[dict[str, Any]]):
+    """按顺序重放浏览器已回答的调用;遇到下一条未回答调用就抛 DeferredLLMCall。
+
+    每次 HTTP 续跑都会从同一会话快照重新执行。request_id 同时绑定调用序号、messages
+    和参数,因此旧回合/错顺序的回答不能被误消费。
+    """
+    cursor = 0
+
+    def replay(kind: str, messages: list[dict], *, model: str | None,
+               max_tokens: int, json_mode: bool):
+        nonlocal cursor
+        call = DeferredLLMCall(
+            cursor, kind, messages, model=model,
+            max_tokens=max_tokens, json_mode=json_mode,
+        )
+        cursor += 1
+        if call.index >= len(answers):
+            raise call
+        answer = answers[call.index]
+        if not isinstance(answer, dict) or answer.get("request_id") != call.request_id:
+            raise DeferredReplayMismatch(f"第 {call.index + 1} 个本机模型回答与当前请求不匹配")
+        content = answer.get("content")
+        if not isinstance(content, str):
+            raise DeferredReplayMismatch(f"第 {call.index + 1} 个本机模型回答缺少文本内容")
+        usage = answer.get("usage") if isinstance(answer.get("usage"), dict) else None
+        return _ScriptedOutput(content, usage)
+
+    with scripted_backend(replay):
+        yield
+
+
 def _feed_estimated_usage(messages: list[dict], out: str) -> None:
     acc = _usage_collector.get()
     if acc is None:
         return
     p = sum(len(str(m.get("content", ""))) for m in messages) // 3
     acc.add(_SimpleUsage(p, len(out) // 3))
+
+
+def _bounded_usage(value: Any) -> int:
+    try:
+        return min(10_000_000, max(0, int(value or 0)))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _scripted_text(messages: list[dict], result) -> str:
+    """兼容旧脚本后端(str)与本机代理重放结果(带真实 usage)。"""
+    if not isinstance(result, _ScriptedOutput):
+        out = str(result)
+        _feed_estimated_usage(messages, out)
+        return out
+    out = result.content
+    usage = result.usage
+    acc = _usage_collector.get()
+    if acc is not None and usage:
+        prompt = _bounded_usage(usage.get("prompt_tokens"))
+        completion = _bounded_usage(usage.get("completion_tokens"))
+        total = _bounded_usage(usage.get("total_tokens")) or min(10_000_000, prompt + completion)
+        acc.add(_SimpleUsage(prompt, completion, total))
+    else:
+        _feed_estimated_usage(messages, out)
+    return out
 
 
 def chat(system: str, user: str, *, model: str | None = None, max_tokens: int = 1024) -> str:
@@ -130,9 +245,8 @@ def chat_messages(messages: list[dict], *, model: str | None = None,
     """
     fn = _scripted_backend.get()
     if fn is not None:
-        out = fn("sync", messages, model=model, max_tokens=max_tokens, json_mode=json_mode)
-        _feed_estimated_usage(messages, out)
-        return out
+        result = fn("sync", messages, model=model, max_tokens=max_tokens, json_mode=json_mode)
+        return _scripted_text(messages, result)
     kwargs = {
         "model": model or os.environ["LLM_MODEL"],
         "messages": messages,
@@ -152,9 +266,8 @@ async def achat_messages(messages: list[dict], *, model: str | None = None,
     """chat_messages 的异步版。故事回合的非流式 LLM 调用(摘要/抽取/修复/重试)走这个。"""
     fn = _scripted_backend.get()
     if fn is not None:
-        out = fn("async", messages, model=model, max_tokens=max_tokens, json_mode=json_mode)
-        _feed_estimated_usage(messages, out)
-        return out
+        result = fn("async", messages, model=model, max_tokens=max_tokens, json_mode=json_mode)
+        return _scripted_text(messages, result)
     kwargs = {
         "model": model or os.environ["LLM_MODEL"],
         "messages": messages,
@@ -179,10 +292,10 @@ async def achat_messages_stream(messages: list[dict], *, model: str | None = Non
     """
     fn = _scripted_backend.get()
     if fn is not None:
-        out = fn("stream", messages, model=model, max_tokens=max_tokens, json_mode=json_mode)
+        result = fn("stream", messages, model=model, max_tokens=max_tokens, json_mode=json_mode)
+        out = _scripted_text(messages, result)
         if on_delta is not None:
             await on_delta(out)
-        _feed_estimated_usage(messages, out)
         return out
     kwargs = {
         "model": model or os.environ["LLM_MODEL"],
