@@ -4,7 +4,15 @@ import { Button, Input, CardShelf } from "../components/ui";
 import CharDetailModal from "../components/CharDetailModal";
 import { getJSON, postJSON, delJSON } from "../lib/api";
 import { toCardModels } from "../lib/cardModel";
-import { loadLocalProxySettings, saveLocalProxySettings } from "../lib/localProxy";
+import {
+  LOCAL_PROXY_SETUP_URL,
+  cancelLocalProxyLogin,
+  getLocalProxyConnection,
+  getLocalProxyLoginStatus,
+  loadLocalProxySettings,
+  saveLocalProxySettings,
+  startLocalProxyLogin,
+} from "../lib/localProxy";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
 import "./Mine.css";
@@ -19,6 +27,14 @@ const TABS = [
 ];
 const PAGE = 8;
 const FAV_KEY = "ais_favorites_v1";
+const CODEX_PLAN_LABELS = {
+  plus: "ChatGPT Plus",
+  pro: "ChatGPT Pro",
+  prolite: "ChatGPT Pro",
+  business: "ChatGPT Business",
+  team: "ChatGPT Team",
+  enterprise: "ChatGPT Enterprise",
+};
 
 // 成就系统已删除(YOR-188,yufei 拍板)。
 function avatarChar(name) {
@@ -36,6 +52,7 @@ export default function Mine() {
   const [saving, setSaving] = useState(false);
   const [proxySettings, setProxySettings] = useState(loadLocalProxySettings);
   const [proxyStatus, setProxyStatus] = useState("");
+  const [codexConnection, setCodexConnection] = useState({ phase: "checking" });
   const [created, setCreated] = useState([]);
   const [createdPage, setCreatedPage] = useState(1);
   const [saves, setSaves] = useState(null); // null=未取 / []=空 / [...]
@@ -48,6 +65,7 @@ export default function Mine() {
     }
   });
   const fileRef = useRef(null);
+  const codexLoginRun = useRef(0);
   // 子分区红线指示条:测量当前 tab 的位置/宽度,用 transform 平移过去(不再硬切 border-color)。
   const tabRefs = useRef([]);
   const [bar, setBar] = useState({ x: 0, y: 0, w: 0 });
@@ -80,6 +98,33 @@ export default function Mine() {
   }, [measureBar]);
 
   useEffect(() => setMe(user), [user]);
+
+  useEffect(() => {
+    if (!(enabled && user && me && me.local_proxy_enabled)) return;
+    if (proxySettings.source !== "local_proxy" && !window.location.hash.includes("codex=connected")) return;
+    let alive = true;
+    setCodexConnection({ phase: "checking" });
+    getLocalProxyConnection()
+      .then(({ health, account }) => {
+        if (!alive) return;
+        const connected = !!account.authenticated;
+        setCodexConnection({
+          phase: connected ? "connected" : "login_required",
+          health,
+          account,
+        });
+        if (connected && window.location.hash.includes("codex=connected")) {
+          const next = saveLocalProxySettings({ ...loadLocalProxySettings(), source: "local_proxy" });
+          setProxySettings(next);
+          setProxyStatus("Codex 已连接并启用");
+        }
+      })
+      .catch(() => alive && setCodexConnection({ phase: "missing" }));
+    return () => {
+      alive = false;
+      codexLoginRun.current += 1;
+    };
+  }, [enabled, user, me && me.local_proxy_enabled, proxySettings.source]);
 
   // 我创建的(卡):本机/账号下非官方角色卡。
   useEffect(() => {
@@ -196,8 +241,114 @@ export default function Mine() {
     setProxyStatus("本机反代设置已保存");
   }
 
+  async function refreshCodexConnection() {
+    setCodexConnection({ phase: "checking" });
+    try {
+      const { health, account } = await getLocalProxyConnection();
+      setCodexConnection({
+        phase: account.authenticated ? "connected" : "login_required",
+        health,
+        account,
+      });
+      return { health, account };
+    } catch (error) {
+      setCodexConnection({ phase: "missing", error: error.message });
+      return null;
+    }
+  }
+
+  function downloadCodexConnector() {
+    const link = document.createElement("a");
+    link.href = LOCAL_PROXY_SETUP_URL;
+    link.download = "AIStory-Codex-Setup.cmd";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setCodexConnection({ phase: "installing" });
+    setProxyStatus("连接助手已下载，运行后会自动完成安装和登录");
+  }
+
+  function wakeCodexConnector() {
+    window.location.href = "aistory-codex://connect";
+    setProxyStatus("正在启动已安装的连接助手");
+    setTimeout(refreshCodexConnection, 3000);
+  }
+
+  async function beginCodexLogin(flow = "browser") {
+    const runId = ++codexLoginRun.current;
+    const authWindow = flow === "browser" ? window.open("about:blank", "aistory-codex-oauth") : null;
+    setCodexConnection((current) => ({ ...current, phase: "login_pending", flow }));
+    try {
+      const login = await startLocalProxyLogin(flow);
+      if (login.status === "authenticated" || (login.account && login.account.authenticated)) {
+        if (authWindow) authWindow.close();
+        const next = saveLocalProxySettings({ ...proxySettings, source: "local_proxy" });
+        setProxySettings(next);
+        await refreshCodexConnection();
+        setProxyStatus("Codex 已连接并启用");
+        return;
+      }
+      if (flow === "browser" && login.auth_url) {
+        if (authWindow) authWindow.location.replace(login.auth_url);
+        else setCodexConnection((current) => ({ ...current, oauthUrl: login.auth_url }));
+      }
+      if (flow === "device" && login.verification_url) {
+        try { await navigator.clipboard.writeText(login.user_code || ""); } catch (e) {}
+        window.open(login.verification_url, "_blank", "noopener");
+      }
+      setCodexConnection((current) => ({
+        ...current,
+        phase: "login_pending",
+        loginId: login.login_id,
+        verificationUrl: login.verification_url,
+        userCode: login.user_code,
+      }));
+      for (let attempt = 0; attempt < 200 && codexLoginRun.current === runId; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const status = await getLocalProxyLoginStatus(login.login_id);
+        if (status.account && status.account.authenticated) {
+          if (authWindow && !authWindow.closed) authWindow.close();
+          const next = saveLocalProxySettings({ ...proxySettings, source: "local_proxy" });
+          setProxySettings(next);
+          setCodexConnection({ phase: "connected", account: status.account });
+          setProxyStatus("Codex 已连接并启用");
+          return;
+        }
+        if (status.status === "failed" || status.status === "cancelled") {
+          throw new Error(status.error || "Codex 登录没有完成");
+        }
+      }
+      if (codexLoginRun.current === runId) {
+        await cancelLocalProxyLogin(login.login_id).catch(() => {});
+        throw new Error("登录等待超时，请重试或使用设备码");
+      }
+    } catch (error) {
+      if (authWindow && !authWindow.closed) authWindow.close();
+      if (codexLoginRun.current === runId) {
+        setCodexConnection((current) => ({ ...current, phase: "login_required", error: error.message }));
+        setProxyStatus(error.message || "Codex 登录失败");
+      }
+    }
+  }
+
   const displayName = (me && (me.display_name || me.username)) || "游客";
   const loggedIn = !!(enabled && user);
+  const codexPhase = codexConnection.phase;
+  const codexLabel = {
+    checking: "正在检测本机连接",
+    missing: "尚未连接",
+    installing: "等待连接助手启动",
+    login_required: "等待 ChatGPT 登录",
+    login_pending: "正在连接 ChatGPT",
+    connected: "Codex 已连接",
+  }[codexPhase] || "Codex 连接异常";
+  const codexDetail = codexPhase === "connected"
+    ? [
+        CODEX_PLAN_LABELS[codexConnection.account && codexConnection.account.plan_type] || null,
+        codexConnection.health && codexConnection.health.model,
+      ]
+        .filter(Boolean).join(" · ") || "可以开始游玩"
+    : codexConnection.error || "";
 
   return (
     <div className="page mine">
@@ -285,36 +436,87 @@ export default function Mine() {
                 </button>
               </div>
               {proxySettings.source === "local_proxy" && (
-                <div className="mine-model-fields">
-                  <label>
-                    <span className="t-meta">API Base URL</span>
-                    <Input
-                      value={proxySettings.endpoint}
-                      onChange={(e) => setProxySettings((s) => ({ ...s, endpoint: e.target.value }))}
-                      placeholder="http://127.0.0.1:端口/v1"
-                      spellCheck={false}
-                    />
-                  </label>
-                  <label>
-                    <span className="t-meta">Model</span>
-                    <Input
-                      value={proxySettings.model}
-                      onChange={(e) => setProxySettings((s) => ({ ...s, model: e.target.value }))}
-                      placeholder="反代支持的模型名"
-                      spellCheck={false}
-                    />
-                  </label>
-                  <label>
-                    <span className="t-meta">API Key（可选）</span>
-                    <Input
-                      type="password"
-                      value={proxySettings.apiKey}
-                      onChange={(e) => setProxySettings((s) => ({ ...s, apiKey: e.target.value }))}
-                      placeholder="仅保留到本次浏览器会话"
-                      autoComplete="off"
-                    />
-                  </label>
-                  <Button variant="line" onClick={saveProxySettings}>保存模型设置</Button>
+                <div className="mine-codex-connect">
+                  <div className={`mine-codex-state is-${codexPhase}`}>
+                    <span className="mine-codex-dot" aria-hidden="true" />
+                    <span className="mine-codex-state-copy">
+                      <strong className="t-ui-sm">{codexLabel}</strong>
+                      {codexDetail && <span className="t-meta">{codexDetail}</span>}
+                    </span>
+                  </div>
+
+                  <div className="mine-codex-actions">
+                    {(codexPhase === "missing" || codexPhase === "installing") && (
+                      <Button variant="primary" onClick={downloadCodexConnector}>
+                        {codexPhase === "installing" ? "重新下载安装器" : "一键安装并连接"}
+                      </Button>
+                    )}
+                    {codexPhase === "missing" && (
+                      <Button variant="line" onClick={wakeCodexConnector}>启动已安装助手</Button>
+                    )}
+                    {codexPhase === "login_required" && (
+                      <Button variant="primary" onClick={() => beginCodexLogin("browser")}>连接 ChatGPT</Button>
+                    )}
+                    <Button
+                      variant="line"
+                      disabled={codexPhase === "checking" || codexPhase === "login_pending"}
+                      onClick={refreshCodexConnection}
+                    >
+                      重新检测
+                    </Button>
+                  </div>
+
+                  {codexConnection.oauthUrl && (
+                    <a className="mine-codex-link t-ui-sm" href={codexConnection.oauthUrl} target="_blank" rel="noreferrer">
+                      打开 ChatGPT 登录页
+                    </a>
+                  )}
+                  {codexPhase === "login_required" && codexConnection.health && (
+                    <button className="mine-codex-device t-meta" onClick={() => beginCodexLogin("device")}>
+                      改用设备码登录
+                    </button>
+                  )}
+                  {codexConnection.userCode && (
+                    <div className="mine-codex-code">
+                      <span className="t-meta">设备码</span>
+                      <strong className="t-mono">{codexConnection.userCode}</strong>
+                    </div>
+                  )}
+
+                  <details className="mine-model-advanced">
+                    <summary className="t-meta">高级设置</summary>
+                    <div className="mine-model-fields">
+                      <label>
+                        <span className="t-meta">API Base URL</span>
+                        <Input
+                          value={proxySettings.endpoint}
+                          onChange={(e) => setProxySettings((s) => ({ ...s, endpoint: e.target.value }))}
+                          placeholder="http://127.0.0.1:端口/v1"
+                          spellCheck={false}
+                        />
+                      </label>
+                      <label>
+                        <span className="t-meta">Model</span>
+                        <Input
+                          value={proxySettings.model}
+                          onChange={(e) => setProxySettings((s) => ({ ...s, model: e.target.value }))}
+                          placeholder="codex"
+                          spellCheck={false}
+                        />
+                      </label>
+                      <label>
+                        <span className="t-meta">API Key（可选）</span>
+                        <Input
+                          type="password"
+                          value={proxySettings.apiKey}
+                          onChange={(e) => setProxySettings((s) => ({ ...s, apiKey: e.target.value }))}
+                          placeholder="仅保留到本次浏览器会话"
+                          autoComplete="off"
+                        />
+                      </label>
+                      <Button variant="line" onClick={saveProxySettings}>保存高级设置</Button>
+                    </div>
+                  </details>
                 </div>
               )}
               {proxyStatus && <span className="mine-model-status t-meta">{proxyStatus}</span>}

@@ -1,0 +1,3 @@
+tools/codex-local-proxy/*.js text eol=lf
+tools/codex-local-proxy/*.ps1 text eol=lf
+tools/codex-local-proxy/*.cmd text eol=crlf

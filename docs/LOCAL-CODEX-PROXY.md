@@ -17,14 +17,14 @@
 ## 玩家
 
 1. 在“我的 > 档案 > 模型来源”选择“Codex 本机”。
-2. 在本项目目录运行 `.\tools\codex-local-proxy\manage.ps1 start`。
-3. 默认 API Base URL 为 `http://127.0.0.1:8765/v1`,model 为 `codex`。
-4. 如反代要求 Bearer token,填写 API Key。Key 只保存于当前浏览器会话,不会发送给 Render。
-5. 保存后进入故事。游玩页可随时在 DeepSeek / Codex 本机之间切换。
+2. 点击“一键安装并连接”,打开浏览器下载的安装器。
+3. 在打开的 ChatGPT 页面确认一次登录。完成后会自动回到 app 并启用 Codex。
 
 反代必须实现 `POST /chat/completions`,返回 OpenAI-compatible 的 `choices[0].message.content`。JSON 模式调用还会携带 `response_format: {"type":"json_object"}`。
 
-项目自带桥接器会使用这台电脑当前登录的 Codex,无需玩家部署 Render。启动、停止和配置细节见 `tools/codex-local-proxy/README.md`。
+连接助手会自动复用电脑上已有的 Codex 和 Node.js;缺失时自动安装官方 Codex CLI 和便携 Node.js。它还会注册当前用户的开机启动和 `aistory-codex://` 唤醒协议。OAuth token 由 Codex 自己保存和刷新,不会进入网页或 Render。
+
+当前一键安装器面向 Windows 11。开发者手动启动和高级配置见 `tools/codex-local-proxy/README.md`。
 
 ## 浏览器要求
 

@@ -1,8 +1,19 @@
 # Codex 本机桥接器
 
-这个桥接器把当前电脑已登录的 Codex 转成 app 可调用的 OpenAI-compatible 接口。它只监听 `127.0.0.1`,不会暴露到局域网或公网。
+这个桥接器把当前电脑登录的 Codex 转成 app 可调用的 OpenAI-compatible 接口。它只监听 `127.0.0.1`,不会暴露到局域网或公网。
 
-## 使用
+## 玩家安装
+
+获授权用户直接在 app 的“我的 > 模型来源”点击“一键安装并连接”。下载的 `AIStory-Codex-Setup.cmd` 会自动:
+
+1. 检测并复用现有 Node.js 与 Codex。
+2. 缺失时校验并安装便携 Node.js 和官方 OpenAI Codex CLI。
+3. 安装连接助手、注册开机启动并拉起 ChatGPT OAuth。
+4. 登录完成后自动返回 app。
+
+浏览器 OAuth 不经过 app 后端。账号 token 由 Codex app-server 自己保存和刷新。
+
+## 开发者手动使用
 
 先确认 Codex 桌面端已经登录,然后在项目根目录运行:
 
@@ -10,7 +21,7 @@
 .\tools\codex-local-proxy\manage.ps1 start
 ```
 
-app 中填写:
+app 的高级设置默认值:
 
 - API Base URL: `http://127.0.0.1:8765/v1`
 - Model: `codex`
