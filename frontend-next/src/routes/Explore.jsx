@@ -1,37 +1,31 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useNavigate } from "../lib/transitionNav";
-import { Chip, SearchField, Button, Badge, Tag, CardShelf } from "../components/ui";
+import { SearchField, Button, Badge, Tag } from "../components/ui";
+import ShowcaseGrid from "../components/explore/ShowcaseGrid";
 import { getJSON } from "../lib/api";
 import { toCardModel, toCardModels } from "../lib/cardModel";
 import "./Explore.css";
 
 const FAV_KEY = "ais_favorites_v1";
 
-// 探索 = 玩家入场货架(默认首屏)。本批决策:拿掉「卡市集」,只留双轨 ——
-//   完整故事(/api/presets · 可直接玩) + 角色卡(/api/library/characters · 选/扮演角色)。
-//   设定卡 / 世界书 / 故事书 / 演出卡 不再摆给玩家,移到创作端素材库。
 const TRACKS = [
   { key: "all", label: "全部" },
   { key: "story", label: "完整故事" },
   { key: "character", label: "角色卡" },
 ];
 
-// 排序:最新/综合 前端可真排;热度/点击需后端字段(热度·点击·更新时间)→ YOR-95,先优雅降级(禁用 + 标注)。
-const SORTS = [
-  { key: "composite", label: "综合", live: true },
-  { key: "latest", label: "最新", live: true },
-  { key: "heat", label: "热度", live: false },
-  { key: "clicks", label: "点击", live: false },
+const LIVE_SORTS = [
+  { key: "composite", label: "综合" },
+  { key: "latest", label: "最新" },
 ];
-const LIVE_SORTS = SORTS.filter((item) => item.live);
 
-const PAGE_SIZE = 15;
-const SKELETON_COUNT = 12;
+const PAGE_SIZE = 12;
+const SKELETON_COUNT = 8;
 
-function SegmentedControl({ id, items, value, onChange, label, reducedMotion }) {
+function ShowcaseTabs({ items, value, onChange, reducedMotion }) {
   return (
-    <div className="explore-segmented" role="group" aria-label={label}>
+    <div className="showcase4-tabs" role="group" aria-label="内容类型">
       {items.map((item) => {
         const active = value === item.key;
         return (
@@ -44,12 +38,12 @@ function SegmentedControl({ id, items, value, onChange, label, reducedMotion }) 
           >
             {active ? (
               <motion.span
-                className="explore-segmented-active"
-                layoutId={`explore-segmented-${id}`}
-                transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 520, damping: 38, mass: 0.62 }}
+                className="showcase4-tabs-active"
+                layoutId="explore-showcase4-tab"
+                transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 400, damping: 32 }}
               />
             ) : null}
-            <span className="explore-segmented-label">{item.label}</span>
+            <span>{item.label}</span>
           </button>
         );
       })}
@@ -73,14 +67,14 @@ function AnimatedNumber({ value, reducedMotion }) {
   );
 }
 
-function ExploreSkeleton() {
+function ShowcaseSkeleton() {
   return (
-    <div className="card-shelf explore-skeleton" aria-hidden="true">
+    <div className="showcase4-skeleton" aria-hidden="true">
       {Array.from({ length: SKELETON_COUNT }, (_, index) => (
-        <div className="explore-skeleton-card" key={index}>
-          <span className="explore-skeleton-cover" />
-          <span className="explore-skeleton-line" />
-          <span className="explore-skeleton-line is-short" />
+        <div className="showcase4-skeleton-card" key={index}>
+          <span />
+          <b />
+          <i />
         </div>
       ))}
     </div>
@@ -98,17 +92,17 @@ export default function Explore() {
   const [genre, setGenre] = useState("全部");
   const [sort, setSort] = useState("composite");
   const [page, setPage] = useState(1);
-  const [detail, setDetail] = useState(null); // CardModel | null
+  const [detail, setDetail] = useState(null);
   const deferredQ = useDeferredValue(q);
   const reducedMotion = Boolean(useReducedMotion());
   const resultsRef = useRef(null);
   const dialogRef = useRef(null);
   const dialogCloseRef = useRef(null);
-  // 收藏(本机;个人中心「收藏」读同一份)。存原始项,按归一化 id 去重。
+
   const [favs, setFavs] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(FAV_KEY)) || { stories: [], characters: [] };
-    } catch (e) {
+    } catch (error) {
       return { stories: [], characters: [] };
     }
   });
@@ -120,17 +114,15 @@ export default function Explore() {
       getJSON("/api/presets"),
       getJSON("/api/library/characters"),
     ]);
+    const presetOk = presetResult.status === "fulfilled" && Array.isArray(presetResult.value);
+    const charOk = charResult.status === "fulfilled" && Array.isArray(charResult.value);
 
-    if (presetResult.status === "fulfilled") {
-      setPresets(Array.isArray(presetResult.value) ? presetResult.value : []);
-    } else {
-      setPresets([]);
-      setLoadErr(true);
-    }
-    // 角色卡轨道:库读取失败不致命(故事轨仍可用),静默退回空。
-    setChars(charResult.status === "fulfilled" && Array.isArray(charResult.value) ? charResult.value : []);
+    setPresets(presetOk ? presetResult.value : []);
+    setChars(charOk ? charResult.value : []);
+    setLoadErr(!presetOk && !charOk);
     setLoading(false);
   }
+
   useEffect(() => {
     refresh();
   }, []);
@@ -175,60 +167,53 @@ export default function Explore() {
     };
   }, [detail]);
 
-  // 两轨归一化为统一 CardModel(角标/竖卡/翻面全由统一 Card 负责)。
   const storyModels = useMemo(() => toCardModels("story", presets), [presets]);
   const charModels = useMemo(() => toCardModels("character", chars), [chars]);
-
-  // 轨道合并:全部 = 完整故事在前、角色卡在后。
   const trackModels = useMemo(() => {
     if (track === "story") return storyModels;
     if (track === "character") return charModels;
     return [...storyModels, ...charModels];
   }, [track, storyModels, charModels]);
 
-  // 标签 chip:从当前轨道真实存在的标签按频次取前 N(标签细化 YOR-34:
-  // 高频标签才上筛选条,避免角色卡一堆一次性描述词(银发/温和…)把筛选淹没)。
-  const GENRE_LIMIT = 12;
-  const genreChips = useMemo(() => {
-    const freq = new Map();
-    trackModels.forEach((m) => (m.tags || []).forEach((t) => {
-      if (t) freq.set(t, (freq.get(t) || 0) + 1);
+  const genreOptions = useMemo(() => {
+    const frequency = new Map();
+    trackModels.forEach((model) => (model.tags || []).forEach((tag) => {
+      if (tag) frequency.set(tag, (frequency.get(tag) || 0) + 1);
     }));
-    const top = [...freq.entries()]
+    const top = [...frequency.entries()]
       .sort((a, b) => b[1] - a[1])
-      .slice(0, GENRE_LIMIT)
-      .map(([t]) => t);
+      .slice(0, 12)
+      .map(([tag]) => tag);
     return ["全部", ...top];
   }, [trackModels]);
 
   const filtered = useMemo(() => {
-    const s = deferredQ.trim().toLowerCase();
-    let xs = trackModels.filter((m) => {
-      const inGenre = genre === "全部" || (m.tags || []).includes(genre);
-      const inQ =
-        !s ||
-        [m.title, m.blurb, m.meta.author, (m.tags || []).join(" ")]
+    const search = deferredQ.trim().toLowerCase();
+    let models = trackModels.filter((model) => {
+      const inGenre = genre === "全部" || (model.tags || []).includes(genre);
+      const inSearch =
+        !search ||
+        [model.title, model.blurb, model.meta?.author, (model.tags || []).join(" ")]
           .filter(Boolean)
-          .some((f) => f.toLowerCase().includes(s));
-      return inGenre && inQ;
+          .some((field) => field.toLowerCase().includes(search));
+      return inGenre && inSearch;
     });
-    // 综合 = 官方优先(预设/库项的 official 标记);最新 = 取回顺序(库列表已按更新倒序)。
-    // 热度/点击暂无后端字段:不假排,退回取回顺序(占位,等 YOR-95)。
+
     if (sort === "composite") {
-      xs = [...xs].sort((a, b) => {
-        const ao = a.raw && a.raw.official, bo = b.raw && b.raw.official;
-        return ao === bo ? 0 : bo ? 1 : -1;
+      models = [...models].sort((a, b) => {
+        const aOfficial = Boolean(a.raw?.official);
+        const bOfficial = Boolean(b.raw?.official);
+        return aOfficial === bOfficial ? 0 : bOfficial ? 1 : -1;
       });
     }
-    return xs;
+    return models;
   }, [trackModels, deferredQ, genre, sort]);
 
-  // 分页(卡数限制 YOR-39:一页固定张数,翻页;不再一页平铺全部)。
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const curPage = Math.min(page, pageCount);
-  const shown = filtered.slice((curPage - 1) * PAGE_SIZE, curPage * PAGE_SIZE);
-  const resultMotionKey = `${track}:${genre}:${sort}:${curPage}`;
+  const currentPage = Math.min(page, pageCount);
+  const shown = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const searchPending = q !== deferredQ;
+
   useEffect(() => {
     setPage(1);
   }, [track, q, genre, sort]);
@@ -236,180 +221,161 @@ export default function Explore() {
   function changePage(nextPage) {
     setPage(nextPage);
     requestAnimationFrame(() => {
-      resultsRef.current?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+      resultsRef.current?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
     });
   }
 
-  // —— 卡片去向 ——
-  // 完整故事 → 介绍页(选主角三选一 + 涟漪入局);直接开玩的捷径收敛进详情页。
-  function goDetail(m) {
-    navigate(`/story/${encodeURIComponent(m.id)}`, { state: { preset: m.raw } });
+  function goStory(model) {
+    navigate(`/story/${encodeURIComponent(model.id)}`, { state: { preset: model.raw } });
   }
-  // 角色卡「纯聊」:进微信式轻聊。预载该角色 → sessionStorage,纯聊页读后自动加联系人并选中。
-  function chatWith(m) {
+
+  function chatWith(model) {
     try {
-      if (m && m.raw) sessionStorage.setItem("ais_chat_preload", JSON.stringify(m.raw));
-    } catch (e) {}
+      if (model?.raw) sessionStorage.setItem("ais_chat_preload", JSON.stringify(model.raw));
+    } catch (error) {}
     navigate("/chat");
   }
 
-  // 收藏:按归一化 id 判定 + 增删,写回 localStorage(细节⑭)。
-  const favIds = useMemo(
+  function openModel(model) {
+    if (model.kind === "story") goStory(model);
+    else setDetail(model);
+  }
+
+  const favoriteIds = useMemo(
     () => ({
-      story: new Set(toCardModels("story", favs.stories || []).map((x) => x.id)),
-      character: new Set(toCardModels("character", favs.characters || []).map((x) => x.id)),
+      story: new Set(toCardModels("story", favs.stories || []).map((item) => item.id)),
+      character: new Set(toCardModels("character", favs.characters || []).map((item) => item.id)),
     }),
     [favs]
   );
-  const isFav = (m) => favIds[m.kind] && favIds[m.kind].has(m.id);
-  function toggleFav(m) {
-    setFavs((prev) => {
-      const bucket = m.kind === "story" ? "stories" : "characters";
-      const arr = prev[bucket] || [];
-      const has = favIds[m.kind] && favIds[m.kind].has(m.id);
-      const next = has ? arr.filter((raw) => toCardModel(m.kind, raw).id !== m.id) : [...arr, m.raw];
-      const updated = { ...prev, [bucket]: next };
+
+  const isFavorite = (model) => Boolean(favoriteIds[model.kind]?.has(model.id));
+
+  function toggleFavorite(model) {
+    setFavs((previous) => {
+      const bucket = model.kind === "story" ? "stories" : "characters";
+      const current = previous[bucket] || [];
+      const exists = favoriteIds[model.kind]?.has(model.id);
+      const next = exists
+        ? current.filter((raw) => toCardModel(model.kind, raw).id !== model.id)
+        : [...current, model.raw];
+      const updated = { ...previous, [bucket]: next };
       try {
         localStorage.setItem(FAV_KEY, JSON.stringify(updated));
-      } catch (e) {}
+      } catch (error) {}
       return updated;
     });
   }
 
-  function actionsFor(m) {
-    const fav = { label: isFav(m) ? "已收藏" : "收藏", variant: isFav(m) ? "secondary" : "line", onClick: () => toggleFav(m) };
-    if (m.kind === "character") {
-      // 角色卡反面:纯聊为主功能(标红),不再有「开故事」(细节⑤)。
-      return [
-        { label: "纯聊", variant: "primary", onClick: () => chatWith(m) },
-        fav,
-      ];
-    }
-    return [{ label: "查看故事", variant: "primary", isDetail: true, onClick: () => goDetail(m) }, fav];
-  }
-
   const totalCount = storyModels.length + charModels.length;
-  // 计数跟着筛选走:有任一筛选/搜索时显示「匹配 N / 共 M 个」,否则保持全量口径。
   const filtering = track !== "all" || q.trim() !== "" || genre !== "全部";
 
   return (
     <>
       <div className="page explore">
-        {/* 继续游玩改由全局悬浮 ResumeBar 负责(只在探索悬浮,细节①),此处不再内联 rail */}
-        <div className="explore-head">
-          <div>
-            <h1 className="t-display">探索</h1>
-            <p className="t-ui explore-sub">取下一本书,或挑一张角色卡,走进会回应你的故事世界。</p>
-          </div>
-          <div className="explore-count t-ui-sm" aria-live="polite" aria-atomic="true">
+        <h1 className="explore-status-sr">探索</h1>
+        <section className="explore-showcase-tools" aria-label="探索筛选">
+          <span className="showcase4-filter-label">筛选</span>
+          <ShowcaseTabs
+            items={TRACKS}
+            value={track}
+            reducedMotion={reducedMotion}
+            onChange={(nextTrack) => {
+              setTrack(nextTrack);
+              setGenre("全部");
+            }}
+          />
+          <SearchField
+            className="explore-showcase-search"
+            aria-label="搜索故事或角色"
+            placeholder="搜索名字、简介、作者或标签"
+            value={q}
+            onChange={(event) => setQ(event.target.value)}
+            onClear={() => setQ("")}
+          />
+          <label className="showcase-select-wrap">
+            <span className="explore-status-sr">题材</span>
+            <select value={genre} onChange={(event) => setGenre(event.target.value)} aria-label="题材筛选">
+              {genreOptions.map((item) => (
+                <option value={item} key={item}>{item === "全部" ? "所有题材" : item}</option>
+              ))}
+            </select>
+          </label>
+          <label className="showcase-select-wrap">
+            <span className="explore-status-sr">排序</span>
+            <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="排序方式">
+              {LIVE_SORTS.map((item) => <option value={item.key} key={item.key}>{item.label}</option>)}
+            </select>
+          </label>
+          <div className="explore-showcase-count t-ui-sm" aria-live="polite" aria-atomic="true">
             {loading ? (
-              <span>正在整理书架</span>
+              "正在整理"
             ) : filtering ? (
-              <>
-                匹配 <AnimatedNumber value={filtered.length} reducedMotion={reducedMotion} /> / 共 {totalCount} 个
-              </>
+              <>匹配 <AnimatedNumber value={filtered.length} reducedMotion={reducedMotion} /> / {totalCount}</>
             ) : (
-              <>
-                共 <AnimatedNumber value={totalCount} reducedMotion={reducedMotion} /> 个故事 / 角色
-              </>
+              <>共 <AnimatedNumber value={totalCount} reducedMotion={reducedMotion} /> 个</>
             )}
           </div>
-        </div>
-
-        <section className="explore-controls" aria-label="探索筛选">
-          <div className="explore-primary-controls">
-            <SegmentedControl
-              id="track"
-              items={TRACKS}
-              value={track}
-              label="内容类型"
-              reducedMotion={reducedMotion}
-              onChange={(nextTrack) => {
-                setTrack(nextTrack);
-                setGenre("全部");
-              }}
-            />
-            <SearchField
-              className="explore-search"
-              aria-label="搜索故事或角色"
-              placeholder="搜索名字、简介、作者或标签"
-              value={q}
-              onChange={(event) => setQ(event.target.value)}
-              onClear={() => setQ("")}
-            />
-            <SegmentedControl
-              id="sort"
-              items={LIVE_SORTS}
-              value={sort}
-              label="排序方式"
-              reducedMotion={reducedMotion}
-              onChange={setSort}
-            />
-          </div>
-
-          {genreChips.length > 1 ? (
-            <div className="explore-genres" role="group" aria-label="题材筛选">
-              {genreChips.map((item) => (
-                <Chip key={item} active={genre === item} onClick={() => setGenre(item)}>
-                  {item === "全部" ? "所有题材" : item}
-                </Chip>
-              ))}
-            </div>
-          ) : null}
         </section>
 
-        <div ref={resultsRef} className="explore-results" aria-busy={loading || searchPending}>
+        <section ref={resultsRef} className="explore-showcase-results" aria-busy={loading || searchPending}>
           <span className="explore-status-sr" role="status" aria-live="polite">
             {loading ? "正在加载探索内容" : searchPending ? "正在筛选" : `显示 ${shown.length} 条内容`}
           </span>
+
           {loading ? (
-            <ExploreSkeleton />
+            <ShowcaseSkeleton />
           ) : loadErr && !totalCount ? (
             <div className="explore-empty">
-              <h3 className="t-h2">书架加载失败</h3>
-              <p className="t-ui explore-sub">没能从服务器取到列表,可能是网络抖动或服务暂不可用。</p>
-              <Button variant="primary" onClick={refresh}>点击重试</Button>
+              <h2 className="t-h2">内容加载失败</h2>
+              <p className="t-ui">没能从服务器取到故事和角色。</p>
+              <Button variant="primary" onClick={refresh}>重试</Button>
             </div>
           ) : !filtered.length ? (
             <div className="explore-empty">
-              <h3 className="t-h2">{totalCount ? "没有匹配的内容" : "书架还空着"}</h3>
-              <p className="t-ui explore-sub">{totalCount ? "换个关键词、标签或类型试试。" : "去创作从一张角色卡开始。"}</p>
+              <h2 className="t-h2">{totalCount ? "没有匹配的内容" : "这里还没有故事"}</h2>
+              <p className="t-ui">{totalCount ? "换个关键词或题材试试。" : "先从创作一张角色卡开始。"}</p>
             </div>
           ) : (
             <>
-              <AnimatePresence initial={false} mode="wait">
-                <motion.div
-                  key={resultMotionKey}
-                  className="explore-grid-motion"
-                  initial={reducedMotion ? false : { opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={reducedMotion ? { opacity: 1 } : { opacity: 0, y: -6 }}
-                  transition={{ duration: reducedMotion ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }}
-                >
-                  <CardShelf
-                    models={shown.map((model) => (isFav(model) ? { ...model, fav: true } : model))}
-                    actionsFor={actionsFor}
-                    onOpen={(model) => (model.kind === "story" ? goDetail(model) : setDetail(model))}
-                    eagerCount={2}
-                  />
-                </motion.div>
-              </AnimatePresence>
+              <ShowcaseGrid
+                models={shown}
+                isFavorite={isFavorite}
+                onOpen={openModel}
+                onToggleFavorite={toggleFavorite}
+                reducedMotion={reducedMotion}
+              />
+
               {pageCount > 1 ? (
-                <div className="explore-pager">
-                  <Button variant="line" disabled={curPage <= 1} onClick={() => changePage(Math.max(1, curPage - 1))}>
-                    上一页
-                  </Button>
-                  <span className="explore-pager-info t-ui-sm" aria-label={`第 ${curPage} 页,共 ${pageCount} 页`}>
-                    {curPage} / {pageCount}
+                <div className="showcase4-pager">
+                  <button
+                    type="button"
+                    className="showcase4-page-button"
+                    disabled={currentPage <= 1}
+                    aria-label="上一页"
+                    title="上一页"
+                    onClick={() => changePage(Math.max(1, currentPage - 1))}
+                  >
+                    <span aria-hidden="true">←</span>
+                  </button>
+                  <span className="showcase4-page-indicator t-ui-sm" aria-label={`第 ${currentPage} 页,共 ${pageCount} 页`}>
+                    {currentPage} / {pageCount}
                   </span>
-                  <Button variant="line" disabled={curPage >= pageCount} onClick={() => changePage(Math.min(pageCount, curPage + 1))}>
-                    下一页
-                  </Button>
+                  <button
+                    type="button"
+                    className="showcase4-page-button"
+                    disabled={currentPage >= pageCount}
+                    aria-label="下一页"
+                    title="下一页"
+                    onClick={() => changePage(Math.min(pageCount, currentPage + 1))}
+                  >
+                    <span aria-hidden="true">→</span>
+                  </button>
                 </div>
               ) : null}
             </>
           )}
-        </div>
+        </section>
       </div>
 
       <AnimatePresence>

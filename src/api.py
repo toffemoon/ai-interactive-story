@@ -20,6 +20,9 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from psycopg import OperationalError
+from psycopg.errors import IdleInTransactionSessionTimeout
+from psycopg_pool import PoolTimeout, TooManyRequests
 
 from .identify import (
     build_card,
@@ -97,6 +100,20 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="AI 互动故事", lifespan=lifespan)
+
+
+async def _database_unavailable(_request: Request, exc: Exception):
+    """池耗尽、断线或数据库超时统一变成可重试 503，不泄露 DSN/驱动正文。"""
+    log.warning("database unavailable: %s stats=%s", type(exc).__name__, db.pool_stats())
+    return JSONResponse(
+        {"detail": "数据库暂时不可用，请稍后重试"},
+        status_code=503,
+        headers={"Retry-After": "1"},
+    )
+
+
+for _db_exc in (PoolTimeout, TooManyRequests, OperationalError, IdleInTransactionSessionTimeout):
+    app.add_exception_handler(_db_exc, _database_unavailable)
 
 
 class TextReq(BaseModel):
@@ -524,13 +541,9 @@ def api_my_oc(user: dict | None = Depends(current_user_dep)):
 def api_health():
     """健康检查:确认后端在线 + DB 可达 + 是否带前端 + deep 向量召回依赖是否就绪。
     AI / 调用方可先打这个再调其它接口。"""
-    db_ok = True
-    try:
-        with db.get_pool().connection() as conn, conn.cursor() as cur:
-            cur.execute("select 1")
-            cur.fetchone()
-    except Exception:
-        db_ok = False
+    # 池满时 health 1s 内返回 503；半开 TCP 由 checkout 探活 + keepalive/tcp_user_timeout 限定。
+    db_ok = db.ping(timeout=1.0)
+    db_pool = db.pool_stats()
     # embeddings_installed:部署装没装 sentence-transformers/torch(= deep 向量召回 + Phase 3 在场过滤能不能用);
     #   只查包是否可定位、不加载模型(不触发下载)。embeddings_loaded:bge 是否已加载(首次 deep 触发后才 True)。
     try:
@@ -543,7 +556,8 @@ def api_health():
         emb_loaded = _memory.is_ready()
     except Exception:
         emb_loaded = False
-    body = {"status": "ok" if db_ok else "degraded", "db": db_ok, "frontend": FRONTEND.is_dir(),
+    body = {"status": "ok" if db_ok else "degraded", "db": db_ok, "db_pool": db_pool,
+            "frontend": FRONTEND.is_dir(),
             "embeddings_installed": emb_installed, "embeddings_loaded": emb_loaded,
             "deep_capable": emb_installed,  # True = 完整 Phase 3(向量在场过滤)可用
             "mode": "frontend+api" if FRONTEND.is_dir() else "api-only"}

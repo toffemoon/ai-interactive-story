@@ -6,6 +6,9 @@ import { fileToCompressedDataURL } from "../lib/image";
 import ImageCropField from "../components/ImageCropField";
 import StoryHero from "../components/StoryHero";
 import CharDetailModal from "../components/CharDetailModal";
+import StaggeredText from "../components/staggered-text";
+import DepthCard from "../components/react-bits/depth-card";
+import { BlurHighlight } from "../components/react-bits/blur-highlight";
 import { useAuth } from "../state/auth";
 import "./Create.css";
 
@@ -52,6 +55,13 @@ const KINDS = [
   { zh: "故事书", k: "stories", ph: "说说这个故事……", opening: "想讲什么样的故事?一个开头、一句梗概都行——聊着聊着,书就翻开了。" },
 ];
 const OPENINGS = Object.fromEntries(KINDS.map((t) => [t.k, t.opening]));
+// 空台引子(桌面 reskin):点一下把句子放进输入框(不代发,用户过目再发),降低冷启动门槛。
+const SUGGESTS = {
+  characters: ["雨夜书店里打工的银发少女", "满口谎话却心软的江湖骗子", "不会说谎的未来管家机器人"],
+  players: ["刚穿越过来的现代医学生", "隐姓埋名的前朝剑客", "星舰上唯一清醒的副驾驶"],
+  worlds: ["灵气复苏后的沿海小城", "漂浮在云海上的九座岛", "地下铁尽头的隐秘市集"],
+  stories: ["雪夜密室里的一场告别", "世界三天后重启,只有你记得", "茶馆里一纸换命的旧约"],
+};
 const IDENTIFY_EP = {
   characters: "/api/identify",
   worlds: "/api/identify_world",
@@ -676,19 +686,38 @@ export default function Create() {
           </div>
         </>
       ) : (
-        /* ———————————————— 桌面:两栏(对话 | 实时卡 + 操作钉死) ———————————————— */
+        /* ———————————————— 桌面:两栏(对话 | 实时卡 + 操作钉死) ————————————————
+           reskin(YOR-211):入场动效(标题错层/副标晕染/tab 错峰)+ 空台引子 + 墨点打字指示 +
+           草稿卡 DepthCard 视差。功能契约未动:send/onUpload/收纳/发布全部原样。 */
         <>
           <div className="create-head">
             <div>
-              <h1 className="t-display">创作</h1>
-              <p className="t-ui create-sub">和 AI 一起,边聊边把一张卡 / 一个故事填出来。草稿自动保存。</p>
+              <h1 className="t-display">
+                <StaggeredText text="创作" as="span" segmentBy="chars" className="create-title-st" />
+              </h1>
+              <p className="t-ui create-sub">
+                <BlurHighlight
+                  highlightedBits={["边聊边", "草稿自动保存"]}
+                  highlightColor="color-mix(in srgb, var(--accent) 16%, transparent)"
+                  blurDuration={0.7}
+                  highlightDelay={0.5}
+                  viewportOptions={{ once: true, amount: 0.3 }}
+                >
+                  和 AI 一起,边聊边把一张卡 / 一个故事填出来。草稿自动保存。
+                </BlurHighlight>
+              </p>
             </div>
           </div>
           <div className="create-kinds">
             {KINDS.map((t, i) => {
               const cnt = desks[t.k].built.length;
               return (
-                <button key={t.k} className={"create-kind" + (i === ki ? " is-on" : "")} onClick={() => setKi(i)}>
+                <button
+                  key={t.k}
+                  className={"create-kind" + (i === ki ? " is-on" : "")}
+                  style={{ "--ci": i }}
+                  onClick={() => setKi(i)}
+                >
                   {t.zh}
                   {cnt > 0 && <span className="create-kind-badge">{cnt}</span>}
                 </button>
@@ -696,7 +725,8 @@ export default function Create() {
             })}
           </div>
 
-          <div className="create-body">
+          {/* key=kind:切卡种时整个主体重挂,吃同一段入场动效当作切换转场 */}
+          <div className="create-body" key={kind}>
             {/* 对话区 */}
             <div className="create-chat">
               <div className="create-msgs" ref={chatRef}>
@@ -706,10 +736,33 @@ export default function Create() {
                     <p className="create-msg-text t-ui">{m.text}</p>
                   </div>
                 ))}
+                {/* 空台引子:还没聊起来时给三条可点的起手句(点了只进输入框,不代发) */}
+                {desk.messages.length <= 1 && !busy && (
+                  <div className="create-starters">
+                    <span className="create-starters-h t-meta">起个头</span>
+                    <div className="create-starters-row">
+                      {(SUGGESTS[kind] || []).map((s, i) => (
+                        <button
+                          key={s}
+                          className="create-starter t-ui-sm"
+                          style={{ "--ci": i }}
+                          onClick={() => patch(kind, { input: s })}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {busy && (
                   <div className="create-msg">
                     <span className="create-msg-who t-meta">助手</span>
-                    <p className="create-msg-text t-ui create-msg-typing">正在想……</p>
+                    <p className="create-msg-text t-ui create-msg-typing">
+                      <span className="create-dot" aria-hidden="true" />
+                      <span className="create-dot" aria-hidden="true" />
+                      <span className="create-dot" aria-hidden="true" />
+                      正在想……
+                    </p>
                   </div>
                 )}
               </div>
@@ -739,30 +792,35 @@ export default function Create() {
               </div>
             </div>
 
-            {/* 实时卡预览(卡片化 YOR-55) */}
+            {/* 实时卡预览(卡片化 YOR-55;YOR-211 reskin:DepthCard 视差 + 空态改宣纸空卡) */}
             <aside className="create-preview">
-              <div className="create-card">
-                <div className="create-card-kind t-meta">{KINDS[ki].zh}{desk.built.length > 0 && ` · 本台已建 ${desk.built.length}`}</div>
-                <div className="create-card-name t-kai">{draftName}</div>
-                {kind === "characters" && (avatar || portrait) && (
-                  <div className="create-pics-preview">
-                    {avatar && <span className="create-pics-av" style={{ backgroundImage: `url("${avatar}")` }} aria-label="头像" />}
-                    {portrait && <span className="create-pics-portrait" style={{ backgroundImage: `url("${portrait}")` }} aria-label="立绘" />}
-                  </div>
-                )}
-                <div className="create-card-fields">
-                  {fields.length ? (
-                    fields.map((f, i) => (
-                      <div className={"create-field" + (f.fresh ? " is-fresh" : "")} key={i}>
-                        <span className="create-field-k t-meta">{f.k}</span>
-                        <span className="create-field-v t-ui-sm">{f.hidden ? "(隐藏真相,玩家不可见)" + f.v : f.v}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="create-field-empty t-meta">聊着聊着,卡就长出来了。</div>
+              <DepthCard className="create-card-tilt">
+                <div className={"create-card" + (fields.length ? "" : " is-blank")}>
+                  <div className="create-card-kind t-meta">{KINDS[ki].zh}{desk.built.length > 0 && ` · 本台已建 ${desk.built.length}`}</div>
+                  <div className="create-card-name t-kai">{draftName}</div>
+                  {kind === "characters" && (avatar || portrait) && (
+                    <div className="create-pics-preview">
+                      {avatar && <span className="create-pics-av" style={{ backgroundImage: `url("${avatar}")` }} aria-label="头像" />}
+                      {portrait && <span className="create-pics-portrait" style={{ backgroundImage: `url("${portrait}")` }} aria-label="立绘" />}
+                    </div>
                   )}
+                  <div className="create-card-fields">
+                    {fields.length ? (
+                      fields.map((f, i) => (
+                        <div className={"create-field" + (f.fresh ? " is-fresh" : "")} key={i}>
+                          <span className="create-field-k t-meta">{f.k}</span>
+                          <span className="create-field-v t-ui-sm">{f.hidden ? "(隐藏真相,玩家不可见)" + f.v : f.v}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="create-card-blank">
+                        <span className="create-card-blank-seal t-kai" aria-hidden="true">卡</span>
+                        <span className="create-card-blank-tx t-meta">聊着聊着,卡就长出来了。</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              </DepthCard>
 
               <div className="create-actions">
                 <Button variant="line" onClick={saveCard} disabled={!hasDraft || savingCard} title={hasDraft ? undefined : "先聊出一张卡再收入卡库"}>
@@ -775,6 +833,7 @@ export default function Create() {
                   <Button variant="line" onClick={() => setBuiltView(true)}>查看本台已建({desk.built.length})</Button>
                 )}
                 <Button variant="line" onClick={openLib}>从卡库补素材</Button>
+                <div className="create-actions-sep" aria-hidden="true" />
                 <Button
                   variant="primary"
                   full
