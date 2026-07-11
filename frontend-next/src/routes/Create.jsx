@@ -1158,6 +1158,14 @@ export default function Create() {
                 {desk.blueprint.map((b, i) => (
                   <div className="create-bp-item t-ui" key={i}>—— {b}</div>
                 ))}
+                <input
+                  className="create-ask-line t-ui-sm"
+                  value={bpNote}
+                  disabled={busy}
+                  placeholder="落笔前补一句要求(可空)"
+                  onChange={(e) => setBpNote(e.target.value)}
+                  aria-label="落笔附言"
+                />
                 <div className="create-bp-foot">
                   <Button variant="primary" onClick={approveBlueprint}>批准,开始写</Button>
                   <button className="create-blank-link" onClick={() => patch(kind, { phase: "understand" })}>再聊聊</button>
@@ -1187,9 +1195,25 @@ export default function Create() {
                 <button onClick={() => { setMoreOpen(false); openSeed(); }}>
                   {desk.seed ? `参考资料 · ${seedLenLabel(desk.seed)}(查看 / 清除)` : "挂参考资料"}
                 </button>
+                {/* F6 手机最小入口:引用面板(弹窗与桌面共用);纸签行在 composer 上方 */}
+                <button onClick={() => { setMoreOpen(false); openRefPanel("desk"); }}>
+                  {deskRefs.length ? `引用卡 / 提示词 · 已挂 ${deskRefs.length}` : "引用卡 / 提示词"}
+                </button>
                 <button className="ct-more-pub" onClick={openPreview} disabled={!hasChars}>预览并发布到探索 · 公开</button>
                 {/* 禁用原因触屏可见(桌面版的 title 手机看不到,同 YOR-173 范式) */}
                 {!hasChars && <span className="ct-more-note t-meta">至少要一张角色卡——先聊一张,或从卡库补一张</span>}
+              </div>
+            )}
+            {/* F6:挂台纸签在手机也常显可摘(同一套类名,CSS 通用) */}
+            {deskRefs.length > 0 && (
+              <div className="create-refs" aria-label="挂在台上的引用">
+                {deskRefs.map((r) => (
+                  <span className="create-ref-chip t-ui-sm" key={r.label}>
+                    <span className="create-ref-t">{r.type === "prompt" ? "词" : "卡"}</span>
+                    {r.label}
+                    <button className="create-ref-x" onClick={() => removeRef(r.label)} aria-label={"摘下" + r.label}>×</button>
+                  </span>
+                ))}
               </div>
             )}
             <div className="ct-composer">
@@ -1198,7 +1222,17 @@ export default function Create() {
                 value={desk.input}
                 disabled={busy}
                 placeholder={KINDS[ki].ph}
-                onChange={(e) => patch(kind, { input: e.target.value })}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  const old = desk.input || "";
+                  // F6:手机输入 @ 同样唤起引用面板(与桌面同规则)
+                  if (v.length === old.length + 1 && v.endsWith("@") && (v.length === 1 || /\s/.test(v[v.length - 2]))) {
+                    patch(kind, { input: v.slice(0, -1) });
+                    openRefPanel("desk");
+                    return;
+                  }
+                  patch(kind, { input: v });
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
                     e.preventDefault();

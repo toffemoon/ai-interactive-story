@@ -237,3 +237,22 @@ plan: docs/2026-07-11-create-card-canvas-plan.md
   - console 全程零报错;`npx vite build` 过。
 - 已知边界(如实):① E0 属引擎核心(identify.py build_card 加 understand 分支+服务端 draft 硬回退),**须主理人审+压测后才可合**;② understand 每轮多一次完整 JSON 契约调用,token 成本与 drafting 同量级;③ 完整度是模型自评分,60 阈值前端可调(threshold 参数已留);④ 测试期 8017/test 库落了少量私有卡库行(阿澈/林默·改等)。
 - E 系列(E0-E6)全绿:后端硬门槛(评分之下 AI 不得写)+ Plan 流(问题圈选→蓝图批准→落笔)+ artifact 式双栏 + 快速通道兼容 + 手机进流。stacked PR:#159(C)→#160(D)→#161(E,本次)。
+
+## F0-F6 · 2026-07-12 ✅ AI 触点皆可控(宗旨落地,F 系列一次收官)
+
+- 宗旨(主理人):任何用到 AI 的地方,用户都必须能写提示词 / 拖拽 / refer(提示词、角色卡等)。两拍板:通道动后端做干净;一键按钮改点开一行可空指示。
+- **F0 后端(引擎核心,单独 commit 2603847,须主理人审+压测)**:build_card+refs[{label,text}](≤4条/单条3000,seed 后 draft 前独立标签段,understand 同吃)、identify 四端点+hint(截1000,_hint_block 共享;worldbook markdown 快路径 hint 非空跳过)。全可选默认空=旧行为。_smoke_refs.py 4/4:空参基线/引用生效/hint tags 全英文/understand 吃 refs 门槛不动摇。
+- F1 提示词库:localStorage ais_prompt_lib_v1,面板「提示词」tab 内存/删/引用,跨台通用。
+- F2 引用体系:desk.refs 可选键挂台常驻;纸签行(hairline+×,零胶囊零框)/「@ 引用」按钮/输入 @ 唤起;面板三 tab(桌上的卡=四台 built+draft / 我的卡库四 kind 切 / 提示词);refText.js 按 models.py 字段拼紧凑可读文本;去重+上限 4(后端预算对齐)。
+- F3 指示行:✦/⟳ 点开一行(可空回车=默认写法,Esc 收);蓝图批准附言;生成介绍口味指示——全拼进既有指令走原管线,零新端点。
+- F4 拖拽:台架卡/卡库面板行 draggable → 命令条 onDrop 落纸签;自定义 MIME application/x-ais-ref(普通文件拖入不误触);接收态淡纸底+虚线+「松手,挂为引用」。
+- F5 导入指示:导入面板 hint 行(pick/paste 两 step 共享保留;上传路径经 uploadHintRef 递——面板先关后弹文件框);酒馆卡本地解析无 AI,如实不加。
+- F6 手机:.ct 布局零改动——纸签行入 ct-foot、更多面板+「引用卡 / 提示词」、输入 @ 同规则、手机蓝图块补附言行;面板弹窗天然可用。
+- 端到端验收(5199+8017 真调,全新 localStorage 从零跑):
+  - 提示词「文风偏冷句子短」存→挂→build_card 载荷 refs 正确,understand 轮 AI 回复口吻立变(短句直问);
+  - 卡库挂林默(refText 拼出名字/设定/性格…),✦ 指示「糙汉自称老子」→ anchor 落笔完全服从且提示词文风叠加生效("哭啥,天塌不下来,老子顶你");
+  - identify_world hint「keys 全英文小写」→ 5 条目 keys 全变 mist season/fog keeper/canal town——解析指示被服从;
+  - 拖拽:接收态亮+离开复位+drop 落签;同名去重+上限 4 拦截;
+  - 手机 390:纸签可摘、更多面板入口、面板三 tab 可用,composer/actions 布局原样;
+  - console 全程零报错;build 过。
+- 如实边界:refs 每轮进 prompt=成本随挂随涨(纸签常显可摘,与 seed 同口径);hint 是 prompt 约定非硬锁;提示词库本机 localStorage 不跨设备;测试期 test 库又落两行(深夜电台构思没入库,雾季运河镇世界书入库了)。
