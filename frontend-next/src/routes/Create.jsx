@@ -11,6 +11,8 @@ import DepthCard from "../components/react-bits/depth-card"; // C4 本台架 min
 import { BlurHighlight } from "../components/react-bits/blur-highlight";
 import { parseJsonCard, parsePngCard } from "../lib/tavernCard"; // D2 酒馆卡纯前端解析
 import { TEMPLATES, getTpl } from "./createTemplates"; // D3 创作模板(文案归内容侧,来源 card-templates/)
+import { loadPrompts, addPrompt, removePrompt } from "../lib/promptLib"; // F1 提示词库(localStorage)
+import { cardToRefText, makeRef } from "../lib/refText"; // F2 卡→引用文本(refs 通道)
 import { useAuth } from "../state/auth";
 import "./Create.css";
 
@@ -185,13 +187,27 @@ export default function Create() {
   // D1 参考资料:desks[kind].seed(可选键,兼容扩展)。弹窗内编辑用本地 seedText,确认才 patch。
   const [seedOpen, setSeedOpen] = useState(false);
   const [seedText, setSeedText] = useState("");
-  // D2 导入面板:null | { step: "pick"|"paste", text, err }。酒馆解析是同步的,不需要独立 step。
+  // D2 导入面板:null | { step: "pick"|"paste", text, err, hint }。酒馆解析是同步的,不需要独立 step。
+  // F5:hint = 用户对解析口味的指示(可选,identify 的 hint 通道);面板点「上传文档」会先关面板再弹文件框,
+  // hint 经 uploadHintRef 递给 onUpload(命令条直传时 ref 为空 = 无指示,旧行为)。
   const [importOpen, setImportOpen] = useState(null);
+  const uploadHintRef = useRef("");
   const tavernRef = useRef(null); // 酒馆卡文件 input(.json/.png)
   // D3 模板选择器;desks[kind].tpl 只存模板 id(hints 从常量派生,localStorage 零膨胀)。
   const [tplOpen, setTplOpen] = useState(false);
   // D4 「从我发布的故事继续」:presets 列表弹层({items}|null),选一条拆回四台 built。
   const [presetsModal, setPresetsModal] = useState(null);
+  // F2 引用体系:desks[kind].refs 可选键(挂台常驻,每轮请求都带,纸签可摘;后端上限 4 条)。
+  // 面板 tab:desk=桌上的卡(四台 built+draft) / lib=我的卡库(四 kind 可切) / prompt=提示词库。
+  const [refPanel, setRefPanel] = useState(null); // null | {tab, kk, items, loading, err}
+  const [prompts, setPrompts] = useState(loadPrompts);
+  const [promptDraft, setPromptDraft] = useState(""); // 「存为提示词」输入(提示词 tab 内)
+  const [refDragOver, setRefDragOver] = useState(false); // F4 拖拽接收态(命令条区)
+  // F3 一键 AI 长出指示行:askOpen = 字段 k0 | null(✦/⟳ 点开,可空回车=默认指令)。
+  const [askOpen, setAskOpen] = useState(null);
+  const [askText, setAskText] = useState("");
+  const [bpNote, setBpNote] = useState(""); // 蓝图批准附言(可空)
+  const [introAsk, setIntroAsk] = useState(""); // 自动生成角色介绍的口味指示(可空)
   const fileRef = useRef(null);
   const coverRef = useRef(null);
   const chatRef = useRef(null);
@@ -261,6 +277,53 @@ export default function Create() {
     setQuizAns({});
     setQuizFree({});
   }, [desk.questions, kind]);
+  // F2/F3 局部态跟台走:切卡种清指示行/附言/面板(引用纸签本身在 desks 里,各台各留各的)。
+  useEffect(() => {
+    setAskOpen(null);
+    setAskText("");
+    setBpNote("");
+    setRefPanel(null);
+  }, [kind]);
+
+  // ── F2 引用体系:挂台纸签(desks[kind].refs 可选键,后端 refs 通道上限 4 条) ──
+  const deskRefs = Array.isArray(desk.refs) ? desk.refs : [];
+  function addRef(r) {
+    if (!r || !r.text) return;
+    const cur = Array.isArray(desks[kind].refs) ? desks[kind].refs : [];
+    if (cur.some((x) => x.label === r.label)) {
+      flash("「" + r.label + "」已经挂着了");
+      return;
+    }
+    if (cur.length >= 4) {
+      flash("最多同时引用 4 个(再挂先摘一个)");
+      return;
+    }
+    patch(kind, { refs: [...cur, r] });
+    setRefPanel(null);
+    flash("已引用「" + r.label + "」——之后每轮 AI 都会参考,随时可摘");
+  }
+  function removeRef(label) {
+    patch(kind, (d0) => ({ refs: (Array.isArray(d0.refs) ? d0.refs : []).filter((x) => x.label !== label) }));
+  }
+  function refFromCard(kk, card) {
+    const c = (card && card.data) || card || {};
+    const nm = c.name || c.title || "未命名";
+    const zh = (KINDS.find((t) => t.k === kk) || {}).zh || "卡";
+    return makeRef("card", zh + "·" + nm, cardToRefText(kk, c));
+  }
+  async function openRefPanel(tab = "desk", kk = kind) {
+    if (tab === "lib") {
+      setRefPanel({ tab, kk, items: [], loading: true });
+      try {
+        const items = await getJSON("/api/library/" + kk);
+        setRefPanel((p) => (p && p.tab === "lib" ? { ...p, kk, items: Array.isArray(items) ? items : [], loading: false } : p));
+      } catch (e) {
+        setRefPanel((p) => (p && p.tab === "lib" ? { ...p, loading: false, err: "读库失败:" + e.message } : p));
+      }
+    } else {
+      setRefPanel({ tab, kk, items: [], loading: false });
+    }
+  }
   function quizAnswerOf(qu) {
     return (quizFree[qu.id] || "").trim() || quizAns[qu.id] || "";
   }
@@ -275,11 +338,16 @@ export default function Create() {
     sendText(lines.join("\n"));
   }
   // E4 蓝图批准:切 drafting + 让 AI 按蓝图一次落笔(此后回到既有创作行为)。
+  // F3:批准可带一句附言(落笔前最后的口味要求),可空。
   function approveBlueprint() {
     const bp = desk.blueprint || [];
+    const note = (bpNote || "").trim();
+    setBpNote("");
     patch(kind, { phase: "drafting" });
     sendText(
-      "就按这份蓝图开始写卡,把已经聊清的内容一次填进字段,别再反问:\n" + bp.map((b) => "- " + b).join("\n"),
+      "就按这份蓝图开始写卡,把已经聊清的内容一次填进字段,别再反问:\n" +
+        bp.map((b) => "- " + b).join("\n") +
+        (note ? `\n落笔时额外注意(用户附言,优先遵守):${note}` : ""),
       { phaseOverride: "drafting" }
     );
   }
@@ -300,11 +368,14 @@ export default function Create() {
       // phaseOverride:批准蓝图那一发要立即按 drafting 走(setState 异步,闭包里的 desks 还是旧 phase)。
       const curPhase = phaseOverride || deskPhase(cur);
       const gated = curPhase === "understand" || curPhase === "blueprint";
+      // F2:挂台引用随每轮走(后端独立标签段);旧后端 Pydantic 忽略未知字段,优雅降级。
+      const refsPayload = (Array.isArray(cur.refs) ? cur.refs : []).map((x) => ({ label: x.label, text: x.text }));
       const r = await postJSON("/api/build_card", {
         kind: kk,
         messages: apiMsgs,
         draft: cur.draft,
         seed: cur.seed || "",
+        ...(refsPayload.length ? { refs: refsPayload } : {}),
         ...(gated ? { phase: "understand", threshold: COMP_THRESHOLD } : {}),
       });
       if (r.phase === "understand") {
@@ -344,12 +415,31 @@ export default function Create() {
   }
   // C3 字段级 AI 动作:⟳ 改写 / ✦ 补写 = 合成定向指令走同一管线。
   // 「尽量别动其他字段」是 prompt 约定不是硬锁;实际动了哪些,filled diff 全部墨晕显形。
-  function sendFieldDirective(f, mode) {
-    const text =
+  // F3(AI 触点可控):extra = 用户在指示行写的口味要求,拼进指令;空=默认写法。
+  function sendFieldDirective(f, mode, extra = "") {
+    const base =
       mode === "fill"
         ? `请直接补写「${f.k}」(${f.k0}):按已有设定写出这一块的内容并填进 ${f.k0} 字段。不要反问、不要只解释,这一轮就把内容写出来。尽量别动其他字段。`
         : `请直接把「${f.k}」(${f.k0})改写得更具体、更立体,写回 ${f.k0} 字段。不要反问,这一轮就改完。尽量别动其他字段。`;
-    return sendText(text);
+    const ex = (extra || "").trim();
+    return sendText(ex ? base + `\n用户对这一块的要求(优先遵守):${ex}` : base);
+  }
+  // F3:点 ✦/⟳ 先展开指示行(可空回车=默认);再点同一颗收起。
+  function toggleFieldAsk(f) {
+    if (askOpen === f.k0) {
+      setAskOpen(null);
+      setAskText("");
+    } else {
+      setAskOpen(f.k0);
+      setAskText("");
+    }
+  }
+  function commitFieldAsk(f) {
+    const mode = f.empty ? "fill" : "rewrite";
+    const ex = askText;
+    setAskOpen(null);
+    setAskText("");
+    return sendFieldDirective(f, mode, ex);
   }
 
   // D2 共享:把 identify 的返回铺上画布(上传/粘贴两路共用)。identify 副作用=后端已自动收进卡库,文案如实。
@@ -409,7 +499,10 @@ export default function Create() {
     patch(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text: "(上传了《" + file.name + "》)" }] }));
     try {
       const text = await uploadFile(file);
-      const out = await postJSON(IDENTIFY_EP[kk], { text });
+      // F5:导入面板给的解析指示(hint);命令条直传时为空 = 旧行为
+      const hint = (uploadHintRef.current || "").trim();
+      uploadHintRef.current = "";
+      const out = await postJSON(IDENTIFY_EP[kk], { text, ...(hint ? { hint } : {}) });
       applyIdentified(out, kk);
       flash("已解析并收入卡库");
     } catch (e) {
@@ -428,7 +521,8 @@ export default function Create() {
     const kk = kind;
     setBusy(true);
     try {
-      const out = await postJSON(IDENTIFY_EP[kk], { text: t });
+      const hint = ((importOpen && importOpen.hint) || "").trim(); // F5 解析指示
+      const out = await postJSON(IDENTIFY_EP[kk], { text: t, ...(hint ? { hint } : {}) });
       const nm = applyIdentified(out, kk);
       setImportOpen(null);
       flash("已解析《" + nm + "》并收入卡库");
@@ -525,19 +619,26 @@ export default function Create() {
   }
 
   // 「完善角色卡」/ 详情预览里「自动生成」:调现有 build_card,按已填设定补一段角色介绍写进 description。
+  // F3:introAsk = 用户对介绍的口味指示(可空);F2:挂台引用一并带上。
   async function genIntro() {
     if (genBusy) return;
     const cur = desks[kind];
     setGenBusy(true);
     try {
+      const ex = (introAsk || "").trim();
       const apiMsgs = [
         {
           role: "user",
           content:
-            "请根据已有设定,为这个角色写一段第三人称的「角色介绍」(外貌、性格、来历、当前处境,200 字以内),写进 description 字段。",
+            "请根据已有设定,为这个角色写一段第三人称的「角色介绍」(外貌、性格、来历、当前处境,200 字以内),写进 description 字段。" +
+            (ex ? `\n用户对这段介绍的要求(优先遵守):${ex}` : ""),
         },
       ];
-      const r = await postJSON("/api/build_card", { kind, messages: apiMsgs, draft: cur.draft, seed: cur.seed || "" });
+      const refsPayload = (Array.isArray(cur.refs) ? cur.refs : []).map((x) => ({ label: x.label, text: x.text }));
+      const r = await postJSON("/api/build_card", {
+        kind, messages: apiMsgs, draft: cur.draft, seed: cur.seed || "",
+        ...(refsPayload.length ? { refs: refsPayload } : {}),
+      });
       if (r.draft) {
         patch(kind, (d0) => ({ draft: { ...r.draft, ...pickPics(d0.draft) }, filled: r.filled || Object.keys(r.draft) }));
       } else if (r.reply) {
@@ -1241,6 +1342,21 @@ export default function Create() {
                     {desk.blueprint.map((b, i) => (
                       <div className="create-bp-item t-ui" key={i}>—— {b}</div>
                     ))}
+                    {/* F3 批准附言:落笔前最后一句口味要求,可空(AI 触点皆可控) */}
+                    <input
+                      className="create-ask-line t-ui-sm"
+                      value={bpNote}
+                      disabled={busy}
+                      placeholder="落笔前补一句要求(可空)——比如:对话多一点,别太文绉绉"
+                      onChange={(e) => setBpNote(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !(e.nativeEvent || e).isComposing && !busy) {
+                          e.preventDefault();
+                          approveBlueprint();
+                        }
+                      }}
+                      aria-label="落笔附言"
+                    />
                     <div className="create-bp-foot">
                       <Button variant="primary" onClick={approveBlueprint}>批准,开始写</Button>
                       <button
@@ -1267,7 +1383,42 @@ export default function Create() {
                   </div>
                 )}
               </div>
-              <div className="create-dock">
+              <div
+                className={"create-dock" + (refDragOver ? " is-dropping" : "")}
+                onDragOver={(e) => {
+                  // F4:接收台架/卡库拖来的卡(自定义 MIME,普通文件拖入不误触)
+                  if ([...e.dataTransfer.types].includes("application/x-ais-ref")) {
+                    e.preventDefault();
+                    setRefDragOver(true);
+                  }
+                }}
+                onDragLeave={() => setRefDragOver(false)}
+                onDrop={(e) => {
+                  setRefDragOver(false);
+                  const raw = e.dataTransfer.getData("application/x-ais-ref");
+                  if (!raw) return;
+                  e.preventDefault();
+                  try {
+                    const p = JSON.parse(raw);
+                    addRef(refFromCard(p.kk, p.card));
+                  } catch {
+                    flash("这张卡拖不进来(数据读不出)");
+                  }
+                }}
+              >
+                {/* F2 引用纸签:挂台常驻,每轮都随请求走;点 × 摘下 */}
+                {(deskRefs.length > 0 || refDragOver) && (
+                  <div className="create-refs" aria-label="挂在台上的引用">
+                    {deskRefs.map((r) => (
+                      <span className="create-ref-chip t-ui-sm" key={r.label} title={"AI 每轮都会参考「" + r.label + "」"}>
+                        <span className="create-ref-t">{r.type === "prompt" ? "词" : "卡"}</span>
+                        {r.label}
+                        <button className="create-ref-x" onClick={() => removeRef(r.label)} aria-label={"摘下" + r.label}>×</button>
+                      </span>
+                    ))}
+                    {refDragOver && <span className="create-ref-hint t-meta">松手,挂为引用</span>}
+                  </div>
+                )}
                 <div className="create-composer">
                   <textarea
                     ref={dockInputRef}
@@ -1275,7 +1426,17 @@ export default function Create() {
                     value={desk.input}
                     disabled={busy}
                     placeholder={KINDS[ki].ph}
-                    onChange={(e) => patch(kind, { input: e.target.value })}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      const old = desk.input || "";
+                      // F2:行首或空白后敲 @ 唤起引用面板(那个 @ 不留在输入里)
+                      if (v.length === old.length + 1 && v.endsWith("@") && (v.length === 1 || /\s/.test(v[v.length - 2]))) {
+                        patch(kind, { input: v.slice(0, -1) });
+                        openRefPanel("desk");
+                        return;
+                      }
+                      patch(kind, { input: v });
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
                         e.preventDefault();
@@ -1295,6 +1456,14 @@ export default function Create() {
                       title={desk.seed ? "查看 / 修改 / 清除参考资料(AI 每轮都在参考它)" : "挂一份已有设定 / 旧卡文本,AI 之后每轮都基于它来完善"}
                     >
                       {desk.seed ? `参考 · ${seedLenLabel(desk.seed)}` : "挂资料"}
+                    </button>
+                    <button
+                      className={"create-seed-btn" + (deskRefs.length ? " has-seed" : "")}
+                      onClick={() => (refPanel ? setRefPanel(null) : openRefPanel("desk"))}
+                      disabled={busy}
+                      title="引用已有的卡或提示词,AI 每轮都会参考(输入框里敲 @ 也能唤起;桌面还可以直接把卡拖进来)"
+                    >
+                      {deskRefs.length ? `@ 引用 · ${deskRefs.length}` : "@ 引用"}
                     </button>
                     <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim()}>
                       发送
@@ -1375,11 +1544,11 @@ export default function Create() {
                             {f.editable ? (
                               <>
                                 <button
-                                  className="create-field-act"
+                                  className={"create-field-act" + (askOpen === f.k0 ? " is-on" : "")}
                                   disabled={busy}
-                                  title={f.empty ? "让 AI 补写这一块" : "让 AI 把这一块改写得更立体"}
+                                  title={f.empty ? "让 AI 补写这一块(可先写一句要求)" : "让 AI 把这一块改写得更立体(可先写一句要求)"}
                                   aria-label={(f.empty ? "补写" : "改写") + f.k}
-                                  onClick={() => sendFieldDirective(f, f.empty ? "fill" : "rewrite")}
+                                  onClick={() => toggleFieldAsk(f)}
                                 >
                                   {f.empty ? "✦" : "⟳"}
                                 </button>
@@ -1393,6 +1562,27 @@ export default function Create() {
                               </button>
                             )}
                           </span>
+                        )}
+                        {/* F3 指示行:✦/⟳ 点开——写一句要求或直接回车用默认写法(AI 触点皆可控) */}
+                        {askOpen === f.k0 && (
+                          <input
+                            className="create-ask-line t-ui-sm"
+                            autoFocus
+                            value={askText}
+                            disabled={busy}
+                            placeholder={(f.empty ? "想怎么补?" : "想怎么改?") + "可留空直接回车"}
+                            onChange={(e) => setAskText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !(e.nativeEvent || e).isComposing) {
+                                e.preventDefault();
+                                commitFieldAsk(f);
+                              } else if (e.key === "Escape") {
+                                setAskOpen(null);
+                                setAskText("");
+                              }
+                            }}
+                            aria-label={"对" + f.k + "的要求"}
+                          />
                         )}
                       </div>
                     ))
@@ -1453,7 +1643,14 @@ export default function Create() {
                       const firstField = cardFields(card)[0];
                       return (
                         <DepthCard key={nm + i} className="create-shelf-tilt" maxRotation={5}>
-                          <div className="create-shelf-card">
+                          <div
+                            className="create-shelf-card"
+                            draggable
+                            title="拖到左下命令条,挂为引用"
+                            onDragStart={(e) =>
+                              e.dataTransfer.setData("application/x-ais-ref", JSON.stringify({ kk: kind, card }))
+                            }
+                          >
                             <span className="create-shelf-name t-kai">{nm}</span>
                             <span className="create-shelf-sub t-meta">
                               {entries ? `${entries.length} 条条目` : firstField ? firstField.v.slice(0, 22) : "已收进本台"}
@@ -1592,6 +1789,128 @@ export default function Create() {
       )}
 
       {/* D4 故事拆回:选一条已发布预设,四类卡追加回各台 built(官方故事也可拆——拆的是副本,发布生成新预设)。 */}
+      {/* F2 引用面板:桌上的卡 / 我的卡库 / 提示词——选一个挂为引用(@ 或按钮唤起) */}
+      {refPanel && (
+        <div className="create-modal" onClick={() => setRefPanel(null)}>
+          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="引用" onClick={(e) => e.stopPropagation()}>
+            <button className="create-modal-x" onClick={() => setRefPanel(null)} aria-label="关闭">×</button>
+            <h2 className="t-h2">引用 · AI 每轮都会参考</h2>
+            <div className="create-ref-tabs">
+              {[["desk", "桌上的卡"], ["lib", "我的卡库"], ["prompt", "提示词"]].map(([t, zh]) => (
+                <button
+                  key={t}
+                  className={"create-ref-tab t-ui-sm" + (refPanel.tab === t ? " is-on" : "")}
+                  onClick={() => openRefPanel(t, refPanel.kk || kind)}
+                >
+                  {zh}
+                </button>
+              ))}
+            </div>
+            {refPanel.tab === "desk" && (
+              <div className="create-ref-list">
+                {KINDS.flatMap((t) => deskCards(t.k).map((c, i) => ({ kk: t.k, zh: t.zh, c, i }))).map(({ kk, zh, c, i }) => {
+                  const nm = c.name || c.title || "未命名";
+                  return (
+                    <button className="create-ref-row" key={kk + i + nm} onClick={() => addRef(refFromCard(kk, c))}>
+                      <span className="create-ref-row-t t-ui">{nm}</span>
+                      <span className="create-ref-row-d t-meta">{zh}</span>
+                    </button>
+                  );
+                })}
+                {!KINDS.some((t) => deskCards(t.k).length) && (
+                  <div className="create-shelf-empty t-meta">四个台子都还空着——先聊出点东西,或去「我的卡库」引用。</div>
+                )}
+              </div>
+            )}
+            {refPanel.tab === "lib" && (
+              <>
+                <div className="create-ref-tabs create-ref-kinds">
+                  {KINDS.map((t) => (
+                    <button
+                      key={t.k}
+                      className={"create-ref-tab t-ui-sm" + ((refPanel.kk || kind) === t.k ? " is-on" : "")}
+                      onClick={() => openRefPanel("lib", t.k)}
+                    >
+                      {t.zh}
+                    </button>
+                  ))}
+                </div>
+                <div className="create-ref-list">
+                  {refPanel.loading ? (
+                    <div className="create-shelf-empty t-meta">翻库中……</div>
+                  ) : refPanel.err ? (
+                    <div className="create-import-err t-meta">{refPanel.err}</div>
+                  ) : refPanel.items.length ? (
+                    refPanel.items.map((it, i) => (
+                      <button
+                        className="create-ref-row"
+                        key={(it.name || i) + i}
+                        draggable
+                        onDragStart={(e) => {
+                          const raw = it && it.data ? it.data : it;
+                          e.dataTransfer.setData("application/x-ais-ref", JSON.stringify({ kk: refPanel.kk || kind, card: raw }));
+                        }}
+                        onClick={() => {
+                          const raw = it && it.data ? it.data : it;
+                          addRef(refFromCard(refPanel.kk || kind, raw));
+                        }}
+                      >
+                        <span className="create-ref-row-t t-ui">{libName(it)}</span>
+                        <span className="create-ref-row-d t-meta">{(libDesc(it) || "").slice(0, 40)}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="create-shelf-empty t-meta">这一类还没有入库的卡。</div>
+                  )}
+                </div>
+              </>
+            )}
+            {refPanel.tab === "prompt" && (
+              <div className="create-ref-list">
+                <div className="create-prompt-add">
+                  <input
+                    className="create-ask-line t-ui-sm"
+                    value={promptDraft}
+                    placeholder="写一条常用提示词存起来——比如:文风偏冷,句子短,不用成语"
+                    onChange={(e) => setPromptDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !(e.nativeEvent || e).isComposing && promptDraft.trim()) {
+                        e.preventDefault();
+                        setPrompts(addPrompt("", promptDraft));
+                        setPromptDraft("");
+                      }
+                    }}
+                  />
+                  <button
+                    className="create-blank-link"
+                    disabled={!promptDraft.trim()}
+                    onClick={() => {
+                      setPrompts(addPrompt("", promptDraft));
+                      setPromptDraft("");
+                    }}
+                  >
+                    存入
+                  </button>
+                </div>
+                {prompts.length ? (
+                  prompts.map((p) => (
+                    <div className="create-ref-row create-prompt-row" key={p.id}>
+                      <button className="create-prompt-use" onClick={() => addRef(makeRef("prompt", "提示词·" + p.name, p.text))}>
+                        <span className="create-ref-row-t t-ui">{p.name}</span>
+                        <span className="create-ref-row-d t-meta">{p.text.slice(0, 46)}</span>
+                      </button>
+                      <button className="create-ref-x" onClick={() => setPrompts(removePrompt(p.id))} aria-label={"删除提示词" + p.name}>×</button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="create-shelf-empty t-meta">还没存过提示词——上面写一条,以后任何台子都能引用。</div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {presetsModal && (
         <div className="create-modal" onClick={() => setPresetsModal(null)}>
           <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="从故事继续" onClick={(e) => e.stopPropagation()}>
@@ -1664,12 +1983,19 @@ export default function Create() {
             {importOpen.step === "pick" ? (
               <>
                 <p className="create-seed-note t-meta">把已有的内容直接变成一张卡,不用从零聊。</p>
+                {/* F5:解析指示(可选)——AI 解析的两条路(粘贴/上传)都会带上;酒馆卡是本地解析,吃不到 */}
+                <input
+                  className="create-ask-line t-ui-sm"
+                  value={importOpen.hint || ""}
+                  onChange={(e) => setImportOpen((m) => ({ ...m, hint: e.target.value }))}
+                  placeholder="解析要求(可空)——比如:重点抽性格和说话风格,标签用中文"
+                />
                 <div className="create-import-picks">
-                  <button className="create-import-pick" onClick={() => setImportOpen({ step: "paste", text: "", err: "" })}>
+                  <button className="create-import-pick" onClick={() => setImportOpen((m) => ({ step: "paste", text: "", err: "", hint: (m && m.hint) || "" }))}>
                     <span className="create-import-pick-t t-ui">粘贴文本</span>
                     <span className="create-import-pick-d t-meta">散文设定 / 旧卡文字,AI 解析成卡(会同时收进你的卡库 · 私密)</span>
                   </button>
-                  <button className="create-import-pick" onClick={() => { setImportOpen(null); fileRef.current && fileRef.current.click(); }}>
+                  <button className="create-import-pick" onClick={() => { uploadHintRef.current = (importOpen && importOpen.hint) || ""; setImportOpen(null); fileRef.current && fileRef.current.click(); }}>
                     <span className="create-import-pick-t t-ui">上传文档</span>
                     <span className="create-import-pick-d t-meta">.txt / .md / .docx,抽出文字后同上(≤2MB)</span>
                   </button>
@@ -1696,10 +2022,16 @@ export default function Create() {
                   onChange={(e) => setImportOpen((m) => ({ ...m, text: e.target.value, err: "" }))}
                   placeholder="把设定粘进来……"
                 />
+                <input
+                  className="create-ask-line t-ui-sm"
+                  value={importOpen.hint || ""}
+                  onChange={(e) => setImportOpen((m) => ({ ...m, hint: e.target.value }))}
+                  placeholder="解析要求(可空)——比如:重点抽性格和说话风格,标签用中文"
+                />
                 <div className="create-seed-count t-meta">{importOpen.text.length} 字</div>
                 {importOpen.err && <div className="create-import-err t-meta">{importOpen.err}</div>}
                 <div className="create-seed-actions">
-                  <Button variant="line" onClick={() => setImportOpen({ step: "pick", text: "", err: "" })}>返回</Button>
+                  <Button variant="line" onClick={() => setImportOpen((m) => ({ step: "pick", text: "", err: "", hint: (m && m.hint) || "" }))}>返回</Button>
                   <Button variant="primary" onClick={importPaste} disabled={busy || !importOpen.text.trim()}>
                     {busy ? "解析中…" : "解析成卡"}
                   </Button>
@@ -1851,6 +2183,21 @@ export default function Create() {
                 {genBusy ? "生成中…" : "自动生成"}
               </button>
             </div>
+            {/* F3:生成的口味指示(可空)——回车即生成 */}
+            <input
+              className="create-ask-line t-ui-sm"
+              value={introAsk}
+              disabled={genBusy}
+              placeholder="对介绍的要求(可空)——比如:第一人称、带点自嘲"
+              onChange={(e) => setIntroAsk(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !(e.nativeEvent || e).isComposing && !genBusy) {
+                  e.preventDefault();
+                  genIntro();
+                }
+              }}
+              aria-label="对角色介绍的要求"
+            />
             {/* 角色介绍可直接编辑 */}
             <textarea
               className="ct-finalize-introedit"

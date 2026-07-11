@@ -1948,3 +1948,135 @@
   text-decoration: underline dashed;
   text-underline-offset: 3px;
 }
+
+/* ── F 系列:AI 触点皆可控(指示行 / 引用纸签 / 引用面板 / 拖拽接收) ── */
+
+/* F3 指示行:一条填空线,零边框零底色(沐言少框);出现处=字段下/蓝图前/生成介绍旁/导入面板 */
+.create-ask-line {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed color-mix(in srgb, var(--fg) 30%, transparent);
+  padding: 4px 2px 5px;
+  margin: 6px 0 2px;
+  color: var(--fg);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.create-ask-line:focus {
+  outline: none;
+  border-bottom: 1px solid var(--accent);
+}
+.create-ask-line::placeholder { color: color-mix(in srgb, var(--fg) 38%, transparent); }
+.create-field-act.is-on { color: var(--accent); }
+
+/* F2 引用纸签:小字 + hairline 下边线 + 摘除,不做胶囊不画框 */
+.create-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 4px 2px 2px;
+}
+.create-ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent-3) 55%, transparent);
+  color: var(--fg);
+}
+.create-ref-t {
+  font-size: 10px;
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 2px;
+  padding: 0 3px;
+  line-height: 1.5;
+}
+.create-ref-x {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  cursor: pointer;
+  color: color-mix(in srgb, var(--fg) 45%, transparent);
+  font-size: 13px;
+  line-height: 1;
+}
+.create-ref-x:hover { color: var(--accent); }
+.create-ref-hint { color: var(--accent); }
+
+/* F4 拖拽接收态:淡纸底 + 虚 hairline,松手即挂 */
+.create-dock.is-dropping {
+  background: color-mix(in srgb, var(--accent-3) 7%, transparent);
+  outline: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: -4px;
+}
+.create-shelf-card[draggable="true"] { cursor: grab; }
+.create-shelf-card[draggable="true"]:active { cursor: grabbing; }
+
+/* F2 引用面板:tab=下划线切换;行=hairline 分隔,零卡片 */
+.create-ref-tabs {
+  display: flex;
+  gap: 14px;
+  margin: 8px 0 4px;
+}
+.create-ref-kinds { margin-top: 2px; gap: 10px; }
+.create-ref-tab {
+  background: none;
+  border: none;
+  padding: 2px 0 4px;
+  cursor: pointer;
+  color: color-mix(in srgb, var(--fg) 55%, transparent);
+  border-bottom: 2px solid transparent;
+}
+.create-ref-tab.is-on {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+}
+.create-ref-list {
+  max-height: 46vh;
+  overflow-y: auto;
+  margin-top: 6px;
+}
+.create-ref-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--fg) 10%, transparent);
+  padding: 8px 2px;
+  cursor: pointer;
+}
+.create-ref-row:hover .create-ref-row-t { color: var(--accent); }
+.create-ref-row-t { flex: none; }
+.create-ref-row-d {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.create-prompt-add {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.create-prompt-add .create-ask-line { flex: 1; margin: 0; }
+.create-prompt-row { padding: 0 2px; }
+.create-prompt-row .create-prompt-use {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 8px 0;
+  cursor: pointer;
+}
+.create-prompt-row .create-prompt-use:hover .create-ref-row-t { color: var(--accent); }
