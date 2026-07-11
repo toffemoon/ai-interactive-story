@@ -130,6 +130,8 @@ class BuildCardReq(BaseModel):
     messages: list[dict] = []      # [{role:user/assistant, content}] 至今的建卡对话
     draft: dict | None = None      # 当前草稿(对应卡的 data)
     seed: str = ""                 # 可选:已有资料/旧卡文本(完善模式)
+    phase: str = "drafting"        # E0 完整度门控:"understand"=构思阶段(只问不写);默认 drafting=原行为
+    threshold: int = 60            # 完整度阈值(0-100),仅 understand 阶段生效
 
 
 class ChatReq(BaseModel):
@@ -658,12 +660,14 @@ async def api_identify_player(req: TextReq, request: Request, user: dict | None 
 
 @app.post("/api/build_card")
 async def api_build_card(req: BuildCardReq, request: Request, user: dict | None = Depends(current_user_dep)):
-    """对话式建卡一轮:返回 {reply, draft(Card V2 data), next_question, done, filled}。
+    """对话式建卡一轮:返回 {reply, draft(Card V2 data), next_question, done, filled};
+    phase="understand"(E0 完整度门控)时另带 {completeness, questions, blueprint, phase},且服务端强制不产 draft。
 
     无状态——前端维护对话与草稿,每轮回传。完成后前端把 draft 包成 CharacterCard 进 CharacterEditor。
     此前该端点连鉴权都没有(P0-2):现 AUTH 开时需登录,且过 costguard。"""
     _require_login_when_auth(user)
-    return await _guarded_llm(request, lambda: build_card(req.kind, req.messages, req.draft, req.seed),
+    return await _guarded_llm(request, lambda: build_card(req.kind, req.messages, req.draft, req.seed,
+                                                          phase=req.phase, threshold=req.threshold),
                               fail_msg="建卡失败")
 
 

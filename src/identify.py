@@ -538,6 +538,57 @@ _BUILD_SYSTEMS = {
     "stories": _BUILD_STORY,
 }
 
+# —— 完整度门控(E0):understand 阶段——只评估与提问,不写卡 ——
+# 设计:AI 自由度太高的病根是"用户说一句就敢写"。此阶段先自评这张卡的信息完整度(0-100),
+# 低于阈值只许问(结构化选项题,复刻 StoryChoice 范式);达标改出「创作蓝图」等用户批准。
+# 硬门槛在 build_card 代码里强制:understand 阶段无论模型返回什么 draft 一律丢弃(回传 prev)。
+_UNDERSTAND_ASPECTS = {
+    "characters": "名字或称呼 / 身份与来历 / 性格底色与内在张力 / 和玩家(主角)的关系 / 说话腔调 / 所处场景氛围",
+    "players": "扮演谁(名字·身份) / 来历背景 / 这一局的目标 / 能力与限制 / 开局知道什么",
+    "worlds": "世界一句话定义 / 一两条世界铁则 / 关键地点·势力·术语 / 氛围基调 / 有没有隐藏真相",
+    "stories": "故事前提(谁·在哪·出了什么事) / 核心冲突 / 主要角色 / 大致走向或结局方向 / 节奏快慢",
+}
+
+_UNDERSTAND_SYSTEM_TMPL = """你是「对话式建卡」的构思助手。用户想造一张{kind_zh},现在是【构思阶段】:你的任务是搞清楚用户想要什么,此阶段绝对不写卡。
+
+评估维度(这张卡要立得住,大致需要这些面向):{aspects}
+
+每轮做三件事:
+1) 按上面维度自评当前信息的完整度 completeness(0-100 整数):用户已经说清了多少。只有用户明确给过或明确认可的信息才算数,你的猜测不算。
+2) completeness < {threshold}:挑最关键的 1-3 个缺口提问。每个问题给 3-5 个具体、风格化、可直接点选的方向(不要抽象分类词,要像"满口谎话却心软的骗子"这种一眼有画面的选项),用户也可以自由回答。别重复问已经答过的。
+3) completeness >= {threshold}:不再提问。给出「创作蓝图」blueprint:4-6 条要点,说清你打算怎么写这张卡(核心锚点方向 / 性格或基调 / 关系与张力 / 开场方向等),供用户批准后再动笔。
+
+每轮严格输出 JSON:
+{{
+ "reply":"对用户这轮的自然回应,一两句,像聊天",
+ "completeness": 0 到 100 的整数,
+ "questions":[{{"id":"短id","label":"问题本身","options":["具体方向1","具体方向2","具体方向3"],"allow_free":true}}],
+ "blueprint":["要点1","要点2"],
+ "draft": null,
+ "done": false
+}}
+规则:构思阶段 draft 恒为 null;completeness>={threshold} 时 questions 必须为 [],否则 blueprint 必须为 []。只输出 JSON。"""
+
+
+def _normalize_questions(raw) -> list[dict]:
+    """规整 understand 阶段的结构化问题(镜像 story._normalize_choices 的容错姿势)。
+    接受 dict 或纯字符串;每题 {id,label,options[≤5],allow_free};最多 3 题。"""
+    out: list[dict] = []
+    for i, q in enumerate((raw or [])[:3]):
+        if isinstance(q, str):
+            label, options, allow_free, qid = q.strip(), [], True, f"q{i + 1}"
+        elif isinstance(q, dict):
+            label = str(q.get("label") or q.get("q") or q.get("question") or "").strip()
+            options = [str(o).strip() for o in (q.get("options") or []) if str(o).strip()][:5]
+            allow_free = bool(q.get("allow_free", True))
+            qid = str(q.get("id") or f"q{i + 1}").strip() or f"q{i + 1}"
+        else:
+            continue
+        if not label:
+            continue
+        out.append({"id": qid, "label": label, "options": options, "allow_free": allow_free})
+    return out
+
 
 def _validate_build_draft(kind: str, raw_draft: dict, prev: dict | None) -> dict:
     """把模型给的草稿按 kind 校验成对应卡的合法 data。失败回退上一版草稿。"""
@@ -587,21 +638,45 @@ def _validate_build_draft(kind: str, raw_draft: dict, prev: dict | None) -> dict
         return prev or ({"name": ""} if kind != "stories" else {"title": ""})
 
 
-def build_card(kind: str, messages: list[dict], draft: dict | None = None, seed: str = "") -> dict:
+_KIND_ZH = {"characters": "角色卡", "players": "演出卡(玩家主角)", "worlds": "世界书 / 设定卡", "stories": "故事书"}
+
+
+def build_card(
+    kind: str,
+    messages: list[dict],
+    draft: dict | None = None,
+    seed: str = "",
+    phase: str = "drafting",
+    threshold: int = 60,
+) -> dict:
     """对话式建卡一轮(无状态),kind ∈ characters/players/worlds/stories。
 
     messages:[{role, content}] 至今的对话(前端维护);draft:当前草稿(对应卡的 data);
     seed:可选,已有资料/旧卡文本(完善模式,针对空/弱字段定向追问)。
+    phase(E0 完整度门控):"drafting"(默认,原行为不变——旧前端/MCP/冒烟脚本零影响)|
+      "understand"(构思阶段:只评完整度+提问/出蓝图,**代码强制不写卡**——无论模型返回什么
+      draft 一律丢弃、回传 prev。这是「评分之下不得 AI 写」的硬门槛,prompt 约定+代码强制双保险)。
+    threshold:完整度阈值(0-100,默认 60),仅 understand 阶段生效。
     把对话历史折进 system(避免 DeepSeek json_mode 遇多轮 assistant 散文吐空白),只发 [system, user]。
-    返回 {reply, draft, next_question, done, filled};draft 一定是对应卡的合法 data。
+    返回 {reply, draft, next_question, done, filled};understand 阶段另带
+    {completeness, questions[{id,label,options,allow_free}], blueprint[], phase}。
     """
     kind = kind if kind in _BUILD_SYSTEMS else "characters"
+    understand = phase == "understand"
+    try:
+        threshold = max(0, min(100, int(threshold)))
+    except Exception:
+        threshold = 60
     msgs = messages or []
     if msgs and msgs[-1].get("role") == "user":
         history, latest = msgs[:-1], str(msgs[-1].get("content") or "")
     else:
-        history, latest = msgs, "(开始建卡,请先问我第一个问题)"
-    system = _BUILD_SYSTEMS[kind]
+        history, latest = msgs, "(开始建卡,请先问我第一个问题)" if not understand else "(我想造一张卡,先帮我想清楚要什么)"
+    system = (
+        _UNDERSTAND_SYSTEM_TMPL.format(kind_zh=_KIND_ZH[kind], aspects=_UNDERSTAND_ASPECTS[kind], threshold=threshold)
+        if understand
+        else _BUILD_SYSTEMS[kind]
+    )
     if seed and seed.strip():
         system += "\n\n【用户已有的资料 / 旧卡——基于它来完善,找出空或薄弱的字段定向追问】\n" + seed.strip()[:6000]
     if draft:
@@ -622,6 +697,33 @@ def build_card(kind: str, messages: list[dict], draft: dict | None = None, seed:
         obj = _loads_tolerant(raw)
     except Exception:
         obj = {}
+
+    if understand:
+        try:
+            comp = max(0, min(100, int(obj.get("completeness"))))
+        except Exception:
+            comp = 0
+        questions = _normalize_questions(obj.get("questions"))
+        blueprint = [str(x).strip() for x in (obj.get("blueprint") or []) if str(x).strip()][:8]
+        # 按分数整理互斥(模型两个都给/都不给时以分数为准):达标=只留蓝图;未达标=只留问题。
+        if comp >= threshold:
+            questions = []
+        else:
+            blueprint = []
+        return {
+            "reply": str(obj.get("reply") or ""),
+            # 硬门槛:构思阶段不写卡。draft 原样回传(prev 规整),模型输出的 draft 一律丢弃。
+            "draft": _validate_build_draft(kind, draft or {}, draft),
+            # 纯文本降级路径:不认识 questions 的消费方至少能拿到第一题当追问。
+            "next_question": str(obj.get("next_question") or "") or (questions[0]["label"] if questions else ""),
+            "done": False,
+            "filled": [],
+            "completeness": comp,
+            "questions": questions,
+            "blueprint": blueprint,
+            "phase": "understand",
+        }
+
     raw_draft = obj.get("draft") if isinstance(obj.get("draft"), dict) else (draft or {})
     return {
         "reply": str(obj.get("reply") or ""),

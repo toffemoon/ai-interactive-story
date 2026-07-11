@@ -181,3 +181,19 @@ plan: docs/2026-07-11-create-card-canvas-plan.md
 - 红线:API 契约零改动(seed 用的是后端已实现参数);desks 兼容扩展(seed/tpl 可选键,双向兼容);手机 .ct 仅 ct-more 两项(主理人拍板的例外);三弹层沿用;npm 零新增;token 皮肤;main 未碰。
 - 已知边界(带进 PR):seed 每轮计费(UI 三重明示);「别动其他字段」是 prompt 约定(diff 墨晕兜底);酒馆 zTXt 不支持(诚实报错);Mine「去改编」发送端在 AUTH off 本地不可达(环境语义),真机 AUTH on 建议走查;identify 入库 vs 酒馆本地的双口径已当面写清。
 - 测试残留:test 库 library 新增若干私密卡(林默等),preview 浏览器 localStorage 留测试台数据(与用户浏览器无关)。
+
+---
+
+# E 系列(完整度门控)· journal 续记
+
+> 分支 gengyue/create-completeness-gate(stacked on create-creator-tools/#160);方案见 plan 文档 E 章。
+
+## E0 · 2026-07-12 01:54 ✅ 后端完整度门控(引擎核心,请主理人重点审)
+
+- 实现(src/identify.py + src/api.py):build_card 加 phase(默认 "drafting"=原行为,旧前端/MCP/冒烟零影响)+threshold(默认 60);understand 阶段独立 system 模板(按 kind 给评估维度)——completeness 0-100 自评+questions(≤3 题,每题 3-5 具体选项,_normalize_questions 容错规整,复刻 StoryChoice 姿势)+达标出 blueprint(≤8 条);**代码强制:understand 阶段 draft 一律 _validate_build_draft(kind, prev, prev) 回传——模型输出的 draft 丢弃**;questions/blueprint 按分数互斥整理;next_question 兜底第一题(纯文本降级);BuildCardReq 加两可选字段,端点透传(无 response_model,新键自动到前端)。
+- 压测(_smoke_completeness.py,untracked 惯例,真调 DeepSeek 四用例全过):
+  - U1「我想要一个角色」→ completeness=0、questions 带具体可点选项(林默/瘸腿老猫/夜莺…)、零蓝图、draft 空壳;
+  - U2 已有 draft+用户催「随便写完」→ **不写**:draft 三字段与 prev 逐字一致,分 25 继续问(「你和她是什么关系」);
+  - U3 充足信息+seed → 65 分达标、blueprint 5 条(锚点/基调/带例句的腔调/关系/开场画面)、questions=[];
+  - R4 缺省 phase → 原行为(写出 8 字段),返回不带门控键。
+- 治理:引擎核心改动,单独 commit;合 main 前主理人审(压测输出如上,脚本在工作树可复跑)。
