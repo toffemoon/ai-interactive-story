@@ -254,7 +254,37 @@ export default function Create() {
   const phase = deskPhase(desk);
   const COMP_THRESHOLD = 60;
 
-  async function sendText(rawText, { clearInput = false } = {}) {
+  // E3 问题作答(本地态,题目换了就清;答案不进 desks——提交后化成一条用户消息即是历史)。
+  const [quizAns, setQuizAns] = useState({});
+  const [quizFree, setQuizFree] = useState({});
+  useEffect(() => {
+    setQuizAns({});
+    setQuizFree({});
+  }, [desk.questions, kind]);
+  function quizAnswerOf(qu) {
+    return (quizFree[qu.id] || "").trim() || quizAns[qu.id] || "";
+  }
+  function submitQuiz() {
+    const lines = (desk.questions || [])
+      .map((qu) => {
+        const a = quizAnswerOf(qu);
+        return a ? `${qu.label} —— ${a}` : null;
+      })
+      .filter(Boolean);
+    if (!lines.length) return;
+    sendText(lines.join("\n"));
+  }
+  // E4 蓝图批准:切 drafting + 让 AI 按蓝图一次落笔(此后回到既有创作行为)。
+  function approveBlueprint() {
+    const bp = desk.blueprint || [];
+    patch(kind, { phase: "drafting" });
+    sendText(
+      "就按这份蓝图开始写卡,把已经聊清的内容一次填进字段,别再反问:\n" + bp.map((b) => "- " + b).join("\n"),
+      { phaseOverride: "drafting" }
+    );
+  }
+
+  async function sendText(rawText, { clearInput = false, phaseOverride = null } = {}) {
     const kk = kind;
     const cur = desks[kk];
     const text = (rawText || "").trim();
@@ -267,7 +297,8 @@ export default function Create() {
     patch(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text }], ...(clearInput ? { input: "" } : {}) }));
     try {
       // D1:seed = 挂在台上的参考资料;E2:understand/blueprint 态带 phase=understand(后端只评分提问,硬不写卡)。
-      const curPhase = deskPhase(cur);
+      // phaseOverride:批准蓝图那一发要立即按 drafting 走(setState 异步,闭包里的 desks 还是旧 phase)。
+      const curPhase = phaseOverride || deskPhase(cur);
       const gated = curPhase === "understand" || curPhase === "blueprint";
       const r = await postJSON("/api/build_card", {
         kind: kk,
@@ -1100,6 +1131,72 @@ export default function Create() {
                     <div className="create-say-tx t-ui">{m.text}</div>
                   </div>
                 ))}
+                {/* E3 问题作答:稿纸圈选词——虚线下划的可点词组,点选转朱砂实线;「其他」是填空线。零卡片零边框。 */}
+                {phase === "understand" && (desk.questions || []).length > 0 && !busy && (
+                  <div className="create-quiz">
+                    {desk.questions.map((qu) => (
+                      <div className="create-quiz-q" key={qu.id}>
+                        <div className="create-quiz-label t-ui">{qu.label}</div>
+                        <div className="create-quiz-opts">
+                          {(qu.options || []).map((o) => (
+                            <button
+                              key={o}
+                              className={"create-quiz-opt" + (quizAns[qu.id] === o ? " is-on" : "")}
+                              onClick={() =>
+                                setQuizAns((a) => ({ ...a, [qu.id]: a[qu.id] === o ? undefined : o }))
+                              }
+                            >
+                              {o}
+                            </button>
+                          ))}
+                          {qu.allow_free !== false && (
+                            <input
+                              className="create-quiz-free t-ui-sm"
+                              placeholder="其他,自己写……"
+                              value={quizFree[qu.id] || ""}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setQuizFree((f) => ({ ...f, [qu.id]: v }));
+                                if (v) setQuizAns((a) => ({ ...a, [qu.id]: undefined }));
+                              }}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    <div className="create-quiz-foot">
+                      <Button
+                        variant="primary"
+                        disabled={!(desk.questions || []).some((qu) => quizAnswerOf(qu))}
+                        onClick={submitQuiz}
+                      >
+                        就按这些答
+                      </Button>
+                      <span className="create-quiz-skip t-meta">没答全没关系,也可以直接在下面说</span>
+                    </div>
+                  </div>
+                )}
+                {/* E4 蓝图:破折号要点直排纸面;唯一的重元素是那颗批准钮。 */}
+                {phase === "blueprint" && (desk.blueprint || []).length > 0 && !busy && (
+                  <div className="create-bp">
+                    <div className="create-bp-h t-kai">蓝图 · 这张卡打算这么写</div>
+                    {desk.blueprint.map((b, i) => (
+                      <div className="create-bp-item t-ui" key={i}>—— {b}</div>
+                    ))}
+                    <div className="create-bp-foot">
+                      <Button variant="primary" onClick={approveBlueprint}>批准,开始写</Button>
+                      <button
+                        className="create-blank-link"
+                        onClick={() => {
+                          patch(kind, { phase: "understand" });
+                          requestAnimationFrame(() => dockInputRef.current && dockInputRef.current.focus());
+                        }}
+                      >
+                        再聊聊
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {busy && (
                   <div className="create-say">
                     <span className="create-say-who t-kai">助手</span>

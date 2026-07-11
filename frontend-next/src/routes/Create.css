@@ -1853,3 +1853,88 @@
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
   }
 }
+
+/* ————————————————————————————————————————————————————————————
+   E3 问题作答(稿纸圈选词)+ E4 蓝图。零卡片零边框:全靠字重/下划线/留白。
+   ———————————————————————————————————————————————————————————— */
+@media (min-width: 861px) {
+  .create-quiz {
+    margin: var(--sp-2) 0 var(--sp-4);
+    animation: msgIn 0.3s var(--ease-out) both;
+  }
+  .create-quiz-q {
+    margin-bottom: var(--sp-4);
+  }
+  .create-quiz-label {
+    color: var(--fg);
+    font-family: var(--font-serif);
+    margin-bottom: var(--sp-2);
+  }
+  .create-quiz-opts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px var(--sp-3);
+    align-items: baseline;
+  }
+  .create-quiz-opt {
+    background: transparent;
+    border: none;
+    padding: 2px 1px;
+    color: var(--muted);
+    font-family: var(--font-kai);
+    font-size: var(--fs-ui);
+    cursor: pointer;
+    border-bottom: 1px dashed color-mix(in srgb, var(--accent) 40%, var(--line));
+    transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+  }
+  .create-quiz-opt:hover {
+    color: var(--fg);
+  }
+  .create-quiz-opt.is-on {
+    color: var(--accent);
+    border-bottom: 2px solid var(--accent);
+  }
+  .create-quiz-free {
+    min-width: 130px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed var(--line);
+    padding: 2px 1px;
+    color: var(--fg);
+    font-family: var(--font-kai);
+    outline: none;
+  }
+  .create-quiz-free:focus {
+    border-bottom-color: var(--accent);
+  }
+  .create-quiz-foot {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    margin-top: var(--sp-2);
+  }
+  .create-quiz-skip {
+    color: var(--muted);
+  }
+  /* 蓝图:眉题 + 破折号要点,直排纸面 */
+  .create-bp {
+    margin: var(--sp-2) 0 var(--sp-4);
+    animation: msgIn 0.3s var(--ease-out) both;
+  }
+  .create-bp-h {
+    color: var(--accent-3);
+    letter-spacing: 0.1em;
+    margin-bottom: var(--sp-2);
+  }
+  .create-bp-item {
+    color: var(--fg);
+    line-height: var(--lh-body);
+    margin-bottom: 6px;
+  }
+  .create-bp-foot {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-4);
+    margin-top: var(--sp-3);
+  }
+}
