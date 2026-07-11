@@ -2201,3 +2201,37 @@
 }
 .create-ledger-menu button:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 4%, transparent); color: var(--accent); }
 .create-ledger-menu button:disabled { color: color-mix(in srgb, var(--fg) 30%, transparent); cursor: default; }
+
+/* ── F7b「完善角色卡」左右结构(桌面):左立绘 | 右头像行+名字+介绍;手机保持纵排 ── */
+@media (min-width: 861px) {
+  .create-modal-card.ct-finalize-card {
+    width: min(780px, 92vw);
+  }
+  .ct-finalize-cols {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: var(--sp-5);
+    align-items: start;
+    margin-top: var(--sp-3);
+  }
+  .ct-finalize-cols .ct-finalize-portrait {
+    margin-top: 0;
+  }
+  .ct-finalize-cols .ct-finalize-portrait .icf-thumb {
+    width: 100%; /* 立绘吃满左栏(240 → 2:3 约 240×360) */
+  }
+  /* 头像+名字横排,左对齐(原纵排居中是手机形态) */
+  .ct-finalize-cols .ct-finalize-avatar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--sp-4);
+    margin: 0 0 var(--sp-3);
+  }
+  .ct-finalize-cols .ct-finalize-avatar .icf {
+    align-items: flex-start;
+  }
+  .ct-finalize-cols .create-preview-introhead {
+    margin-top: var(--sp-2);
+  }
+}

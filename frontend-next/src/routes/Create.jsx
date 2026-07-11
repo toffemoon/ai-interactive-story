@@ -2181,62 +2181,68 @@ export default function Create() {
       {/* 完善角色卡:立绘大图在上 + 头像圆居中名字在下 + 角色介绍可编辑,确认后 收进本台 / 收入卡库 */}
       {finalize && (
         <div className="create-modal" onClick={() => setFinalize(null)}>
-          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="完善角色卡" onClick={(e) => e.stopPropagation()}>
+          <div className="create-modal-card ct-finalize-card" role="dialog" aria-modal="true" aria-label="完善角色卡" onClick={(e) => e.stopPropagation()}>
             <button className="create-modal-x" onClick={() => setFinalize(null)} aria-label="关闭">×</button>
             <h2 className="t-h2">完善角色卡</h2>
-            {/* 立绘大图在上(主视觉,单独放大) */}
-            <div className="ct-finalize-portrait">
-              <ImageCropField
-                label="立绘(主图)"
-                hint="详情页 / 看板 / 纯聊右侧"
-                value={desk.draft.image || ""}
-                aspect={2 / 3}
-                output={{ maxW: 768, maxH: 1152, quality: 0.82 }}
-                onChange={(url) => setDraftPic("image", url)}
-              />
+            {/* F7b 左右结构(桌面):左=立绘主图;右=头像+名字一行 + 角色介绍。手机保持纵排。 */}
+            <div className="ct-finalize-cols">
+              <div className="ct-finalize-figure">
+                <div className="ct-finalize-portrait">
+                  <ImageCropField
+                    label="立绘(主图)"
+                    hint="详情页 / 看板 / 纯聊右侧"
+                    value={desk.draft.image || ""}
+                    aspect={2 / 3}
+                    output={{ maxW: 768, maxH: 1152, quality: 0.82 }}
+                    onChange={(url) => setDraftPic("image", url)}
+                  />
+                </div>
+              </div>
+              <div className="ct-finalize-body">
+                {/* 头像与名字同一行(桌面);手机沿用纵排居中 */}
+                <div className="ct-finalize-avatar">
+                  <ImageCropField
+                    label="头像"
+                    hint="纯聊圆头像"
+                    value={desk.draft.avatar || ""}
+                    aspect={1}
+                    round
+                    output={{ maxW: 256, maxH: 256, quality: 0.85 }}
+                    onChange={(url) => setDraftPic("avatar", url)}
+                  />
+                  <div className="ct-finalize-name t-kai">{draftName}</div>
+                </div>
+                <div className="create-preview-introhead">
+                  <span className="t-h3">角色介绍</span>
+                  <button className="create-gen-btn" disabled={genBusy} onClick={genIntro}>
+                    {genBusy ? "生成中…" : "自动生成"}
+                  </button>
+                </div>
+                {/* F3:生成的口味指示(可空)——回车即生成 */}
+                <input
+                  className="create-ask-line t-ui-sm"
+                  value={introAsk}
+                  disabled={genBusy}
+                  placeholder="对介绍的要求(可空)——比如:第一人称、带点自嘲"
+                  onChange={(e) => setIntroAsk(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !(e.nativeEvent || e).isComposing && !genBusy) {
+                      e.preventDefault();
+                      genIntro();
+                    }
+                  }}
+                  aria-label="对角色介绍的要求"
+                />
+                {/* 角色介绍可直接编辑 */}
+                <textarea
+                  className="ct-finalize-introedit"
+                  rows={7}
+                  value={desk.draft.description || ""}
+                  onChange={(e) => setDraftDesc(e.target.value)}
+                  placeholder="写角色介绍,或点「自动生成」让 AI 按已填设定写一段。"
+                />
+              </div>
             </div>
-            {/* 头像居中 + 名字在头像下方 */}
-            <div className="ct-finalize-avatar">
-              <ImageCropField
-                label="头像"
-                hint="纯聊圆头像"
-                value={desk.draft.avatar || ""}
-                aspect={1}
-                round
-                output={{ maxW: 256, maxH: 256, quality: 0.85 }}
-                onChange={(url) => setDraftPic("avatar", url)}
-              />
-              <div className="ct-finalize-name t-kai">{draftName}</div>
-            </div>
-            <div className="create-preview-introhead">
-              <span className="t-h3">角色介绍</span>
-              <button className="create-gen-btn" disabled={genBusy} onClick={genIntro}>
-                {genBusy ? "生成中…" : "自动生成"}
-              </button>
-            </div>
-            {/* F3:生成的口味指示(可空)——回车即生成 */}
-            <input
-              className="create-ask-line t-ui-sm"
-              value={introAsk}
-              disabled={genBusy}
-              placeholder="对介绍的要求(可空)——比如:第一人称、带点自嘲"
-              onChange={(e) => setIntroAsk(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !(e.nativeEvent || e).isComposing && !genBusy) {
-                  e.preventDefault();
-                  genIntro();
-                }
-              }}
-              aria-label="对角色介绍的要求"
-            />
-            {/* 角色介绍可直接编辑 */}
-            <textarea
-              className="ct-finalize-introedit"
-              rows={4}
-              value={desk.draft.description || ""}
-              onChange={(e) => setDraftDesc(e.target.value)}
-              placeholder="写角色介绍,或点「自动生成」让 AI 按已填设定写一段。"
-            />
             {/* 钉在弹窗可视底边:矮屏下内容超出 84vh 时主 CTA 不再沉到折叠线下(YOR-148) */}
             <div className="ct-finalize-footer">
               <Button variant="primary" full onClick={confirmFinalize}>
