@@ -9,6 +9,7 @@ import CharDetailModal from "../components/CharDetailModal";
 import StaggeredText from "../components/staggered-text";
 import DepthCard from "../components/react-bits/depth-card"; // C4 本台架 mini 卡(画布本体不倾斜)
 import { BlurHighlight } from "../components/react-bits/blur-highlight";
+import { parseJsonCard, parsePngCard } from "../lib/tavernCard"; // D2 酒馆卡纯前端解析
 import { useAuth } from "../state/auth";
 import "./Create.css";
 
@@ -186,6 +187,9 @@ export default function Create() {
   // D1 参考资料:desks[kind].seed(可选键,兼容扩展)。弹窗内编辑用本地 seedText,确认才 patch。
   const [seedOpen, setSeedOpen] = useState(false);
   const [seedText, setSeedText] = useState("");
+  // D2 导入面板:null | { step: "pick"|"paste", text, err }。酒馆解析是同步的,不需要独立 step。
+  const [importOpen, setImportOpen] = useState(null);
+  const tavernRef = useRef(null); // 酒馆卡文件 input(.json/.png)
   const fileRef = useRef(null);
   const coverRef = useRef(null);
   const chatRef = useRef(null);
@@ -285,6 +289,23 @@ export default function Create() {
     return sendText(text);
   }
 
+  // D2 共享:把 identify 的返回铺上画布(上传/粘贴两路共用)。identify 副作用=后端已自动收进卡库,文案如实。
+  function applyIdentified(out, kk) {
+    const draft = kk === "characters" ? out.data || out : out;
+    const nm = draft.name || draft.title || "未命名";
+    patch(kk, (d0) => ({
+      draft: { ...draft, ...pickPics(d0.draft) }, // 保住已上传的头像/立绘
+      filled: Object.keys(draft),
+      messages: [...d0.messages, { who: "ai", text: "《" + nm + "》解析好了,已铺上画布,顺手也收进了你的卡库(私密)。哪里不对,聊着改。" }],
+    }));
+    return nm;
+  }
+  // 导入会整卡替换画布草稿:有未收草稿先确认(镜像 removeBuilt 的破坏性确认范式)。
+  function confirmReplaceDraft() {
+    if (!hasDraft) return true;
+    return window.confirm("画布上已有草稿《" + draftName + "》,导入会替换它(已收进本台 / 卡库的不受影响)。继续?");
+  }
+
   async function onUpload(ev) {
     const file = ev.target.files && ev.target.files[0];
     ev.target.value = "";
@@ -295,19 +316,69 @@ export default function Create() {
     try {
       const text = await uploadFile(file);
       const out = await postJSON(IDENTIFY_EP[kk], { text });
-      const draft = kk === "characters" ? out.data || out : out;
-      const nm = draft.name || draft.title || "未命名";
-      patch(kk, (d0) => ({
-        draft: { ...draft, ...pickPics(d0.draft) }, // 保住已上传的头像/立绘
-        filled: Object.keys(draft),
-        messages: [...d0.messages, { who: "ai", text: "《" + nm + "》解析好了,已填进草稿卡,顺手也收进了你的卡库。哪里不对,聊着改。" }],
-      }));
+      applyIdentified(out, kk);
       flash("已解析并收入卡库");
     } catch (e) {
       patch(kk, (d0) => ({ messages: [...d0.messages, { who: "ai", text: "(解析失败:" + e.message + ")" }] }));
       flash("解析失败");
     } finally {
       setBusy(false);
+    }
+  }
+
+  // D2 粘贴直通:文本直接调 identify(跳过 /api/upload,不占上传限流)。
+  async function importPaste() {
+    const t = ((importOpen && importOpen.text) || "").trim();
+    if (!t || busy) return;
+    if (!confirmReplaceDraft()) return;
+    const kk = kind;
+    setBusy(true);
+    try {
+      const out = await postJSON(IDENTIFY_EP[kk], { text: t });
+      const nm = applyIdentified(out, kk);
+      setImportOpen(null);
+      flash("已解析《" + nm + "》并收入卡库");
+    } catch (e) {
+      setImportOpen((m) => (m ? { ...m, err: "解析失败:" + e.message } : m));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // D2 酒馆卡(.json / PNG 内嵌卡):纯前端解析直落 draft——零请求、零入库、不耗额度(与 identify 路径口径相反,UI 已写明)。
+  async function onTavernFile(ev) {
+    const file = ev.target.files && ev.target.files[0];
+    ev.target.value = "";
+    if (!file) return;
+    try {
+      const isJson = /\.json$/i.test(file.name);
+      const parsed = isJson ? parseJsonCard(await file.text()) : parsePngCard(await file.arrayBuffer());
+      if (!confirmReplaceDraft()) return;
+      const nm = parsed.draft.name || "未命名";
+      const droppedNote = parsed.dropped.length
+        ? "有 " + parsed.dropped.length + " 个酒馆特有字段暂不支持,已略过:" +
+          parsed.dropped.slice(0, 6).join("、") + (parsed.dropped.length > 6 ? "…" : "") + "。"
+        : "";
+      patch(kind, (d0) => ({
+        draft: { ...parsed.draft, ...pickPics(d0.draft) },
+        filled: Object.keys(parsed.draft),
+        messages: [...d0.messages, { who: "ai", text: "《" + nm + "》从酒馆卡读进来了(本地解析,没入库、不耗额度)。" + droppedNote + "哪里不对,聊着改。" }],
+      }));
+      // PNG 本体顺手压成立绘(draft.image 空着才填,不覆盖用户已传的)
+      if (!isJson) {
+        try {
+          const dataUrl = await fileToCompressedDataURL(file, { maxW: 768, maxH: 1152, quality: 0.82 });
+          patch(kind, (d0) => (d0.draft.image ? {} : { draft: { ...d0.draft, image: dataUrl } }));
+        } catch (e) {}
+      }
+      // 卡自带世界书 → 桥到 D1 参考资料(截 6000),AI 每轮可参考
+      if (parsed.bookText && window.confirm("这张卡自带世界书条目(" + parsed.bookText.length + " 字)。挂为「参考资料」让 AI 每轮参考?(可随时清除)")) {
+        patch(kind, { seed: parsed.bookText.slice(0, 6000) });
+      }
+      setImportOpen(null);
+      flash("已导入《" + nm + "》(本地,未入库)");
+    } catch (e) {
+      setImportOpen((m) => (m ? { ...m, err: "导入失败:" + e.message } : { step: "pick", text: "", err: "导入失败:" + e.message }));
     }
   }
 
@@ -605,6 +676,7 @@ export default function Create() {
     setEditingKey(null);
     setJournalOpen(false);
     setSeedOpen(false);
+    setImportOpen(null);
   }, [kind]);
 
   // —— D1 参考资料:打开弹窗时把当前 seed 带进编辑框;确认时 trim+截 6000(存储即截断,所见即所发) ——
@@ -983,9 +1055,13 @@ export default function Create() {
                           </div>
                         </div>
                       )}
-                      {/* D1:已有内容优先的第二入口——挂参考资料(D2 导入入口后续排同一行) */}
+                      {/* D1/D2:已有内容优先的入口行——导入成卡 / 挂参考资料 */}
                       <div className="create-blank-more t-meta">
                         已有设定或旧卡?
+                        <button className="create-blank-link" onClick={() => setImportOpen({ step: "pick", text: "", err: "" })}>
+                          直接导入成卡
+                        </button>
+                        ·
                         <button className="create-blank-link" onClick={openSeed}>
                           {desk.seed ? `参考资料 · ${seedLenLabel(desk.seed)}` : "挂上参考资料"}
                         </button>
@@ -1199,6 +1275,62 @@ export default function Create() {
                   )}
                   <Button variant="primary" onClick={commitSeed}>挂上</Button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* D2 导入面板:把已有内容直接变成卡——粘贴文本(identify,会入库)/上传文档(现有链路)/
+              酒馆卡(纯前端解析,不入库不耗额度)。两种口径都当面写清。 */}
+          {importOpen && (
+            <div className="create-modal" onClick={() => setImportOpen(null)}>
+              <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="导入成卡" onClick={(e) => e.stopPropagation()}>
+                <button className="create-modal-x" onClick={() => setImportOpen(null)} aria-label="关闭">×</button>
+                <h2 className="t-h2">导入成卡 · {KINDS[ki].zh}</h2>
+                {importOpen.step === "pick" ? (
+                  <>
+                    <p className="create-seed-note t-meta">把已有的内容直接变成一张卡,不用从零聊。</p>
+                    <div className="create-import-picks">
+                      <button className="create-import-pick" onClick={() => setImportOpen({ step: "paste", text: "", err: "" })}>
+                        <span className="create-import-pick-t t-ui">粘贴文本</span>
+                        <span className="create-import-pick-d t-meta">散文设定 / 旧卡文字,AI 解析成卡(会同时收进你的卡库 · 私密)</span>
+                      </button>
+                      <button className="create-import-pick" onClick={() => { setImportOpen(null); fileRef.current && fileRef.current.click(); }}>
+                        <span className="create-import-pick-t t-ui">上传文档</span>
+                        <span className="create-import-pick-d t-meta">.txt / .md / .docx,抽出文字后同上(≤2MB)</span>
+                      </button>
+                      {kind === "characters" && (
+                        <button className="create-import-pick" onClick={() => tavernRef.current && tavernRef.current.click()}>
+                          <span className="create-import-pick-t t-ui">酒馆角色卡</span>
+                          <span className="create-import-pick-d t-meta">SillyTavern 的 .json / PNG 内嵌卡——本地解析,不入库、不耗额度</span>
+                        </button>
+                      )}
+                    </div>
+                    {importOpen.err && <div className="create-import-err t-meta">{importOpen.err}</div>}
+                    <input ref={tavernRef} type="file" accept=".json,.png" hidden onChange={onTavernFile} />
+                  </>
+                ) : (
+                  <>
+                    <p className="create-seed-note t-meta">
+                      粘贴散文设定 / 旧卡文字,AI 解析成{KINDS[ki].zh};解析成功会同时把这张卡存进你的卡库(私密),可去「我的」删除。
+                      超长文本(两万字以上)建议分段导入,或改挂「参考资料」。
+                    </p>
+                    <textarea
+                      className="create-seed-ta t-ui-sm"
+                      rows={10}
+                      value={importOpen.text}
+                      onChange={(e) => setImportOpen((m) => ({ ...m, text: e.target.value, err: "" }))}
+                      placeholder="把设定粘进来……"
+                    />
+                    <div className="create-seed-count t-meta">{importOpen.text.length} 字</div>
+                    {importOpen.err && <div className="create-import-err t-meta">{importOpen.err}</div>}
+                    <div className="create-seed-actions">
+                      <Button variant="line" onClick={() => setImportOpen({ step: "pick", text: "", err: "" })}>返回</Button>
+                      <Button variant="primary" onClick={importPaste} disabled={busy || !importOpen.text.trim()}>
+                        {busy ? "解析中…" : "解析成卡"}
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}

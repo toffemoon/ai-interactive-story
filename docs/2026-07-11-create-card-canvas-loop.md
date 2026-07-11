@@ -132,3 +132,13 @@ plan: docs/2026-07-11-create-card-canvas-plan.md
   - worlds 老 desk(无 seed 键)→ 拦截验载荷 seed:""(零真调用),行为同现状;
   - 收进本台 → seed 保留(6000 仍在,built+1,draft 清);刷新 → 徽章仍亮;
   - console 零报错;build 过。
+
+## D2 · 2026-07-11 21:0x ✅ 导入即成卡(粘贴/上传/酒馆 JSON+PNG)
+
+- 实现:空卡「直接导入成卡」面板三入口——粘贴文本(直调 identify,跳过 /api/upload)/上传文档(现有链路,抽出共享 applyIdentified)/酒馆角色卡(.json/PNG,仅 characters;lib/tavernCard.js 纯前端解析)。两种口径当面写清:identify 路径「会同时收进你的卡库(私密)」,酒馆路径「本地解析,不入库、不耗额度」。已有草稿导入前 confirm 替换。白名单与后端 model_fields 对齐(15 键),酒馆特有字段如实播报略过;character_book 自动提文本并询问「挂为参考资料」(桥接 D1);PNG 本体压缩后顺手填 draft.image(空才填);zTXt/iTXt 压缩变体诚实报错引导导 JSON;大 chunk 分块解码防栈溢。
+- 验收(5199 实测):
+  - 粘贴散文「林默」→ 真 identify → 16 字段铺上画布、面板自关、卡库入库(文案已预告);
+  - 酒馆 V2 JSON「白栎」→ 白名单进 draft(creator_notes 被滤),叙述条播报「4 个酒馆特有字段暂不支持:creator_notes、alternate_greetings、system_prompt…」;**character_book 两条目桥成 seed(42 字)——D1/D2 打通**;
+  - 手工构造 PNG(tEXt chara chunk)→「PNG测试·砚青」纯本地解析进 draft,零网络请求;
+  - 坏文件(JPG 改名 .png)→ 面板内红字「导入失败:不是 PNG 文件」,不关不崩;
+  - console 零报错;build 2.03s。

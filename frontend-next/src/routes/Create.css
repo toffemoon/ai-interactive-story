@@ -1799,3 +1799,41 @@
   gap: var(--sp-3);
   margin-top: var(--sp-3);
 }
+
+/* ————————————————————————————————————————————————————————————
+   D2 导入面板:三入口卡片 + 错误行(粘贴框复用 .create-seed-ta)。
+   ———————————————————————————————————————————————————————————— */
+.create-import-picks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+}
+.create-import-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.create-import-pick:hover {
+  border-color: var(--accent-2);
+  background: var(--panel);
+}
+.create-import-pick-t {
+  color: var(--fg);
+  font-family: var(--font-kai);
+}
+.create-import-pick-d {
+  color: var(--muted);
+  line-height: var(--lh-body);
+}
+.create-import-err {
+  margin-top: var(--sp-2);
+  color: var(--accent);
+}
