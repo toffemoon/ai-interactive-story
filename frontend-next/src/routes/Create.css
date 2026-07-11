@@ -1269,7 +1269,7 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
+    grid-template-columns: minmax(0, 1fr) 240px; /* E1:产出侧瘦身,画布让位给三栏 */
     gap: var(--sp-5);
     animation: createRise 0.45s var(--ease-out) both;
     animation-delay: 0.1s;
@@ -1304,11 +1304,10 @@
     gap: var(--sp-4);
     padding-top: var(--sp-2);
   }
-  /* 信笺坞:叙述条 + 命令条(消息条已随 C2 退役进手记抽屉) */
+  /* 命令条坞:钉在会话流底(E1 起归属左栏) */
   .create-dock {
     flex: none;
-    width: min(680px, 100%);
-    margin: var(--sp-4) auto 0;
+    padding-top: var(--sp-3);
   }
   .create-dock .create-composer {
     border: 1px solid var(--line);
@@ -1452,134 +1451,9 @@
     justify-content: space-between;
     gap: var(--sp-4);
   }
-  .create-journal-btn {
-    flex: none;
-    margin-top: 6px;
-    padding: 7px 14px;
-    border: 1px solid var(--line);
-    border-radius: var(--r-pill);
-    background: transparent;
-    color: var(--muted);
-    font-family: var(--font-kai);
-    cursor: pointer;
-    transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
-  }
-  .create-journal-btn:hover {
-    color: var(--fg);
-    border-color: var(--accent-2);
-  }
 
-  /* 叙述条:一句 AI 的话浮在命令条上方,像笺纸上的批注 */
-  .create-narr {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--sp-2);
-    margin-bottom: var(--sp-2);
-    padding: 9px 12px;
-    border: 1px solid color-mix(in srgb, var(--accent-3) 35%, var(--line));
-    border-radius: var(--r-md);
-    background: color-mix(in srgb, var(--accent-3) 6%, var(--panel));
-    animation: msgIn 0.3s var(--ease-out) both;
-  }
-  .create-narr-mark {
-    flex: none;
-    color: var(--accent-3);
-    font-size: 15px;
-    line-height: 1.4;
-  }
-  .create-narr-tx {
-    flex: 1;
-    min-width: 0;
-    color: var(--fg);
-    line-height: var(--lh-body);
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-  .create-narr-x {
-    flex: none;
-    border: none;
-    background: transparent;
-    color: var(--muted);
-    font-size: 15px;
-    line-height: 1;
-    padding: 2px 4px;
-    cursor: pointer;
-  }
-  .create-narr-x:hover {
-    color: var(--fg);
-  }
+}
 
-  /* 手记抽屉:右滑入的笺纸,全史可滚 */
-  .create-journal {
-    position: fixed;
-    inset: 0;
-    z-index: 70;
-  }
-  .create-journal-scrim {
-    position: absolute;
-    inset: 0;
-    background: var(--scrim);
-    animation: journalFade 0.25s var(--ease-out) both;
-  }
-  .create-journal-panel {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: min(420px, 92vw);
-    display: flex;
-    flex-direction: column;
-    background: var(--panel);
-    border-left: 1px solid var(--line);
-    box-shadow: var(--shadow-pop);
-    animation: journalSlide 0.3s var(--ease-out) both;
-  }
-  .create-journal-head {
-    flex: none;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--sp-4) var(--sp-5);
-    border-bottom: 1px solid var(--line);
-  }
-  .create-journal-x {
-    position: static;
-  }
-  .create-journal-list {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: var(--sp-4);
-    padding: var(--sp-4) var(--sp-5) var(--sp-5);
-  }
-}
-@keyframes journalSlide {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-@keyframes journalFade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .create-narr,
-  .create-journal-scrim,
-  .create-journal-panel {
-    animation: none !important;
-  }
-}
 
 /* ———— C3 字段级 AI 动作:空字段=✦ 补写目标,不再是空行 ———— */
 @media (min-width: 861px) {
@@ -1874,4 +1748,61 @@
 .create-bind-resume:hover {
   color: var(--accent-2);
   border-color: var(--accent-2);
+}
+
+/* ————————————————————————————————————————————————————————————
+   E1 双栏(artifact 式):左会话流 | 右 stage(画布+产出侧)。
+   会话=稿纸对谈体:说话人小楷标+正文直排,零气泡零框;栏间一条墨线分隔。
+   ———————————————————————————————————————————————————————————— */
+@media (min-width: 861px) {
+  .create-studio {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    /* 会话栏随屏自适应(1366≈355 / 1920=400);画布优先吃剩余 */
+    grid-template-columns: clamp(320px, 26vw, 400px) minmax(0, 1fr);
+    gap: var(--sp-5);
+    animation: createRise 0.45s var(--ease-out) both;
+    animation-delay: 0.1s;
+  }
+  .create-session {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--line);
+    padding-right: var(--sp-5);
+  }
+  .create-session-flow {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: var(--sp-2) var(--sp-2) var(--sp-3) 0;
+  }
+  .create-say {
+    margin-bottom: var(--sp-4);
+    animation: msgIn 0.3s var(--ease-out) both;
+  }
+  .create-say-who {
+    display: block;
+    margin-bottom: 3px;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+  }
+  .create-say.is-me .create-say-who {
+    color: var(--accent);
+  }
+  .create-say-tx {
+    color: var(--fg);
+    line-height: var(--lh-body);
+    white-space: pre-wrap;
+  }
+  .create-say.is-me .create-say-tx {
+    color: color-mix(in srgb, var(--fg) 88%, var(--accent));
+  }
+  /* stage 在 studio 内:动画交给 studio,自身只管内部网格 */
+  .create-stage {
+    animation: none;
+    animation-delay: 0s;
+  }
 }

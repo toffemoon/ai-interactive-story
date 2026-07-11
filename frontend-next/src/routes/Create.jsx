@@ -182,9 +182,6 @@ export default function Create() {
   const [editingKey, setEditingKey] = useState(null);
   const [editVal, setEditVal] = useState("");
   const dockInputRef = useRef(null); // 命令条输入框(「聊着改」把光标带过去)
-  // C2 叙述层:AI 的话降级为「最新一句」浮条 + 全史进手记抽屉;对话数据结构(desk.messages)不动。
-  const [journalOpen, setJournalOpen] = useState(false);
-  const [narrClosed, setNarrClosed] = useState(false);
   // D1 参考资料:desks[kind].seed(可选键,兼容扩展)。弹窗内编辑用本地 seedText,确认才 patch。
   const [seedOpen, setSeedOpen] = useState(false);
   const [seedText, setSeedText] = useState("");
@@ -229,7 +226,7 @@ export default function Create() {
   useEffect(() => {
     const el = chatRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [desk.messages, busy, journalOpen]); // journalOpen:手记抽屉打开那刻滚到底
+  }, [desk.messages, busy]);
 
   // go = 可选去处路由:带去处的 toast 多留一会儿,不然来不及点(YOR-170)
   function flash(msg, go = null) {
@@ -756,7 +753,6 @@ export default function Create() {
   // 切卡种时丢弃未提交的就地编辑(编辑目标已不在场),手记抽屉/参考资料弹窗一并合上。
   useEffect(() => {
     setEditingKey(null);
-    setJournalOpen(false);
     setSeedOpen(false);
     setImportOpen(null);
     setTplOpen(false);
@@ -819,27 +815,6 @@ export default function Create() {
     const n = (s || "").length;
     return n < 1000 ? `${n}字` : `${(n / 1000).toFixed(1)}k字`;
   }
-
-  // 叙述条:取最后一条 AI 消息;新回复到来(消息数变化)自动重新亮起。
-  const lastAi = useMemo(() => {
-    for (let i = desk.messages.length - 1; i >= 0; i--) {
-      if (desk.messages[i].who !== "你") return desk.messages[i];
-    }
-    return null;
-  }, [desk.messages]);
-  useEffect(() => {
-    setNarrClosed(false);
-  }, [desk.messages.length, kind]);
-
-  // 手记抽屉 Esc 关闭。
-  useEffect(() => {
-    if (!journalOpen) return undefined;
-    const onKey = (e) => {
-      if (e.key === "Escape") setJournalOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [journalOpen]);
 
   // —— C1 就地手改:手改直接写 draft(draft 即共享真相,AI 下轮基于改后内容继续长) ——
   function startFieldEdit(f) {
@@ -1044,13 +1019,6 @@ export default function Create() {
                 </BlurHighlight>
               </p>
             </div>
-            <button
-              className="create-journal-btn t-ui-sm"
-              onClick={() => setJournalOpen(true)}
-              title="这张卡聊过的全部对话"
-            >
-              ✒ 创作手记{desk.messages.length > 1 ? ` · ${desk.messages.length}` : ""}
-            </button>
           </div>
           <div className="create-kinds">
             {KINDS.map((t, i) => {
@@ -1069,11 +1037,68 @@ export default function Create() {
             })}
           </div>
 
-          {/* C0 骨架(卡即界面,方案 docs/2026-07-11-create-card-canvas-plan.md):
-              中央卡画布 = 页面本体;右栏 = 产出侧(收纳/发布,本台架 C4 补);
-              底部信笺坞 = 消息条(临时,C2 换叙述条+手记)+ 命令条(原 composer 原样搬家)。
-              key=kind:切卡种整段重挂,吃入场动效当转场。 */}
-          <div className="create-stage" key={kind}>
+          {/* E1 双栏(artifact 式,方案 E 章):左会话流(对谈体,零气泡框,命令条钉底)|
+              右 artifact 区 = 原 stage(卡画布+产出侧)。key=kind:切卡种整段重挂当转场。
+              叙述条/手记抽屉自此退役——会话流就是历史本身。 */}
+          <div className="create-studio" key={kind}>
+            <section className="create-session" aria-label="创作对话">
+              <div className="create-session-flow" ref={chatRef}>
+                {desk.messages.map((m, i) => (
+                  <div key={i} className={"create-say" + (m.who === "你" ? " is-me" : "")}>
+                    <span className="create-say-who t-kai">{m.who === "你" ? "你" : "助手"}</span>
+                    <div className="create-say-tx t-ui">{m.text}</div>
+                  </div>
+                ))}
+                {busy && (
+                  <div className="create-say">
+                    <span className="create-say-who t-kai">助手</span>
+                    <div className="create-say-tx t-ui create-msg-typing">
+                      <span className="create-dot" aria-hidden="true" />
+                      <span className="create-dot" aria-hidden="true" />
+                      <span className="create-dot" aria-hidden="true" />
+                      正在想……
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="create-dock">
+                <div className="create-composer">
+                  <textarea
+                    ref={dockInputRef}
+                    rows={1}
+                    value={desk.input}
+                    disabled={busy}
+                    placeholder={KINDS[ki].ph}
+                    onChange={(e) => patch(kind, { input: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
+                        e.preventDefault();
+                        send();
+                      }
+                    }}
+                  />
+                  <div className="create-composer-actions">
+                    <button className="create-upload" onClick={() => fileRef.current && fileRef.current.click()} disabled={busy}>
+                      上传文档
+                    </button>
+                    <input ref={fileRef} type="file" accept=".txt,.md,.docx" hidden onChange={onUpload} />
+                    <button
+                      className={"create-seed-btn" + (desk.seed ? " has-seed" : "")}
+                      onClick={openSeed}
+                      disabled={busy}
+                      title={desk.seed ? "查看 / 修改 / 清除参考资料(AI 每轮都在参考它)" : "挂一份已有设定 / 旧卡文本,AI 之后每轮都基于它来完善"}
+                    >
+                      {desk.seed ? `参考 · ${seedLenLabel(desk.seed)}` : "挂资料"}
+                    </button>
+                    <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim()}>
+                      发送
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <div className="create-stage">
             {/* 卡画布:正在长的这张卡铺在中央 */}
             <div className="create-canvas-col">
               <section className="create-canvas" aria-label="卡画布">
@@ -1296,96 +1321,8 @@ export default function Create() {
             </aside>
           </div>
 
-          {/* 信笺坞:叙述条(AI 最新一句,可关;busy=墨点)+ 命令条(原 composer 逻辑原样)。
-              全部对话史在「创作手记」抽屉,消息数据结构不动,只是显示降级。 */}
-          <div className="create-dock">
-            {busy ? (
-              <div className="create-narr" role="status">
-                <span className="create-narr-mark t-kai" aria-hidden="true">✒</span>
-                <span className="create-msg-typing t-ui-sm">
-                  <span className="create-dot" aria-hidden="true" />
-                  <span className="create-dot" aria-hidden="true" />
-                  <span className="create-dot" aria-hidden="true" />
-                  正在想……
-                </span>
-              </div>
-            ) : !narrClosed && lastAi && lastAi.text !== OPENINGS[kind] ? (
-              <div className="create-narr" role="status" key={desk.messages.length}>
-                <span className="create-narr-mark t-kai" aria-hidden="true">✒</span>
-                <span className="create-narr-tx t-ui-sm">
-                  <BlurHighlight blurDuration={0.6} viewportOptions={{ once: true, amount: 0.1 }}>
-                    {lastAi.text}
-                  </BlurHighlight>
-                </span>
-                <button className="create-narr-x" aria-label="收起这句" onClick={() => setNarrClosed(true)}>×</button>
-              </div>
-            ) : null}
-            <div className="create-composer">
-              <textarea
-                ref={dockInputRef}
-                rows={1}
-                value={desk.input}
-                disabled={busy}
-                placeholder={KINDS[ki].ph}
-                onChange={(e) => patch(kind, { input: e.target.value })}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
-                    e.preventDefault();
-                    send();
-                  }
-                }}
-              />
-              <div className="create-composer-actions">
-                <button className="create-upload" onClick={() => fileRef.current && fileRef.current.click()} disabled={busy}>
-                  上传文档
-                </button>
-                <input ref={fileRef} type="file" accept=".txt,.md,.docx" hidden onChange={onUpload} />
-                <button
-                  className={"create-seed-btn" + (desk.seed ? " has-seed" : "")}
-                  onClick={openSeed}
-                  disabled={busy}
-                  title={desk.seed ? "查看 / 修改 / 清除参考资料(AI 每轮都在参考它)" : "挂一份已有设定 / 旧卡文本,AI 之后每轮都基于它来完善"}
-                >
-                  {desk.seed ? `参考 · ${seedLenLabel(desk.seed)}` : "挂资料"}
-                </button>
-                <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim()}>
-                  发送
-                </Button>
-              </div>
-            </div>
           </div>
 
-          {/* 创作手记:这张卡聊过的全部对话(降级存档,想看才看)。数据=desk.messages 原样。 */}
-          {journalOpen && (
-            <div className="create-journal" role="dialog" aria-modal="true" aria-label="创作手记">
-              <div className="create-journal-scrim" onClick={() => setJournalOpen(false)} />
-              <div className="create-journal-panel">
-                <div className="create-journal-head">
-                  <span className="t-h3">创作手记 · {KINDS[ki].zh}</span>
-                  <button className="create-modal-x create-journal-x" onClick={() => setJournalOpen(false)} aria-label="关闭">×</button>
-                </div>
-                <div className="create-journal-list" ref={chatRef}>
-                  {desk.messages.map((m, i) => (
-                    <div key={i} className={"create-msg" + (m.who === "你" ? " is-me" : "")}>
-                      <span className="create-msg-who t-meta">{m.who === "你" ? "你" : "助手"}</span>
-                      <p className="create-msg-text t-ui">{m.text}</p>
-                    </div>
-                  ))}
-                  {busy && (
-                    <div className="create-msg">
-                      <span className="create-msg-who t-meta">助手</span>
-                      <p className="create-msg-text t-ui create-msg-typing">
-                        <span className="create-dot" aria-hidden="true" />
-                        <span className="create-dot" aria-hidden="true" />
-                        <span className="create-dot" aria-hidden="true" />
-                        正在想……
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
 
 
         </>
