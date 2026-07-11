@@ -142,3 +142,14 @@ plan: docs/2026-07-11-create-card-canvas-plan.md
   - 手工构造 PNG(tEXt chara chunk)→「PNG测试·砚青」纯本地解析进 draft,零网络请求;
   - 坏文件(JPG 改名 .png)→ 面板内红字「导入失败:不是 PNG 文件」,不关不崩;
   - console 零报错;build 2.03s。
+
+## D3 · 2026-07-11 21:2x ✅ 创作模板库(card-templates 提炼)
+
+- 实现:createTemplates.js(文案归内容侧,来源逐套标注)——characters 两套(主要NPC 13 字段/隐藏角色 11 字段;**次要NPC 忠于 2026-06-08 内容侧决定不做**,已收进设定卡)、演出卡、世界书(纯 opener)、故事书;skeleton 键名全部 ∈ 后端模型字段。空卡「从模板起手」入口+选择器(复用导入卡片样式+字段数徽章);applyTemplate:骨架直落 draft(空串=✦ 目标、空数组=「聊」目标)、opener 只进输入框、tpl 只存 id;空值渲染统一接 hints(文本+数组都显引导,替换默认「还空着」)。
+- 验收(5199 实测):
+  - 选主要NPC → 13 键骨架铺开、锚点/说话规则等字段显专属引导、opener 预填未发送、tpl=npc-main 落盘;
+  - ✦ 补写锚点(真调)→ **骨架 13/13 键全部过后端存活**(_validate_build_draft 键名铁律实证);anchor 内容取自 seed(D2 桥进来的伞骨信世界书)——模板骨架×seed 资料×字段补写三者协同;diff 墨晕如实标出模型顺手动的 tags/versions;
+  - 刷新 → tpl/骨架/引导文案全持久;
+  - 世界书模板 → 纯 opener 进输入框,draft 保持空;
+  - console 零报错;build 1.78s。
+- 边界如实:模板入口只在空卡态(有草稿时不可达,confirmReplaceDraft 分支保护的是「只有图无字段」的边缘态);「已有草稿时选模板 confirm」未实测(该状态在 UI 上不可达,逻辑保留)。

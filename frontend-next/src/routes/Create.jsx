@@ -10,6 +10,7 @@ import StaggeredText from "../components/staggered-text";
 import DepthCard from "../components/react-bits/depth-card"; // C4 本台架 mini 卡(画布本体不倾斜)
 import { BlurHighlight } from "../components/react-bits/blur-highlight";
 import { parseJsonCard, parsePngCard } from "../lib/tavernCard"; // D2 酒馆卡纯前端解析
+import { TEMPLATES, getTpl } from "./createTemplates"; // D3 创作模板(文案归内容侧,来源 card-templates/)
 import { useAuth } from "../state/auth";
 import "./Create.css";
 
@@ -190,6 +191,8 @@ export default function Create() {
   // D2 导入面板:null | { step: "pick"|"paste", text, err }。酒馆解析是同步的,不需要独立 step。
   const [importOpen, setImportOpen] = useState(null);
   const tavernRef = useRef(null); // 酒馆卡文件 input(.json/.png)
+  // D3 模板选择器;desks[kind].tpl 只存模板 id(hints 从常量派生,localStorage 零膨胀)。
+  const [tplOpen, setTplOpen] = useState(false);
   const fileRef = useRef(null);
   const coverRef = useRef(null);
   const chatRef = useRef(null);
@@ -677,7 +680,26 @@ export default function Create() {
     setJournalOpen(false);
     setSeedOpen(false);
     setImportOpen(null);
+    setTplOpen(false);
   }, [kind]);
+
+  // —— D3 模板:铺骨架进 draft(空串字段=✦ 补写目标),opener 只进输入框不代发 ——
+  const tplHints = useMemo(() => {
+    const t = getTpl(kind, desk.tpl);
+    return (t && t.hints) || {};
+  }, [kind, desk.tpl]);
+  function applyTemplate(t) {
+    if (!confirmReplaceDraft()) return;
+    patch(kind, {
+      draft: t.skeleton ? { ...t.skeleton } : {},
+      filled: [],
+      tpl: t.id,
+      input: t.opener || "",
+    });
+    setTplOpen(false);
+    flash(t.skeleton ? `已铺开「${t.name}」骨架——空字段都是 ✦ 补写目标` : `「${t.name}」的开场指令已放进输入框`);
+    requestAnimationFrame(() => dockInputRef.current && dockInputRef.current.focus());
+  }
 
   // —— D1 参考资料:打开弹窗时把当前 seed 带进编辑框;确认时 trim+截 6000(存储即截断,所见即所发) ——
   function openSeed() {
@@ -1002,8 +1024,14 @@ export default function Create() {
                             onBlur={commitFieldEdit}
                             aria-label={"编辑" + f.k}
                           />
-                        ) : f.empty ? (
-                          <span className="create-field-v create-field-v-empty t-ui-sm">还空着——✦ 让 AI 补写,或 ✎ 手写</span>
+                        ) : f.empty || !f.v.trim() ? (
+                          <span className="create-field-v create-field-v-empty t-ui-sm">
+                            {tplHints[f.k0]
+                              ? tplHints[f.k0] + (f.editable ? "(✦ 补写 / ✎ 手写)" : "(点「聊」到命令条补)")
+                              : f.editable
+                              ? "还空着——✦ 让 AI 补写,或 ✎ 手写"
+                              : "还空着——点「聊」到命令条补"}
+                          </span>
                         ) : (
                           <span className="create-field-v t-ui-sm">{f.hidden ? "(隐藏真相,玩家不可见)" + f.v : f.v}</span>
                         )}
@@ -1055,15 +1083,18 @@ export default function Create() {
                           </div>
                         </div>
                       )}
-                      {/* D1/D2:已有内容优先的入口行——导入成卡 / 挂参考资料 */}
+                      {/* D1/D2/D3:已有内容优先的入口行——模板起手 / 导入成卡 / 挂参考资料 */}
                       <div className="create-blank-more t-meta">
-                        已有设定或旧卡?
+                        <button className="create-blank-link" onClick={() => setTplOpen(true)}>
+                          从模板起手
+                        </button>
+                        ·
                         <button className="create-blank-link" onClick={() => setImportOpen({ step: "pick", text: "", err: "" })}>
-                          直接导入成卡
+                          导入已有内容
                         </button>
                         ·
                         <button className="create-blank-link" onClick={openSeed}>
-                          {desk.seed ? `参考资料 · ${seedLenLabel(desk.seed)}` : "挂上参考资料"}
+                          {desk.seed ? `参考资料 · ${seedLenLabel(desk.seed)}` : "挂参考资料"}
                         </button>
                       </div>
                     </div>
@@ -1274,6 +1305,30 @@ export default function Create() {
                     <Button variant="line" onClick={clearSeed}>清除</Button>
                   )}
                   <Button variant="primary" onClick={commitSeed}>挂上</Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* D3 模板选择器:骨架铺上画布,空字段自带引导;opener 只进输入框不代发。 */}
+          {tplOpen && (
+            <div className="create-modal" onClick={() => setTplOpen(false)}>
+              <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="创作模板" onClick={(e) => e.stopPropagation()}>
+                <button className="create-modal-x" onClick={() => setTplOpen(false)} aria-label="关闭">×</button>
+                <h2 className="t-h2">从模板起手 · {KINDS[ki].zh}</h2>
+                <p className="create-seed-note t-meta">
+                  选一套骨架铺上画布:空字段自带引导,✦ 让 AI 补、✎ 自己写;开场指令会放进输入框,过目再发。
+                </p>
+                <div className="create-import-picks">
+                  {(TEMPLATES[kind] || []).map((t) => (
+                    <button key={t.id} className="create-import-pick" onClick={() => applyTemplate(t)}>
+                      <span className="create-import-pick-t t-ui">
+                        {t.name}
+                        <span className="create-tpl-badge t-meta">{t.skeleton ? `${Object.keys(t.skeleton).length} 字段` : "纯引导"}</span>
+                      </span>
+                      <span className="create-import-pick-d t-meta">{t.hint}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>

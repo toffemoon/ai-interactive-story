@@ -1837,3 +1837,13 @@
   margin-top: var(--sp-2);
   color: var(--accent);
 }
+
+/* ———— D3 模板选择器:复用 import-pick 卡片,加字段数徽章 ———— */
+.create-tpl-badge {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  color: var(--muted);
+  font-size: 11px;
+}
