@@ -1717,3 +1717,85 @@
     animation-delay: calc(0.12s + var(--ci, 0) * 40ms);
   }
 }
+
+/* ————————————————————————————————————————————————————————————
+   D1 参考资料(seed):命令条挂资料钮/徽章 + 弹窗 + 空卡入口行。
+   ———————————————————————————————————————————————————————————— */
+@media (min-width: 861px) {
+  .create-seed-btn {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-family: var(--font-sans);
+    font-size: var(--fs-ui-sm);
+    padding: 8px 14px;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+  }
+  .create-seed-btn:hover:not(:disabled) {
+    color: var(--fg);
+    border-color: var(--accent-2);
+  }
+  /* 已挂徽章态:鎏金描边常亮——成本在场的提醒 */
+  .create-seed-btn.has-seed {
+    color: var(--badge-gilt-fg);
+    border-color: color-mix(in srgb, var(--accent-3) 55%, var(--line));
+    background: var(--badge-gilt-bg);
+  }
+  .create-blank-more {
+    margin-top: var(--sp-3);
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .create-blank-link {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: var(--accent);
+    font: inherit;
+    cursor: pointer;
+    text-decoration: underline dashed;
+    text-underline-offset: 3px;
+  }
+  .create-blank-link:hover {
+    color: var(--accent-bright);
+  }
+}
+.create-seed-note {
+  color: var(--muted);
+  margin: var(--sp-2) 0 var(--sp-3);
+  line-height: var(--lh-body);
+}
+.create-seed-ta {
+  width: 100%;
+  resize: vertical;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+  font-family: var(--font-kai);
+  line-height: var(--lh-body);
+  color: var(--fg);
+  outline: none;
+}
+.create-seed-ta:focus {
+  border-color: var(--accent);
+}
+.create-seed-count {
+  margin-top: var(--sp-1);
+  text-align: right;
+  color: var(--muted);
+}
+.create-seed-count.is-over {
+  color: var(--accent);
+}
+.create-seed-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+}

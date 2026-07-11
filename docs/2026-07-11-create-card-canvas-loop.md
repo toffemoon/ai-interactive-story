@@ -115,3 +115,20 @@ plan: docs/2026-07-11-create-card-canvas-plan.md
 - 红线全程未破:手机 .ct 分支零改动;API 契约(/api/build_card /identify* /library/save /presets)与 desks localStorage 形状不动;三弹层沿用;npm 零新增依赖;视觉全语义 token;.env 未读写;main 未碰。
 - 已知边界(如实):①「尽量别动其他字段」是 prompt 约定,diff 墨晕兜底显形;②结构化字段(entries/timeline/tags)v1 只读走「聊」;③真发布未在测试中执行;④无头环境 blur/autoFocus 弱,真浏览器无此问题。
 - 测试残留:test 库 library 多两行私密卡(苏晚棠/未命名守夜人),preview 浏览器 localStorage 留有测试台数据(与用户浏览器无关)。
+
+---
+
+# D 系列(创作者功能)· 同 journal 续记
+
+> 方案:.claude 计划已批(2026-07-11 晚),D 系列=prompt 脚手架+从现有内容 generate。分支 gengyue/create-creator-tools(基于 rebase 后的 create-canvas-rework@47cf57c,PR #159 已随 rebase 更新)。
+> 切片:D1 seed 参考资料 / D2 导入即成卡(粘贴/上传/酒馆 JSON+PNG) / D3 模板库(card-templates 提炼) / D4 改编(卡级+故事级) / D5 导出 / D6 手机最小入口 / D7 回归+PR。
+
+## D1 · 2026-07-11 20:41 ✅ 参考资料(seed 喂料)
+
+- 实现:sendText/genIntro 传 desks[kind].seed(可选键,老数据 || "" 兜底);collectToDesk 保留 seed 清 tpl;命令条「挂资料」钮/鎏金徽章(参考 · N字);空卡入口行;弹窗(6000 存储即截断+超长高亮提示+成本明示「每轮都参考,更慢更贵」+清除)。
+- 验收(5199 实测,真后端):
+  - 挂 103 字私设 → 载荷 seed 完整;**考题实锤**:问「她怕什么」,AI 答「根据资料,她唯一害怕的是打雷,因为母亲在雷雨夜失踪」并写进 draft.description——从"从零聊"变"基于我的资料长";
+  - 7500 字粘贴 → 计数红提示"超出不保存" → 存 6000,徽章 6.0k字;
+  - worlds 老 desk(无 seed 键)→ 拦截验载荷 seed:""(零真调用),行为同现状;
+  - 收进本台 → seed 保留(6000 仍在,built+1,draft 清);刷新 → 徽章仍亮;
+  - console 零报错;build 过。

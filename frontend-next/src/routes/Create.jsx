@@ -183,6 +183,9 @@ export default function Create() {
   // C2 叙述层:AI 的话降级为「最新一句」浮条 + 全史进手记抽屉;对话数据结构(desk.messages)不动。
   const [journalOpen, setJournalOpen] = useState(false);
   const [narrClosed, setNarrClosed] = useState(false);
+  // D1 参考资料:desks[kind].seed(可选键,兼容扩展)。弹窗内编辑用本地 seedText,确认才 patch。
+  const [seedOpen, setSeedOpen] = useState(false);
+  const [seedText, setSeedText] = useState("");
   const fileRef = useRef(null);
   const coverRef = useRef(null);
   const chatRef = useRef(null);
@@ -246,7 +249,9 @@ export default function Create() {
     }));
     patch(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text }], ...(clearInput ? { input: "" } : {}) }));
     try {
-      const r = await postJSON("/api/build_card", { kind: kk, messages: apiMsgs, draft: cur.draft, seed: "" });
+      // D1:seed = 挂在台上的参考资料(desks[kind].seed,可选键;老草稿无此键走 || "" 兜底)。
+      // 后端非空时截前 6000 字拼进 system prompt(「基于已有资料完善,定向追问弱字段」,src/identify.py)。
+      const r = await postJSON("/api/build_card", { kind: kk, messages: apiMsgs, draft: cur.draft, seed: cur.seed || "" });
       const ask = [r.reply, r.next_question].filter(Boolean).join(" ");
       patch(kk, (d0) => {
         const nextDraft = r.draft ? { ...r.draft, ...pickPics(d0.draft) } : d0.draft; // 保住已上传的头像/立绘
@@ -329,6 +334,8 @@ export default function Create() {
       ...ds,
       [kind]: {
         ...blankDesk(kind),
+        // D1:参考资料跨卡保留(一份资料常连造多张卡);tpl 不带 = 自然清(模板是单卡的事)。
+        seed: ds[kind].seed || "",
         built: [...ds[kind].built, cardDraft],
         messages: [{ who: "ai", text: "《" + nm + "》放进台子了(本台第 " + (ds[kind].built.length + 1) + " 张)。说说下一张?" }],
       },
@@ -364,7 +371,7 @@ export default function Create() {
             "请根据已有设定,为这个角色写一段第三人称的「角色介绍」(外貌、性格、来历、当前处境,200 字以内),写进 description 字段。",
         },
       ];
-      const r = await postJSON("/api/build_card", { kind, messages: apiMsgs, draft: cur.draft, seed: "" });
+      const r = await postJSON("/api/build_card", { kind, messages: apiMsgs, draft: cur.draft, seed: cur.seed || "" });
       if (r.draft) {
         patch(kind, (d0) => ({ draft: { ...r.draft, ...pickPics(d0.draft) }, filled: r.filled || Object.keys(r.draft) }));
       } else if (r.reply) {
@@ -593,11 +600,34 @@ export default function Create() {
       }));
   }, [desk.draft, desk.filled]);
 
-  // 切卡种时丢弃未提交的就地编辑(编辑目标已不在场),手记抽屉一并合上。
+  // 切卡种时丢弃未提交的就地编辑(编辑目标已不在场),手记抽屉/参考资料弹窗一并合上。
   useEffect(() => {
     setEditingKey(null);
     setJournalOpen(false);
+    setSeedOpen(false);
   }, [kind]);
+
+  // —— D1 参考资料:打开弹窗时把当前 seed 带进编辑框;确认时 trim+截 6000(存储即截断,所见即所发) ——
+  function openSeed() {
+    setSeedText(desk.seed || "");
+    setSeedOpen(true);
+  }
+  function commitSeed() {
+    const t = seedText.trim().slice(0, 6000);
+    patch(kind, { seed: t });
+    setSeedOpen(false);
+    flash(t ? "参考资料已挂上——AI 之后每一轮都会参考它" : "参考资料已清空");
+  }
+  function clearSeed() {
+    patch(kind, { seed: "" });
+    setSeedOpen(false);
+    flash("参考资料已清除");
+  }
+  // 徽章字数:<1000 显示整数字,否则 x.xk
+  function seedLenLabel(s) {
+    const n = (s || "").length;
+    return n < 1000 ? `${n}字` : `${(n / 1000).toFixed(1)}k字`;
+  }
 
   // 叙述条:取最后一条 AI 消息;新回复到来(消息数变化)自动重新亮起。
   const lastAi = useMemo(() => {
@@ -953,6 +983,13 @@ export default function Create() {
                           </div>
                         </div>
                       )}
+                      {/* D1:已有内容优先的第二入口——挂参考资料(D2 导入入口后续排同一行) */}
+                      <div className="create-blank-more t-meta">
+                        已有设定或旧卡?
+                        <button className="create-blank-link" onClick={openSeed}>
+                          {desk.seed ? `参考资料 · ${seedLenLabel(desk.seed)}` : "挂上参考资料"}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1085,6 +1122,14 @@ export default function Create() {
                   上传文档
                 </button>
                 <input ref={fileRef} type="file" accept=".txt,.md,.docx" hidden onChange={onUpload} />
+                <button
+                  className={"create-seed-btn" + (desk.seed ? " has-seed" : "")}
+                  onClick={openSeed}
+                  disabled={busy}
+                  title={desk.seed ? "查看 / 修改 / 清除参考资料(AI 每轮都在参考它)" : "挂一份已有设定 / 旧卡文本,AI 之后每轮都基于它来完善"}
+                >
+                  {desk.seed ? `参考 · ${seedLenLabel(desk.seed)}` : "挂资料"}
+                </button>
                 <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim()}>
                   发送
                 </Button>
@@ -1119,6 +1164,40 @@ export default function Create() {
                       </p>
                     </div>
                   )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* D1 参考资料弹窗:粘贴已有设定/旧卡,存 desks[kind].seed(≤6000 字,存储即截断);
+              成本明示:每一轮 build_card 都会带上它。 */}
+          {seedOpen && (
+            <div className="create-modal" onClick={() => setSeedOpen(false)}>
+              <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="参考资料" onClick={(e) => e.stopPropagation()}>
+                <button className="create-modal-x" onClick={() => setSeedOpen(false)} aria-label="关闭">×</button>
+                <h2 className="t-h2">参考资料 · {KINDS[ki].zh}</h2>
+                <p className="create-seed-note t-meta">
+                  把已有的设定 / 旧卡文本挂在台上:之后每一轮 AI 都会基于它来完善、对空缺处定向追问。
+                  每轮都参考意味着回复更慢也更贵——用完记得清除。只保存前 6000 字。
+                </p>
+                <textarea
+                  className="create-seed-ta t-ui-sm"
+                  rows={10}
+                  maxLength={8000}
+                  value={seedText}
+                  onChange={(e) => setSeedText(e.target.value)}
+                  placeholder="粘贴已有设定、旧卡文本、世界观笔记……"
+                />
+                <div className={"create-seed-count t-meta" + (seedText.length > 6000 ? " is-over" : "")}>
+                  {seedText.length > 6000
+                    ? `${seedText.length} 字——超出 6000 字的部分不会保存`
+                    : `${seedText.length} / 6000 字`}
+                </div>
+                <div className="create-seed-actions">
+                  {(desk.seed || "") && (
+                    <Button variant="line" onClick={clearSeed}>清除</Button>
+                  )}
+                  <Button variant="primary" onClick={commitSeed}>挂上</Button>
                 </div>
               </div>
             </div>
