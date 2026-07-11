@@ -173,3 +173,11 @@ plan: docs/2026-07-11-create-card-canvas-plan.md
 
 - 实现:①结构修正——D1-D4 四个弹窗从桌面分支迁到「桌面/手机共用弹层区」(python 锚点搬移+缩进归一,否则手机触发状态弹窗不渲染);②.ct「更多」面板加两项:导入已有内容(开 D2 面板)/参考资料徽章行(字数+查看/清除)。.ct 布局其余零改动。
 - 验收(390px 实测):ct-more 五项就位;导入面板在手机打开(3 入口)、seed 弹窗打开(42 字徽章正确);.ct 聊天/composer 原样;桌面 1366 回归:seed 弹窗/presets 弹窗迁移后照常可开;build 过。
+
+## D7 · 2026-07-12 凌晨 —— D 系列收尾账 ✅
+
+- 冷加载全量回归(5199):画布(白栎·改)/本台架 ×6/seed 徽章(42字)/装订清单(角色×7+世界+演出+故事)+拆回入口/导出按钮/字段动作条全部就位;手机 390(D6 轮)/桌面弹窗迁移回归已各自验;console error 总数封在 6(全部为 D4 编辑中途一次 HMR 瞬时事件,冷加载零新增);build 1.73s。
+- 六切片六 commit:D1 3cfdd7c / D2 52b11c6 / D3 0187242 / D4 04d095e / D5 4dbea99 / D6 e084d38;分支 gengyue/create-creator-tools(基于 rebase 后的 create-canvas-rework,stacked 于 PR #159)。
+- 红线:API 契约零改动(seed 用的是后端已实现参数);desks 兼容扩展(seed/tpl 可选键,双向兼容);手机 .ct 仅 ct-more 两项(主理人拍板的例外);三弹层沿用;npm 零新增;token 皮肤;main 未碰。
+- 已知边界(带进 PR):seed 每轮计费(UI 三重明示);「别动其他字段」是 prompt 约定(diff 墨晕兜底);酒馆 zTXt 不支持(诚实报错);Mine「去改编」发送端在 AUTH off 本地不可达(环境语义),真机 AUTH on 建议走查;identify 入库 vs 酒馆本地的双口径已当面写清。
+- 测试残留:test 库 library 新增若干私密卡(林默等),preview 浏览器 localStorage 留测试台数据(与用户浏览器无关)。
