@@ -7,8 +7,8 @@ import { toCardModel } from "../lib/cardModel";
 import { resolveMediaUrl } from "../lib/mediaUrl.js";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
-import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, FIRST_BEAT, beatById, consumeTestHomeBypass, loadEcho, markOnboarded, isOnboarded, saveEcho, setTestHomeBypass } from "./onboardingScript";
-import { INITIAL_ONBOARDING_AUTO_CONTROL, analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, hasRestoredHomeConversation, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, resolveAutoAdvancePlan, sanitizeCardMessage, shouldAcceptNameLocally, shouldConfirmBareNameLocally, transitionOnboardingAutoControl } from "./onboardingLogic";
+import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, AUTO_CHAT_INTERRUPT_AI, FIRST_BEAT, beatById, buildAutoChatShownContext, consumeTestHomeBypass, loadEcho, markOnboarded, isOnboarded, saveEcho, setTestHomeBypass } from "./onboardingScript";
+import { INITIAL_ONBOARDING_AUTO_CONTROL, analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, hasRestoredHomeConversation, isCurrentOnboardingInteraction, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, resolveAutoAdvancePlan, sanitizeCardMessage, shouldAcceptNameLocally, shouldConfirmBareNameLocally, transitionOnboardingAutoControl } from "./onboardingLogic";
 import { IdentityCard } from "../components/IdentityCard";
 import StaggeredText from "../components/staggered-text";
 import AnimatedList from "../components/animated-list";
@@ -223,6 +223,8 @@ export default function Home({ testMode = false }) {
   const [obPendingConfirm, setObPendingConfirm] = useState(null); // {field,value,reason}:奇怪/玩笑名先二次确认,不直接写卡
   const [obEmoOverride, setObEmoOverride] = useState(null); // 临时覆盖立绘(如奇怪名字→流汗 wry、接梗→惊讶 surprise)
   const [obContinueHint, setObContinueHint] = useState(false); // 长时间不点 chip 时的弱提示
+  const [obComposerFocused, setObComposerFocused] = useState(false);
+  const [obInterruptFailure, setObInterruptFailure] = useState(null);
   const [obAutoControl, setObAutoControl] = useState(INITIAL_ONBOARDING_AUTO_CONTROL);
   const obAutoControlRef = useRef(INITIAL_ONBOARDING_AUTO_CONTROL);
   const [obCrop, setObCrop] = useState(null); // 头像裁剪弹窗状态
@@ -240,6 +242,19 @@ export default function Home({ testMode = false }) {
   const obDemo = obBeat && obBeat.demo;
   const introFrame = obIntro >= 0 ? INTRO[obIntro] : null;
   const obActive = obIntro >= 0 || !!obBeat;
+  const obReplySpeaker = (obBeat && obBeat.speaker) || "糖沐";
+  const obThinkingLine = `${obReplySpeaker}正想着怎么接…`;
+  const obHasDraft = Boolean(obInput.trim());
+  const obReplyBlocked = obThinking || Boolean(obInterruptFailure);
+  const obAutoPlan = resolveAutoAdvancePlan({
+    autoNext: obBeat && obBeat.autoNext,
+    autoMs: obBeat && obBeat.autoMs,
+    nextOverride: obAutoControl.nextOverride,
+    inputFocused: obComposerFocused,
+    hasDraft: obHasDraft,
+    menuOpen,
+    replyBlocked: obReplyBlocked || obAutoControl.replyState !== "idle",
+  });
   const introTimerPlan = resolveAutoAdvancePlan({
     autoNext: introFrame ? (introFrame.hold ? "intro:hint" : "intro:advance") : null,
     autoMs: introFrame ? (introFrame.hold ? 2500 : introFrame.dur || 1200) : 0,
@@ -251,7 +266,7 @@ export default function Home({ testMode = false }) {
   // 当前台词优先级:思考态 > 回退反悔(backLine) > 上传头像后的回应(avatarLine) > AI 自适应/闲聊(obAiLine) > 静态脚本(line)。
   const obHasAvatar = !!(obCardAvatar || (obEcho && obEcho.avatar));
   const obLine = obThinking
-    ? "（想一下……）"
+    ? obThinkingLine
     : obBeat
     ? obViaBack && obBeat.backLine
       ? obBeat.backLine(obEcho)
@@ -423,18 +438,22 @@ export default function Home({ testMode = false }) {
   }, [obStep]);
 
   useEffect(() => {
-    if (!obBeat || !obBeat.autoNext || menuOpen) return undefined;
+    if (!obBeat || !obAutoPlan.shouldSchedule || !obAutoPlan.nextId) return undefined;
     const beatId = obBeat.id;
+    const scheduledEpoch = obAutoControlRef.current.interactionEpoch;
     const timer = setTimeout(() => {
-      if (obStepRef.current === beatId) {
-        obGoNext(obBeat.autoNext, null, { history: false });
+      if (obStepRef.current === beatId && obAutoControlRef.current.interactionEpoch === scheduledEpoch) {
+        obGoNext(obAutoPlan.nextId, null, { history: false });
       }
-    }, obBeat.autoMs);
+    }, obAutoPlan.delay);
     return () => clearTimeout(timer);
-  }, [obBeat, menuOpen]);
+  }, [obBeat, obAutoPlan.shouldSchedule, obAutoPlan.nextId, obAutoPlan.delay]);
 
   useEffect(() => {
     return () => {
+      commitOnboardingAutoEvent({ type: "invalidate" });
+      setObInterruptFailure(null);
+      setObComposerFocused(false);
       if (obLineTimerRef.current) clearTimeout(obLineTimerRef.current);
     };
   }, []);
@@ -643,8 +662,21 @@ export default function Home({ testMode = false }) {
     if (transition.blurComposer) obInputRef.current?.blur();
     return transition;
   }
+  function beginOnboardingInteraction(beatId, type = "request-start") {
+    const transition = commitOnboardingAutoEvent({ type });
+    return { requestEpoch: transition.control.interactionEpoch, requestBeatId: beatId };
+  }
+  function canApplyOnboardingInteraction(token) {
+    return isCurrentOnboardingInteraction({
+      ...token,
+      currentEpoch: obAutoControlRef.current.interactionEpoch,
+      currentBeatId: obStepRef.current,
+    });
+  }
   function endOnboarding(echo) {
     commitOnboardingAutoEvent({ type: "invalidate" });
+    setObInterruptFailure(null);
+    setObComposerFocused(false);
     if (!testMode) {
       markOnboarded();
       saveEcho(echo || obEcho);
@@ -681,6 +713,14 @@ export default function Home({ testMode = false }) {
     requestAnimationFrame(() => obInputRef.current?.focus());
   }
   function obChip(c) {
+    if (c.retryInterrupt) {
+      submitAutoDialogueInterrupt(obInterruptFailure.text);
+      return;
+    }
+    if (c.continueAfterInterrupt) {
+      obGoNext("tryCreate", null, { history: false });
+      return;
+    }
     if (c.confirmName) {
       confirmPendingName();
       return;
@@ -779,6 +819,7 @@ export default function Home({ testMode = false }) {
     // AI 辨别:[OK]→填卡+推进;[MEME]/[CHAT]→接话不填。名字拍失败/漏标时重说,其他字段保留旧的无标记答案降级。
     if (beat.ai) {
       setObEmoOverride(null);
+      const token = beginOnboardingInteraction(beat.id);
       setObThinking(true);
       let reply = null;
       try {
@@ -791,6 +832,9 @@ export default function Home({ testMode = false }) {
       } catch (e) {
         reply = null; // 降级:请玩家重说,避免把闲聊/反问误写进身份卡。
       }
+      if (!canApplyOnboardingInteraction(token)) return;
+      const settled = commitOnboardingAutoEvent({ type: "reply-settled", interactionEpoch: token.requestEpoch });
+      if (!settled.applied) return;
       setObThinking(false);
       if (!reply && beat.ai.optional) {
         const echo = { ...obEcho, [beat.field]: fieldValue };
@@ -866,10 +910,62 @@ export default function Home({ testMode = false }) {
     }
   }
 
+  async function submitAutoDialogueInterrupt(retryText = null) {
+    const beat = obBeat;
+    const value = String(retryText == null ? obInput : retryText).trim();
+    if (!value || !beat || !beat.interruptible || obThinking) return;
+    const shownLine = obLine;
+    const shownContext = buildAutoChatShownContext(beat.id, obEcho, shownLine);
+    const speaker = beat.speaker || "糖沐";
+    const ai = AUTO_CHAT_INTERRUPT_AI[speaker];
+    const token = beginOnboardingInteraction(beat.id, retryText == null ? "send" : "retry");
+    setObComposerFocused(false);
+    setObInterruptFailure(null);
+    setObThinking(true);
+
+    let reply = null;
+    try {
+      const card = {
+        spec: "chara_card_v2",
+        spec_version: "2.0",
+        data: {
+          name: speaker,
+          description: ai.description,
+          scenario: ai.scenario({ name: obEcho.name, shownContext }),
+        },
+      };
+      const response = await Promise.race([
+        postJSON("/api/chat", { card, session_id: newSessionId(), user: value, world: null }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 12000)),
+      ]);
+      reply = String((response && response.reply) || "").trim() || null;
+    } catch (error) {
+      reply = null;
+    }
+
+    if (!canApplyOnboardingInteraction(token)) return;
+    if (reply) {
+      const transition = commitOnboardingAutoEvent({ type: "reply-success", interactionEpoch: token.requestEpoch });
+      if (!transition.applied) return;
+      setObThinking(false);
+      setObInput("");
+      setObAiLine(reply);
+      setObInterruptFailure(null);
+      return;
+    }
+    const transition = commitOnboardingAutoEvent({ type: "reply-failure", interactionEpoch: token.requestEpoch });
+    if (!transition.applied) return;
+    setObThinking(false);
+    setObInput(value);
+    setObAiLine(ai.failureLine);
+    setObInterruptFailure({ beatId: beat.id, speaker, text: value });
+  }
+
   // 导览期玩家插话:先判断是不是当前动作的自然说法;确实是闲聊才让糖沐接一句,不推进当前导览拍。
   async function obChatSubmit() {
     const v = obInput.trim();
     if (!v || obThinking) return;
+    if (obBeat?.interruptible) return submitAutoDialogueInterrupt();
     if (obBeat) {
       const chipMatch = matchChipIntent(v, obBeat.chips);
       if (chipMatch) {
@@ -878,10 +974,14 @@ export default function Home({ testMode = false }) {
         return;
       }
     }
+    const token = beginOnboardingInteraction(obBeat.id);
     setObInput("");
     setObThinking(true);
-    const intent = await obAskChipIntent(v, obBeat, obBeat && obBeat.chips, obLine);
+    const intent = await obAskChipIntent(v, obBeat, obBeat.chips, obLine);
+    if (!canApplyOnboardingInteraction(token)) return;
     if (intent.chip) {
+      const settled = commitOnboardingAutoEvent({ type: "reply-settled", interactionEpoch: token.requestEpoch });
+      if (!settled.applied) return;
       setObThinking(false);
       if (intent.chip.upload) {
         setObAiLine("可以,点一下「＋ 传张头像」,我就帮你贴到卡上。");
@@ -892,6 +992,8 @@ export default function Home({ testMode = false }) {
       return;
     }
     if (intent.chat) {
+      const settled = commitOnboardingAutoEvent({ type: "reply-settled", interactionEpoch: token.requestEpoch });
+      if (!settled.applied) return;
       setObThinking(false);
       setObAiLine(intent.chat);
       return;
@@ -899,14 +1001,17 @@ export default function Home({ testMode = false }) {
     let reply = null;
     try {
       const card = { spec: "chara_card_v2", spec_version: "2.0", data: { name: "糖沐", description: AI_PERSONA, scenario: CHAT_SCENARIO } };
-      const r = await Promise.race([
+      const response = await Promise.race([
         postJSON("/api/chat", { card, session_id: newSessionId(), user: v, world: null }),
-        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 12000)),
       ]);
-      reply = ((r && r.reply) || "").trim() || null;
-    } catch (e) {
+      reply = String((response && response.reply) || "").trim() || null;
+    } catch (error) {
       reply = null;
     }
+    if (!canApplyOnboardingInteraction(token)) return;
+    const settled = commitOnboardingAutoEvent({ type: "reply-settled", interactionEpoch: token.requestEpoch });
+    if (!settled.applied) return;
     setObThinking(false);
     if (reply) setObAiLine(reply);
     else {
@@ -916,6 +1021,9 @@ export default function Home({ testMode = false }) {
   }
   // 前进一拍:压历史(供回退),清回退态与输入框;aiLine=本次 AI 自适应台词(替下一拍静态开场),null=用脚本。
   function obGoNext(nextId, aiLine = null, opts = {}) {
+    commitOnboardingAutoEvent({ type: "invalidate" });
+    setObInterruptFailure(null);
+    setObComposerFocused(false);
     if (opts.history !== false) setObHistory((h) => [...h, obStep]);
     setObViaBack(false);
     setObAiLine(aiLine);
@@ -929,6 +1037,9 @@ export default function Home({ testMode = false }) {
   // 回退上一拍:糖沐做反悔反应(backLine/backEmo);字段拍回填旧值方便改。清 AI 自适应/思考态。
   function obBack() {
     if (!obHistory.length || obThinking) return;
+    commitOnboardingAutoEvent({ type: "invalidate" });
+    setObInterruptFailure(null);
+    setObComposerFocused(false);
     const prevId = obHistory[obHistory.length - 1];
     const prev = beatById(prevId);
     setObHistory((h) => h.slice(0, -1));
@@ -1074,7 +1185,12 @@ export default function Home({ testMode = false }) {
     );
   }
 
-  const obRenderChips = obPendingConfirm
+  const obRenderChips = obInterruptFailure
+    ? [
+        { label: "再试一次", retryInterrupt: true },
+        { label: "继续看创作", continueAfterInterrupt: true },
+      ]
+    : obPendingConfirm
     ? [
         { label: `就写「${obPendingConfirm.value}」`, confirmName: true },
         { label: "我换一个", retryName: true },
@@ -1225,8 +1341,8 @@ export default function Home({ testMode = false }) {
                     ← 上一步
                   </button>
                 )}
-                {/* 输入框:自动播放拍隐藏;其余 field 拍=回答登记(走 AI 辨别),导览/办卡拍=跟糖沐说话。 */}
-                {!obBeat.autoNext && (!obDemo || obDemo.type !== "createProjection") && <div className="home-composer">
+                {/* 输入框:field 拍=回答登记(走 AI 辨别),导览/办卡/可打断自动拍=跟当前角色说话。 */}
+                {(!obDemo || obDemo.type !== "createProjection") && <div className="home-composer">
                   <input
                     ref={obInputRef}
                     className="home-input"
@@ -1234,7 +1350,7 @@ export default function Home({ testMode = false }) {
                     disabled={obThinking}
                     placeholder={
                       obThinking
-                        ? "糖沐正想着怎么接…"
+                        ? obThinkingLine
                         : obBeat.field === "name"
                         ? "输入你的称呼…"
                         : obBeat.field === "taste"
@@ -1244,6 +1360,8 @@ export default function Home({ testMode = false }) {
                         : "想跟糖沐说点什么…"
                     }
                     onChange={(e) => setObInput(e.target.value)}
+                    onFocus={() => setObComposerFocused(true)}
+                    onBlur={() => setObComposerFocused(false)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.isComposing) {
                         e.preventDefault();
@@ -1256,7 +1374,7 @@ export default function Home({ testMode = false }) {
                     {obThinking ? "…" : obBeat.submitLabel || (obBeat.field ? "好" : "说")}
                   </Button>
                 </div>}
-                {!obBeat.autoNext && !!obRenderChips.length && (
+                {(!obBeat.autoNext || obInterruptFailure) && !!obRenderChips.length && (
                   <div className="home-ob-chips">
                     {obRenderChips.map((c, i) => {
                       // 头像拍传了头像后,chip 文案随之变(＋传张头像→换一张 / 用字头就好→好了,继续)。
