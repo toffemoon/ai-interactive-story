@@ -227,3 +227,13 @@ plan: docs/2026-07-11-create-card-canvas-plan.md
 
 - 四入口(粘贴/上传 identify、酒馆卡、模板骨架、改编 fork)显式 phase=drafting+清构思残留(comp/questions/blueprint);世界书纯 opener 模板留在构思阶段(它本来就是"聊出来"路径);收进本台重置=新对象天然回 understand(带 seed 重新构思);老草稿由 deskPhase 兜底。
 - 验收:fork《林默·改》→ phase=drafting、火候线不现、残留清零;其余三通道同一 patch 模式(主链路 D2/D3 已验);build 过。
+
+## E6 · 2026-07-12 ✅ 手机进流 + 全链路回归 + PR(E 系列收官)
+
+- 手机(拍板红线内最小动作):.ct 整体布局零改动,只往 `.ct-chat` 对话流里长三个已有组件——火候线(流顶)、问题圈选、蓝图批准(消息之后、busy 之前),类名/条件与桌面完全同一套;CSS 侧把 E2/E3/E4 组件段从 `@media (min-width:861px)` 解包成通用(python 脚本处理,`.create-blank-link` 文字链一并通用化)。
+- 回归(5199+8017):
+  - 手机 390:stories 台火候线「完整度 20 · 过 60 才落笔」+2 题圈选词进流,composer/布局原样;
+  - 桌面 1366:stories 台会话流火候线+quiz 正常且 `create-comp` 全 DOM 仅 1 份(桌面/手机分支互斥,无重复渲染);characters 台(drafting)火候线/quiz 零渲染、14 字段画布原样——门控组件对 drafting 态零打扰;
+  - console 全程零报错;`npx vite build` 过。
+- 已知边界(如实):① E0 属引擎核心(identify.py build_card 加 understand 分支+服务端 draft 硬回退),**须主理人审+压测后才可合**;② understand 每轮多一次完整 JSON 契约调用,token 成本与 drafting 同量级;③ 完整度是模型自评分,60 阈值前端可调(threshold 参数已留);④ 测试期 8017/test 库落了少量私有卡库行(阿澈/林默·改等)。
+- E 系列(E0-E6)全绿:后端硬门槛(评分之下 AI 不得写)+ Plan 流(问题圈选→蓝图批准→落笔)+ artifact 式双栏 + 快速通道兼容 + 手机进流。stacked PR:#159(C)→#160(D)→#161(E,本次)。

@@ -72,3 +72,26 @@ scope: frontend-next 桌面创作页整页重做;手机 .ct 分支本期不动
 ## 已拍默认
 
 ① 右窄栏保留为「产出侧」(本台架+装订/发布),重心在左画布;② 手机端本期不动;③ 分支切新的(不混进 yor-211 的 Explore/侧栏工作)。
+
+
+---
+
+# E 系列:完整度门控创作(2026-07-12 批准,主理人四拍板+两修正)
+
+> 拍板:后端硬门槛 / 选项式问题 / 左会话右卡双栏(artifact 式) / 蓝图批准才落笔。
+> 修正:评分术语=**完整度(completeness)** 非"理解度";前端用 React Bits + frontend-design skill;**少用卡片和框**(排版层次/留白/墨线,不框套框)。
+
+## 状态机(desks[kind].phase 可选键,向后兼容)
+
+understand(新空台默认,只问不写) → 完整度≥60 → blueprint(蓝图待批) → 批准 → drafting(现行为)。
+快速通道:导入/改编/模板铺骨架=已带内容 → 直接 drafting;老草稿(有 draft 无 phase)→ drafting。
+
+## 切片
+
+- **E0 后端门控(引擎核心,单独 commit,主理人审+压测)**:BuildCardReq 加可选 phase(默认 "drafting"=旧行为,MCP/smoke/旧前端零影响)+threshold(默认 60)。understand 阶段换 JSON 契约:completeness 0-100 自评+questions(≤3 题,每题 3-5 具体选项+自由输入,复刻 StoryChoice 的 _normalize 范式)+达标改出 blueprint(4-6 要点);**代码强制:understand 阶段 draft 一律回退 prev(丢弃模型输出)**——prompt+代码双保险。解析失败降级现状纯文本。压测脚本(untracked 惯例)3 用例:信息少→低分+问题+draft 不动;补答→分升;高分→blueprint。
+- **E1 双栏骨架(先 invoke frontend-design skill)**:左会话流(全部消息+问题/蓝图/完整度都长在流里,命令条钉底)|右卡画布=artifact。叙述条/手记抽屉退役。**设计纪律:少框——问题/蓝图用排版层次(缩进/字重/hairline/留白)不用边框卡;React Bits 素材合适才用**。
+- **E2 门控接线**:phase 状态机+完整度进度(60 刻度);understand 态画布=构思中空态;收纳/发布置灰。
+- **E3 问题交互**:选项 chips 点选+自由输入,一键提交合成一条用户消息走原管线。
+- **E4 蓝图与批准**:要点排版呈现+【批准,开始写】(切 drafting+自动发落笔指令)/【再聊聊】。
+- **E5 快速通道**:导入/fork/模板直通 drafting;seed 在 understand 照常参与;老数据无缝。
+- **E6 手机+回归+PR**:.ct 对话流渲染问题/蓝图/完整度组件(布局不动);全链路回归;stacked PR(#159→#160→#161)。

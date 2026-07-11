@@ -1005,12 +1005,64 @@ export default function Create() {
 
           {/* 中:对话(唯一滚动区) */}
           <div className="ct-chat" ref={chatRef}>
+            {/* E6:完整度火候线进手机对话流(布局不动,只是流内多一行) */}
+            {phase !== "drafting" && (
+              <div className="create-comp" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={desk.comp || 0} aria-label="这张卡的完整度">
+                <span className="create-comp-label t-meta">
+                  完整度 {desk.comp || 0}
+                  <span className="create-comp-hint">{(desk.comp || 0) >= COMP_THRESHOLD ? " · 过线,可以落笔" : ` · 过 ${COMP_THRESHOLD} 才落笔`}</span>
+                </span>
+                <span className="create-comp-line" aria-hidden="true">
+                  <span className="create-comp-fill" style={{ width: `${Math.min(100, desk.comp || 0)}%` }} />
+                  <span className="create-comp-mark" style={{ left: `${COMP_THRESHOLD}%` }} />
+                </span>
+              </div>
+            )}
             {desk.messages.map((m, i) => (
               <div key={i} className={"create-msg" + (m.who === "你" ? " is-me" : "")}>
                 <span className="create-msg-who t-meta">{m.who === "你" ? "你" : "助手"}</span>
                 <p className="create-msg-text t-ui">{m.text}</p>
               </div>
             ))}
+            {/* E6:问题圈选与蓝图进手机对话流(复用桌面组件类,样式已通用) */}
+            {phase === "understand" && (desk.questions || []).length > 0 && !busy && (
+              <div className="create-quiz">
+                {desk.questions.map((qu) => (
+                  <div className="create-quiz-q" key={qu.id}>
+                    <div className="create-quiz-label t-ui">{qu.label}</div>
+                    <div className="create-quiz-opts">
+                      {(qu.options || []).map((o) => (
+                        <button key={o} className={"create-quiz-opt" + (quizAns[qu.id] === o ? " is-on" : "")}
+                          onClick={() => setQuizAns((a) => ({ ...a, [qu.id]: a[qu.id] === o ? undefined : o }))}>
+                          {o}
+                        </button>
+                      ))}
+                      {qu.allow_free !== false && (
+                        <input className="create-quiz-free t-ui-sm" placeholder="其他,自己写……" value={quizFree[qu.id] || ""}
+                          onChange={(e) => { const v = e.target.value; setQuizFree((f) => ({ ...f, [qu.id]: v })); if (v) setQuizAns((a) => ({ ...a, [qu.id]: undefined })); }} />
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <div className="create-quiz-foot">
+                  <Button variant="primary" disabled={!(desk.questions || []).some((qu) => quizAnswerOf(qu))} onClick={submitQuiz}>
+                    就按这些答
+                  </Button>
+                </div>
+              </div>
+            )}
+            {phase === "blueprint" && (desk.blueprint || []).length > 0 && !busy && (
+              <div className="create-bp">
+                <div className="create-bp-h t-kai">蓝图 · 这张卡打算这么写</div>
+                {desk.blueprint.map((b, i) => (
+                  <div className="create-bp-item t-ui" key={i}>—— {b}</div>
+                ))}
+                <div className="create-bp-foot">
+                  <Button variant="primary" onClick={approveBlueprint}>批准,开始写</Button>
+                  <button className="create-blank-link" onClick={() => patch(kind, { phase: "understand" })}>再聊聊</button>
+                </div>
+              </div>
+            )}
             {busy && (
               <div className="create-msg">
                 <span className="create-msg-who t-meta">助手</span>

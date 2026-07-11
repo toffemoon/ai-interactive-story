@@ -1754,7 +1754,6 @@
    E1 双栏(artifact 式):左会话流 | 右 stage(画布+产出侧)。
    会话=稿纸对谈体:说话人小楷标+正文直排,零气泡零框;栏间一条墨线分隔。
    ———————————————————————————————————————————————————————————— */
-@media (min-width: 861px) {
   .create-studio {
     flex: 1;
     min-height: 0;
@@ -1805,12 +1804,11 @@
     animation: none;
     animation-delay: 0s;
   }
-}
+
 
 /* ————————————————————————————————————————————————————————————
    E2 完整度火候线:墨→鎏金渐染细线,60 处朱点=落笔线。一根线,不是框。
    ———————————————————————————————————————————————————————————— */
-@media (min-width: 861px) {
   .create-comp {
     flex: none;
     padding: 0 var(--sp-2) var(--sp-3) 0;
@@ -1852,7 +1850,7 @@
     background: var(--accent);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
   }
-}
+
 
 /* ————————————————————————————————————————————————————————————
    E3 问题作答(稿纸圈选词)+ E4 蓝图。零卡片零边框:全靠字重/下划线/留白。
@@ -1937,4 +1935,16 @@
     gap: var(--sp-4);
     margin-top: var(--sp-3);
   }
+}
+
+/* E6:手机对话流复用构思组件——文字链通用化(原定义在桌面媒体内) */
+.create-blank-link {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline dashed;
+  text-underline-offset: 3px;
 }
