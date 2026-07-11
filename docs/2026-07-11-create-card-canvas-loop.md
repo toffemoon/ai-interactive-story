@@ -203,3 +203,13 @@ plan: docs/2026-07-11-create-card-canvas-plan.md
 - 设计(frontend-design skill 校准):调色/字体不动(沐言 token 是既有体系);设计自由度花在会话流排版语言——**稿纸对谈体**:说话人小楷标(你=朱砂/助手=墨灰)+正文直排纸面,零气泡零框;栏间一条墨线分隔;完整度火候线/圈选词/填空题式自由输入将在 E2/E3 落。
 - 实现:.create-studio 双栏(会话 clamp(320,26vw,400) | stage 吃剩余);stage 内产出侧瘦身 300→240,画布优先(1366 实测 355/477/240);命令条(含挂资料/上传)钉左栏底;chatRef 移会话流;**叙述条/手记抽屉/页头手记按钮全部退役**(会话即历史),孤儿状态(journalOpen/narrClosed/lastAi)与样式段清除。
 - 验收(5199 实测):双栏就位、7 条历史以对谈体渲染(无气泡背景)、发送流(拦截式零 token)消息 append+busy 墨点+错误行+自动滚底;画布/产出侧(架/装订/动作 5 钮)照旧;页面不滚;390 手机 .ct 原样零泄漏;console 零报错;build 过。
+
+## E2 · 2026-07-12 02:4x ✅ 门控接线 + 完整度火候线(端到端首验)
+
+- 实现:deskPhase 状态机(显式 phase 优先;老数据有草稿/已聊开=drafting 不回拽;新空台=understand);sendText 按台阶段带 phase/threshold,understand 响应只存 comp/questions/blueprint 不动 draft,拿到蓝图自动切 phase=blueprint;**完整度火候线**(signature:墨→鎏金渐染 2px 细线,60 处朱点=落笔线,一根线不是框),drafting 后退场;understand 画布空态文案=「构思中——…完整度过线、蓝图点头,再落笔」;dev 基建:vite 代理目标支持 AIS_API_TARGET 环境变量(默认 8000 不变,用户 dev server 零影响),5199 preview 指向自起的 8017 新代码后端。
+- 验收(8017 新后端,真调三轮):
+  - 「我想演一个人」→ comp=10,火候线 10%,两题各 4 选项落 desks,draft 零用户内容,画布构思态,收纳灰;
+  - 丰富信息一轮 → comp=40(爬升),仍只问不写;
+  - 补性格/开场+「就这些,够了」→ **comp=85 过线,blueprint 五条**(锚点/基调/关系张力/能力限制/开场方向,内容精准贴用户素材),phase 自动切 blueprint,火候线「过线,可以落笔」;**三轮全程 draft 无一字用户内容——硬门槛端到端铁证**;
+  - 兼容性实证(意外收获):旧后端(8000)+新前端=优雅降级为旧行为不崩;console 零报错;build 2.30s。
+- 备注:E2 首验时误把旧后端(8000)当新码,发现后走 AIS_API_TARGET+8017 路线;8000 是用户进程未动。players 台测试数据(阿澈)保留给 E3/E4 用。

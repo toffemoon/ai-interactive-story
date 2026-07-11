@@ -243,6 +243,17 @@ export default function Create() {
 
   // 发一句话进建卡管线(命令条 send 与字段级指令共用;messages/draft 契约不动)。
   // filled 改为客户端 diff:如实标出这一轮实际变化的字段(C3 坦白原则——模型可能顺手动别处,全部显形)。
+  // E2 完整度门控:台子的创作阶段(desks[kind].phase 可选键)。
+  // 兼容规则:显式 phase 优先;老数据无 phase → 有草稿或已聊开(消息>1)视为 drafting(别把进行中的老会话拽回门控),
+  // 全新空台才进 understand(构思:只问不写,后端硬门槛)。
+  function deskPhase(d) {
+    if (d.phase) return d.phase;
+    if (Object.keys(d.draft || {}).length) return "drafting";
+    return d.messages.length <= 1 ? "understand" : "drafting";
+  }
+  const phase = deskPhase(desk);
+  const COMP_THRESHOLD = 60;
+
   async function sendText(rawText, { clearInput = false } = {}) {
     const kk = kind;
     const cur = desks[kk];
@@ -255,23 +266,42 @@ export default function Create() {
     }));
     patch(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text }], ...(clearInput ? { input: "" } : {}) }));
     try {
-      // D1:seed = 挂在台上的参考资料(desks[kind].seed,可选键;老草稿无此键走 || "" 兜底)。
-      // 后端非空时截前 6000 字拼进 system prompt(「基于已有资料完善,定向追问弱字段」,src/identify.py)。
-      const r = await postJSON("/api/build_card", { kind: kk, messages: apiMsgs, draft: cur.draft, seed: cur.seed || "" });
-      const ask = [r.reply, r.next_question].filter(Boolean).join(" ");
-      patch(kk, (d0) => {
-        const nextDraft = r.draft ? { ...r.draft, ...pickPics(d0.draft) } : d0.draft; // 保住已上传的头像/立绘
-        const changed = r.draft
-          ? Object.keys(nextDraft).filter(
-              (k) => JSON.stringify(nextDraft[k]) !== JSON.stringify((d0.draft || {})[k])
-            )
-          : d0.filled;
-        return {
-          messages: [...d0.messages, { who: "ai", text: ask || "(这轮没接住——换个说法,或把内容分短一点再说一次)" }],
-          draft: nextDraft,
-          filled: changed,
-        };
+      // D1:seed = 挂在台上的参考资料;E2:understand/blueprint 态带 phase=understand(后端只评分提问,硬不写卡)。
+      const curPhase = deskPhase(cur);
+      const gated = curPhase === "understand" || curPhase === "blueprint";
+      const r = await postJSON("/api/build_card", {
+        kind: kk,
+        messages: apiMsgs,
+        draft: cur.draft,
+        seed: cur.seed || "",
+        ...(gated ? { phase: "understand", threshold: COMP_THRESHOLD } : {}),
       });
+      if (r.phase === "understand") {
+        // 构思轮:不动 draft(后端已回传 prev);存完整度/问题/蓝图;拿到蓝图即切待批态。
+        patch(kk, (d0) => ({
+          messages: [...d0.messages, { who: "ai", text: r.reply || "(这轮没接住——换个说法再说一次)" }],
+          comp: r.completeness || 0,
+          questions: r.questions || [],
+          blueprint: r.blueprint || [],
+          phase: (r.blueprint || []).length ? "blueprint" : "understand",
+        }));
+      } else {
+        const ask = [r.reply, r.next_question].filter(Boolean).join(" ");
+        patch(kk, (d0) => {
+          const nextDraft = r.draft ? { ...r.draft, ...pickPics(d0.draft) } : d0.draft; // 保住已上传的头像/立绘
+          const changed = r.draft
+            ? Object.keys(nextDraft).filter(
+                (k) => JSON.stringify(nextDraft[k]) !== JSON.stringify((d0.draft || {})[k])
+              )
+            : d0.filled;
+          return {
+            messages: [...d0.messages, { who: "ai", text: ask || "(这轮没接住——换个说法,或把内容分短一点再说一次)" }],
+            draft: nextDraft,
+            filled: changed,
+            phase: "drafting",
+          };
+        });
+      }
     } catch (e) {
       patch(kk, (d0) => ({ messages: [...d0.messages, { who: "ai", text: "(建卡出错:" + e.message + ")" }] }));
     } finally {
@@ -1042,6 +1072,27 @@ export default function Create() {
               叙述条/手记抽屉自此退役——会话流就是历史本身。 */}
           <div className="create-studio" key={kind}>
             <section className="create-session" aria-label="创作对话">
+              {/* E2 完整度火候线(signature):一根从墨到鎏金渐染的细线,60 处一粒朱点=落笔线;
+                  只在构思/蓝图阶段出现——落笔后它的任务就完成了。 */}
+              {phase !== "drafting" && (
+                <div
+                  className="create-comp"
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={desk.comp || 0}
+                  aria-label="这张卡的完整度"
+                >
+                  <span className="create-comp-label t-meta">
+                    完整度 {desk.comp || 0}
+                    <span className="create-comp-hint">{(desk.comp || 0) >= COMP_THRESHOLD ? " · 过线,可以落笔" : ` · 过 ${COMP_THRESHOLD} 才落笔`}</span>
+                  </span>
+                  <span className="create-comp-line" aria-hidden="true">
+                    <span className="create-comp-fill" style={{ width: `${Math.min(100, desk.comp || 0)}%` }} />
+                    <span className="create-comp-mark" style={{ left: `${COMP_THRESHOLD}%` }} />
+                  </span>
+                </div>
+              )}
               <div className="create-session-flow" ref={chatRef}>
                 {desk.messages.map((m, i) => (
                   <div key={i} className={"create-say" + (m.who === "你" ? " is-me" : "")}>
@@ -1193,7 +1244,9 @@ export default function Create() {
                   ) : (
                     <div className="create-card-blank">
                       <span className="create-card-blank-seal t-kai" aria-hidden="true">卡</span>
-                      <span className="create-card-blank-tx t-meta">{OPENINGS[kind]}</span>
+                      <span className="create-card-blank-tx t-meta">
+                        {phase !== "drafting" ? "构思中——左边聊清楚要什么,完整度过线、蓝图点头,再落笔。" : OPENINGS[kind]}
+                      </span>
                       {/* 空台引子:起手句进画布空卡里(点了只进输入框,不代发) */}
                       {desk.messages.length <= 1 && !busy && (
                         <div className="create-starters">
