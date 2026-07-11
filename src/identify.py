@@ -40,17 +40,28 @@ _SYSTEM = """你是一个角色设定解析器。用户会给你一段关于某�
 - 只输出 JSON,不要任何解释。"""
 
 
-def identify(text: str) -> CharacterCard:
+def _hint_block(hint: str) -> str:
+    """用户对本次解析/生成的额外要求 → system 追加段(F0 AI 触点可控)。
+
+    空串返回空——所有加了 hint 参数的函数在不传时与旧行为完全一致。
+    截 1000 字:hint 是"口味指示"不是素材,素材走 text/seed/refs。
+    """
+    h = (hint or "").strip()[:1000]
+    return f"\n\n【用户对这次解析的额外要求——在不破坏输出 JSON 格式的前提下优先遵守】\n{h}" if h else ""
+
+
+def identify(text: str, hint: str = "") -> CharacterCard:
     """把一段设定文字识别成 Card V2。JSON 偶发不合法时容错解析,失败重试一次再抛。
 
     对齐 identify_storybook / build_card 的健壮性:DeepSeek json_mode 偶尔吐出
     带 fence / 中文引号 / 尾逗号的非法 JSON,裸 json.loads 会随机崩。
+    hint:可选,用户对解析口味的指示(如"重点抽性格和说话风格")。
     """
     last_err: Exception | None = None
     for _ in range(3):
         raw = chat_messages(
             [
-                {"role": "system", "content": _SYSTEM},
+                {"role": "system", "content": _SYSTEM + _hint_block(hint)},
                 {"role": "user", "content": text.strip()},
             ],
             json_mode=True,
@@ -142,13 +153,17 @@ def worldbook_from_markdown(text: str, name: str = "世界书") -> WorldBook:
     return WorldBook(name=_infer_book_name(text, entries, name), entries=entries)
 
 
-def identify_worldbook(text: str, name: str = "世界书") -> WorldBook:
-    """世界观文字 → 世界书。已结构化的 markdown 按标题切(不压缩);散文走 LLM 识别。"""
-    if len(re.findall(r"^#{2,}\s", text, re.M)) >= 8:
+def identify_worldbook(text: str, name: str = "世界书", hint: str = "") -> WorldBook:
+    """世界观文字 → 世界书。已结构化的 markdown 按标题切(不压缩);散文走 LLM 识别。
+
+    hint 非空时跳过 markdown 快路径:用户给了解析指示=要 AI 按指示重组,
+    纯代码切分吃不到指示(代价:超长结构化文档会被 LLM 压缩,如实)。
+    """
+    if not (hint or "").strip() and len(re.findall(r"^#{2,}\s", text, re.M)) >= 8:
         return worldbook_from_markdown(text, name)
     raw = chat_messages(
         [
-            {"role": "system", "content": _WORLD_SYSTEM},
+            {"role": "system", "content": _WORLD_SYSTEM + _hint_block(hint)},
             {"role": "user", "content": text.strip()},
         ],
         json_mode=True,
@@ -213,13 +228,13 @@ _PLAYER_SYSTEM = """你是玩家设定卡解析器。用户会给一段玩家/�
 要求忠于原文,不要扩写经历。只输出 JSON。"""
 
 
-def identify_player(text: str) -> PlayerCard:
+def identify_player(text: str, hint: str = "") -> PlayerCard:
     """玩家设定文字 → PlayerCard。JSON 偶发不合法时容错解析 + 重试一次再抛(对齐 identify)。"""
     last_err: Exception | None = None
     for _ in range(3):
         raw = chat_messages(
             [
-                {"role": "system", "content": _PLAYER_SYSTEM},
+                {"role": "system", "content": _PLAYER_SYSTEM + _hint_block(hint)},
                 {"role": "user", "content": text.strip()},
             ],
             json_mode=True,
@@ -355,9 +370,9 @@ def _loads_tolerant(raw: str) -> dict:
         return json.loads(cand)
 
 
-def _story_llm(text: str, concise: bool) -> dict | None:
+def _story_llm(text: str, concise: bool, hint: str = "") -> dict | None:
     """调一次故事书识别。8000 token 给丰富故事留余量;concise=True 时再压一压防大故事截断。"""
-    system = _STORY_SYSTEM
+    system = _STORY_SYSTEM + _hint_block(hint)
     if concise:
         system += ("\n\n【再次强调】上次输出过长被截断。这次务必更精简:events ≤8 条、每字段一句话、"
                    "endings 1-3 个、character_boundaries 只列 2-3 个主要角色,确保整个 JSON 完整闭合。")
@@ -375,14 +390,14 @@ def _story_llm(text: str, concise: bool) -> dict | None:
         return None
 
 
-def identify_storybook(text: str) -> StoryBook:
+def identify_storybook(text: str, hint: str = "") -> StoryBook:
     """故事书文字 → 结构化 StoryBook(含多结局 / 时间字段 / 角色边界 / 待确认标注)。
 
     大故事书输出可能很长,8000 token 仍截断时,用更精简的指令重试一次,再不行才抛错。
     """
-    obj = _story_llm(text, concise=False)
+    obj = _story_llm(text, concise=False, hint=hint)
     if obj is None:
-        obj = _story_llm(text, concise=True)
+        obj = _story_llm(text, concise=True, hint=hint)
     if obj is None:
         raise ValueError("故事书解析失败:模型输出过长或非合法 JSON,建议把素材拆短再试")
     events = [_story_event_from(e) for e in obj.get("events", []) if isinstance(e, dict)]
@@ -648,11 +663,14 @@ def build_card(
     seed: str = "",
     phase: str = "drafting",
     threshold: int = 60,
+    refs: list[dict] | None = None,
 ) -> dict:
     """对话式建卡一轮(无状态),kind ∈ characters/players/worlds/stories。
 
     messages:[{role, content}] 至今的对话(前端维护);draft:当前草稿(对应卡的 data);
     seed:可选,已有资料/旧卡文本(完善模式,针对空/弱字段定向追问)。
+    refs(F0 AI 触点可控):可选,用户点名引用的参考物 [{label, text}](已有卡/提示词等),
+    ≤4 条、单条 text 截 3000;不传=旧行为零影响。与 seed 双轨:seed=散文资料,refs=结构化引用。
     phase(E0 完整度门控):"drafting"(默认,原行为不变——旧前端/MCP/冒烟脚本零影响)|
       "understand"(构思阶段:只评完整度+提问/出蓝图,**代码强制不写卡**——无论模型返回什么
       draft 一律丢弃、回传 prev。这是「评分之下不得 AI 写」的硬门槛,prompt 约定+代码强制双保险)。
@@ -679,6 +697,13 @@ def build_card(
     )
     if seed and seed.strip():
         system += "\n\n【用户已有的资料 / 旧卡——基于它来完善,找出空或薄弱的字段定向追问】\n" + seed.strip()[:6000]
+    for r in (refs or [])[:4]:
+        if not isinstance(r, dict):
+            continue
+        label = str(r.get("label") or "").strip()[:60] or "参考"
+        body = str(r.get("text") or "").strip()[:3000]
+        if body:
+            system += f"\n\n【用户引用:{label}——用户点名要参考的,优先照它的口味/设定来,但别整段照抄】\n{body}"
     if draft:
         system += "\n\n【当前草稿(在它基础上继续填,别推翻用户已确认的)】\n" + json.dumps(draft, ensure_ascii=False)[:4000]
     recap = "\n".join(

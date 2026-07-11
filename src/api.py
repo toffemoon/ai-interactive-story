@@ -118,6 +118,7 @@ for _db_exc in (PoolTimeout, TooManyRequests, OperationalError, IdleInTransactio
 
 class TextReq(BaseModel):
     text: str
+    hint: str = ""                 # F0 可选:用户对这次解析的口味指示(如"重点抽性格");空=旧行为
 
 
 class AutoReq(BaseModel):
@@ -132,6 +133,7 @@ class BuildCardReq(BaseModel):
     seed: str = ""                 # 可选:已有资料/旧卡文本(完善模式)
     phase: str = "drafting"        # E0 完整度门控:"understand"=构思阶段(只问不写);默认 drafting=原行为
     threshold: int = 60            # 完整度阈值(0-100),仅 understand 阶段生效
+    refs: list[dict] = []          # F0 可选:用户点名引用的参考物 [{label, text}];空=旧行为
 
 
 class ChatReq(BaseModel):
@@ -605,7 +607,7 @@ async def api_identify(req: TextReq, request: Request, user: dict | None = Depen
         raise HTTPException(400, "设定文字不能为空")
     _require_login_when_auth(user)
     owner = _write_owner(user)
-    card = await _guarded_llm(request, lambda: identify(req.text), fail_msg="识别失败")
+    card = await _guarded_llm(request, lambda: identify(req.text, hint=req.hint), fail_msg="识别失败")
     try:
         storage.save_library("characters", card.data.name, card.model_dump(), user_id=owner)
     except Exception:
@@ -620,7 +622,7 @@ async def api_identify_world(req: TextReq, request: Request, user: dict | None =
         raise HTTPException(400, "世界观文字不能为空")
     _require_login_when_auth(user)
     owner = _write_owner(user)
-    world = await _guarded_llm(request, lambda: identify_worldbook(req.text), fail_msg="识别失败")
+    world = await _guarded_llm(request, lambda: identify_worldbook(req.text, hint=req.hint), fail_msg="识别失败")
     try:
         storage.save_library("worlds", world.name, world.model_dump(), user_id=owner)
     except Exception:
@@ -635,7 +637,7 @@ async def api_identify_story(req: TextReq, request: Request, user: dict | None =
         raise HTTPException(400, "故事书文字不能为空")
     _require_login_when_auth(user)
     owner = _write_owner(user)
-    story = await _guarded_llm(request, lambda: identify_storybook(req.text), fail_msg="识别失败")
+    story = await _guarded_llm(request, lambda: identify_storybook(req.text, hint=req.hint), fail_msg="识别失败")
     try:
         storage.save_library("stories", story.title, story.model_dump(), user_id=owner)
     except Exception:
@@ -650,7 +652,7 @@ async def api_identify_player(req: TextReq, request: Request, user: dict | None 
         raise HTTPException(400, "玩家设定不能为空")
     _require_login_when_auth(user)
     owner = _write_owner(user)
-    player = await _guarded_llm(request, lambda: identify_player(req.text), fail_msg="识别失败")
+    player = await _guarded_llm(request, lambda: identify_player(req.text, hint=req.hint), fail_msg="识别失败")
     try:
         storage.save_library("players", player.name, player.model_dump(), user_id=owner)
     except Exception:
@@ -667,7 +669,8 @@ async def api_build_card(req: BuildCardReq, request: Request, user: dict | None 
     此前该端点连鉴权都没有(P0-2):现 AUTH 开时需登录,且过 costguard。"""
     _require_login_when_auth(user)
     return await _guarded_llm(request, lambda: build_card(req.kind, req.messages, req.draft, req.seed,
-                                                          phase=req.phase, threshold=req.threshold),
+                                                          phase=req.phase, threshold=req.threshold,
+                                                          refs=req.refs),
                               fail_msg="建卡失败")
 
 
