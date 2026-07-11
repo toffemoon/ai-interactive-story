@@ -193,6 +193,8 @@ export default function Create() {
   const tavernRef = useRef(null); // 酒馆卡文件 input(.json/.png)
   // D3 模板选择器;desks[kind].tpl 只存模板 id(hints 从常量派生,localStorage 零膨胀)。
   const [tplOpen, setTplOpen] = useState(false);
+  // D4 「从我发布的故事继续」:presets 列表弹层({items}|null),选一条拆回四台 built。
+  const [presetsModal, setPresetsModal] = useState(null);
   const fileRef = useRef(null);
   const coverRef = useRef(null);
   const chatRef = useRef(null);
@@ -307,6 +309,34 @@ export default function Create() {
   function confirmReplaceDraft() {
     if (!hasDraft) return true;
     return window.confirm("画布上已有草稿《" + draftName + "》,导入会替换它(已收进本台 / 卡库的不受影响)。继续?");
+  }
+
+  // D4 改编:把一张已有卡 fork 成指定台的草稿。名字加「·改」——/api/library/save 按名 upsert,
+  // 不改名会覆盖原卡;改编稿入库=另存新卡,原卡不动。
+  function forkToDraft(item, kk = kind) {
+    let card = (item && item.data) || item || {};
+    if (card && card.data && typeof card.data === "object" && !Array.isArray(card.data)) card = card.data; // chara_card_v2 信封再剥一层
+    if (!card || !Object.keys(card).length) {
+      flash("这张卡读不出内容");
+      return false;
+    }
+    const tgt = desks[kk];
+    const tgtHas = Object.keys((tgt && tgt.draft) || {}).length > 0;
+    if (tgtHas) {
+      const tn = tgt.draft.name || (tgt.draft.data && tgt.draft.data.name) || tgt.draft.title || "未命名";
+      if (!window.confirm(`「${KINDS.find((t) => t.k === kk).zh}」台上已有草稿《${tn}》,改编会替换它。继续?`)) return false;
+    }
+    const useTitle = "title" in card && !("name" in card);
+    const base = card[useTitle ? "title" : "name"] || "未命名";
+    const nm = /·改$/.test(base) ? base : base + "·改";
+    patch(kk, (d0) => ({
+      draft: { ...card, [useTitle ? "title" : "name"]: nm },
+      filled: Object.keys(card),
+      tpl: undefined,
+      messages: [...d0.messages, { who: "ai", text: "《" + nm + "》已铺开——基于它改;原卡不动,入库时按新名字另存。" }],
+    }));
+    flash("已铺开改编稿《" + nm + "》");
+    return true;
   }
 
   async function onUpload(ev) {
@@ -525,6 +555,33 @@ export default function Create() {
     patch(kind, (d0) => ({ draft: { ...d0.draft, description: text } }));
   }
 
+  // D4 故事级拆回:/api/presets 列表已含完整卡组 data,选一条把四类卡追加回各台 built
+  // (不清现有、不动原预设;发布时按新名字生成新预设,不碰权属)。
+  async function openPresets() {
+    try {
+      const items = await getJSON("/api/presets");
+      setPresetsModal({ items: Array.isArray(items) ? items : [] });
+    } catch (e) {
+      flash("读故事列表失败:" + e.message);
+    }
+  }
+  function unpackPreset(p) {
+    const d = (p && p.data) || {};
+    const unwrap = (c) => (c && c.data) || c;
+    const chars = (d.characters || []).map(unwrap).filter(Boolean);
+    const players = ((d.playables && d.playables.length ? d.playables : d.player ? [d.player] : []) || []).map(unwrap).filter(Boolean);
+    const worlds = d.world ? [d.world] : [];
+    const stories = d.story ? [d.story] : [];
+    setDesks((ds) => ({
+      characters: { ...ds.characters, built: [...ds.characters.built, ...chars] },
+      players: { ...ds.players, built: [...ds.players.built, ...players] },
+      worlds: { ...ds.worlds, built: [...ds.worlds.built, ...worlds] },
+      stories: { ...ds.stories, built: [...ds.stories.built, ...stories] },
+    }));
+    setPresetsModal(null);
+    flash(`已把《${p.name}》拆回四台(角色×${chars.length} 演出×${players.length} 世界×${worlds.length} 故事×${stories.length});发布会生成新预设`);
+  }
+
   // 素材复用:列我的库 → 搜索/挑一张推进对应台子的 built。
   async function openLib() {
     setMoreOpen(false);
@@ -681,7 +738,25 @@ export default function Create() {
     setSeedOpen(false);
     setImportOpen(null);
     setTplOpen(false);
+    setPresetsModal(null);
   }, [kind]);
+
+  // D4:接「我的 · 去改编」带来的卡(sessionStorage 一次性 payload,读完即删,刷新不重复触发)。
+  useEffect(() => {
+    let raw = null;
+    try {
+      raw = sessionStorage.getItem("ais_create_adapt");
+      if (raw) sessionStorage.removeItem("ais_create_adapt");
+    } catch (e) {}
+    if (!raw) return;
+    try {
+      const payload = JSON.parse(raw);
+      const idx = KINDS.findIndex((t) => t.k === payload.kind);
+      if (idx >= 0) setKi(idx);
+      forkToDraft(payload.card, payload.kind);
+    } catch (e) {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // —— D3 模板:铺骨架进 draft(空串字段=✦ 补写目标),opener 只进输入框不代发 ——
   const tplHints = useMemo(() => {
@@ -1179,6 +1254,10 @@ export default function Create() {
                     {mf.anySecret && (
                       <div className="create-bind-warn t-meta">⚠ 带「隐藏真相」的卡会随发布公开,发布前核对</div>
                     )}
+                    {/* D4 故事级改编:把发布过的故事整组拆回四台继续编(追加进 built,不动原预设) */}
+                    <button className="create-bind-resume" onClick={openPresets}>
+                      ↺ 从我发布的故事继续改
+                    </button>
                   </div>
                 );
               })()}
@@ -1310,6 +1389,45 @@ export default function Create() {
             </div>
           )}
 
+          {/* D4 故事拆回:选一条已发布预设,四类卡追加回各台 built(官方故事也可拆——拆的是副本,发布生成新预设)。 */}
+          {presetsModal && (
+            <div className="create-modal" onClick={() => setPresetsModal(null)}>
+              <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="从故事继续" onClick={(e) => e.stopPropagation()}>
+                <button className="create-modal-x" onClick={() => setPresetsModal(null)} aria-label="关闭">×</button>
+                <h2 className="t-h2">从已发布的故事继续改</h2>
+                <p className="create-seed-note t-meta">
+                  选一条,里面的角色 / 演出 / 世界书 / 故事书会整组追加回四个台子(原故事不动;改完发布=新故事)。
+                </p>
+                <div className="create-lib-list">
+                  {presetsModal.items.length ? (
+                    presetsModal.items.map((p, i) => {
+                      const d = p.data || {};
+                      const cnt = (d.characters || []).length;
+                      return (
+                        <div className="create-lib-item create-lib-item--row" key={i}>
+                          <span className="create-lib-item-tx">
+                            <span className="t-ui-sm">
+                              {p.name}
+                              {p.official && <span className="create-tpl-badge t-meta">官方</span>}
+                            </span>
+                            <span className="t-meta">
+                              角色×{cnt}{d.world ? " · 世界书" : ""}{d.story ? " · 故事书" : ""}{(d.playables || []).length || d.player ? " · 演出卡" : ""}
+                            </span>
+                          </span>
+                          <span className="create-lib-item-acts">
+                            <button className="create-shelf-act" onClick={() => unpackPreset(p)}>拆回四台</button>
+                          </span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="t-ui create-sub">还没有已发布的故事。</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* D3 模板选择器:骨架铺上画布,空字段自带引导;opener 只进输入框不代发。 */}
           {tplOpen && (
             <div className="create-modal" onClick={() => setTplOpen(false)}>
@@ -1433,14 +1551,25 @@ export default function Create() {
                 );
                 if (!libModal.items.length) return <p className="t-ui create-sub">这个分类的卡库还空着。</p>;
                 if (!list.length) return <p className="t-ui create-sub">没有匹配的卡。换个关键词。</p>;
+                {/* D4:行改双动作(按钮不能嵌按钮,行由 button 改 div)——加入本台=原样;改编成草稿=fork(·改) */}
                 return list.map((it, i) => (
-                  <button className="create-lib-item" key={i} onClick={() => libAdd(it)}>
+                  <div className="create-lib-item create-lib-item--row" key={i}>
                     <span className="create-lib-item-tx">
                       <span className="t-ui-sm">{libName(it)}</span>
                       <span className="t-meta">{libDesc(it).slice(0, 40)}</span>
                     </span>
-                    <span className="t-meta">加入 →</span>
-                  </button>
+                    <span className="create-lib-item-acts">
+                      <button className="create-shelf-act" onClick={() => libAdd(it)}>加入本台</button>
+                      <button
+                        className="create-shelf-act"
+                        onClick={() => {
+                          if (forkToDraft(it)) setLibModal(null);
+                        }}
+                      >
+                        改编成草稿
+                      </button>
+                    </span>
+                  </div>
                 ));
               })()}
             </div>

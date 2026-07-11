@@ -153,3 +153,13 @@ plan: docs/2026-07-11-create-card-canvas-plan.md
   - 世界书模板 → 纯 opener 进输入框,draft 保持空;
   - console 零报错;build 1.78s。
 - 边界如实:模板入口只在空卡态(有草稿时不可达,confirmReplaceDraft 分支保护的是「只有图无字段」的边缘态);「已有草稿时选模板 confirm」未实测(该状态在 UI 上不可达,逻辑保留)。
+
+## D4 · 2026-07-11 深夜 ✅ 从已有改编(卡级+故事级)
+
+- 实现:forkToDraft(双层解包兼容 chara_card_v2 信封;名字加「·改」防 library upsert 覆盖原卡;目标台有草稿先 confirm);「从卡库补素材」行改双动作(加入本台/改编成草稿,行由 button 改 div 防按钮嵌套);Mine「我创建的」详情弹层加「去改编」(CharDetailModal 可选 onAdapt prop,sessionStorage 一次性 payload 复刻探索→纯聊范式,读完即删);故事级:「↺ 从我发布的故事继续改」(装订区入口)→ /api/presets 列表 → 整组拆回四台 built(追加不覆盖、不动原预设,官方故事也可拆——拆的是副本)。
+- 验收(5199 实测):
+  - 卡级 fork:《林默》→《林默·改》16 字段铺画布、弹层自关、原卡在库;
+  - Mine 链路:发送端在本地 AUTH off 环境不可达(「我创建的」按 official 过滤,匿名保存的卡全记官方名下——环境语义非 bug,真机 AUTH on 复查留 D7 备注);**接收端实测**:注入 payload →《白栎·改》铺画布+自动切角色卡 tab+payload 读完即删(刷新不重复);反向验证以代码判定收口(onAdapt 仅 Mine created 传);
+  - 故事级拆回:官方《雨夜档案-第七站台》→ 角色 3→6、演出 0→1、世界 0→1、故事 0→1(追加语义,原 3 张保留),toast 精确汇报,装订清单实时联动(角色卡 ×7…);
+  - build 1.88s。
+- ⚠ 插曲如实:D4 编辑中途 console 出现 6 条 Create 崩溃(同一事件×6 订阅通道)——分批 Edit 的 HMR 中间帧(kind effect 先引用 setPresetsModal、state 声明后落)。冷加载复验:error 计数零新增、全功能正常,最终代码干净。教训:同组 state+引用应一次 Edit 落盘,已记。

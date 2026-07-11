@@ -599,7 +599,25 @@ export default function Mine() {
         </section>
       )}
 
-      {detail && <CharDetailModal model={detail} onClose={() => setDetail(null)} onDelete={tab === "created" ? deleteCard : undefined} />}
+      {detail && (
+        <CharDetailModal
+          model={detail}
+          onClose={() => setDetail(null)}
+          onDelete={tab === "created" ? deleteCard : undefined}
+          onAdapt={
+            // D4:「我创建的」→ 去改编:整卡经 sessionStorage 带去创作页 fork 成草稿(复刻探索→纯聊的 raw 跳转范式)
+            tab === "created"
+              ? (m) => {
+                  try {
+                    sessionStorage.setItem("ais_create_adapt", JSON.stringify({ kind: "characters", card: m.raw }));
+                  } catch (e) {}
+                  setDetail(null);
+                  navigate("/create");
+                }
+              : undefined
+          }
+        />
+      )}
     </div>
   );
 }
