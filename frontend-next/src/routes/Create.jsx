@@ -985,6 +985,13 @@ export default function Create() {
                   查看本台已建({desk.built.length})
                 </button>
                 <button onClick={openLib}>从卡库补素材</button>
+                {/* D6 手机最小入口:只加两项,弹窗与桌面共用;.ct 布局不动 */}
+                <button onClick={() => { setMoreOpen(false); setImportOpen({ step: "pick", text: "", err: "" }); }}>
+                  导入已有内容
+                </button>
+                <button onClick={() => { setMoreOpen(false); openSeed(); }}>
+                  {desk.seed ? `参考资料 · ${seedLenLabel(desk.seed)}(查看 / 清除)` : "挂参考资料"}
+                </button>
                 <button className="ct-more-pub" onClick={openPreview} disabled={!hasChars}>预览并发布到探索 · 公开</button>
                 {/* 禁用原因触屏可见(桌面版的 title 手机看不到,同 YOR-173 范式) */}
                 {!hasChars && <span className="ct-more-note t-meta">至少要一张角色卡——先聊一张,或从卡库补一张</span>}
@@ -1380,158 +1387,7 @@ export default function Create() {
             </div>
           )}
 
-          {/* D1 参考资料弹窗:粘贴已有设定/旧卡,存 desks[kind].seed(≤6000 字,存储即截断);
-              成本明示:每一轮 build_card 都会带上它。 */}
-          {seedOpen && (
-            <div className="create-modal" onClick={() => setSeedOpen(false)}>
-              <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="参考资料" onClick={(e) => e.stopPropagation()}>
-                <button className="create-modal-x" onClick={() => setSeedOpen(false)} aria-label="关闭">×</button>
-                <h2 className="t-h2">参考资料 · {KINDS[ki].zh}</h2>
-                <p className="create-seed-note t-meta">
-                  把已有的设定 / 旧卡文本挂在台上:之后每一轮 AI 都会基于它来完善、对空缺处定向追问。
-                  每轮都参考意味着回复更慢也更贵——用完记得清除。只保存前 6000 字。
-                </p>
-                <textarea
-                  className="create-seed-ta t-ui-sm"
-                  rows={10}
-                  maxLength={8000}
-                  value={seedText}
-                  onChange={(e) => setSeedText(e.target.value)}
-                  placeholder="粘贴已有设定、旧卡文本、世界观笔记……"
-                />
-                <div className={"create-seed-count t-meta" + (seedText.length > 6000 ? " is-over" : "")}>
-                  {seedText.length > 6000
-                    ? `${seedText.length} 字——超出 6000 字的部分不会保存`
-                    : `${seedText.length} / 6000 字`}
-                </div>
-                <div className="create-seed-actions">
-                  {(desk.seed || "") && (
-                    <Button variant="line" onClick={clearSeed}>清除</Button>
-                  )}
-                  <Button variant="primary" onClick={commitSeed}>挂上</Button>
-                </div>
-              </div>
-            </div>
-          )}
 
-          {/* D4 故事拆回:选一条已发布预设,四类卡追加回各台 built(官方故事也可拆——拆的是副本,发布生成新预设)。 */}
-          {presetsModal && (
-            <div className="create-modal" onClick={() => setPresetsModal(null)}>
-              <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="从故事继续" onClick={(e) => e.stopPropagation()}>
-                <button className="create-modal-x" onClick={() => setPresetsModal(null)} aria-label="关闭">×</button>
-                <h2 className="t-h2">从已发布的故事继续改</h2>
-                <p className="create-seed-note t-meta">
-                  选一条,里面的角色 / 演出 / 世界书 / 故事书会整组追加回四个台子(原故事不动;改完发布=新故事)。
-                </p>
-                <div className="create-lib-list">
-                  {presetsModal.items.length ? (
-                    presetsModal.items.map((p, i) => {
-                      const d = p.data || {};
-                      const cnt = (d.characters || []).length;
-                      return (
-                        <div className="create-lib-item create-lib-item--row" key={i}>
-                          <span className="create-lib-item-tx">
-                            <span className="t-ui-sm">
-                              {p.name}
-                              {p.official && <span className="create-tpl-badge t-meta">官方</span>}
-                            </span>
-                            <span className="t-meta">
-                              角色×{cnt}{d.world ? " · 世界书" : ""}{d.story ? " · 故事书" : ""}{(d.playables || []).length || d.player ? " · 演出卡" : ""}
-                            </span>
-                          </span>
-                          <span className="create-lib-item-acts">
-                            <button className="create-shelf-act" onClick={() => unpackPreset(p)}>拆回四台</button>
-                          </span>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <p className="t-ui create-sub">还没有已发布的故事。</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* D3 模板选择器:骨架铺上画布,空字段自带引导;opener 只进输入框不代发。 */}
-          {tplOpen && (
-            <div className="create-modal" onClick={() => setTplOpen(false)}>
-              <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="创作模板" onClick={(e) => e.stopPropagation()}>
-                <button className="create-modal-x" onClick={() => setTplOpen(false)} aria-label="关闭">×</button>
-                <h2 className="t-h2">从模板起手 · {KINDS[ki].zh}</h2>
-                <p className="create-seed-note t-meta">
-                  选一套骨架铺上画布:空字段自带引导,✦ 让 AI 补、✎ 自己写;开场指令会放进输入框,过目再发。
-                </p>
-                <div className="create-import-picks">
-                  {(TEMPLATES[kind] || []).map((t) => (
-                    <button key={t.id} className="create-import-pick" onClick={() => applyTemplate(t)}>
-                      <span className="create-import-pick-t t-ui">
-                        {t.name}
-                        <span className="create-tpl-badge t-meta">{t.skeleton ? `${Object.keys(t.skeleton).length} 字段` : "纯引导"}</span>
-                      </span>
-                      <span className="create-import-pick-d t-meta">{t.hint}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* D2 导入面板:把已有内容直接变成卡——粘贴文本(identify,会入库)/上传文档(现有链路)/
-              酒馆卡(纯前端解析,不入库不耗额度)。两种口径都当面写清。 */}
-          {importOpen && (
-            <div className="create-modal" onClick={() => setImportOpen(null)}>
-              <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="导入成卡" onClick={(e) => e.stopPropagation()}>
-                <button className="create-modal-x" onClick={() => setImportOpen(null)} aria-label="关闭">×</button>
-                <h2 className="t-h2">导入成卡 · {KINDS[ki].zh}</h2>
-                {importOpen.step === "pick" ? (
-                  <>
-                    <p className="create-seed-note t-meta">把已有的内容直接变成一张卡,不用从零聊。</p>
-                    <div className="create-import-picks">
-                      <button className="create-import-pick" onClick={() => setImportOpen({ step: "paste", text: "", err: "" })}>
-                        <span className="create-import-pick-t t-ui">粘贴文本</span>
-                        <span className="create-import-pick-d t-meta">散文设定 / 旧卡文字,AI 解析成卡(会同时收进你的卡库 · 私密)</span>
-                      </button>
-                      <button className="create-import-pick" onClick={() => { setImportOpen(null); fileRef.current && fileRef.current.click(); }}>
-                        <span className="create-import-pick-t t-ui">上传文档</span>
-                        <span className="create-import-pick-d t-meta">.txt / .md / .docx,抽出文字后同上(≤2MB)</span>
-                      </button>
-                      {kind === "characters" && (
-                        <button className="create-import-pick" onClick={() => tavernRef.current && tavernRef.current.click()}>
-                          <span className="create-import-pick-t t-ui">酒馆角色卡</span>
-                          <span className="create-import-pick-d t-meta">SillyTavern 的 .json / PNG 内嵌卡——本地解析,不入库、不耗额度</span>
-                        </button>
-                      )}
-                    </div>
-                    {importOpen.err && <div className="create-import-err t-meta">{importOpen.err}</div>}
-                    <input ref={tavernRef} type="file" accept=".json,.png" hidden onChange={onTavernFile} />
-                  </>
-                ) : (
-                  <>
-                    <p className="create-seed-note t-meta">
-                      粘贴散文设定 / 旧卡文字,AI 解析成{KINDS[ki].zh};解析成功会同时把这张卡存进你的卡库(私密),可去「我的」删除。
-                      超长文本(两万字以上)建议分段导入,或改挂「参考资料」。
-                    </p>
-                    <textarea
-                      className="create-seed-ta t-ui-sm"
-                      rows={10}
-                      value={importOpen.text}
-                      onChange={(e) => setImportOpen((m) => ({ ...m, text: e.target.value, err: "" }))}
-                      placeholder="把设定粘进来……"
-                    />
-                    <div className="create-seed-count t-meta">{importOpen.text.length} 字</div>
-                    {importOpen.err && <div className="create-import-err t-meta">{importOpen.err}</div>}
-                    <div className="create-seed-actions">
-                      <Button variant="line" onClick={() => setImportOpen({ step: "pick", text: "", err: "" })}>返回</Button>
-                      <Button variant="primary" onClick={importPaste} disabled={busy || !importOpen.text.trim()}>
-                        {busy ? "解析中…" : "解析成卡"}
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
         </>
       )}
 
@@ -1555,6 +1411,159 @@ export default function Create() {
       )}
 
       {/* —————————————— 以下弹层桌面 / 手机共用 —————————————— */}
+
+      {/* D1 参考资料弹窗:粘贴已有设定/旧卡,存 desks[kind].seed(≤6000 字,存储即截断);
+          成本明示:每一轮 build_card 都会带上它。 */}
+      {seedOpen && (
+        <div className="create-modal" onClick={() => setSeedOpen(false)}>
+          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="参考资料" onClick={(e) => e.stopPropagation()}>
+            <button className="create-modal-x" onClick={() => setSeedOpen(false)} aria-label="关闭">×</button>
+            <h2 className="t-h2">参考资料 · {KINDS[ki].zh}</h2>
+            <p className="create-seed-note t-meta">
+              把已有的设定 / 旧卡文本挂在台上:之后每一轮 AI 都会基于它来完善、对空缺处定向追问。
+              每轮都参考意味着回复更慢也更贵——用完记得清除。只保存前 6000 字。
+            </p>
+            <textarea
+              className="create-seed-ta t-ui-sm"
+              rows={10}
+              maxLength={8000}
+              value={seedText}
+              onChange={(e) => setSeedText(e.target.value)}
+              placeholder="粘贴已有设定、旧卡文本、世界观笔记……"
+            />
+            <div className={"create-seed-count t-meta" + (seedText.length > 6000 ? " is-over" : "")}>
+              {seedText.length > 6000
+                ? `${seedText.length} 字——超出 6000 字的部分不会保存`
+                : `${seedText.length} / 6000 字`}
+            </div>
+            <div className="create-seed-actions">
+              {(desk.seed || "") && (
+                <Button variant="line" onClick={clearSeed}>清除</Button>
+              )}
+              <Button variant="primary" onClick={commitSeed}>挂上</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* D4 故事拆回:选一条已发布预设,四类卡追加回各台 built(官方故事也可拆——拆的是副本,发布生成新预设)。 */}
+      {presetsModal && (
+        <div className="create-modal" onClick={() => setPresetsModal(null)}>
+          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="从故事继续" onClick={(e) => e.stopPropagation()}>
+            <button className="create-modal-x" onClick={() => setPresetsModal(null)} aria-label="关闭">×</button>
+            <h2 className="t-h2">从已发布的故事继续改</h2>
+            <p className="create-seed-note t-meta">
+              选一条,里面的角色 / 演出 / 世界书 / 故事书会整组追加回四个台子(原故事不动;改完发布=新故事)。
+            </p>
+            <div className="create-lib-list">
+              {presetsModal.items.length ? (
+                presetsModal.items.map((p, i) => {
+                  const d = p.data || {};
+                  const cnt = (d.characters || []).length;
+                  return (
+                    <div className="create-lib-item create-lib-item--row" key={i}>
+                      <span className="create-lib-item-tx">
+                        <span className="t-ui-sm">
+                          {p.name}
+                          {p.official && <span className="create-tpl-badge t-meta">官方</span>}
+                        </span>
+                        <span className="t-meta">
+                          角色×{cnt}{d.world ? " · 世界书" : ""}{d.story ? " · 故事书" : ""}{(d.playables || []).length || d.player ? " · 演出卡" : ""}
+                        </span>
+                      </span>
+                      <span className="create-lib-item-acts">
+                        <button className="create-shelf-act" onClick={() => unpackPreset(p)}>拆回四台</button>
+                      </span>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="t-ui create-sub">还没有已发布的故事。</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* D3 模板选择器:骨架铺上画布,空字段自带引导;opener 只进输入框不代发。 */}
+      {tplOpen && (
+        <div className="create-modal" onClick={() => setTplOpen(false)}>
+          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="创作模板" onClick={(e) => e.stopPropagation()}>
+            <button className="create-modal-x" onClick={() => setTplOpen(false)} aria-label="关闭">×</button>
+            <h2 className="t-h2">从模板起手 · {KINDS[ki].zh}</h2>
+            <p className="create-seed-note t-meta">
+              选一套骨架铺上画布:空字段自带引导,✦ 让 AI 补、✎ 自己写;开场指令会放进输入框,过目再发。
+            </p>
+            <div className="create-import-picks">
+              {(TEMPLATES[kind] || []).map((t) => (
+                <button key={t.id} className="create-import-pick" onClick={() => applyTemplate(t)}>
+                  <span className="create-import-pick-t t-ui">
+                    {t.name}
+                    <span className="create-tpl-badge t-meta">{t.skeleton ? `${Object.keys(t.skeleton).length} 字段` : "纯引导"}</span>
+                  </span>
+                  <span className="create-import-pick-d t-meta">{t.hint}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* D2 导入面板:把已有内容直接变成卡——粘贴文本(identify,会入库)/上传文档(现有链路)/
+          酒馆卡(纯前端解析,不入库不耗额度)。两种口径都当面写清。 */}
+      {importOpen && (
+        <div className="create-modal" onClick={() => setImportOpen(null)}>
+          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="导入成卡" onClick={(e) => e.stopPropagation()}>
+            <button className="create-modal-x" onClick={() => setImportOpen(null)} aria-label="关闭">×</button>
+            <h2 className="t-h2">导入成卡 · {KINDS[ki].zh}</h2>
+            {importOpen.step === "pick" ? (
+              <>
+                <p className="create-seed-note t-meta">把已有的内容直接变成一张卡,不用从零聊。</p>
+                <div className="create-import-picks">
+                  <button className="create-import-pick" onClick={() => setImportOpen({ step: "paste", text: "", err: "" })}>
+                    <span className="create-import-pick-t t-ui">粘贴文本</span>
+                    <span className="create-import-pick-d t-meta">散文设定 / 旧卡文字,AI 解析成卡(会同时收进你的卡库 · 私密)</span>
+                  </button>
+                  <button className="create-import-pick" onClick={() => { setImportOpen(null); fileRef.current && fileRef.current.click(); }}>
+                    <span className="create-import-pick-t t-ui">上传文档</span>
+                    <span className="create-import-pick-d t-meta">.txt / .md / .docx,抽出文字后同上(≤2MB)</span>
+                  </button>
+                  {kind === "characters" && (
+                    <button className="create-import-pick" onClick={() => tavernRef.current && tavernRef.current.click()}>
+                      <span className="create-import-pick-t t-ui">酒馆角色卡</span>
+                      <span className="create-import-pick-d t-meta">SillyTavern 的 .json / PNG 内嵌卡——本地解析,不入库、不耗额度</span>
+                    </button>
+                  )}
+                </div>
+                {importOpen.err && <div className="create-import-err t-meta">{importOpen.err}</div>}
+                <input ref={tavernRef} type="file" accept=".json,.png" hidden onChange={onTavernFile} />
+              </>
+            ) : (
+              <>
+                <p className="create-seed-note t-meta">
+                  粘贴散文设定 / 旧卡文字,AI 解析成{KINDS[ki].zh};解析成功会同时把这张卡存进你的卡库(私密),可去「我的」删除。
+                  超长文本(两万字以上)建议分段导入,或改挂「参考资料」。
+                </p>
+                <textarea
+                  className="create-seed-ta t-ui-sm"
+                  rows={10}
+                  value={importOpen.text}
+                  onChange={(e) => setImportOpen((m) => ({ ...m, text: e.target.value, err: "" }))}
+                  placeholder="把设定粘进来……"
+                />
+                <div className="create-seed-count t-meta">{importOpen.text.length} 字</div>
+                {importOpen.err && <div className="create-import-err t-meta">{importOpen.err}</div>}
+                <div className="create-seed-actions">
+                  <Button variant="line" onClick={() => setImportOpen({ step: "pick", text: "", err: "" })}>返回</Button>
+                  <Button variant="primary" onClick={importPaste} disabled={busy || !importOpen.text.trim()}>
+                    {busy ? "解析中…" : "解析成卡"}
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 补素材 modal */}
       {libModal && (

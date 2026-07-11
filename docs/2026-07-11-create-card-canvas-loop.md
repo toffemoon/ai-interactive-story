@@ -168,3 +168,8 @@ plan: docs/2026-07-11-create-card-canvas-plan.md
 
 - 实现:exportCard——characters 走现成 wrapCard 套 chara_card_v2 信封(与酒馆 JSON 同构,**可被 D2 导入原样吃回**),其余卡种导裸 data;Blob+<a download> 纯前端零请求。入口:动作列「导出草稿 JSON」(无草稿置灰)+ builtView 每卡「导出」。
 - 验收:点击导出 → toast「已导出《白栎·改》.json」(链路无异常);builtView 6 卡各带导出钮;round-trip 由同构性成立(D2 已实测解析 {spec,data} 信封);build 过(1.80s)。
+
+## D6 · 2026-07-12 凌晨 ✅ 手机最小入口
+
+- 实现:①结构修正——D1-D4 四个弹窗从桌面分支迁到「桌面/手机共用弹层区」(python 锚点搬移+缩进归一,否则手机触发状态弹窗不渲染);②.ct「更多」面板加两项:导入已有内容(开 D2 面板)/参考资料徽章行(字数+查看/清除)。.ct 布局其余零改动。
+- 验收(390px 实测):ct-more 五项就位;导入面板在手机打开(3 入口)、seed 弹窗打开(42 字徽章正确);.ct 聊天/composer 原样;桌面 1366 回归:seed 弹窗/presets 弹窗迁移后照常可开;build 过。
