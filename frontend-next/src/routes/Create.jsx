@@ -178,6 +178,9 @@ export default function Create() {
   const [editingKey, setEditingKey] = useState(null);
   const [editVal, setEditVal] = useState("");
   const dockInputRef = useRef(null); // 命令条输入框(「聊着改」把光标带过去)
+  // C2 叙述层:AI 的话降级为「最新一句」浮条 + 全史进手记抽屉;对话数据结构(desk.messages)不动。
+  const [journalOpen, setJournalOpen] = useState(false);
+  const [narrClosed, setNarrClosed] = useState(false);
   const fileRef = useRef(null);
   const coverRef = useRef(null);
   const chatRef = useRef(null);
@@ -212,7 +215,7 @@ export default function Create() {
   useEffect(() => {
     const el = chatRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [desk.messages, busy]);
+  }, [desk.messages, busy, journalOpen]); // journalOpen:手记抽屉打开那刻滚到底
 
   // go = 可选去处路由:带去处的 toast 多留一会儿,不然来不及点(YOR-170)
   function flash(msg, go = null) {
@@ -564,10 +567,32 @@ export default function Create() {
       }));
   }, [desk.draft, desk.filled]);
 
-  // 切卡种时丢弃未提交的就地编辑(编辑目标已不在场)。
+  // 切卡种时丢弃未提交的就地编辑(编辑目标已不在场),手记抽屉一并合上。
   useEffect(() => {
     setEditingKey(null);
+    setJournalOpen(false);
   }, [kind]);
+
+  // 叙述条:取最后一条 AI 消息;新回复到来(消息数变化)自动重新亮起。
+  const lastAi = useMemo(() => {
+    for (let i = desk.messages.length - 1; i >= 0; i--) {
+      if (desk.messages[i].who !== "你") return desk.messages[i];
+    }
+    return null;
+  }, [desk.messages]);
+  useEffect(() => {
+    setNarrClosed(false);
+  }, [desk.messages.length, kind]);
+
+  // 手记抽屉 Esc 关闭。
+  useEffect(() => {
+    if (!journalOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === "Escape") setJournalOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [journalOpen]);
 
   // —— C1 就地手改:手改直接写 draft(draft 即共享真相,AI 下轮基于改后内容继续长) ——
   function startFieldEdit(f) {
@@ -765,6 +790,13 @@ export default function Create() {
                 </BlurHighlight>
               </p>
             </div>
+            <button
+              className="create-journal-btn t-ui-sm"
+              onClick={() => setJournalOpen(true)}
+              title="这张卡聊过的全部对话"
+            >
+              ✒ 创作手记{desk.messages.length > 1 ? ` · ${desk.messages.length}` : ""}
+            </button>
           </div>
           <div className="create-kinds">
             {KINDS.map((t, i) => {
@@ -914,27 +946,30 @@ export default function Create() {
             </aside>
           </div>
 
-          {/* 信笺坞:消息条(临时,C2 换叙述条+手记抽屉)+ 命令条(原 composer 逻辑原样) */}
+          {/* 信笺坞:叙述条(AI 最新一句,可关;busy=墨点)+ 命令条(原 composer 逻辑原样)。
+              全部对话史在「创作手记」抽屉,消息数据结构不动,只是显示降级。 */}
           <div className="create-dock">
-            <div className="create-dock-msgs" ref={chatRef}>
-              {desk.messages.map((m, i) => (
-                <div key={i} className={"create-msg" + (m.who === "你" ? " is-me" : "")}>
-                  <span className="create-msg-who t-meta">{m.who === "你" ? "你" : "助手"}</span>
-                  <p className="create-msg-text t-ui">{m.text}</p>
-                </div>
-              ))}
-              {busy && (
-                <div className="create-msg">
-                  <span className="create-msg-who t-meta">助手</span>
-                  <p className="create-msg-text t-ui create-msg-typing">
-                    <span className="create-dot" aria-hidden="true" />
-                    <span className="create-dot" aria-hidden="true" />
-                    <span className="create-dot" aria-hidden="true" />
-                    正在想……
-                  </p>
-                </div>
-              )}
-            </div>
+            {busy ? (
+              <div className="create-narr" role="status">
+                <span className="create-narr-mark t-kai" aria-hidden="true">✒</span>
+                <span className="create-msg-typing t-ui-sm">
+                  <span className="create-dot" aria-hidden="true" />
+                  <span className="create-dot" aria-hidden="true" />
+                  <span className="create-dot" aria-hidden="true" />
+                  正在想……
+                </span>
+              </div>
+            ) : !narrClosed && lastAi && desk.messages.length > 1 ? (
+              <div className="create-narr" role="status" key={desk.messages.length}>
+                <span className="create-narr-mark t-kai" aria-hidden="true">✒</span>
+                <span className="create-narr-tx t-ui-sm">
+                  <BlurHighlight blurDuration={0.6} viewportOptions={{ once: true, amount: 0.1 }}>
+                    {lastAi.text}
+                  </BlurHighlight>
+                </span>
+                <button className="create-narr-x" aria-label="收起这句" onClick={() => setNarrClosed(true)}>×</button>
+              </div>
+            ) : null}
             <div className="create-composer">
               <textarea
                 ref={dockInputRef}
@@ -961,6 +996,38 @@ export default function Create() {
               </div>
             </div>
           </div>
+
+          {/* 创作手记:这张卡聊过的全部对话(降级存档,想看才看)。数据=desk.messages 原样。 */}
+          {journalOpen && (
+            <div className="create-journal" role="dialog" aria-modal="true" aria-label="创作手记">
+              <div className="create-journal-scrim" onClick={() => setJournalOpen(false)} />
+              <div className="create-journal-panel">
+                <div className="create-journal-head">
+                  <span className="t-h3">创作手记 · {KINDS[ki].zh}</span>
+                  <button className="create-modal-x create-journal-x" onClick={() => setJournalOpen(false)} aria-label="关闭">×</button>
+                </div>
+                <div className="create-journal-list" ref={chatRef}>
+                  {desk.messages.map((m, i) => (
+                    <div key={i} className={"create-msg" + (m.who === "你" ? " is-me" : "")}>
+                      <span className="create-msg-who t-meta">{m.who === "你" ? "你" : "助手"}</span>
+                      <p className="create-msg-text t-ui">{m.text}</p>
+                    </div>
+                  ))}
+                  {busy && (
+                    <div className="create-msg">
+                      <span className="create-msg-who t-meta">助手</span>
+                      <p className="create-msg-text t-ui create-msg-typing">
+                        <span className="create-dot" aria-hidden="true" />
+                        <span className="create-dot" aria-hidden="true" />
+                        <span className="create-dot" aria-hidden="true" />
+                        正在想……
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 

@@ -1366,19 +1366,11 @@
     gap: var(--sp-4);
     padding-top: var(--sp-2);
   }
-  /* 信笺坞:消息条(临时)+ 命令条 */
+  /* 信笺坞:叙述条 + 命令条(消息条已随 C2 退役进手记抽屉) */
   .create-dock {
     flex: none;
     width: min(680px, 100%);
     margin: var(--sp-4) auto 0;
-  }
-  .create-dock-msgs {
-    max-height: 124px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: var(--sp-3);
-    padding: 0 var(--sp-2) var(--sp-3);
   }
   .create-dock .create-composer {
     border: 1px solid var(--line);
@@ -1508,5 +1500,145 @@
     color: var(--accent);
     font-size: 10px;
     line-height: 1;
+  }
+}
+
+/* ————————————————————————————————————————————————————————————
+   C2 叙述层(卡即界面):页头「创作手记」入口 + 叙述条(AI 最新一句)+
+   手记抽屉(全史)。对话数据结构不动,只是显示降级。
+   ———————————————————————————————————————————————————————————— */
+@media (min-width: 861px) {
+  .create-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--sp-4);
+  }
+  .create-journal-btn {
+    flex: none;
+    margin-top: 6px;
+    padding: 7px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-pill);
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--font-kai);
+    cursor: pointer;
+    transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+  }
+  .create-journal-btn:hover {
+    color: var(--fg);
+    border-color: var(--accent-2);
+  }
+
+  /* 叙述条:一句 AI 的话浮在命令条上方,像笺纸上的批注 */
+  .create-narr {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-2);
+    padding: 9px 12px;
+    border: 1px solid color-mix(in srgb, var(--accent-3) 35%, var(--line));
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--accent-3) 6%, var(--panel));
+    animation: msgIn 0.3s var(--ease-out) both;
+  }
+  .create-narr-mark {
+    flex: none;
+    color: var(--accent-3);
+    font-size: 15px;
+    line-height: 1.4;
+  }
+  .create-narr-tx {
+    flex: 1;
+    min-width: 0;
+    color: var(--fg);
+    line-height: var(--lh-body);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .create-narr-x {
+    flex: none;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1;
+    padding: 2px 4px;
+    cursor: pointer;
+  }
+  .create-narr-x:hover {
+    color: var(--fg);
+  }
+
+  /* 手记抽屉:右滑入的笺纸,全史可滚 */
+  .create-journal {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+  }
+  .create-journal-scrim {
+    position: absolute;
+    inset: 0;
+    background: var(--scrim);
+    animation: journalFade 0.25s var(--ease-out) both;
+  }
+  .create-journal-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(420px, 92vw);
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+    border-left: 1px solid var(--line);
+    box-shadow: var(--shadow-pop);
+    animation: journalSlide 0.3s var(--ease-out) both;
+  }
+  .create-journal-head {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--sp-4) var(--sp-5);
+    border-bottom: 1px solid var(--line);
+  }
+  .create-journal-x {
+    position: static;
+  }
+  .create-journal-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+    padding: var(--sp-4) var(--sp-5) var(--sp-5);
+  }
+}
+@keyframes journalSlide {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes journalFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .create-narr,
+  .create-journal-scrim,
+  .create-journal-panel {
+    animation: none !important;
   }
 }
