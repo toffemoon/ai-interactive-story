@@ -14,7 +14,7 @@ plan: docs/2026-07-11-create-card-canvas-plan.md
 - [x] C3 字段级 AI 动作(⟳/✦ 定向指令)(R4)
 - [x] C4 本台架+装订区(R5)
 - [x] C5 动效/空状态/文案 pass(R6)
-- [ ] C6 全链路:preview 实测+console 零错+build+手机 390 回归
+- [x] C6 全链路:preview 实测+console 零错+build+手机 390 回归(R7)
 
 ## R1 · 2026-07-11 07:34
 
@@ -95,3 +95,23 @@ plan: docs/2026-07-11-create-card-canvas-plan.md
 - 文案:LABELS 补 known_public=公开设定 / known_hidden=隐藏设定 / versions=多版本 / relationships=关系(实测注入 draft 显示中文,测试数据已还原)。
 - 死样式清理:旧桌面布局层(.create-body/.create-chat/.create-msgs/.create-preview/.create-card/.create-card-tilt + reskin 时期的 sticky/高度规则)8 处精确切除;.create-msg/.create-field 等内容类继续服役(手记抽屉/手机端在用);删后布局完整性实测(canvas/shelf/bind/dock/grid 全在)。
 - console 零报错;build 1.94s。
+
+## R7 · 2026-07-11 09:03 —— C6 全链路 ✅ + 收尾账
+
+全链路回归(5199 preview,真后端):
+
+- 冷加载:卡种 tab 记忆(KI)生效——停在故事书台则架空/叙述条静默均正确;切回角色卡后架上苏晚棠/叙述条亮收纳句/装订清单一致;
+- 核心循环:起手句 → 真发送 → 14 字段长上画布(全新 draft,fresh ×14 如实)、空卡退场、叙述条=最新回复、手记计数联动;
+- 手改:「简述」✎ 追加"(C6 手改回归)"→ store 落盘;
+- 收入卡库真链路:finalize 确认 → toast「已收入卡库 · 私密」(test 库 library 真写一行);从卡库补素材 → 15 条列表真读;
+- 装订区 vs 发布 overlay:manifest 逐字一致(角色卡 ×2:苏晚棠、未命名);发布 overlay 内 StoryHero 详情页渲染、CTA「发布到探索 · 公开」可用——**未点真发布**(会在 test 库造公开预设,链路验到 CTA 为止,与历轮测试深度一致);
+- 手记抽屉:3 条全史,Esc 关;
+- 手机 390 回归:.ct 4 tab/草稿条/composer 全在,桌面(stage/dock/shelf/narr/journalBtn)零泄漏;
+- console 零报错;build 1.92s(dist 与 C5 相同 hash,未变)。
+
+### 收尾
+
+- 六切片六 commit:C0 6e21bde / C1 7dd94da / C2 c99ba85 / C3 60b3fe8 / C4 6761d7b / C5 e8a0324;分支 gengyue/create-canvas-rework(基于 yor-211 保护点 0091bea)。
+- 红线全程未破:手机 .ct 分支零改动;API 契约(/api/build_card /identify* /library/save /presets)与 desks localStorage 形状不动;三弹层沿用;npm 零新增依赖;视觉全语义 token;.env 未读写;main 未碰。
+- 已知边界(如实):①「尽量别动其他字段」是 prompt 约定,diff 墨晕兜底显形;②结构化字段(entries/timeline/tags)v1 只读走「聊」;③真发布未在测试中执行;④无头环境 blur/autoFocus 弱,真浏览器无此问题。
+- 测试残留:test 库 library 多两行私密卡(苏晚棠/未命名守夜人),preview 浏览器 localStorage 留有测试台数据(与用户浏览器无关)。
