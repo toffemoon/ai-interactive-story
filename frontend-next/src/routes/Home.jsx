@@ -1,13 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Card } from "../components/ui";
+import { useShellMenuCoordination } from "../components/shell/AppShell";
 import { getJSON, postJSON, newSessionId } from "../lib/api";
 import { toCardModel } from "../lib/cardModel";
 import { resolveMediaUrl } from "../lib/mediaUrl.js";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
-import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, FIRST_BEAT, beatById, loadEcho, saveEcho, isOnboarded, markOnboarded } from "./onboardingScript";
-import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, sanitizeCardMessage, shouldAcceptNameLocally, shouldConfirmBareNameLocally } from "./onboardingLogic";
+import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, FIRST_BEAT, beatById, consumeTestHomeBypass, loadEcho, markOnboarded, isOnboarded, saveEcho, setTestHomeBypass } from "./onboardingScript";
+import { INITIAL_ONBOARDING_AUTO_CONTROL, analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, hasRestoredHomeConversation, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, resolveAutoAdvancePlan, sanitizeCardMessage, shouldAcceptNameLocally, shouldConfirmBareNameLocally, transitionOnboardingAutoControl } from "./onboardingLogic";
 import { IdentityCard } from "../components/IdentityCard";
 import StaggeredText from "../components/staggered-text";
 import AnimatedList from "../components/animated-list";
@@ -137,7 +138,7 @@ function OnboardingDemo({ beat, echo, value, busy, inputRef, onChange, onSubmit 
     const model = demo.preset ? toCardModel("story", demo.preset) : null;
     return (
       <aside className={"home-ob-demo home-ob-demo--story" + (demo.result ? " is-result" : "")} aria-label="故事预演">
-        <DemoCard model={model} className="home-demo-story-card" />
+        <DemoCard key={`${model.kind}:${model.id}`} model={model} className="home-demo-story-card" />
       </aside>
     );
   }
@@ -146,7 +147,7 @@ function OnboardingDemo({ beat, echo, value, busy, inputRef, onChange, onSubmit 
     const model = demo.characterCard ? toCardModel("character", demo.characterCard) : null;
     return (
       <aside className="home-ob-demo home-ob-demo--character-card" aria-label="角色卡预演">
-        <DemoCard model={model} className="home-demo-character-card" />
+        <DemoCard key={`${model.kind}:${model.id}`} model={model} className="home-demo-character-card" />
       </aside>
     );
   }
@@ -186,6 +187,7 @@ function OnboardingDemo({ beat, echo, value, busy, inputRef, onChange, onSubmit 
 }
 
 export default function Home({ testMode = false }) {
+  const { menuOpen, registerBeforeMenuNavigate } = useShellMenuCoordination();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { game } = useGame();
@@ -221,6 +223,8 @@ export default function Home({ testMode = false }) {
   const [obPendingConfirm, setObPendingConfirm] = useState(null); // {field,value,reason}:奇怪/玩笑名先二次确认,不直接写卡
   const [obEmoOverride, setObEmoOverride] = useState(null); // 临时覆盖立绘(如奇怪名字→流汗 wry、接梗→惊讶 surprise)
   const [obContinueHint, setObContinueHint] = useState(false); // 长时间不点 chip 时的弱提示
+  const [obAutoControl, setObAutoControl] = useState(INITIAL_ONBOARDING_AUTO_CONTROL);
+  const obAutoControlRef = useRef(INITIAL_ONBOARDING_AUTO_CONTROL);
   const [obCrop, setObCrop] = useState(null); // 头像裁剪弹窗状态
   // 立绘双层(交叉溶解):slots=两层各 src, layer=当前在顶(不透明)的层。合成一个 state 一次提交,避免换图/切层两次 setState 间的中间帧闪(重影根因之一)。
   const [obPortrait, setObPortrait] = useState({ slots: [null, null], layer: 0 });
@@ -236,6 +240,11 @@ export default function Home({ testMode = false }) {
   const obDemo = obBeat && obBeat.demo;
   const introFrame = obIntro >= 0 ? INTRO[obIntro] : null;
   const obActive = obIntro >= 0 || !!obBeat;
+  const introTimerPlan = resolveAutoAdvancePlan({
+    autoNext: introFrame ? (introFrame.hold ? "intro:hint" : "intro:advance") : null,
+    autoMs: introFrame ? (introFrame.hold ? 2500 : introFrame.dur || 1200) : 0,
+    menuOpen,
+  });
   // 当前有效 emo:回退进入且该拍有 backEmo → 用反悔姿势,否则常态 emo。
   const obEmoBase = obBeat ? (obViaBack && obBeat.backEmo ? obBeat.backEmo : obBeat.emo) : null;
   const obEmo = obEmoOverride || (obBeat && obBeat.id === "avatar" && obEcho.nameOdd ? "wry" : obEmoBase);
@@ -292,7 +301,7 @@ export default function Home({ testMode = false }) {
       r = JSON.parse(localStorage.getItem(HOME_KEY) || "null");
     } catch (e) {}
     if (r && r.card) {
-      restoredRef.current = true;
+      restoredRef.current = hasRestoredHomeConversation(r);
       setCard(r.card);
       setIsTangmu(!!r.isTangmu);
       setSessionId(r.sessionId || newSessionId());
@@ -308,7 +317,8 @@ export default function Home({ testMode = false }) {
       setObIntro(0); // 从入场演出(背身)开始
       return;
     }
-    if (!isOnboarded() && !restoredRef.current) {
+    const skipOnce = consumeTestHomeBypass();
+    if (!skipOnce && !isOnboarded() && !restoredRef.current) {
       setObEcho(loadEcho());
       setObIntro(0);
     }
@@ -326,16 +336,14 @@ export default function Home({ testMode = false }) {
   }
   // 入场节奏:背身→回头(无 hold)按 dur 自动播到正面;正面对话帧(hold)停下等点击推进,太久没点(2.5s)冒"点击继续"提示。
   useEffect(() => {
-    if (obIntro < 0) return undefined;
+    if (obIntro < 0 || !introTimerPlan.shouldSchedule) return undefined;
     setShowIntroHint(false);
-    const cur = INTRO[obIntro];
-    if (cur && cur.hold) {
-      const t = setTimeout(() => setShowIntroHint(true), 2500); // 正面对话:等点击,太久没点→提示
-      return () => clearTimeout(t);
-    }
-    const t = setTimeout(advanceIntro, (cur && cur.dur) || 1200); // 背身/回头:自动切下一帧
-    return () => clearTimeout(t);
-  }, [obIntro]);
+    const timer = setTimeout(() => {
+      if (introTimerPlan.nextId === "intro:hint") setShowIntroHint(true);
+      else advanceIntro();
+    }, introTimerPlan.delay);
+    return () => clearTimeout(timer);
+  }, [obIntro, introTimerPlan.shouldSchedule, introTimerPlan.nextId, introTimerPlan.delay]);
 
   // 拉默认糖沐卡(《新人入店》characters 里 name 含「糖沐」)。
   useEffect(() => {
@@ -395,8 +403,7 @@ export default function Home({ testMode = false }) {
     };
   }, [fullscreen]);
 
-  // onboarding 期间 = 全屏接管:给 root 挂类,隐藏导航壳 chrome(菜单头条 / 续玩浮条),
-  // 新客引导期间不露导航,真·满铺。引导结束(obActive→false)自动恢复。
+  // onboarding 期间 = 全屏接管:给 root 挂类,隐藏续玩浮条并让菜单保持可用。
   useEffect(() => {
     const el = document.documentElement;
     el.classList.toggle("ais-onboarding", obActive);
@@ -404,11 +411,19 @@ export default function Home({ testMode = false }) {
   }, [obActive]);
 
   useEffect(() => {
+    if (!obActive) return undefined;
+    return registerBeforeMenuNavigate(() => {
+      if (testMode) setTestHomeBypass();
+      endOnboarding();
+    });
+  }, [obActive, registerBeforeMenuNavigate, testMode, obEcho]);
+
+  useEffect(() => {
     obStepRef.current = obStep;
   }, [obStep]);
 
   useEffect(() => {
-    if (!obBeat || !obBeat.autoNext) return undefined;
+    if (!obBeat || !obBeat.autoNext || menuOpen) return undefined;
     const beatId = obBeat.id;
     const timer = setTimeout(() => {
       if (obStepRef.current === beatId) {
@@ -416,7 +431,7 @@ export default function Home({ testMode = false }) {
       }
     }, obBeat.autoMs);
     return () => clearTimeout(timer);
-  }, [obBeat]);
+  }, [obBeat, menuOpen]);
 
   useEffect(() => {
     return () => {
@@ -621,7 +636,15 @@ export default function Home({ testMode = false }) {
   }
 
   // —— 新手引导逻辑 ——
+  function commitOnboardingAutoEvent(event) {
+    const transition = transitionOnboardingAutoControl(obAutoControlRef.current, event);
+    obAutoControlRef.current = transition.control;
+    setObAutoControl(transition.control);
+    if (transition.blurComposer) obInputRef.current?.blur();
+    return transition;
+  }
   function endOnboarding(echo) {
+    commitOnboardingAutoEvent({ type: "invalidate" });
     if (!testMode) {
       markOnboarded();
       saveEcho(echo || obEcho);
@@ -634,6 +657,7 @@ export default function Home({ testMode = false }) {
     setObPendingConfirm(null);
     setObEmoOverride(null);
     setObContinueHint(false);
+    setObIntro(-1);
     setObStep(null);
   }
   function persistEcho(echo) {
@@ -682,9 +706,12 @@ export default function Home({ testMode = false }) {
       setObEcho(echo);
       persistEcho(echo);
     }
-    if (c.to) navigate(c.to);
     if (c.done) endOnboarding(echo);
-    else if (c.next) obGoNext(c.next);
+    if (c.to) {
+      navigate(c.to);
+      return;
+    }
+    if (!c.done && c.next) obGoNext(c.next);
   }
   // 解析糖沐回复的辨别标记:[CHAT]/[MEME]=接话不填 / [NONE]=无偏好 / [OK]=填答案。名字拍强制要求标记,避免漏标时误写卡。
   async function obFieldSubmit() {

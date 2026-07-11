@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import "./IdentityCard.css";
 
 // 身份卡(入店凭证)· 横版暖米白纸质 · 点一下翻面。onboarding 收尾:糖沐递给新客,印上称呼 + 口味 + 一句寄语。
@@ -15,6 +15,9 @@ import "./IdentityCard.css";
 //   forming  登记态(边填边成形):不可翻面(还没办好)、正面临时显口味行、名字/口味用 key 触发浮现动画。
 export function IdentityCard({ name, taste, message, avatar, issuedAt, shopName = "沐言书坊", clerk = "糖沐", forming = false }) {
   const [flipped, setFlipped] = useState(false);
+  useLayoutEffect(() => {
+    if (forming) setFlipped(false);
+  }, [forming]);
   const nick = (name || "").trim();
   const hasName = !!nick;
   const shownNick = nick || "客人";

@@ -966,17 +966,17 @@
   display: none !important;
 }
 
-/* onboarding 全屏接管:隐藏导航壳 chrome(桌面 rail / 手机 Pill Nav + 续玩浮条),
-   新客引导期间不露导航;引导结束自动恢复。 */
-.ais-onboarding .staggered-menu-wrapper,
-.ais-onboarding .shell-pillnav,
+/* onboarding 全屏接管:隐藏续玩浮条,保留菜单作为随时离开的出口。 */
 .ais-onboarding .resume-bar {
   display: none !important;
 }
 
-.ais-home-fullscreen .shell--semi-nav,
-.ais-onboarding .shell--semi-nav {
+.ais-home-fullscreen .shell--semi-nav {
   padding-left: 0;
+}
+
+.ais-onboarding .staggered-menu-wrapper.fixed-wrapper {
+  z-index: 70;
 }
 
 /* onboarding 接管首屏时把 Home 锁在视口上。
