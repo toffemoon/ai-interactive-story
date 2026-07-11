@@ -555,6 +555,28 @@ export default function Create() {
     patch(kind, (d0) => ({ draft: { ...d0.draft, description: text } }));
   }
 
+  // D5 导出:characters 套 chara_card_v2 信封(与酒馆 JSON 同构,可被 D2 导入原样吃回),
+  // 其余卡种导裸 data;纯前端 Blob 下载,零请求。
+  function exportCard(card, kk = kind) {
+    const c = (card && card.data) || card || {};
+    if (!Object.keys(c).length) {
+      flash("还没有可导出的内容");
+      return;
+    }
+    const obj = kk === "characters" ? wrapCard(c) : c;
+    const nm = c.name || c.title || "未命名";
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nm + ".json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    flash("已导出《" + nm + "》.json");
+  }
+
   // D4 故事级拆回:/api/presets 列表已含完整卡组 data,选一条把四类卡追加回各台 built
   // (不清现有、不动原预设;发布时按新名字生成新预设,不碰权属)。
   async function openPresets() {
@@ -1218,6 +1240,9 @@ export default function Create() {
                   收进本台 · 再建一张
                 </Button>
                 <Button variant="line" onClick={openLib}>从卡库补素材</Button>
+                <Button variant="line" onClick={() => exportCard(desk.draft)} disabled={!hasDraft} title={hasDraft ? "下载当前草稿为 JSON(角色卡=chara_card_v2,可再导入)" : "先聊出一张卡再导出"}>
+                  导出草稿 JSON
+                </Button>
                 <div className="create-actions-sep" aria-hidden="true" />
                 <Button
                   variant="primary"
@@ -1594,6 +1619,7 @@ export default function Create() {
                       <div className="create-built-head">
                         <span className="create-built-name t-kai">{nm}</span>
                         {entries && <span className="create-built-count t-meta">{entries.length} 条条目</span>}
+                        <button className="create-built-x create-built-export" onClick={() => exportCard(card)} title="下载为 JSON">导出</button>
                         <button className="create-built-x" onClick={() => removeBuilt(i)}>移除</button>
                       </div>
                       {entries ? (

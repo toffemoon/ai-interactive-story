@@ -163,3 +163,8 @@ plan: docs/2026-07-11-create-card-canvas-plan.md
   - 故事级拆回:官方《雨夜档案-第七站台》→ 角色 3→6、演出 0→1、世界 0→1、故事 0→1(追加语义,原 3 张保留),toast 精确汇报,装订清单实时联动(角色卡 ×7…);
   - build 1.88s。
 - ⚠ 插曲如实:D4 编辑中途 console 出现 6 条 Create 崩溃(同一事件×6 订阅通道)——分批 Edit 的 HMR 中间帧(kind effect 先引用 setPresetsModal、state 声明后落)。冷加载复验:error 计数零新增、全功能正常,最终代码干净。教训:同组 state+引用应一次 Edit 落盘,已记。
+
+## D5 · 2026-07-12 凌晨 ✅ 导出 JSON
+
+- 实现:exportCard——characters 走现成 wrapCard 套 chara_card_v2 信封(与酒馆 JSON 同构,**可被 D2 导入原样吃回**),其余卡种导裸 data;Blob+<a download> 纯前端零请求。入口:动作列「导出草稿 JSON」(无草稿置灰)+ builtView 每卡「导出」。
+- 验收:点击导出 → toast「已导出《白栎·改》.json」(链路无异常);builtView 6 卡各带导出钮;round-trip 由同构性成立(D2 已实测解析 {spec,data} 信封);build 过(1.80s)。
