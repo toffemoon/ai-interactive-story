@@ -1402,7 +1402,7 @@
 @media (min-width: 861px) {
   .create-canvas .create-field {
     position: relative;
-    padding-right: 44px;
+    padding-right: 76px; /* C3:动作条最多两钮(⟳/✦ + ✎) */
     border-radius: var(--r-sm);
     transition: background var(--dur-fast) var(--ease-out);
   }
@@ -1640,5 +1640,18 @@
   .create-journal-scrim,
   .create-journal-panel {
     animation: none !important;
+  }
+}
+
+/* ———— C3 字段级 AI 动作:空字段=✦ 补写目标,不再是空行 ———— */
+@media (min-width: 861px) {
+  .create-field-v-empty {
+    color: var(--muted);
+    opacity: 0.7;
+    font-family: var(--font-kai);
+  }
+  .create-field-act:disabled {
+    opacity: 0.45;
+    cursor: default;
   }
 }

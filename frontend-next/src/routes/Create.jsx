@@ -230,30 +230,52 @@ export default function Create() {
   const patch = (kk, p) =>
     setDesks((ds) => ({ ...ds, [kk]: { ...ds[kk], ...(typeof p === "function" ? p(ds[kk]) : p) } }));
 
-  async function send() {
+  // 发一句话进建卡管线(命令条 send 与字段级指令共用;messages/draft 契约不动)。
+  // filled 改为客户端 diff:如实标出这一轮实际变化的字段(C3 坦白原则——模型可能顺手动别处,全部显形)。
+  async function sendText(rawText, { clearInput = false } = {}) {
     const kk = kind;
     const cur = desks[kk];
-    const text = (cur.input || "").trim();
+    const text = (rawText || "").trim();
     if (!text || busy) return;
     setBusy(true);
     const apiMsgs = [...cur.messages, { who: "你", text }].map((m) => ({
       role: m.who === "你" ? "user" : "assistant",
       content: m.text,
     }));
-    patch(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text }], input: "" }));
+    patch(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text }], ...(clearInput ? { input: "" } : {}) }));
     try {
       const r = await postJSON("/api/build_card", { kind: kk, messages: apiMsgs, draft: cur.draft, seed: "" });
       const ask = [r.reply, r.next_question].filter(Boolean).join(" ");
-      patch(kk, (d0) => ({
-        messages: [...d0.messages, { who: "ai", text: ask || "(这轮没接住——换个说法,或把内容分短一点再说一次)" }],
-        draft: r.draft ? { ...r.draft, ...pickPics(d0.draft) } : d0.draft, // 保住已上传的头像/立绘
-        filled: r.filled || (r.draft ? Object.keys(r.draft) : d0.filled),
-      }));
+      patch(kk, (d0) => {
+        const nextDraft = r.draft ? { ...r.draft, ...pickPics(d0.draft) } : d0.draft; // 保住已上传的头像/立绘
+        const changed = r.draft
+          ? Object.keys(nextDraft).filter(
+              (k) => JSON.stringify(nextDraft[k]) !== JSON.stringify((d0.draft || {})[k])
+            )
+          : d0.filled;
+        return {
+          messages: [...d0.messages, { who: "ai", text: ask || "(这轮没接住——换个说法,或把内容分短一点再说一次)" }],
+          draft: nextDraft,
+          filled: changed,
+        };
+      });
     } catch (e) {
       patch(kk, (d0) => ({ messages: [...d0.messages, { who: "ai", text: "(建卡出错:" + e.message + ")" }] }));
     } finally {
       setBusy(false);
     }
+  }
+  function send() {
+    return sendText(desks[kind].input, { clearInput: true });
+  }
+  // C3 字段级 AI 动作:⟳ 改写 / ✦ 补写 = 合成定向指令走同一管线。
+  // 「尽量别动其他字段」是 prompt 约定不是硬锁;实际动了哪些,filled diff 全部墨晕显形。
+  function sendFieldDirective(f, mode) {
+    const text =
+      mode === "fill"
+        ? `请直接补写「${f.k}」(${f.k0}):按已有设定写出这一块的内容并填进 ${f.k0} 字段。不要反问、不要只解释,这一轮就把内容写出来。尽量别动其他字段。`
+        : `请直接把「${f.k}」(${f.k0})改写得更具体、更立体,写回 ${f.k0} 字段。不要反问,这一轮就改完。尽量别动其他字段。`;
+    return sendText(text);
   }
 
   async function onUpload(ev) {
@@ -557,11 +579,13 @@ export default function Create() {
     return Object.keys(d)
       .filter((k) => !NON_FIELD_KEYS.includes(k))
       .map((k) => ({
-        k0: k, // 原始 key(就地手改回写用)
+        k0: k, // 原始 key(就地手改/定向指令回写用)
         k: LABELS[k] || k,
         v: fmtVal(d[k]),
         // 纯文本字段可就地手改;对象/数组(世界书 entries、故事 timeline、tags…)v1 只读走「聊着改」
         editable: typeof d[k] === "string",
+        // AI 骨架常带空串字段:收编成 ✦ 补写目标,不再是意义不明的空行
+        empty: typeof d[k] === "string" && !d[k].trim(),
         fresh: (desk.filled || []).includes(k),
         hidden: /secret|隐藏|真相/i.test(k),
       }));
@@ -873,17 +897,30 @@ export default function Create() {
                             onBlur={commitFieldEdit}
                             aria-label={"编辑" + f.k}
                           />
+                        ) : f.empty ? (
+                          <span className="create-field-v create-field-v-empty t-ui-sm">还空着——✦ 让 AI 补写,或 ✎ 手写</span>
                         ) : (
                           <span className="create-field-v t-ui-sm">{f.hidden ? "(隐藏真相,玩家不可见)" + f.v : f.v}</span>
                         )}
                         {editingKey !== f.k0 && (
                           <span className="create-field-acts">
                             {f.editable ? (
-                              <button className="create-field-act" title="就地手改" aria-label={"手改" + f.k} onClick={() => startFieldEdit(f)}>
-                                ✎
-                              </button>
+                              <>
+                                <button
+                                  className="create-field-act"
+                                  disabled={busy}
+                                  title={f.empty ? "让 AI 补写这一块" : "让 AI 把这一块改写得更立体"}
+                                  aria-label={(f.empty ? "补写" : "改写") + f.k}
+                                  onClick={() => sendFieldDirective(f, f.empty ? "fill" : "rewrite")}
+                                >
+                                  {f.empty ? "✦" : "⟳"}
+                                </button>
+                                <button className="create-field-act" disabled={busy} title="就地手改" aria-label={"手改" + f.k} onClick={() => startFieldEdit(f)}>
+                                  ✎
+                                </button>
+                              </>
                             ) : (
-                              <button className="create-field-act" title="这块是结构化内容,到命令条聊着改" aria-label={"聊着改" + f.k} onClick={() => chatAboutField(f)}>
+                              <button className="create-field-act" disabled={busy} title="这块是结构化内容,到命令条聊着改" aria-label={"聊着改" + f.k} onClick={() => chatAboutField(f)}>
                                 聊
                               </button>
                             )}
