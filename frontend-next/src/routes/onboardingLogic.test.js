@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { toCardModel } from "../lib/cardModel.js";
-import { beatById } from "./onboardingScript.js";
-import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, isExactFillChipSubmission, isExplicitNameSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, sanitizeCardMessage, shouldAcceptNameLocally, shouldConfirmBareNameLocally } from "./onboardingLogic.js";
+import { AUTO_CHAT_INTERRUPT_AI, beatById, buildAutoChatShownContext, consumeTestHomeBypass, setTestHomeBypass } from "./onboardingScript.js";
+import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, hasRestoredHomeConversation, INITIAL_ONBOARDING_AUTO_CONTROL, isCurrentOnboardingInteraction, isExactFillChipSubmission, isExplicitNameSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, resolveAutoAdvancePlan, sanitizeCardMessage, shouldAcceptNameLocally, shouldConfirmBareNameLocally, transitionOnboardingAutoControl } from "./onboardingLogic.js";
 
 test("extracts the usable name from a sentence", () => {
   assert.deepEqual(analyzeNameInput("我的名字叫 叶叶"), {
@@ -171,6 +171,13 @@ test("does not treat ok as skipping the taste answer", () => {
   assert.equal(matchChipIntent("ok", chips), null);
 });
 
+test("taste skip requires an unambiguous absence", () => {
+  const chips = [{ label: "还没看什么", set: { taste: "" }, next: "cardDone" }];
+  for (const text of ["不是没有，我在看剑来", "没有看书，但在追三体电视剧", "暂时没有，不过我在看三体", "有没有推荐"]) {
+    assert.equal(matchChipIntent(text, chips), null, text);
+  }
+});
+
 test("distinguishes typed fill text from clicking a suggestion chip", () => {
   const chip = { label: "半夜给自己写信的人", fill: "半夜给自己写信的人" };
   assert.equal(isExactFillChipSubmission("半夜给自己写信的人", chip), true);
@@ -192,6 +199,16 @@ test("matches natural and English avatar skip wording", () => {
   ];
   assert.equal(matchChipIntent("头像先跳过好了", chips), chips[1]);
   assert.equal(matchChipIntent("no avatar, continue", chips), chips[1]);
+});
+
+test("avatar negation wins over upload words", () => {
+  const chips = [
+    { label: "＋ 传张头像", upload: true },
+    { label: "用名字字头就好", next: "taste" },
+  ];
+  for (const text of ["我不要上传照片", "不传头像", "不用图片"]) {
+    assert.equal(matchChipIntent(text, chips), chips[1], text);
+  }
 });
 
 test("matches explicit avatar upload wording without broad short-token matches", () => {
@@ -402,4 +419,139 @@ test("onboarding rehearses story chat and creation without route jumps", () => {
   assert.equal(wrap.centerBubble, true);
   assert.match(wrap.line({ name: "何人初见月" }), /主页|探索页|创作/);
   assert.equal(wrap.chips[0].to, "/explore");
+});
+
+test("auto dialogue pauses and resumes with its full delay", () => {
+  const base = { autoNext: "tryChatTangmuReply", autoMs: 3200, nextOverride: null };
+  assert.deepEqual(resolveAutoAdvancePlan(base), {
+    pauseReasons: [],
+    shouldSchedule: true,
+    nextId: "tryChatTangmuReply",
+    delay: 3200,
+  });
+  for (const paused of [
+    { inputFocused: true, reason: "focus" },
+    { hasDraft: true, reason: "draft" },
+    { menuOpen: true, reason: "menu" },
+    { replyBlocked: true, reason: "pending-reply" },
+  ]) {
+    const plan = resolveAutoAdvancePlan({ ...base, [Object.keys(paused)[0]]: true });
+    assert.equal(plan.shouldSchedule, false);
+    assert.deepEqual(plan.pauseReasons, [paused.reason]);
+  }
+  assert.equal(resolveAutoAdvancePlan({ ...base, inputFocused: false, hasDraft: false }).delay, 3200);
+});
+
+test("successful interruption overrides the next target without changing the delay", () => {
+  assert.deepEqual(
+    resolveAutoAdvancePlan({ autoNext: "tryChatIntro", autoMs: 4200, nextOverride: "tryCreate" }),
+    { pauseReasons: [], shouldSchedule: true, nextId: "tryCreate", delay: 4200 }
+  );
+  assert.equal(resolveAutoAdvancePlan({ autoMs: 4200 }).shouldSchedule, false);
+});
+
+test("send blurs the composer, invalidates the old target, and waits for a reply", () => {
+  const sent = transitionOnboardingAutoControl(
+    { ...INITIAL_ONBOARDING_AUTO_CONTROL, nextOverride: "tryChatTangmuReply" },
+    { type: "send" }
+  );
+  assert.equal(sent.blurComposer, true);
+  assert.equal(sent.applied, true);
+  assert.deepEqual(sent.control, { interactionEpoch: 1, nextOverride: null, replyState: "pending" });
+  assert.equal(
+    resolveAutoAdvancePlan({ autoNext: "tryChatTangmuReply", autoMs: 3200, replyBlocked: sent.control.replyState !== "idle" }).shouldSchedule,
+    false
+  );
+});
+
+test("current success overrides to tryCreate while failure stays paused", () => {
+  const sent = transitionOnboardingAutoControl(INITIAL_ONBOARDING_AUTO_CONTROL, { type: "send" });
+  const success = transitionOnboardingAutoControl(sent.control, { type: "reply-success", interactionEpoch: 1 });
+  assert.deepEqual(success.control, { interactionEpoch: 1, nextOverride: "tryCreate", replyState: "idle" });
+  assert.equal(resolveAutoAdvancePlan({ autoNext: "tryChatIntro", autoMs: 4200, nextOverride: success.control.nextOverride }).nextId, "tryCreate");
+
+  const failed = transitionOnboardingAutoControl(sent.control, { type: "reply-failure", interactionEpoch: 1 });
+  assert.deepEqual(failed.control, { interactionEpoch: 1, nextOverride: null, replyState: "failed" });
+  assert.equal(resolveAutoAdvancePlan({ autoNext: "tryChatIntro", autoMs: 4200, replyBlocked: true }).shouldSchedule, false);
+  const retry = transitionOnboardingAutoControl(failed.control, { type: "retry" });
+  assert.deepEqual(retry.control, { interactionEpoch: 2, nextOverride: null, replyState: "pending" });
+  assert.equal(retry.blurComposer, true);
+});
+
+test("late success and failure cannot mutate a newer interaction", () => {
+  const current = { interactionEpoch: 2, nextOverride: null, replyState: "pending" };
+  for (const type of ["reply-success", "reply-failure"]) {
+    const stale = transitionOnboardingAutoControl(current, { type, interactionEpoch: 1 });
+    assert.equal(stale.applied, false, type);
+    assert.deepEqual(stale.control, current, type);
+  }
+});
+
+test("menu close restarts the full Intro or beat timer", () => {
+  for (const timer of [
+    { autoNext: "intro:advance", autoMs: 1300 },
+    { autoNext: "tryChatTangmuReply", autoMs: 3200 },
+  ]) {
+    assert.equal(resolveAutoAdvancePlan({ ...timer, menuOpen: true }).shouldSchedule, false);
+    assert.deepEqual(resolveAutoAdvancePlan({ ...timer, menuOpen: false }), {
+      pauseReasons: [],
+      shouldSchedule: true,
+      nextId: timer.autoNext,
+      delay: timer.autoMs,
+    });
+  }
+});
+
+test("only the current interaction epoch and beat may apply a reply", () => {
+  const current = { requestEpoch: 4, currentEpoch: 4, requestBeatId: "tryChatTalk", currentBeatId: "tryChatTalk" };
+  assert.equal(isCurrentOnboardingInteraction(current), true);
+  assert.equal(isCurrentOnboardingInteraction({ ...current, requestEpoch: 3 }), false);
+  assert.equal(isCurrentOnboardingInteraction({ ...current, requestBeatId: "tryChatIntro" }), false);
+});
+
+test("test Home bypass is consumed exactly once", () => {
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.get(key) || null,
+    setItem: (key, value) => values.set(key, String(value)),
+    removeItem: (key) => values.delete(key),
+  };
+  setTestHomeBypass(storage);
+  assert.equal(consumeTestHomeBypass(storage), true);
+  assert.equal(consumeTestHomeBypass(storage), false);
+});
+
+test("only real message history suppresses first-visit onboarding", () => {
+  assert.equal(hasRestoredHomeConversation({ card: { data: { name: "糖沐" } }, msgs: [] }), false);
+  assert.equal(hasRestoredHomeConversation({ card: { data: { name: "糖沐" } }, msgs: [{ who: "me", text: "你好" }] }), true);
+  assert.equal(hasRestoredHomeConversation(null), false);
+});
+
+test("auto chat beats expose speaker-aware interruption contracts", () => {
+  const ids = ["tryChatTalk", "tryChatTangmuReply", "tryChatIntro", "tryChatLeave"];
+  for (const id of ids) {
+    const beat = beatById(id);
+    assert.equal(beat.interruptible, true, id);
+    assert.ok(AUTO_CHAT_INTERRUPT_AI[beat.speaker], id);
+    const shownContext = buildAutoChatShownContext(id, { name: "雨飞" }, beat.line({ name: "雨飞" }));
+    const scenario = AUTO_CHAT_INTERRUPT_AI[beat.speaker].scenario({ name: "雨飞", shownContext });
+    assert.match(scenario, new RegExp(beat.speaker));
+    assert.match(scenario, /只回应已经显示/);
+  }
+  assert.equal(beatById("tryChatGreet").interruptible, undefined);
+});
+
+test("auto chat context contains shown lines but excludes future lines", () => {
+  const current = beatById("tryChatTangmuReply");
+  const context = buildAutoChatShownContext(current.id, { name: "雨飞" }, current.line({ name: "雨飞" }));
+  assert.match(context, /糖沐\?你怎么把我从书里喊出来了/);
+  assert.match(context, /别紧张,宣/);
+  assert.doesNotMatch(context, /介绍一下,这是宣/);
+});
+
+test("wrap CTA promises the real Explore destination", () => {
+  const chip = beatById("tryWrap").chips[0];
+  assert.equal(chip.label, "去故事广场看看");
+  assert.equal(chip.to, "/explore");
+  assert.equal(chip.done, true);
 });

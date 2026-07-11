@@ -158,11 +158,11 @@ const CHIP_SYNONYMS = [
   { key: "叫宣出来看看", words: ["叫宣", "宣出来", "叫角色", "叫她", "叫出来", "把人请出来", "角色聊天", "聊天看看", "叫她出来"] },
   { key: "继续看创作", words: ["继续看创作", "看创作", "创作", "工坊", "继续", "下一步", "下一个", "然后", "next", "go on", "continue"] },
   { key: "收尾吧", words: ["收尾", "结束引导", "最后", "继续", "下一步", "下一个", "next", "go on", "continue"] },
-  { key: "带我进第一本书", words: ["进第一本", "第一本书", "开始看", "开始故事", "去探索", "带我进", "start the first story", "first story"] },
+  { key: "去故事广场看看", words: ["故事广场", "去故事广场", "看看故事", "去探索", "探索故事", "explore stories"] },
   { key: "我自己逛逛", words: ["自己逛", "自己看看", "我自己", "随便逛", "先不用"] },
 ];
 
-const PROGRESS_CHIP_KEYS = new Set(["带我认认这儿", "然后呢", "还有吗", "继续", "最后一个", "用名字字头就好", "拿一本看看", "继续看角色", "把宣喊出来", "听糖沐解释", "互相介绍", "和宣打招呼", "问她一句", "叫宣出来看看", "继续看创作", "收尾吧", "带我进第一本书"].map(normalizeText));
+const PROGRESS_CHIP_KEYS = new Set(["带我认认这儿", "然后呢", "还有吗", "继续", "最后一个", "用名字字头就好", "拿一本看看", "继续看角色", "把宣喊出来", "听糖沐解释", "互相介绍", "和宣打招呼", "问她一句", "叫宣出来看看", "继续看创作", "收尾吧", "去故事广场看看"].map(normalizeText));
 const AFFIRM_CONTINUE_EXACT = new Set(["ok", "okay", "yes", "yep", "sure", "好", "好的", "好呀", "好啊", "嗯", "嗯嗯", "可以", "行", "了解", "知道了", "明白", "收到"].map(normalizeText));
 const AFFIRM_CONTINUE_WORDS = ["继续", "接着", "下一步", "下一个", "往下", "说下去", "继续说", "继续讲", "继续介绍", "带我看看", "带我逛", "带路", "show me around", "take me around", "next", "go on", "continue"];
 
@@ -201,17 +201,109 @@ function contextualProgressChip(raw, chips) {
   return progress.length === 1 ? progress[0] : null;
 }
 
+function isTasteSkipChip(chip) {
+  return normalizeText(chip && chip.label) === normalizeText("还没看什么");
+}
+
+function isUnambiguousTasteSkip(raw) {
+  const text = normalizeText(raw);
+  if (!text || /不是没有|但|不过|其实|在看|在读|在追|推荐|有没有/.test(text)) return false;
+  return /^(?:我)?(?:最近|现在|暂时)?(?:还没|没有|没在|没)(?:看|读|追)?(?:过)?(?:什么|啥)?(?:书|故事|作品|内容|东西)?$/.test(text) ||
+    /^(?:想不起来|不知道|没想好)$/.test(text);
+}
+
+function hasNegatedAvatarUpload(raw) {
+  const text = normalizeText(raw);
+  return /(?:不要|不用|不想|不传|别|无需|没必要)(?:上传|传|选|换|用|放)*(?:头像|照片|图片|图)/.test(text) ||
+    /(?:no|without|skip)(?:avatar|photo)/i.test(text);
+}
+
 export function matchChipIntent(raw, chips) {
   const text = normalizeText(raw);
   if (!text || !Array.isArray(chips)) return null;
+  const uploadChip = chips.find((chip) => Boolean(chip && chip.upload));
+  const avatarSkipChip = uploadChip
+    ? chips.find((chip) => chip && !chip.upload && /字头|跳过头像|不传头像/.test(normalizeText(chip.label)))
+    : null;
+  if (avatarSkipChip && hasNegatedAvatarUpload(raw)) return avatarSkipChip;
   for (const chip of chips) {
+    if (isTasteSkipChip(chip) && !isUnambiguousTasteSkip(raw)) continue;
     const words = wordsForChip(chip && chip.label);
     for (const word of words) {
-      const w = normalizeText(word);
-      if (w && text.includes(w)) return chip;
+      const normalizedWord = normalizeText(word);
+      if (normalizedWord && text.includes(normalizedWord)) return chip;
     }
   }
   return contextualProgressChip(raw, chips);
+}
+
+export function resolveAutoAdvancePlan({
+  autoNext = null,
+  autoMs = 0,
+  nextOverride = null,
+  inputFocused = false,
+  hasDraft = false,
+  menuOpen = false,
+  replyBlocked = false,
+} = {}) {
+  const pauseReasons = [];
+  if (inputFocused) pauseReasons.push("focus");
+  if (hasDraft) pauseReasons.push("draft");
+  if (menuOpen) pauseReasons.push("menu");
+  if (replyBlocked) pauseReasons.push("pending-reply");
+  return {
+    pauseReasons,
+    shouldSchedule: Boolean(autoNext) && pauseReasons.length === 0,
+    nextId: autoNext ? nextOverride || autoNext : null,
+    delay: Number(autoMs) || 0,
+  };
+}
+
+export function isCurrentOnboardingInteraction({ requestEpoch, currentEpoch, requestBeatId, currentBeatId } = {}) {
+  return requestEpoch === currentEpoch && requestBeatId === currentBeatId;
+}
+
+export function hasRestoredHomeConversation(snapshot) {
+  return Boolean(snapshot && snapshot.card && Array.isArray(snapshot.msgs) && snapshot.msgs.length > 0);
+}
+
+export const INITIAL_ONBOARDING_AUTO_CONTROL = Object.freeze({
+  interactionEpoch: 0,
+  nextOverride: null,
+  replyState: "idle",
+});
+
+export function transitionOnboardingAutoControl(control = INITIAL_ONBOARDING_AUTO_CONTROL, event = {}) {
+  const current = { ...INITIAL_ONBOARDING_AUTO_CONTROL, ...control };
+  if (event.type === "send" || event.type === "retry" || event.type === "request-start") {
+    return {
+      control: { interactionEpoch: current.interactionEpoch + 1, nextOverride: null, replyState: "pending" },
+      blurComposer: event.type !== "request-start",
+      applied: true,
+    };
+  }
+  if (event.type === "invalidate") {
+    return {
+      control: { interactionEpoch: current.interactionEpoch + 1, nextOverride: null, replyState: "idle" },
+      blurComposer: false,
+      applied: true,
+    };
+  }
+  if (event.type === "reply-success" || event.type === "reply-failure" || event.type === "reply-settled") {
+    if (event.interactionEpoch !== current.interactionEpoch) {
+      return { control: current, blurComposer: false, applied: false };
+    }
+    return {
+      control: {
+        ...current,
+        nextOverride: event.type === "reply-success" ? "tryCreate" : null,
+        replyState: event.type === "reply-failure" ? "failed" : "idle",
+      },
+      blurComposer: false,
+      applied: true,
+    };
+  }
+  return { control: current, blurComposer: false, applied: false };
 }
 
 export function parseFieldIntentReply(raw, { requireTag = false, allowNone = true } = {}) {

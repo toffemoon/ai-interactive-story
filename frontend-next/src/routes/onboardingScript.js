@@ -19,6 +19,33 @@
 
 export const OB_KEY = "ais_onboarded_v1"; // 首访完成标记(有它 = 老用户,不再引导)
 export const ECHO_KEY = "ais_ob_echo_v1"; // 回声:称呼/口味,身份卡与后续对话复用
+export const TEST_HOME_BYPASS_KEY = "ais_test_home_bypass_v1";
+
+function sessionStore(storage) {
+  if (storage) return storage;
+  try {
+    return window.sessionStorage;
+  } catch (error) {
+    return null;
+  }
+}
+
+export function setTestHomeBypass(storage) {
+  try {
+    sessionStore(storage)?.setItem(TEST_HOME_BYPASS_KEY, "1");
+  } catch (error) {}
+}
+
+export function consumeTestHomeBypass(storage) {
+  try {
+    const target = sessionStore(storage);
+    const found = Boolean(target?.getItem(TEST_HOME_BYPASS_KEY));
+    if (found) target.removeItem(TEST_HOME_BYPASS_KEY);
+    return found;
+  } catch (error) {
+    return false;
+  }
+}
 
 // emo → 立绘差分图。编号按差分清单:
 // 01常态笑 / 02歪头好奇 / 03眼睛发亮 / 04凑近小声 / 05得意 / 06递出 / 07温和欠身 / 08惊讶 / 09挥手迎接 / 10无奈笑
@@ -86,6 +113,24 @@ export const FIRST_BEAT = "name";
 // beat.ai.scenario 只放「本拍任务」(玩家原话作为 user 传给 /api/chat,不塞进 scenario)。此段属糖沐行为=内容域。
 export const AI_PERSONA =
   "你是糖沐,沐言书坊的店员、看板娘。温和爱书,店员口吻,话里带点暖意,简短自然(最多两三句)。始终留在角色里,用第一人称,不解释、不说「作为AI」。";
+
+const XUAN_INTERRUPT_PERSONA =
+  "你是宣，沐言书坊补书间的补书人。话少、句短、克制，正在 onboarding 中被糖沐临时从书里请出来。";
+
+export const AUTO_CHAT_INTERRUPT_AI = {
+  宣: {
+    description: XUAN_INTERRUPT_PERSONA,
+    scenario: ({ name, shownContext }) =>
+      `你正在和${safePromptText(name, "新客")}对话。以下是已经显示的上下文：${shownContext}。只回应已经显示的内容和玩家此刻的插话，不得假装后续台词已经说过。用宣的口吻接住一句，最多两句，最后自然表示自己要回补书间。`,
+    failureLine: "宣刚才没接上。你可以再试一次，或者继续看创作。",
+  },
+  糖沐: {
+    description: AI_PERSONA,
+    scenario: ({ name, shownContext }) =>
+      `你正在带${safePromptText(name, "新客")}体验角色聊天。以下是已经显示的上下文：${shownContext}。只回应已经显示的内容和玩家此刻的插话，不得假装后续台词已经说过。用糖沐的口吻接住一句，最多两句，并自然收束角色聊天、转向创作体验。`,
+    failureLine: "糖沐刚才没接上。你可以再试一次，或者继续看创作。",
+  },
+};
 
 // 导览期玩家插话时,糖沐的回应场景(闲聊,不推进导览)。
 export const CHAT_SCENARIO =
@@ -249,6 +294,7 @@ export const BEATS = [
   },
   {
     id: "tryChatTalk",
+    interruptible: true,
     autoNext: "tryChatTangmuReply",
     autoMs: 3200,
     speaker: "宣",
@@ -269,6 +315,7 @@ export const BEATS = [
   },
   {
     id: "tryChatTangmuReply",
+    interruptible: true,
     autoNext: "tryChatIntro",
     autoMs: 4200,
     speaker: "糖沐",
@@ -289,6 +336,7 @@ export const BEATS = [
   },
   {
     id: "tryChatIntro",
+    interruptible: true,
     autoNext: "tryChatGreet",
     autoMs: 4200,
     speaker: "糖沐",
@@ -340,6 +388,7 @@ export const BEATS = [
   },
   {
     id: "tryChatLeave",
+    interruptible: true,
     autoNext: "tryCreate",
     autoMs: 3200,
     speaker: "宣",
@@ -411,7 +460,7 @@ export const BEATS = [
     backLine: () => "最后再说一遍:故事在主页和探索页,自己的角色从创作开始。",
     backEmo: "smile",
     chips: [
-      { label: "带我进第一本书", to: "/explore", done: true },
+      { label: "去故事广场看看", to: "/explore", done: true },
       { label: "我自己逛逛", done: true },
     ],
   },
@@ -419,6 +468,25 @@ export const BEATS = [
 
 export function beatById(id) {
   return BEATS.find((b) => b.id === id) || null;
+}
+
+const AUTO_CHAT_CONTEXT_IDS = ["tryChatTalk", "tryChatTangmuReply", "tryChatIntro", "tryChatLeave"];
+
+export function buildAutoChatShownContext(currentBeatId, echo, currentLine) {
+  const currentIndex = AUTO_CHAT_CONTEXT_IDS.indexOf(currentBeatId);
+  if (currentIndex < 0) return safePromptText(currentLine);
+  const lines = AUTO_CHAT_CONTEXT_IDS.slice(0, currentIndex).map((id) => {
+    const beat = beatById(id);
+    return `${beat.speaker}：${safePromptText(beat.line(echo))}`;
+  });
+  if (currentBeatId === "tryChatLeave") {
+    const greet = beatById("tryChatGreet");
+    lines.push(`${greet.speaker}：${safePromptText(greet.line(echo))}`);
+    if (echo && echo.xuanLine) lines.push(`客人：${safePromptText(echo.xuanLine)}`);
+  }
+  const current = beatById(currentBeatId);
+  lines.push(`${current.speaker}：${safePromptText(currentLine)}`);
+  return lines.join("\n");
 }
 
 // 读/写回声(容错)。
