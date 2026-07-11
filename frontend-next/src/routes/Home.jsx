@@ -659,7 +659,7 @@ export default function Home({ testMode = false }) {
     const transition = transitionOnboardingAutoControl(obAutoControlRef.current, event);
     obAutoControlRef.current = transition.control;
     setObAutoControl(transition.control);
-    if (transition.blurComposer) obInputRef.current?.blur();
+    if (transition.blurComposer || event.type === "invalidate") obInputRef.current?.blur();
     return transition;
   }
   function beginOnboardingInteraction(beatId, type = "request-start") {
@@ -1357,7 +1357,7 @@ export default function Home({ testMode = false }) {
                         ? "随口说说…"
                         : obBeat.placeholder
                         ? obBeat.placeholder
-                        : "想跟糖沐说点什么…"
+                        : `想跟${obReplySpeaker}说点什么…`
                     }
                     onChange={(e) => setObInput(e.target.value)}
                     onFocus={() => setObComposerFocused(true)}
