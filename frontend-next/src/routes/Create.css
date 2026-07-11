@@ -1655,3 +1655,115 @@
     cursor: default;
   }
 }
+
+/* ————————————————————————————————————————————————————————————
+   C4 本台架 + 装订区(卡即界面):built 的卡看得见,发布清单常显。
+   ———————————————————————————————————————————————————————————— */
+@media (min-width: 861px) {
+  .create-shelf-h,
+  .create-bind-h {
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    margin-bottom: var(--sp-2);
+  }
+  .create-shelf-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+  .create-shelf-tilt .depth-card {
+    border-radius: var(--r-md);
+  }
+  .create-shelf-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: var(--sp-3) var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: var(--panel);
+  }
+  .create-shelf-card::before {
+    /* 书脊:左缘一条鎏金细带,与卡库/书卡记号呼应 */
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    border-radius: var(--r-pill);
+    background: linear-gradient(180deg, var(--accent-3), color-mix(in srgb, var(--accent-3) 40%, transparent));
+  }
+  .create-shelf-name {
+    font-size: 17px;
+    color: var(--fg);
+  }
+  .create-shelf-sub {
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .create-shelf-acts {
+    position: absolute;
+    top: var(--sp-2);
+    right: var(--sp-2);
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity var(--dur-fast) var(--ease-out);
+  }
+  .create-shelf-card:hover .create-shelf-acts,
+  .create-shelf-card:focus-within .create-shelf-acts {
+    opacity: 1;
+  }
+  .create-shelf-act {
+    padding: 3px 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    background: var(--panel);
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+  }
+  .create-shelf-act:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .create-shelf-empty {
+    color: var(--muted);
+    padding: var(--sp-3);
+    border: 1px dashed var(--line);
+    border-radius: var(--r-md);
+    text-align: center;
+  }
+  /* 装订区:淡沉底,像订书线 */
+  .create-bind {
+    padding: var(--sp-3) var(--sp-4);
+    border: 1px dashed color-mix(in srgb, var(--accent-2) 40%, var(--line));
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--accent-2) 5%, transparent);
+  }
+  .create-bind-h {
+    margin-bottom: var(--sp-1);
+  }
+  .create-bind-list {
+    margin: 0;
+    padding-left: 1.2em;
+    color: var(--muted);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .create-bind-empty {
+    list-style: none;
+    margin-left: -1.2em;
+    opacity: 0.8;
+  }
+  .create-bind-warn {
+    margin-top: var(--sp-2);
+    color: var(--accent);
+  }
+}

@@ -7,7 +7,7 @@ import ImageCropField from "../components/ImageCropField";
 import StoryHero from "../components/StoryHero";
 import CharDetailModal from "../components/CharDetailModal";
 import StaggeredText from "../components/staggered-text";
-// DepthCard 暂下场:C0 画布是大编辑面不倾斜;C4 本台架 mini 卡再请回来。
+import DepthCard from "../components/react-bits/depth-card"; // C4 本台架 mini 卡(画布本体不倾斜)
 import { BlurHighlight } from "../components/react-bits/blur-highlight";
 import { useAuth } from "../state/auth";
 import "./Create.css";
@@ -956,8 +956,38 @@ export default function Create() {
               </section>
             </div>
 
-            {/* 产出侧 */}
+            {/* 产出侧:本台架(看得见的成品)→ 收纳动作 → 装订区(发布清单常显) */}
             <aside className="create-side">
+              <div className="create-shelf">
+                <div className="create-shelf-h t-meta">本台已建 · {desk.built.length}</div>
+                {desk.built.length ? (
+                  <div className="create-shelf-list">
+                    {desk.built.map((card, i) => {
+                      const c = (card && card.data) || card || {};
+                      const nm = c.name || c.title || "未命名";
+                      const entries = worldEntries(card);
+                      const firstField = cardFields(card)[0];
+                      return (
+                        <DepthCard key={nm + i} className="create-shelf-tilt" maxRotation={5}>
+                          <div className="create-shelf-card">
+                            <span className="create-shelf-name t-kai">{nm}</span>
+                            <span className="create-shelf-sub t-meta">
+                              {entries ? `${entries.length} 条条目` : firstField ? firstField.v.slice(0, 22) : "已收进本台"}
+                            </span>
+                            <span className="create-shelf-acts">
+                              <button className="create-shelf-act" onClick={() => setBuiltView(true)}>查看</button>
+                              <button className="create-shelf-act" onClick={() => removeBuilt(i)}>移除</button>
+                            </span>
+                          </div>
+                        </DepthCard>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="create-shelf-empty t-meta">还空着——聊出一张,点「收进本台」。</div>
+                )}
+              </div>
+
               <div className="create-actions">
                 <Button variant="line" onClick={saveCard} disabled={!hasDraft || savingCard} title={hasDraft ? undefined : "先聊出一张卡再收入卡库"}>
                   {savingCard ? "收入中…" : "收入卡库 · 私密"}
@@ -965,9 +995,6 @@ export default function Create() {
                 <Button variant="line" onClick={nextCard} disabled={!hasDraft} title={hasDraft ? undefined : "先聊出一张卡再收进本台"}>
                   收进本台 · 再建一张
                 </Button>
-                {desk.built.length > 0 && (
-                  <Button variant="line" onClick={() => setBuiltView(true)}>查看本台已建({desk.built.length})</Button>
-                )}
                 <Button variant="line" onClick={openLib}>从卡库补素材</Button>
                 <div className="create-actions-sep" aria-hidden="true" />
                 <Button
@@ -980,6 +1007,34 @@ export default function Create() {
                   预览并发布到探索 · 公开
                 </Button>
               </div>
+
+              {/* 装订区:本次发布会打包什么,常显(与 publish 同源 deskCards,「看到的=会发的」YOR-192) */}
+              {(() => {
+                const mf = publishManifest();
+                return (
+                  <div className="create-bind">
+                    <div className="create-bind-h t-meta">装订 · 发布时打包</div>
+                    <ul className="create-bind-list t-meta">
+                      <li>
+                        角色卡 ×{mf.chars.length}
+                        {mf.chars.length > 0 && ":" + mf.chars.map((c) => c.name + (c.secret ? " ⚠" : "")).join("、")}
+                      </li>
+                      {mf.worlds > 0 && <li>设定卡 · 世界书 ×{mf.worlds}</li>}
+                      {mf.players.length > 0 && <li>演出卡 ×{mf.players.length}:{mf.players.join("、")}</li>}
+                      {mf.story && (
+                        <li>
+                          故事书:{mf.story}
+                          {mf.storyExtra > 0 && `(另 ${mf.storyExtra} 张不发)`}
+                        </li>
+                      )}
+                      {!mf.chars.length && <li className="create-bind-empty">还没有角色卡——发布至少要一张</li>}
+                    </ul>
+                    {mf.anySecret && (
+                      <div className="create-bind-warn t-meta">⚠ 带「隐藏真相」的卡会随发布公开,发布前核对</div>
+                    )}
+                  </div>
+                );
+              })()}
             </aside>
           </div>
 
