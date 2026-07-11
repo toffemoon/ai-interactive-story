@@ -75,6 +75,8 @@ const LABELS = {
   premise: "前提", title: "标题", entries: "条目", role: "身份", tags: "标签",
   content: "内容", comment: "条目", keys: "关键词", source: "来源",
   timeline: "时间线", events: "事件节点", main: "主线", anchor: "锚点", tension: "矛盾",
+  // C5 补:引擎新骨架带的键,别再裸奔英文
+  known_public: "公开设定", known_hidden: "隐藏设定", versions: "多版本", relationships: "关系",
 };
 const STORE_KEY = "ais_create_desks_v1";
 const KI_KEY = "ais_create_ki_v1"; // 记住当前卡种 tab(YOR-200)
@@ -873,13 +875,14 @@ export default function Create() {
                 )}
                 <div className="create-card-fields">
                   {fields.length ? (
-                    fields.map((f) => (
+                    fields.map((f, fi) => (
                       <div
                         className={
                           "create-field" +
                           (f.fresh ? " is-fresh" : "") +
                           (editingKey === f.k0 ? " is-editing" : "")
                         }
+                        style={{ "--ci": Math.min(fi, 8) }}
                         key={f.k0}
                       >
                         <span className="create-field-k t-meta">
@@ -1051,7 +1054,7 @@ export default function Create() {
                   正在想……
                 </span>
               </div>
-            ) : !narrClosed && lastAi && desk.messages.length > 1 ? (
+            ) : !narrClosed && lastAi && lastAi.text !== OPENINGS[kind] ? (
               <div className="create-narr" role="status" key={desk.messages.length}>
                 <span className="create-narr-mark t-kai" aria-hidden="true">✒</span>
                 <span className="create-narr-tx t-ui-sm">

@@ -77,33 +77,6 @@
   color: var(--on-accent);
 }
 
-/* 两区主体 */
-.create-body {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 1fr 360px;
-  gap: var(--sp-5);
-  min-height: 0;
-}
-
-/* 对话区 */
-.create-chat {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  background: var(--panel);
-  overflow: hidden;
-  min-height: 420px;
-}
-.create-msgs {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--sp-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-4);
-}
 .create-msg {
   max-width: 90%;
 }
@@ -177,19 +150,6 @@
   margin-left: auto;
 }
 
-/* 实时卡预览 */
-.create-preview {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-4);
-}
-.create-card {
-  border: 1px solid var(--line);
-  border-radius: var(--r-card);
-  background: var(--panel);
-  padding: var(--sp-4);
-  box-shadow: var(--shadow-card);
-}
 .create-card-kind {
   color: var(--accent-3);
 }
@@ -1111,18 +1071,6 @@
 
 /* 布局:对话区吃满视口高(页面基本不滚,只滚消息流),右栏 sticky 跟随 */
 @media (min-width: 861px) {
-  .create-chat {
-    height: calc(100dvh - 268px);
-    min-height: 460px;
-  }
-  .create-preview {
-    position: sticky;
-    top: 64px;
-    align-self: start;
-    max-height: calc(100dvh - 84px);
-    overflow-y: auto;
-  }
-
   /* 入场:标题 → tab 错峰 → 主体;.create-body 带 key=kind,切卡种时同段动效当转场 */
   .create-head {
     animation: createRise 0.5s var(--ease-out) both;
@@ -1130,10 +1078,6 @@
   .create-kind {
     animation: createRise 0.45s var(--ease-out) both;
     animation-delay: calc(80ms + var(--ci, 0) * 60ms);
-  }
-  .create-body {
-    animation: createRise 0.45s var(--ease-out) both;
-    animation-delay: 0.12s;
   }
 }
 @keyframes createRise {
@@ -1154,7 +1098,6 @@
 
 /* 空台引子:贴在消息流底部(靠近输入框),三条起手句错峰浮上来 */
 .create-starters {
-  margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
@@ -1235,12 +1178,6 @@
   }
 }
 
-/* 草稿卡:投影交给 DepthCard(否则倾斜时影子不跟着卡走) */
-.create-card-tilt .create-card {
-  box-shadow: none;
-  border-radius: var(--r-card);
-}
-
 /* 宣纸空卡:虚线内框 + 呼吸的「卡」印(与侧栏「沐」印同一记号语言)+ 极淡朱金晕 */
 .create-card.is-blank .create-card-name {
   color: var(--muted);
@@ -1306,7 +1243,8 @@
 @media (prefers-reduced-motion: reduce) {
   .create-head,
   .create-kind,
-  .create-body,
+  .create-stage,
+  .create-canvas .create-field,
   .create-msg,
   .create-starter,
   .create-field.is-fresh,
@@ -1765,5 +1703,17 @@
   .create-bind-warn {
     margin-top: var(--sp-2);
     color: var(--accent);
+  }
+}
+
+/* ————————————————————————————————————————————————————————————
+   C5 打磨:字段错峰铺纸入场(≤8 级封顶,长卡不拖沓)。
+   死样式(旧 .create-body/.create-chat/.create-msgs/.create-preview/.create-card
+   布局层)已随本轮删除;.create-msg/.create-field 等内容类继续服役。
+   ———————————————————————————————————————————————————————————— */
+@media (min-width: 861px) {
+  .create-canvas .create-field {
+    animation: createRise 0.35s var(--ease-out) both;
+    animation-delay: calc(0.12s + var(--ci, 0) * 40ms);
   }
 }

@@ -13,7 +13,7 @@ plan: docs/2026-07-11-create-card-canvas-plan.md
 - [x] C2 命令条+叙述条+手记抽屉(聊天栏退役)(R3)
 - [x] C3 字段级 AI 动作(⟳/✦ 定向指令)(R4)
 - [x] C4 本台架+装订区(R5)
-- [ ] C5 动效/空状态/文案 pass
+- [x] C5 动效/空状态/文案 pass(R6)
 - [ ] C6 全链路:preview 实测+console 零错+build+手机 390 回归
 
 ## R1 · 2026-07-11 07:34
@@ -85,3 +85,13 @@ plan: docs/2026-07-11-create-card-canvas-plan.md
   - 架上「查看」→ builtView 弹层(「本台已建的『角色卡』(1)」,苏晚棠)✓;「移除」confirm=false 时不删(守卫 wired,未做破坏性删除,苏晚棠留给 C6 全链路用);
   - console 零报错;build 1.96s。
 - 遗留观察:收进本台后 desk.messages 重置为 1 条收纳提示,叙述条按「>1 才显示」规则不显示这句(toast 已有反馈)——C5 打磨时评估是否放宽为「非开场白就显示」。
+
+## R6 · 2026-07-11 08:48
+
+本轮:C5 动效/空状态/文案 pass ✅(5199 preview 实测)
+
+- 动效:字段块错峰铺纸入场(40ms 步进,--ci 封顶 8 级防长卡拖沓,实测 delay 0.12/0.16/0.20s);reduced-motion 清单同步(.create-stage/.create-field 入列)。
+- 叙述条规则放宽:由「消息数>1」改为「最新 AI 句 ≠ 开场白」——收进本台的确认句(《苏晚棠》放进台子了…)现在会亮在叙述条上(修 R5 遗留);空台仍不显示(开场白只住在空卡上)。
+- 文案:LABELS 补 known_public=公开设定 / known_hidden=隐藏设定 / versions=多版本 / relationships=关系(实测注入 draft 显示中文,测试数据已还原)。
+- 死样式清理:旧桌面布局层(.create-body/.create-chat/.create-msgs/.create-preview/.create-card/.create-card-tilt + reskin 时期的 sticky/高度规则)8 处精确切除;.create-msg/.create-field 等内容类继续服役(手记抽屉/手机端在用);删后布局完整性实测(canvas/shelf/bind/dock/grid 全在)。
+- console 零报错;build 1.94s。
