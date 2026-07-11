@@ -1778,8 +1778,8 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    /* 会话栏随屏自适应(F7 微收:1366≈328 / 1920=360);画布优先吃剩余 */
-    grid-template-columns: clamp(300px, 24vw, 360px) minmax(0, 1fr);
+    /* F8:画布即主界面——会话栏退场(历史进抽屉,构思上画布,dock 缩在画布底) */
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--sp-5);
     animation: createRise 0.45s var(--ease-out) both;
     animation-delay: 0.1s;
@@ -2234,4 +2234,105 @@
   .ct-finalize-cols .create-preview-introhead {
     margin-top: var(--sp-2);
   }
+}
+
+/* ── F8 画布即主界面:dock 缩在画布底、批注行、对话手记抽屉、构思纸面(muse) ── */
+@media (min-width: 861px) {
+  /* dock 归画布同宽,贴画布下沿一条 */
+  .create-canvas-col .create-dock {
+    flex: none;
+    width: min(880px, 100%);
+    margin: 0 auto;
+    padding-top: var(--sp-2);
+  }
+  /* 构思纸面:火候线+助手追问+圈选/蓝图长在画布上 */
+  .create-muse {
+    max-width: 640px;
+    margin: var(--sp-3) auto 0;
+    padding: var(--sp-2) 0;
+  }
+  .create-muse .create-comp { margin-bottom: var(--sp-5); }
+  .create-muse-say { margin-bottom: var(--sp-4); }
+  .create-muse-say .create-say-who { display: block; margin-bottom: 4px; color: var(--muted); letter-spacing: 0.12em; }
+  .create-muse-tx {
+    font-size: 17px;
+    line-height: var(--lh-body);
+    color: var(--fg);
+    white-space: pre-wrap;
+  }
+}
+/* 批注行:dock 顶一行小字(最新一句),点开抽屉 */
+.create-dock-note {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 2px 2px 6px;
+  cursor: pointer;
+  text-align: left;
+}
+.create-dock-note .create-say-who { flex: none; color: var(--muted); letter-spacing: 0.1em; }
+.create-dock-note-tx {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--fg) 72%, transparent);
+}
+.create-dock-note:hover .create-dock-note-tx { color: var(--fg); }
+.create-chat-btn {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 6px 10px;
+  cursor: pointer;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+}
+.create-chat-btn:hover { color: var(--accent); border-color: var(--accent); }
+/* 对话手记抽屉:左滑纸面,稿纸对谈体原样 */
+.create-drawer-shade {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+  background: color-mix(in srgb, var(--fg) 14%, transparent);
+}
+.create-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 40;
+  width: min(420px, 92vw);
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  animation: drawerIn 0.28s var(--ease-out) both;
+}
+@keyframes drawerIn {
+  from { transform: translateX(-24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.create-drawer-h {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-4) var(--sp-5) var(--sp-2);
+}
+.create-drawer-h .create-modal-x { position: static; }
+.create-drawer-flow {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sp-2) var(--sp-5) var(--sp-5);
+}
+@media (prefers-reduced-motion: reduce) {
+  .create-drawer { animation: none; }
 }
