@@ -7,7 +7,6 @@ import ImageCropField from "../components/ImageCropField";
 import StoryHero from "../components/StoryHero";
 import CharDetailModal from "../components/CharDetailModal";
 import StaggeredText from "../components/staggered-text";
-import DepthCard from "../components/react-bits/depth-card"; // C4 本台架 mini 卡(画布本体不倾斜)
 import { BlurHighlight } from "../components/react-bits/blur-highlight";
 import { parseJsonCard, parsePngCard } from "../lib/tavernCard"; // D2 酒馆卡纯前端解析
 import { TEMPLATES, getTpl } from "./createTemplates"; // D3 创作模板(文案归内容侧,来源 card-templates/)
@@ -203,6 +202,8 @@ export default function Create() {
   const [prompts, setPrompts] = useState(loadPrompts);
   const [promptDraft, setPromptDraft] = useState(""); // 「存为提示词」输入(提示词 tab 内)
   const [refDragOver, setRefDragOver] = useState(false); // F4 拖拽接收态(命令条区)
+  // F7 画布重排:产出侧 240px 列退场,收编成画布顶部台账线;弹层 null|'bind'|'menu'。
+  const [ledgerPop, setLedgerPop] = useState(null);
   // F3 一键 AI 长出指示行:askOpen = 字段 k0 | null(✦/⟳ 点开,可空回车=默认指令)。
   const [askOpen, setAskOpen] = useState(null);
   const [askText, setAskText] = useState("");
@@ -348,11 +349,12 @@ export default function Create() {
       "就按这份蓝图开始写卡,把已经聊清的内容一次填进字段,别再反问:\n" +
         bp.map((b) => "- " + b).join("\n") +
         (note ? `\n落笔时额外注意(用户附言,优先遵守):${note}` : ""),
-      { phaseOverride: "drafting" }
+      { phaseOverride: "drafting", display: `批准蓝图,开始落笔${note ? ` —— ${note}` : ""}` }
     );
   }
 
-  async function sendText(rawText, { clearInput = false, phaseOverride = null } = {}) {
+  // F7:display = 会话流里给人看的短句(合成指令别把整段 prompt 亮给用户);API 载荷仍用完整 text。
+  async function sendText(rawText, { clearInput = false, phaseOverride = null, display = null } = {}) {
     const kk = kind;
     const cur = desks[kk];
     const text = (rawText || "").trim();
@@ -362,7 +364,10 @@ export default function Create() {
       role: m.who === "你" ? "user" : "assistant",
       content: m.text,
     }));
-    patch(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text }], ...(clearInput ? { input: "" } : {}) }));
+    patch(kk, (d0) => ({
+      messages: [...d0.messages, { who: "你", text, ...(display ? { show: display } : {}) }],
+      ...(clearInput ? { input: "" } : {}),
+    }));
     try {
       // D1:seed = 挂在台上的参考资料;E2:understand/blueprint 态带 phase=understand(后端只评分提问,硬不写卡)。
       // phaseOverride:批准蓝图那一发要立即按 drafting 走(setState 异步,闭包里的 desks 还是旧 phase)。
@@ -422,7 +427,10 @@ export default function Create() {
         ? `请直接补写「${f.k}」(${f.k0}):按已有设定写出这一块的内容并填进 ${f.k0} 字段。不要反问、不要只解释,这一轮就把内容写出来。尽量别动其他字段。`
         : `请直接把「${f.k}」(${f.k0})改写得更具体、更立体,写回 ${f.k0} 字段。不要反问,这一轮就改完。尽量别动其他字段。`;
     const ex = (extra || "").trim();
-    return sendText(ex ? base + `\n用户对这一块的要求(优先遵守):${ex}` : base);
+    const icon = mode === "fill" ? "✦ 补写" : "⟳ 改写";
+    return sendText(ex ? base + `\n用户对这一块的要求(优先遵守):${ex}` : base, {
+      display: `${icon}「${f.k}」${ex ? ` —— ${ex}` : ""}`,
+    });
   }
   // F3:点 ✦/⟳ 先展开指示行(可空回车=默认);再点同一颗收起。
   function toggleFieldAsk(f) {
@@ -1122,7 +1130,7 @@ export default function Create() {
             {desk.messages.map((m, i) => (
               <div key={i} className={"create-msg" + (m.who === "你" ? " is-me" : "")}>
                 <span className="create-msg-who t-meta">{m.who === "你" ? "你" : "助手"}</span>
-                <p className="create-msg-text t-ui">{m.text}</p>
+                <p className="create-msg-text t-ui">{m.show || m.text}</p>
               </div>
             ))}
             {/* E6:问题圈选与蓝图进手机对话流(复用桌面组件类,样式已通用) */}
@@ -1321,7 +1329,7 @@ export default function Create() {
                 {desk.messages.map((m, i) => (
                   <div key={i} className={"create-say" + (m.who === "你" ? " is-me" : "")}>
                     <span className="create-say-who t-kai">{m.who === "你" ? "你" : "助手"}</span>
-                    <div className="create-say-tx t-ui">{m.text}</div>
+                    <div className="create-say-tx t-ui">{m.show || m.text}</div>
                   </div>
                 ))}
                 {/* E3 问题作答:稿纸圈选词——虚线下划的可点词组,点选转朱砂实线;「其他」是填空线。零卡片零边框。 */}
@@ -1510,6 +1518,88 @@ export default function Create() {
             <div className="create-stage">
             {/* 卡画布:正在长的这张卡铺在中央 */}
             <div className="create-canvas-col">
+              {/* F7 台账线:一行小字管本台架+装订+收纳/发布(原 240px 产出列收编;少框,hairline 一条) */}
+              <div className="create-ledger">
+                <div className="create-ledger-info t-meta">
+                  <span>本台已建 {desk.built.length}</span>
+                  {desk.built.slice(0, 3).map((card, i) => {
+                    const c = (card && card.data) || card || {};
+                    const nm = c.name || c.title || "未命名";
+                    return (
+                      <button
+                        key={nm + i}
+                        className="create-ledger-chip"
+                        draggable
+                        title="点开查看;拖到左下命令条=挂为引用"
+                        onDragStart={(e) => e.dataTransfer.setData("application/x-ais-ref", JSON.stringify({ kk: kind, card }))}
+                        onClick={() => setBuiltView(true)}
+                      >
+                        {nm}
+                      </button>
+                    );
+                  })}
+                  {desk.built.length > 3 && (
+                    <button className="create-ledger-chip" onClick={() => setBuiltView(true)}>+{desk.built.length - 3}</button>
+                  )}
+                  <span className="create-ledger-sep" aria-hidden="true">·</span>
+                  {(() => {
+                    const mf = publishManifest();
+                    const total = mf.chars.length + mf.worlds + mf.players.length + (mf.story ? 1 : 0);
+                    return (
+                      <button
+                        className={"create-ledger-link" + (ledgerPop === "bind" ? " is-on" : "")}
+                        onClick={() => setLedgerPop((p) => (p === "bind" ? null : "bind"))}
+                      >
+                        装订 {total} 卡{mf.anySecret ? " ⚠" : ""}
+                      </button>
+                    );
+                  })()}
+                </div>
+                <div className="create-ledger-acts">
+                  <Button variant="line" onClick={nextCard} disabled={!hasDraft} title={hasDraft ? "把当前草稿收进台子,再建下一张" : "先聊出一张卡"}>收进本台</Button>
+                  <Button variant="line" onClick={saveCard} disabled={!hasDraft || savingCard} title={hasDraft ? "存进你的卡库(私密)" : "先聊出一张卡"}>{savingCard ? "收入中…" : "收入卡库"}</Button>
+                  <Button variant="primary" onClick={openPreview} disabled={!hasChars} title={hasChars ? "预览并发布到探索(公开)" : "至少要一张角色卡"}>发布 · 公开</Button>
+                  <button
+                    className={"create-ledger-more" + (ledgerPop === "menu" ? " is-on" : "")}
+                    onClick={() => setLedgerPop((p) => (p === "menu" ? null : "menu"))}
+                    aria-label="更多动作"
+                  >
+                    ⋯
+                  </button>
+                </div>
+                {ledgerPop && <div className="create-ledger-shade" onClick={() => setLedgerPop(null)} />}
+                {ledgerPop === "bind" && (() => {
+                  const mf = publishManifest();
+                  return (
+                    <div className="create-ledger-pop" role="dialog" aria-label="装订清单">
+                      <div className="create-bind-h t-meta">装订 · 发布时打包(看到的=会发的)</div>
+                      <ul className="create-bind-list t-meta">
+                        <li>
+                          角色卡 ×{mf.chars.length}
+                          {mf.chars.length > 0 && ":" + mf.chars.map((c) => c.name + (c.secret ? " ⚠" : "")).join("、")}
+                        </li>
+                        {mf.worlds > 0 && <li>设定卡 · 世界书 ×{mf.worlds}</li>}
+                        {mf.players.length > 0 && <li>演出卡 ×{mf.players.length}:{mf.players.join("、")}</li>}
+                        {mf.story && (
+                          <li>
+                            故事书:{mf.story}
+                            {mf.storyExtra > 0 && `(另 ${mf.storyExtra} 张不发)`}
+                          </li>
+                        )}
+                        {!mf.chars.length && <li className="create-bind-empty">还没有角色卡——发布至少要一张</li>}
+                      </ul>
+                      {mf.anySecret && <div className="create-bind-warn t-meta">⚠ 带「隐藏真相」的卡会随发布公开,发布前核对</div>}
+                    </div>
+                  );
+                })()}
+                {ledgerPop === "menu" && (
+                  <div className="create-ledger-pop create-ledger-menu" role="menu">
+                    <button onClick={() => { setLedgerPop(null); openLib(); }}>从卡库补素材</button>
+                    <button disabled={!hasDraft} onClick={() => { setLedgerPop(null); exportCard(desk.draft); }}>导出草稿 JSON</button>
+                    <button onClick={() => { setLedgerPop(null); openPresets(); }}>↺ 从我发布的故事继续改</button>
+                  </div>
+                )}
+              </div>
               <section className="create-canvas" aria-label="卡画布">
                 <div className="create-card-kind t-meta">{KINDS[ki].zh}{desk.built.length > 0 && ` · 本台已建 ${desk.built.length}`}</div>
                 {editingKey === "__name" ? (
@@ -1664,100 +1754,7 @@ export default function Create() {
               </section>
             </div>
 
-            {/* 产出侧:本台架(看得见的成品)→ 收纳动作 → 装订区(发布清单常显) */}
-            <aside className="create-side">
-              <div className="create-shelf">
-                <div className="create-shelf-h t-meta">本台已建 · {desk.built.length}</div>
-                {desk.built.length ? (
-                  <div className="create-shelf-list">
-                    {desk.built.map((card, i) => {
-                      const c = (card && card.data) || card || {};
-                      const nm = c.name || c.title || "未命名";
-                      const entries = worldEntries(card);
-                      const firstField = cardFields(card)[0];
-                      return (
-                        <DepthCard key={nm + i} className="create-shelf-tilt" maxRotation={5}>
-                          <div
-                            className="create-shelf-card"
-                            draggable
-                            title="拖到左下命令条,挂为引用"
-                            onDragStart={(e) =>
-                              e.dataTransfer.setData("application/x-ais-ref", JSON.stringify({ kk: kind, card }))
-                            }
-                          >
-                            <span className="create-shelf-name t-kai">{nm}</span>
-                            <span className="create-shelf-sub t-meta">
-                              {entries ? `${entries.length} 条条目` : firstField ? firstField.v.slice(0, 22) : "已收进本台"}
-                            </span>
-                            <span className="create-shelf-acts">
-                              <button className="create-shelf-act" onClick={() => setBuiltView(true)}>查看</button>
-                              <button className="create-shelf-act" onClick={() => removeBuilt(i)}>移除</button>
-                            </span>
-                          </div>
-                        </DepthCard>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="create-shelf-empty t-meta">还空着——聊出一张,点「收进本台」。</div>
-                )}
-              </div>
-
-              <div className="create-actions">
-                <Button variant="line" onClick={saveCard} disabled={!hasDraft || savingCard} title={hasDraft ? undefined : "先聊出一张卡再收入卡库"}>
-                  {savingCard ? "收入中…" : "收入卡库 · 私密"}
-                </Button>
-                <Button variant="line" onClick={nextCard} disabled={!hasDraft} title={hasDraft ? undefined : "先聊出一张卡再收进本台"}>
-                  收进本台 · 再建一张
-                </Button>
-                <Button variant="line" onClick={openLib}>从卡库补素材</Button>
-                <Button variant="line" onClick={() => exportCard(desk.draft)} disabled={!hasDraft} title={hasDraft ? "下载当前草稿为 JSON(角色卡=chara_card_v2,可再导入)" : "先聊出一张卡再导出"}>
-                  导出草稿 JSON
-                </Button>
-                <div className="create-actions-sep" aria-hidden="true" />
-                <Button
-                  variant="primary"
-                  full
-                  disabled={!hasChars}
-                  title={hasChars ? undefined : "至少要一张角色卡才能预览并发布"}
-                  onClick={openPreview}
-                >
-                  预览并发布到探索 · 公开
-                </Button>
-              </div>
-
-              {/* 装订区:本次发布会打包什么,常显(与 publish 同源 deskCards,「看到的=会发的」YOR-192) */}
-              {(() => {
-                const mf = publishManifest();
-                return (
-                  <div className="create-bind">
-                    <div className="create-bind-h t-meta">装订 · 发布时打包</div>
-                    <ul className="create-bind-list t-meta">
-                      <li>
-                        角色卡 ×{mf.chars.length}
-                        {mf.chars.length > 0 && ":" + mf.chars.map((c) => c.name + (c.secret ? " ⚠" : "")).join("、")}
-                      </li>
-                      {mf.worlds > 0 && <li>设定卡 · 世界书 ×{mf.worlds}</li>}
-                      {mf.players.length > 0 && <li>演出卡 ×{mf.players.length}:{mf.players.join("、")}</li>}
-                      {mf.story && (
-                        <li>
-                          故事书:{mf.story}
-                          {mf.storyExtra > 0 && `(另 ${mf.storyExtra} 张不发)`}
-                        </li>
-                      )}
-                      {!mf.chars.length && <li className="create-bind-empty">还没有角色卡——发布至少要一张</li>}
-                    </ul>
-                    {mf.anySecret && (
-                      <div className="create-bind-warn t-meta">⚠ 带「隐藏真相」的卡会随发布公开,发布前核对</div>
-                    )}
-                    {/* D4 故事级改编:把发布过的故事整组拆回四台继续编(追加进 built,不动原预设) */}
-                    <button className="create-bind-resume" onClick={openPresets}>
-                      ↺ 从我发布的故事继续改
-                    </button>
-                  </div>
-                );
-              })()}
-            </aside>
+            {/* F7:产出侧 240px 列退场——本台架/收纳/装订全部收编进画布顶部台账线,画布拿回整幅宽 */}
           </div>
 
           </div>

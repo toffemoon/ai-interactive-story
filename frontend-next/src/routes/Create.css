@@ -1269,7 +1269,7 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 240px; /* E1:产出侧瘦身,画布让位给三栏 */
+    grid-template-columns: minmax(0, 1fr); /* F7:产出列退场(收编台账线),画布拿回整幅 */
     gap: var(--sp-5);
     animation: createRise 0.45s var(--ease-out) both;
     animation-delay: 0.1s;
@@ -1277,10 +1277,12 @@
   .create-canvas-col {
     min-height: 0;
     display: flex;
+    flex-direction: column; /* F7:台账线在顶,画布吃剩余高度自己滚 */
   }
-  /* 卡画布 = 一张摊开的宣纸大卡:居中 ~680,自己滚,页面不滚 */
+  /* 卡画布 = 一张摊开的宣纸大卡:居中 ~880(F7 放宽),自己滚,页面不滚 */
   .create-canvas {
-    width: min(680px, 100%);
+    width: min(880px, 100%);
+    flex: 1;
     margin: 0 auto;
     min-height: 0;
     overflow-y: auto;
@@ -1337,18 +1339,36 @@
    纯文本字段 ✎ 行内编辑;结构化字段(entries/timeline/tags…)「聊」跳命令条。
    ———————————————————————————————————————————————————————————— */
 @media (min-width: 861px) {
+  /* F7 字段块式:名+动作一行,正文全宽在下——长字段不再挤成窄条 */
   .create-canvas .create-field {
     position: relative;
-    padding-right: 76px; /* C3:动作条最多两钮(⟳/✦ + ✎) */
+    display: block;
+    padding-right: 0;
     border-radius: var(--r-sm);
     transition: background var(--dur-fast) var(--ease-out);
+  }
+  .create-canvas .create-field-k {
+    width: auto;
+    min-height: 26px; /* 名行自己给动作钮留高,正文不缩 */
+    padding-right: 76px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .create-canvas .create-field-v {
+    display: block;
+    margin-top: 2px;
+    max-width: 620px; /* 阅读行宽上限:宽画布下正文不摊成超长行 */
+  }
+  .create-canvas .create-field .create-ask-line {
+    max-width: 620px; /* 指示行与正文同宽(修 F3 掉进旧 flex 窄槽的 bug) */
   }
   .create-canvas .create-field:hover {
     background: color-mix(in srgb, var(--fg) 3%, transparent);
   }
   .create-field-acts {
     position: absolute;
-    top: 6px;
+    top: 2px;
     right: 4px;
     display: flex;
     gap: 4px;
@@ -1758,8 +1778,8 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    /* 会话栏随屏自适应(1366≈355 / 1920=400);画布优先吃剩余 */
-    grid-template-columns: clamp(320px, 26vw, 400px) minmax(0, 1fr);
+    /* 会话栏随屏自适应(F7 微收:1366≈328 / 1920=360);画布优先吃剩余 */
+    grid-template-columns: clamp(300px, 24vw, 360px) minmax(0, 1fr);
     gap: var(--sp-5);
     animation: createRise 0.45s var(--ease-out) both;
     animation-delay: 0.1s;
@@ -2080,3 +2100,104 @@
   cursor: pointer;
 }
 .create-prompt-row .create-prompt-use:hover .create-ref-row-t { color: var(--accent); }
+
+/* ── F7 台账线:原 240px 产出列收编成画布顶一行(hairline,少框);浮层=装订清单/更多菜单 ── */
+.create-ledger {
+  position: relative;
+  flex: none;
+  width: min(880px, 100%);
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 0 2px 8px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--sp-3);
+}
+.create-ledger-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+}
+.create-ledger-chip {
+  background: none;
+  border: none;
+  padding: 0 0 1px;
+  cursor: grab;
+  color: var(--fg);
+  font: inherit;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent-3) 55%, transparent);
+}
+.create-ledger-chip:hover { color: var(--accent); }
+.create-ledger-chip:active { cursor: grabbing; }
+.create-ledger-sep { color: color-mix(in srgb, var(--fg) 30%, transparent); }
+.create-ledger-link {
+  background: none;
+  border: none;
+  padding: 0 0 1px;
+  cursor: pointer;
+  color: var(--muted);
+  font: inherit;
+  text-decoration: underline dashed;
+  text-underline-offset: 3px;
+}
+.create-ledger-link:hover, .create-ledger-link.is-on { color: var(--accent); }
+.create-ledger-acts {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.create-ledger-more {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  min-width: 30px;
+  height: 30px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+}
+.create-ledger-more:hover, .create-ledger-more.is-on { color: var(--accent); border-color: var(--accent); }
+.create-ledger-shade {
+  position: fixed;
+  inset: 0;
+  z-index: 29;
+  background: transparent;
+}
+.create-ledger-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  min-width: 280px;
+  max-width: 420px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-3) var(--sp-4);
+}
+.create-ledger-menu {
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  padding: var(--sp-2);
+}
+.create-ledger-menu button {
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 9px 10px;
+  cursor: pointer;
+  color: var(--fg);
+  font: inherit;
+  border-radius: var(--r-sm);
+}
+.create-ledger-menu button:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 4%, transparent); color: var(--accent); }
+.create-ledger-menu button:disabled { color: color-mix(in srgb, var(--fg) 30%, transparent); cursor: default; }
