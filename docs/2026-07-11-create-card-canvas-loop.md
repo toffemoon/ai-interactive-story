@@ -222,3 +222,8 @@ plan: docs/2026-07-11-create-card-canvas-plan.md
   - E4:players 台现成蓝图态(阿澈五条)→ 批准 → 载荷不带 phase(override 生效)→ **AI 按蓝图落笔,「阿澈」9 字段上画布**,phase=drafting,火候线退场——构思(10→40→85)→蓝图→批准→落笔完整 Plan 流首次端到端闭环;
   - E3:stories 台「想写个故事」→ 3 题渲染(选项有画面:旧书店/云上城市/雨镇),圈选「永远下雨的小镇」+填空「守灯塔的聋哑少年」→ 提交合成消息精确(「问 —— 答」两行);
   - console 零报错;build 过。
+
+## E5 · 2026-07-12 03:3x ✅ 快速通道
+
+- 四入口(粘贴/上传 identify、酒馆卡、模板骨架、改编 fork)显式 phase=drafting+清构思残留(comp/questions/blueprint);世界书纯 opener 模板留在构思阶段(它本来就是"聊出来"路径);收进本台重置=新对象天然回 understand(带 seed 重新构思);老草稿由 deskPhase 兜底。
+- 验收:fork《林默·改》→ phase=drafting、火候线不现、残留清零;其余三通道同一 patch 模式(主链路 D2/D3 已验);build 过。

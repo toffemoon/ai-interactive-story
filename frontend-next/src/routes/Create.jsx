@@ -359,6 +359,8 @@ export default function Create() {
     patch(kk, (d0) => ({
       draft: { ...draft, ...pickPics(d0.draft) }, // 保住已上传的头像/立绘
       filled: Object.keys(draft),
+      // E5 快速通道:已带内容,直通 drafting,清构思残留
+      phase: "drafting", comp: 0, questions: [], blueprint: [],
       messages: [...d0.messages, { who: "ai", text: "《" + nm + "》解析好了,已铺上画布,顺手也收进了你的卡库(私密)。哪里不对,聊着改。" }],
     }));
     return nm;
@@ -391,6 +393,7 @@ export default function Create() {
       draft: { ...card, [useTitle ? "title" : "name"]: nm },
       filled: Object.keys(card),
       tpl: undefined,
+      phase: "drafting", comp: 0, questions: [], blueprint: [], // E5 快速通道
       messages: [...d0.messages, { who: "ai", text: "《" + nm + "》已铺开——基于它改;原卡不动,入库时按新名字另存。" }],
     }));
     flash("已铺开改编稿《" + nm + "》");
@@ -453,6 +456,7 @@ export default function Create() {
       patch(kind, (d0) => ({
         draft: { ...parsed.draft, ...pickPics(d0.draft) },
         filled: Object.keys(parsed.draft),
+        phase: "drafting", comp: 0, questions: [], blueprint: [], // E5 快速通道
         messages: [...d0.messages, { who: "ai", text: "《" + nm + "》从酒馆卡读进来了(本地解析,没入库、不耗额度)。" + droppedNote + "哪里不对,聊着改。" }],
       }));
       // PNG 本体顺手压成立绘(draft.image 空着才填,不覆盖用户已传的)
@@ -849,6 +853,8 @@ export default function Create() {
       filled: [],
       tpl: t.id,
       input: t.opener || "",
+      // E5:骨架模板=已有结构直通 drafting(✦ 补写可用);纯 opener 模板(世界书)留在构思阶段
+      ...(t.skeleton ? { phase: "drafting", comp: 0, questions: [], blueprint: [] } : {}),
     });
     setTplOpen(false);
     flash(t.skeleton ? `已铺开「${t.name}」骨架——空字段都是 ✦ 补写目标` : `「${t.name}」的开场指令已放进输入框`);
