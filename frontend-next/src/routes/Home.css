@@ -140,7 +140,7 @@
     color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
 .home-go:hover:not(:disabled) {
-  background: #fffdfa;
+  background: var(--panel);
   border-color: var(--accent-2);
 }
 .home-go:active:not(:disabled) {
@@ -152,7 +152,7 @@
   color: var(--cinnabar);
 }
 .home .btn--primary.home-go:hover:not(:disabled) {
-  background: #fffdfa;
+  background: var(--panel);
 }
 /* 继续故事(secondary):墨字次级,同白胶囊 */
 .home .btn--secondary.home-go {
@@ -160,7 +160,7 @@
   color: #3a2f24;
 }
 .home .btn--secondary.home-go:hover:not(:disabled) {
-  background: #fffdfa;
+  background: var(--panel);
   color: var(--cinnabar);
 }
 
@@ -226,7 +226,7 @@
   height: 32px;
   display: grid;
   place-items: center;
-  border: 1px solid #d8d2c7;
+  border: 1px solid var(--line);
   border-radius: var(--r-sm);
   background: transparent;
   color: #6f706b;
@@ -264,7 +264,7 @@
   flex: 1;
   min-width: 0;
   background: rgba(255, 255, 255, 0.85);
-  border: 1px solid #d8d2c7;
+  border: 1px solid var(--line);
   border-radius: var(--r-md);
   padding: 0 14px;
   height: 44px;

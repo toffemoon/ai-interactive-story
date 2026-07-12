@@ -7,12 +7,12 @@ import { toCardModel } from "../lib/cardModel";
 import "./Styleguide.css";
 
 const PAPER_SWATCHES = [
-  ["宣纸底", "#f3f1ec"],
-  ["凹底", "#eae2cf"],
-  ["面板", "#fffdfa"],
+  ["纸底(全白)", "#ffffff"],
+  ["凹底", "#f4f4f2"],
+  ["面板", "#ffffff"],
   ["墨", "#20201d"],
   ["弱墨", "#6f706b"],
-  ["线", "#d8d2c7"],
+  ["线", "#e4e4e1"],
   ["朱砂", "#8f3c32"],
   ["松绿", "#315d4f"],
   ["赭金", "#ad7a24"],
