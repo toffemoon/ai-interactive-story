@@ -419,10 +419,26 @@ export default function Create() {
   const LP_MS = 550;
   const lpRef = useRef(null); // {iv, ring}
   const lpFiredRef = useRef(false); // 满环后的 pointerup/click 不再当单击
-  // 长按反馈重做(主理人:线条动画不行,找成熟范式):
-  // 按压点圆形进度环(conic 填充,小而聚焦——大卡描边周长太长,进度感知差)
-  // + 目标模块「按压抬起」态(轻微放大+底色渐亮,BlurHighlight 同族气质)。
-  // 完成=环收拢爆点、模块弹回;取消=环淡出、模块落回。零新依赖。
+  // 长按反馈=C·描金一圈(2026-07-13 主理人四案试样拍板,换掉按压点 conic 环):
+  // 鎏金线沿目标模块圆角自描一周(pathLength 归一,大小卡进度节奏一致),画满即「封印」触发;
+  // 松手=描线快速回退,按满=朱砂+鎏金溅墨收拍、模块弹回。零新依赖。
+  function lpSpark(host) {
+    for (let i = 0; i < 10; i++) {
+      const s = document.createElement("i");
+      s.className = "create-lpspark";
+      s.style.background = i % 2 ? "var(--accent-3)" : "var(--accent-bright)";
+      host.appendChild(s);
+      const a = (i / 10) * 2 * Math.PI;
+      const deg = (a * 180) / Math.PI + 90;
+      s.animate(
+        [
+          { transform: `translate(${Math.cos(a) * 14}px, ${Math.sin(a) * 14}px) rotate(${deg}deg) scaleY(1)`, opacity: 1 },
+          { transform: `translate(${Math.cos(a) * 42}px, ${Math.sin(a) * 42}px) rotate(${deg}deg) scaleY(0.3)`, opacity: 0 },
+        ],
+        { duration: 420, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+      );
+    }
+  }
   function lpCancel(fired = false) {
     const l = lpRef.current;
     if (!l) return;
@@ -430,30 +446,46 @@ export default function Create() {
     clearInterval(l.iv);
     cancelAnimationFrame(l.raf);
     l.el.classList.remove("is-pressing");
-    l.ring.classList.add(fired ? "is-done" : "is-out");
-    setTimeout(() => l.ring.remove(), fired ? 260 : 140);
+    if (fired) {
+      l.wrap.classList.add("is-done");
+      lpSpark(l.wrap);
+    } else {
+      l.rect.style.transition = "stroke-dashoffset 0.16s var(--ease-out)";
+      l.rect.style.strokeDashoffset = 100;
+      l.wrap.classList.add("is-out");
+    }
+    setTimeout(() => l.wrap.remove(), fired ? 460 : 190);
   }
   function lpStart(el, e, onFire) {
     lpCancel();
-    const ring = document.createElement("div");
-    ring.className = "create-lpring";
-    ring.style.left = e.clientX + "px";
-    ring.style.top = e.clientY + "px";
-    ring.innerHTML = `<i></i>`;
-    document.body.appendChild(ring);
-    void ring.offsetWidth;
-    ring.classList.add("is-in");
-    el.classList.add("is-pressing");
-    const disc = ring.firstChild;
+    el.classList.add("is-pressing"); // 先上按压态再量圆角(字段的圆角在按压态里才有)
+    const b = el.getBoundingClientRect();
+    const scale = el.offsetWidth ? b.width / el.offsetWidth : 1; // 画布缩放下屏上圆角=样式圆角×zoom
+    const rad = (parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0) * scale;
+    const wrap = document.createElement("div");
+    wrap.className = "create-lptrace";
+    wrap.style.cssText = `left:${b.left}px;top:${b.top}px;width:${b.width}px;height:${b.height}px`;
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    const rect = document.createElementNS(NS, "rect");
+    rect.setAttribute("x", 1);
+    rect.setAttribute("y", 1);
+    rect.setAttribute("width", Math.max(0, b.width - 2));
+    rect.setAttribute("height", Math.max(0, b.height - 2));
+    rect.setAttribute("rx", Math.max(0, rad - 1));
+    rect.setAttribute("pathLength", 100);
+    svg.appendChild(rect);
+    wrap.appendChild(svg);
+    document.body.appendChild(wrap);
     const t0 = performance.now();
     const paint = () => {
       const p = Math.min(1, (performance.now() - t0) / LP_MS);
-      disc.style.background = `conic-gradient(var(--accent) ${p * 360}deg, color-mix(in srgb, var(--accent) 14%, transparent) 0)`;
+      rect.style.strokeDashoffset = 100 - p * 100;
       return p;
     };
     const tick = () => {
       const l = lpRef.current;
-      if (!l || l.ring !== ring) return;
+      if (!l || l.wrap !== wrap) return;
       if (paint() >= 1) {
         lpFiredRef.current = true;
         lpCancel(true);
@@ -463,13 +495,14 @@ export default function Create() {
       l.raf = requestAnimationFrame(tick);
     };
     lpRef.current = {
-      ring,
+      wrap,
+      rect,
       el,
       raf: requestAnimationFrame(tick),
       // rAF 节流环境兜底:低频补帧+保证触发
       iv: setInterval(() => {
         const l = lpRef.current;
-        if (!l || l.ring !== ring) return;
+        if (!l || l.wrap !== wrap) return;
         if (paint() >= 1) {
           lpFiredRef.current = true;
           lpCancel(true);

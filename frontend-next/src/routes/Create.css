@@ -2578,50 +2578,51 @@
     overflow: hidden;
     color: color-mix(in srgb, var(--fg) 55%, transparent);
   }
-  /* I 系列:长按反馈=按压点圆形进度环 + 目标模块按压抬起(线条描边方案已废——大卡周长太长,进度感知差) */
-  .create-lpring {
+  /* I 系列:长按反馈=C·描金一圈(2026-07-13 主理人四案试样拍板):鎏金线沿模块圆角自描一周,
+     pathLength=100 归一让大小卡进度节奏一致;松手描线快退,按满「封印」+溅墨收拍。 */
+  .create-lptrace {
     position: fixed;
     z-index: 60;
-    width: 40px;
-    height: 40px;
-    margin: -20px 0 0 -20px;
     pointer-events: none;
-    opacity: 0;
-    transform: scale(0.6);
-    transition: opacity 0.1s var(--ease-out), transform 0.16s cubic-bezier(0.34, 1.4, 0.64, 1);
   }
-  .create-lpring > i {
-    display: block;
+  .create-lptrace svg {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
-    border-radius: var(--r-pill);
-    background: conic-gradient(var(--accent) 0deg, color-mix(in srgb, var(--accent) 14%, transparent) 0);
-    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4.5px), #000 calc(100% - 3.5px));
-    mask: radial-gradient(farthest-side, transparent calc(100% - 4.5px), #000 calc(100% - 3.5px));
+    overflow: visible;
   }
-  .create-lpring::after {
-    content: "";
-    position: absolute;
-    inset: 14px;
-    border-radius: var(--r-pill);
-    background: color-mix(in srgb, var(--accent) 55%, transparent);
+  .create-lptrace rect {
+    fill: none;
+    stroke: var(--accent-3);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-dasharray: 100;
+    stroke-dashoffset: 100;
   }
-  .create-lpring.is-in {
-    opacity: 1;
-    transform: scale(1);
-  }
-  .create-lpring.is-out {
+  .create-lptrace.is-out {
     opacity: 0;
-    transform: scale(0.7);
-    transition: opacity 0.12s var(--ease-out), transform 0.12s var(--ease-out);
+    transition: opacity 0.18s var(--ease-out);
   }
-  .create-lpring.is-done {
-    animation: lpPop 0.26s var(--ease-out) both;
+  .create-lptrace.is-done {
+    animation: lpSeal 0.46s var(--ease-out) both;
   }
-  @keyframes lpPop {
-    0% { opacity: 1; transform: scale(1); }
-    40% { opacity: 1; transform: scale(1.25); }
-    100% { opacity: 0; transform: scale(1.5); }
+  .create-lptrace.is-done rect {
+    stroke-width: 2.5;
+  }
+  @keyframes lpSeal {
+    0% { opacity: 1; }
+    55% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  .create-lpspark {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 3px;
+    height: 11px;
+    border-radius: 2px;
+    pointer-events: none;
   }
   /* 目标模块按压态:抬起感——卡用阴影+底色(卡的 transform 被行内定位占用),字段可加 scale */
   .create-bcard.is-pressing {
