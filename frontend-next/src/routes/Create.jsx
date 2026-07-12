@@ -179,6 +179,11 @@ export default function Create() {
     for (const t of KINDS) {
       const b = ds[t.k] && ds[t.k].built;
       if (b && b.some((c) => !c || !c._bid)) ds[t.k] = { ...ds[t.k], built: b.map(withBid) };
+      // 文案迁移:老数据里持久化的旧开场白(仅当它是台上唯一一条消息时)换成现行直白版
+      const d = ds[t.k];
+      if (d && d.messages && d.messages.length === 1 && d.messages[0].who === "ai" && d.messages[0].text !== t.opening) {
+        ds[t.k] = { ...ds[t.k], messages: [{ who: "ai", text: t.opening }] };
+      }
     }
     return ds;
   });
@@ -2098,8 +2103,9 @@ export default function Create() {
               )}
               {/* I 系列:H5 批注笺退役——AI 的话常驻 sidebar 对话流,不再飘卡旁 */}
               {/* H2 上下文工具条:选中即见(替换 hover 即现的小钮——误触族的根)。
-                  锚点在世界系(随卡 pan/zoom),条本体逆缩放保持视觉恒定;动作按卡态给(块型×动作矩阵)。 */}
-              {selLive && (() => {
+                  锚点在世界系(随卡 pan/zoom),条本体逆缩放保持视觉恒定;动作按卡态给(块型×动作矩阵)。
+                  聚焦态不渲染——迷你卡已隐,工具条留在原地会成孤儿(主理人截图坐实)。 */}
+              {selLive && !boardFocus && (() => {
                 const bc = boardCards.find((b) => b.id === selLive.id);
                 if (!bc) return null;
                 const pos = boardCardPos(bc, bc.kSeq);

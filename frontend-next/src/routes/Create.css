@@ -2682,7 +2682,7 @@
     left: 24px;
     right: 372px;
     width: auto;
-    transform: none;
+    margin-left: 0;
   }
   /* 聚焦态排版放大:阅读/编辑主场,字号整体上调 */
   .create-focuscard .create-card-name {
@@ -2862,11 +2862,13 @@
   .create-focuscard {
     position: absolute;
     top: 12px;
-    bottom: 210px; /* dock 浮岛最深形态(composer+纸签+批注行)≈190px,留足不遮挡;内容区自滚 */
+    bottom: 24px; /* dock 已退役(I 系列),底部只留呼吸位 */
     left: 50%;
-    transform: translateX(-50%);
     width: min(920px, 94vw);
-    z-index: 7; /* 只压画板内容(卡 z 默认/ctxbar 6/rail·zoomctl 5),不与抽屉(40)/dock(46)抢层 */
+    /* 居中改用 margin(不用 transform)——否则 focusIn 动画 fill 的 translateX 会把
+       sidebar 态的重定位覆盖掉,面板整体左移出屏(主理人截图坐实) */
+    margin-left: calc(min(920px, 94vw) / -2);
+    z-index: 7; /* 只压画板内容(卡 z 默认/ctxbar 6/rail·zoomctl 5) */
     animation: focusIn 0.24s var(--ease-out) both;
   }
   .create-focuscard-in {
@@ -2880,8 +2882,8 @@
     padding: 12px 18px 14px;
   }
   @keyframes focusIn {
-    from { transform: translateX(-50%) translateY(10px); opacity: 0; }
-    to { transform: translateX(-50%) translateY(0); opacity: 1; }
+    from { transform: translateY(10px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
   }
   .create-focus-top {
     flex: none;
