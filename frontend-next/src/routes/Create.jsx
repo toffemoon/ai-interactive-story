@@ -242,7 +242,7 @@ export default function Create() {
       if (raw) {
         const v = JSON.parse(raw);
         if (!v || typeof v !== "object") return {};
-        const { __view, ...cards } = v; // __view 是视口保留键(H1),不是卡坐标
+        const { __view, __ai, ...cards } = v; // __view/__ai 是视口与 sidebar 位置保留键,不是卡坐标
         return cards;
       }
       const v1 = JSON.parse(localStorage.getItem("ais_create_board_v1") || "{}") || {};
@@ -276,6 +276,14 @@ export default function Create() {
     } catch {}
     return { x: 0, y: 0, z: 1 };
   });
+  // sidebar 位置(可拖动,I 系列)——声明必须在下方 persist effect 之前(deps 引用,TDZ)
+  const [aiPos, setAiPos] = useState(() => {
+    try {
+      const p = (JSON.parse(localStorage.getItem("ais_create_board_v2") || "{}") || {}).__ai;
+      if (p && typeof p.x === "number" && typeof p.y === "number") return p;
+    } catch {}
+    return { x: 0, y: 0 };
+  });
   const viewRef = useRef(view);
   const worldRef = useRef(null);
   const boardElRef = useRef(null);
@@ -306,9 +314,9 @@ export default function Create() {
   }, [view]);
   useEffect(() => {
     try {
-      localStorage.setItem("ais_create_board_v2", JSON.stringify({ ...boardPos, __view: view }));
+      localStorage.setItem("ais_create_board_v2", JSON.stringify({ ...boardPos, __view: view, __ai: aiPos }));
     } catch (e) {}
-  }, [boardPos, view]);
+  }, [boardPos, view, aiPos]);
   // wheel 要 preventDefault,React 合成 wheel 在根上是 passive——必须原生监听。
   // 约定:ctrl/cmd+wheel(含触控板捏合)=对准光标缩放;裸 wheel=平移。
   useEffect(() => {
@@ -388,54 +396,65 @@ export default function Create() {
   //    旧入口(✦/⟳ 指示行/批注笺/对话抽屉/dock 批注行)全部退役,对话住右侧 sidebar。 ──
   const [aiOpen, setAiOpen] = useState(false);
   const [aiCtx, setAiCtx] = useState(null); // null=卡级对话 | {type:"field", f}=字段定向 | {type:"built"}=成品卡提示
+  // sidebar 可拖动(主理人反馈):header 按住拖,直写 transform;松手 commit 进 ais_create_board_v2.__ai;双击复位
+  const aiElRef = useRef(null);
+  const aiDragRef = useRef(null);
+  function onAiHeadDown(e) {
+    if (e.button !== 0 || e.target.closest("button")) return;
+    aiDragRef.current = { sx: e.clientX, sy: e.clientY, bx: aiPos.x, by: aiPos.y };
+    e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function onAiHeadMove(e) {
+    const d = aiDragRef.current;
+    if (!d || !aiElRef.current) return;
+    d.nx = d.bx + (e.clientX - d.sx);
+    d.ny = d.by + (e.clientY - d.sy);
+    aiElRef.current.style.transform = `translate(${d.nx}px, ${d.ny}px)`; // 直写零重渲
+  }
+  function onAiHeadUp() {
+    const d = aiDragRef.current;
+    aiDragRef.current = null;
+    if (d && typeof d.nx === "number") setAiPos({ x: d.nx, y: d.ny });
+  }
   const LP_MS = 550;
   const lpRef = useRef(null); // {iv, ring}
   const lpFiredRef = useRef(false); // 满环后的 pointerup/click 不再当单击
-  // 环动画三态(主理人反馈打磨):入场=淡入+微缩即位;进行=rAF 逐帧描边(setInterval 兜底,
-  // 无 rAF 环境也能走完);取消=描边快退+淡出;完成=满环脉冲一拍再散,给确定的"进入了"手感。
+  // 长按反馈重做(主理人:线条动画不行,找成熟范式):
+  // 按压点圆形进度环(conic 填充,小而聚焦——大卡描边周长太长,进度感知差)
+  // + 目标模块「按压抬起」态(轻微放大+底色渐亮,BlurHighlight 同族气质)。
+  // 完成=环收拢爆点、模块弹回;取消=环淡出、模块落回。零新依赖。
   function lpCancel(fired = false) {
     const l = lpRef.current;
     if (!l) return;
     lpRef.current = null;
     clearInterval(l.iv);
     cancelAnimationFrame(l.raf);
-    if (fired) {
-      l.ring.classList.add("is-done");
-      setTimeout(() => l.ring.remove(), 240);
-    } else {
-      l.ring.classList.add("is-out");
-      const rect = l.ring.querySelector("rect");
-      if (rect) rect.style.strokeDashoffset = String(l.per); // 描边回退
-      setTimeout(() => l.ring.remove(), 160);
-    }
+    l.el.classList.remove("is-pressing");
+    l.ring.classList.add(fired ? "is-done" : "is-out");
+    setTimeout(() => l.ring.remove(), fired ? 260 : 140);
   }
-  function lpStart(el, onFire) {
+  function lpStart(el, e, onFire) {
     lpCancel();
-    const r = el.getBoundingClientRect();
-    const cs = getComputedStyle(el);
-    const rx = Math.min(16, parseFloat(cs.borderTopLeftRadius) || 12) + 3;
     const ring = document.createElement("div");
     ring.className = "create-lpring";
-    Object.assign(ring.style, { left: r.left - 5 + "px", top: r.top - 5 + "px", width: r.width + 10 + "px", height: r.height + 10 + "px" });
-    const w = r.width + 6, h = r.height + 6;
-    const per = Math.round(2 * (w + h));
-    ring.innerHTML =
-      `<svg width="100%" height="100%" viewBox="0 0 ${w + 4} ${h + 4}">` +
-      `<rect x="2" y="2" width="${w}" height="${h}" rx="${rx}" fill="none" stroke="var(--accent)" stroke-width="2.5" ` +
-      `stroke-dasharray="${per}" stroke-dashoffset="${per}" stroke-linecap="round"/></svg>`;
+    ring.style.left = e.clientX + "px";
+    ring.style.top = e.clientY + "px";
+    ring.innerHTML = `<i></i>`;
     document.body.appendChild(ring);
-    // 强制 reflow 后进场(淡入+微缩即位由 CSS 过渡完成)
     void ring.offsetWidth;
     ring.classList.add("is-in");
-    const rect = ring.querySelector("rect");
+    el.classList.add("is-pressing");
+    const disc = ring.firstChild;
     const t0 = performance.now();
+    const paint = () => {
+      const p = Math.min(1, (performance.now() - t0) / LP_MS);
+      disc.style.background = `conic-gradient(var(--accent) ${p * 360}deg, color-mix(in srgb, var(--accent) 14%, transparent) 0)`;
+      return p;
+    };
     const tick = () => {
       const l = lpRef.current;
       if (!l || l.ring !== ring) return;
-      const raw = Math.min(1, (performance.now() - t0) / LP_MS);
-      const p = raw < 0.12 ? raw * 0.6 : 0.072 + (raw - 0.12) * 1.0545; // 起步稍缓,后段匀速(可预期)
-      rect.style.strokeDashoffset = String(per * (1 - Math.min(1, p)));
-      if (raw >= 1) {
+      if (paint() >= 1) {
         lpFiredRef.current = true;
         lpCancel(true);
         onFire();
@@ -445,19 +464,16 @@ export default function Create() {
     };
     lpRef.current = {
       ring,
-      per,
+      el,
       raf: requestAnimationFrame(tick),
-      // rAF 被节流的环境(后台标签/无头)兜底:低频检查完成,不描帧但保证能进
+      // rAF 节流环境兜底:低频补帧+保证触发
       iv: setInterval(() => {
         const l = lpRef.current;
         if (!l || l.ring !== ring) return;
-        if (performance.now() - t0 >= LP_MS) {
-          rect.style.strokeDashoffset = "0";
+        if (paint() >= 1) {
           lpFiredRef.current = true;
           lpCancel(true);
           onFire();
-        } else {
-          rect.style.strokeDashoffset = String(per * (1 - Math.min(1, (performance.now() - t0) / LP_MS)));
         }
       }, 80),
     };
@@ -878,7 +894,7 @@ export default function Create() {
     if (e.button !== 0) return;
     dragRef.current = { key: bc.key, startX: e.clientX, startY: e.clientY, baseX: pos.x, baseY: pos.y, moved: false, bc };
     e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId);
-    lpStart(e.currentTarget, () => {
+    lpStart(e.currentTarget, e, () => {
       dragRef.current = null; // 满环=进 AI,本次手势不再是拖/点
       openAiForCard(bc);
     });
@@ -2291,9 +2307,9 @@ export default function Create() {
                         style={{ "--ci": Math.min(fi, 8) }}
                         key={f.k0}
                         onPointerDown={(e) => {
-                          // I 系列:长按字段=唯一 AI 入口(朱砂环满即开对话,语境=这一块)
+                          // I 系列:长按字段=唯一 AI 入口(按压点进度环,语境=这一块)
                           if (e.button !== 0 || editingKey === f.k0) return;
-                          lpStart(e.currentTarget, () => openAiForField(f));
+                          lpStart(e.currentTarget, e, () => openAiForField(f));
                         }}
                         onPointerUp={lpCancel}
                         onPointerLeave={lpCancel}
@@ -2507,7 +2523,9 @@ export default function Create() {
             {/* I 系列:AI 对话 sidebar——唯一对话场所(长按任意 AI 对象即达);dock 浮岛/批注行退役 */}
             {aiOpen && (
               <aside
+                ref={aiElRef}
                 className={"create-ai" + (refDragOver ? " is-dropping" : "")}
+                style={{ transform: `translate(${aiPos.x}px, ${aiPos.y}px)` }}
                 role="complementary"
                 aria-label="AI 对话"
                 onDragOver={(e) => {
@@ -2530,7 +2548,15 @@ export default function Create() {
                   }
                 }}
               >
-                <div className="create-ai-h">
+                <div
+                  className="create-ai-h"
+                  onPointerDown={onAiHeadDown}
+                  onPointerMove={onAiHeadMove}
+                  onPointerUp={onAiHeadUp}
+                  onPointerCancel={onAiHeadUp}
+                  onDoubleClick={() => setAiPos({ x: 0, y: 0 })}
+                  title="按住拖动·双击回位"
+                >
                   <span className="t-kai">AI 对话 · {KINDS[ki].zh}</span>
                   <button className="create-modal-x" onClick={() => setAiOpen(false)} aria-label="收起对话">×</button>
                 </div>
@@ -2571,16 +2597,14 @@ export default function Create() {
                 <div className="create-composer">
                   <textarea
                     ref={dockInputRef}
-                    rows={1}
+                    rows={3}
                     value={desk.input}
-                    disabled={busy || (!isDraftId(selLive) && !(aiCtx && aiCtx.type === "field"))}
+                    disabled={busy || (aiCtx && aiCtx.type === "built")}
                     placeholder={
                       aiCtx && aiCtx.type === "field"
-                        ? (aiCtx.f.empty ? "想怎么补「" + aiCtx.f.k + "」?留空直接发=默认写法" : "想怎么改「" + aiCtx.f.k + "」?留空直接发=默认写法")
-                        : !selLive
-                        ? "先起一张卡再聊——双击画板空白,或左边工具栏「+」"
-                        : !isDraftId(selLive)
-                        ? "已收进台子的卡不能直接聊——先「改编」成草稿"
+                        ? (aiCtx.f.empty ? "补写「" + aiCtx.f.k + "」的要求,留空直接发=默认写法" : "改写「" + aiCtx.f.k + "」的要求,留空直接发=默认写法")
+                        : aiCtx && aiCtx.type === "built"
+                        ? "成品卡不能直接改——先「改编」成草稿"
                         : KINDS[ki].ph
                     }
                     onChange={(e) => {
@@ -2626,7 +2650,8 @@ export default function Create() {
                       onClick={aiSend}
                       disabled={
                         busy ||
-                        (aiCtx && aiCtx.type === "field" ? false : !desk.input.trim() || !isDraftId(selLive))
+                        (aiCtx && aiCtx.type === "built") ||
+                        (aiCtx && aiCtx.type === "field" ? false : !desk.input.trim())
                       }
                     >
                       发送
