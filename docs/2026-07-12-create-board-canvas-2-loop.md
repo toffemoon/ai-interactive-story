@@ -101,4 +101,19 @@ plan: docs/2026-07-12-create-board-canvas-2-plan.md
   - console:磁盘文件 babel parse OK + 冷加载全功能绿;缓冲区内 parse error/b:i0 条目=本轮分步编辑的 HMR 中间态与 H0 第一版历史(**preview 工具的 console 缓冲跨 server 重启持久、无时间戳,是工具局限**,现行代码物理上产生不了这些错误)。
 - 如实边界:①本 headless 环境 rAF 被节流不执行(rafLatency=null 实测),手势中的逐帧视觉更新只能在真浏览器生效,本环境靠 commit 路径兜底落地——代码路径正确性由数学断言与 commit 结果证明;②React 因其它 state 重渲时 world 的 JSX transform 会以最近 commit 值重置(手势中理论上有一帧回跳,200ms 内自愈),真实使用无感,留观;③Profiler 面板不可用于 headless,零重渲证据以「手势期间 % 标签零变化+代码路径只触 ref」口径给出。
 - 测试残留:preview localStorage 留有测试视口/卡位(与用户无关)。
-- **地基盘 PR 已开**:H0+H1 gate 全绿 → gengyue/create-canvas2-base → main。
+- **地基盘 PR 已开**:H0+H1 gate 全绿 → gengyue/create-canvas2-base → main(#165)。
+
+## H-R4 · 2026-07-12 —— H2 BoardActionTrigger+上下文工具条 ✅(commit 9c57bb1,分支 gengyue/create-canvas2-ui,stacked 于 base)
+
+- 实现:
+  - **BoardActionTrigger**(template P0 姿势):手势→意图唯一翻译层——单击=select、双击=enter、拖>4px(世界系)=drag;上层只认意图。修三个事件层缺陷:拖后 300ms 抑制 dblclick(浏览器拖完仍派发)、pointercancel/lostPointerCapture 兜底清拖态、onCardPointerMove 查 e.buttons+data-bckey 防跨卡残留拖。
+  - **上下文工具条**:选中即见(hover 即现的 .create-bcard-acts 退役,CSS 一并清);零尺寸锚点在世界系(随卡 pan/zoom),条本体 `scale(1/z)` 逆缩放保持视觉恒定;动作按块型×卡态给:构思草稿[聚焦构思/挂资料/丢弃]、落笔草稿[聚焦编辑/引用/收进本台/导出]、built[查看/引用/改编/导出/移除]。
+  - **改编语境迁移**:adaptFromBoard=fork 成功后 boardSel 迁到 d:<kind>(dock 立即可聊)——预审「改编后原地打转」根治;新增 discardDraft(confirm 文案区分空卡,seed/built 保留口径镜像 collectToDesk)。
+- 验收证据(5199 preview,窄路径先行再铺矩阵):
+  - **窄路径 select→act→inline-apply**:真选中甲一 → 工具条浮现于卡上方左对齐(几何断言)→ 点「引用」→ desks.characters.refs 落台持久化 + dock 纸签「卡 角色卡·甲一 ×」+ 引用文本无 _bid 泄漏——闭环全绿后才铺矩阵;
+  - built 五键齐;点「改编」→《甲二·改》成草稿(无 _bid)+ **选中自动迁到草稿卡 + dock 解锁**(placeholder=该台起手语)+ 工具条即时切落笔态四键;
+  - 拖后立即 dblclick → 聚焦不再误开;pointerdown→pointercancel→悬停他卡 → 原卡纹丝不动(拖态已清);
+  - 构思态三键齐;「丢弃」→ confirm 文案正确、台子重置(messages 归开场/questions 清/draft 空)、卡下板、选中与工具条一并清、built 保留;
+  - 手机 390:.ct 就位,ctxbar/board 零泄漏;`npx vite build` 2.02s 过。
+- 如实边界:①工具条逆缩放用的是已 commit 的 view.z,pan/zoom 手势进行中有短暂尺寸偏差(200ms 内自愈,真实使用无感);②触屏长按=enter 只留了接口未实装(拍板③手机不上画布);③draft 卡「导出」导的是当下草稿(未 finalize),与台账线菜单口径一致。
+- 测试残留:preview localStorage 有《甲二·改》草稿与 worlds 台重置痕迹(测试数据,与用户无关)。
