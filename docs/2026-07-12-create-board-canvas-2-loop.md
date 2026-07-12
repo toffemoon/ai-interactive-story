@@ -193,3 +193,20 @@ plan: docs/2026-07-12-create-board-canvas-2-plan.md
 - 重做:十键带字分组——**工具**(选择 V/抓手 H)|**起手**(新建=飞出四卡种全名·可拖出落卡/模板/导入)|**内容源**(资料/引用/素材/拆回)|**产出**(导出,无草稿置灰);资料/引用在挂载中时高亮 is-on;装订/发布/对话留 boardbar(文件级)。
 - 验收:十键全渲染、导出置灰逻辑对;逐钮实测——新建 flyout(四全名+draggable)、模板/导入/资料/引用面板、素材(卡库 fetch)、拆回(presets fetch)全部真开;点空白收 flyout;手机 390 rail/fly 零泄漏;build 过。
 - 如实边界:①「修改」类动作(✎/⟳/✦/收进本台/移除)保持在卡的上下文工具条与聚焦面板——rail 是全局能力,卡级动作跟卡走(Figma 同口径);②快捷键 V/H/1-4/⌘0 语义未变。
+
+## 审核重构③ · 2026-07-12(主理人拍板「AI 入口统一为长按+对话 sidebar」,commit 2d70418)
+
+- 拍板:删除所有零散进 AI 方式,唯一入口=**长按任何 AI 可作用对象**(550ms,朱砂环沿模块四周描边生长),满环即开 **AI 对话 sidebar**(右侧常驻);要修改的对象同时进聚焦;补齐对话该有的功能。(即 ripple-iOS「长按任意对象就地进 AI」姿势移植。)
+- 实现:
+  - **长按机器**:lpStart=fixed 定位 SVG 圆角矩形描边(stroke-dashoffset 按 elapsed/550ms 递减,setInterval 40ms 驱动——本环境 rAF 冻结,真浏览器同样适用);拖动>4px/抬起/pointercancel 撤环;满环置 lpFired 吞掉后续 pointerup(不再当单击);
+  - **路由**:长按草稿卡=选中+相机聚焦+开 sidebar;长按 built 卡=开 sidebar+「先改编」提示 chip;长按字段(聚焦面板内)=sidebar 切字段语境(chip「正在改写:『性格』×」+字段 is-aictx 高亮+placeholder 提示留空=默认写法),**空发送=默认指令,单发即清语境**,走原 sendFieldDirective 管线;
+  - **sidebar**:dock 浮岛整体迁化——完整对谈流(.create-say 稿纸体+busy 正在想)+composer 全套(挂资料/@引用/上传/拖卡挂引用/Enter 发送→aiSend 分流);boardbar「AI 对话·N」=开关;
+  - **退役**:✦/⟳/「聊」钮、指示行(askOpen)、批注笺、dock 浮岛、对话抽屉(暂 {false&&} 灭活保结构);✎ 手改(非 AI)保留并 stopPropagation 防误触发场长按;
+  - Esc 层序更新:落卡菜单 → **sidebar** → 聚焦 → 选中。
+- 验收证据(5199+8017 真调):
+  - 长按卡 280ms 采样:环在且描边 51%(336/690,与 elapsed/550 数学吻合)→ 满环:环消失、sidebar 开(3 条对谈史+composer 可用)、聚焦同开;
+  - 长按「性格」字段 → 环上字段 → chip/placeholder/高亮三对 → **空发送真调**:「⟳ 改写『性格』」入流、真回包把 personality 从"沉静"扩成完整段落、语境自动清;
+  - 拖动即撤环;短按=单击选中不变(工具条照常);Esc 先关 sidebar(聚焦保留);
+  - 旧入口零渲染(dock/note/drawer/ask 四查全无);手机 390:.ct 原样,ai/lpring 零泄漏;build 2.27s 过(Create chunk 108.91kB)。
+- 如实边界:①genIntro(完善角色卡弹窗内「自动生成」)未改长按——弹窗域独立交互,留观下一轮反馈;②构思圈选/蓝图批准仍在画布 muse(它们是"回答"不是"入口");③抽屉 JSX 以 {false&&} 灭活保平衡,死代码待清;④「对话该有的功能」本轮=完整历史/语境/引用/资料/上传/快捷发送,重发/停止/复制等增强留观(fetch 无 abort 通道,停止需后端配合)。
+- 测试残留:test 库真调两轮;preview localStorage 留测试台。
