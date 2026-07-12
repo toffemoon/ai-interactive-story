@@ -83,7 +83,17 @@ const STORE_KEY = "ais_create_desks_v1";
 const KI_KEY = "ais_create_ki_v1"; // 记住当前卡种 tab(YOR-200)
 // 这些 key 不当文本字段渲染:name/title 已在卡名展示;avatar/image/cover 是图(base64 data-URI),
 // 只走缩略图,别把 base64 大串当普通字段铺进预览(#92 上传图后的回归)。
-const NON_FIELD_KEYS = ["name", "character_id", "id", "title", "avatar", "image", "cover"];
+const NON_FIELD_KEYS = ["name", "character_id", "id", "title", "avatar", "image", "cover", "_bid"];
+
+// H0 稳定 id:built 卡的长期身份(视图层用:板上坐标/选中/聚焦全挂它,数组下标退役)。
+// _bid 只活在 desks.built 里;导出/发布/改编/引用等出口一律 stripBid,不污染卡数据。
+const newBid = () => "b" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const withBid = (card) => (card && card._bid ? card : { ...(card || {}), _bid: newBid() });
+function stripBid(card) {
+  if (!card || !card._bid) return card;
+  const { _bid, ...rest } = card;
+  return rest;
+}
 
 // 把任意卡字段值渲染成可读文本。根治世界书 entries / 故事书 timeline 这类"对象数组"
 // 被 v.join("、") 渲染成「[object Object]、[object Object]…」的 bug(细节⑤)。
@@ -162,7 +172,16 @@ export default function Create() {
       return 0;
     }
   });
-  const [desks, setDesks] = useState(loadDesks);
+  const [desks, setDesks] = useState(() => {
+    // H0:老 built 卡补稳定 _bid——同步于首渲初始化器,不走 mount effect
+    // (effect 版会造成首帧无 id 的 key 兜底撞车 + 与坐标持久化 effect 的写序竞态)。
+    const ds = loadDesks();
+    for (const t of KINDS) {
+      const b = ds[t.k] && ds[t.k].built;
+      if (b && b.some((c) => !c || !c._bid)) ds[t.k] = { ...ds[t.k], built: b.map(withBid) };
+    }
+    return ds;
+  });
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState("");
   const [toastGo, setToastGo] = useState(null); // toast 可选去处(YOR-170:发布成功带「去看看」)
@@ -205,23 +224,195 @@ export default function Create() {
   // F8 画布即主界面:助手退成画布底一条命令条;完整对话历史收进抽屉(chatOpen)。
   const [chatOpen, setChatOpen] = useState(false);
   // G0 Lovart 式全屏画板:四台物料全部投影成可拖卡片;单击选中(切 ki,选中即聊)、双击聚焦编辑。
-  // sel/focus = { kk, idx },idx=-1 是该台 draft、>=0 是 built[idx];null=无。
+  // H0 起 sel/focus = { kk, id },id="d:<kind>"(该台 draft)| "b:<_bid>"(built 卡);null=无。
+  // 下标退役:built 增删/换序不再让选中与坐标张冠李戴。
   const [boardSel, setBoardSel] = useState(null);
   const [boardFocus, setBoardFocus] = useState(null);
-  // G1 卡片坐标(视图层,不进 desks——回滚=删这一个键):{ cardKey: {x, y} }
+  // H0 卡片坐标(视图层,不进 desks——回滚=删 ais_create_board_v2,v1 原样保留):{ "d:<kind>"|"b:<bid>": {x, y} }
+  // v2 不存在时在初始化器里同步从 v1 迁移(v1 的下标 key 解析到上面刚补好的 _bid);
+  // 必须在 useState 初始化器做:持久化 effect 挂载即写 v2,mount effect 版会被空对象抢先。
   const [boardPos, setBoardPos] = useState(() => {
     try {
-      const v = JSON.parse(localStorage.getItem("ais_create_board_v1") || "{}");
-      return v && typeof v === "object" ? v : {};
+      const raw = localStorage.getItem("ais_create_board_v2");
+      if (raw) {
+        const v = JSON.parse(raw);
+        if (!v || typeof v !== "object") return {};
+        const { __view, ...cards } = v; // __view 是视口保留键(H1),不是卡坐标
+        return cards;
+      }
+      const v1 = JSON.parse(localStorage.getItem("ais_create_board_v1") || "{}") || {};
+      const v2 = {};
+      for (const [k, p] of Object.entries(v1)) {
+        if (!p || typeof p.x !== "number") continue;
+        const m = /^built:([^:]+):(\d+)$/.exec(k);
+        if (m) {
+          const c = ((desks[m[1]] || {}).built || [])[Number(m[2])];
+          if (c && c._bid) v2["b:" + c._bid] = p;
+        } else if (k.startsWith("draft:")) {
+          v2["d:" + k.slice(6)] = p;
+        }
+      }
+      return v2;
     } catch {
       return {};
     }
   });
+  // H1 视口(pan/zoom):世界坐标系=卡坐标;屏幕→世界 = (screen - pan) / z。
+  // 手势中 viewRef 为真源、rAF 直写 world 元素 transform(零 React 重渲),手势结束才 commit 到 state;
+  // 持久化与卡坐标同住 ais_create_board_v2 的保留键 __view(红线:视图态只此一处)。
+  const Z_MIN = 0.25, Z_MAX = 2;
+  const clampZ = (z) => Math.min(Z_MAX, Math.max(Z_MIN, z));
+  const [view, setView] = useState(() => {
+    try {
+      const v = (JSON.parse(localStorage.getItem("ais_create_board_v2") || "{}") || {}).__view;
+      if (v && typeof v.x === "number" && typeof v.y === "number" && typeof v.z === "number") {
+        return { x: v.x, y: v.y, z: clampZ(v.z) };
+      }
+    } catch {}
+    return { x: 0, y: 0, z: 1 };
+  });
+  const viewRef = useRef(view);
+  const worldRef = useRef(null);
+  const boardElRef = useRef(null);
+  const viewRafRef = useRef(0);
+  const viewCommitT = useRef(null);
+  const panRef = useRef(null); // {sx, sy, bx, by} 板平移手势
+  const spaceRef = useRef(false); // Space 按住=抓手(输入框内不劫持)
+  function applyViewNow() {
+    const el = worldRef.current;
+    if (!el) return;
+    const v = viewRef.current;
+    el.style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.z})`;
+  }
+  function scheduleViewApply() {
+    if (viewRafRef.current) return;
+    viewRafRef.current = requestAnimationFrame(() => {
+      viewRafRef.current = 0;
+      applyViewNow();
+    });
+  }
+  function commitViewSoon(ms = 200) {
+    clearTimeout(viewCommitT.current);
+    viewCommitT.current = setTimeout(() => setView({ ...viewRef.current }), ms);
+  }
+  useEffect(() => {
+    viewRef.current = view;
+    applyViewNow();
+  }, [view]);
   useEffect(() => {
     try {
-      localStorage.setItem("ais_create_board_v1", JSON.stringify(boardPos));
+      localStorage.setItem("ais_create_board_v2", JSON.stringify({ ...boardPos, __view: view }));
     } catch (e) {}
-  }, [boardPos]);
+  }, [boardPos, view]);
+  // wheel 要 preventDefault,React 合成 wheel 在根上是 passive——必须原生监听。
+  // 约定:ctrl/cmd+wheel(含触控板捏合)=对准光标缩放;裸 wheel=平移。
+  useEffect(() => {
+    const el = boardElRef.current;
+    if (!el) return;
+    const onWheel = (e) => {
+      e.preventDefault();
+      const v = viewRef.current;
+      if (e.ctrlKey || e.metaKey) {
+        const rect = el.getBoundingClientRect();
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        const nz = clampZ(v.z * Math.exp(-e.deltaY * 0.0015));
+        viewRef.current = { x: mx - ((mx - v.x) * nz) / v.z, y: my - ((my - v.y) * nz) / v.z, z: nz };
+      } else {
+        viewRef.current = { ...v, x: v.x - e.deltaX, y: v.y - e.deltaY };
+      }
+      scheduleViewApply();
+      commitViewSoon();
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobile]);
+  // Space=抓手(光标态直改 class,不走 React);输入框/编辑态不劫持。
+  useEffect(() => {
+    const typing = (t) => t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+    const down = (e) => {
+      if (e.code !== "Space" || e.repeat || typing(e.target)) return;
+      spaceRef.current = true;
+      if (boardElRef.current) {
+        boardElRef.current.classList.add("is-pan");
+        e.preventDefault(); // 只在板上生效时挡滚动
+      }
+    };
+    const up = (e) => {
+      if (e.code !== "Space") return;
+      spaceRef.current = false;
+      boardElRef.current && boardElRef.current.classList.remove("is-pan");
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, []);
+  function onBoardPointerDown(e) {
+    if (e.button === 1 || (e.button === 0 && spaceRef.current)) {
+      panRef.current = { sx: e.clientX, sy: e.clientY, bx: viewRef.current.x, by: viewRef.current.y };
+      e.preventDefault();
+      try {
+        e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {}
+      return;
+    }
+    if (e.target === e.currentTarget || (worldRef.current && e.target === worldRef.current)) setBoardSel(null); // 点空白=取消选中
+  }
+  function onBoardPointerMove(e) {
+    const p = panRef.current;
+    if (!p) return;
+    viewRef.current = { ...viewRef.current, x: p.bx + (e.clientX - p.sx), y: p.by + (e.clientY - p.sy) };
+    scheduleViewApply();
+  }
+  function onBoardPointerEnd() {
+    if (!panRef.current) return;
+    panRef.current = null;
+    setView({ ...viewRef.current });
+  }
+  // 缩放控件:± 以板中心为锚;% 点击=回 100%;「适配」=装下全部卡。
+  function zoomTo(nz, anchor) {
+    const el = boardElRef.current;
+    const v = viewRef.current;
+    nz = clampZ(nz);
+    let ax = 0, ay = 0;
+    if (el) {
+      const r = el.getBoundingClientRect();
+      ax = anchor ? anchor.x : r.width / 2;
+      ay = anchor ? anchor.y : r.height / 2;
+    }
+    viewRef.current = { x: ax - ((ax - v.x) * nz) / v.z, y: ay - ((ay - v.y) * nz) / v.z, z: nz };
+    applyViewNow();
+    setView({ ...viewRef.current });
+  }
+  function fitAllCards() {
+    const el = boardElRef.current;
+    if (!el || !boardCards.length) {
+      viewRef.current = { x: 0, y: 0, z: 1 };
+      applyViewNow();
+      setView({ x: 0, y: 0, z: 1 });
+      return;
+    }
+    const CW = 224, CH = 160;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    boardCards.forEach((bc) => {
+      const p = boardCardPos(bc, bc.kSeq);
+      x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y);
+      x1 = Math.max(x1, p.x + CW); y1 = Math.max(y1, p.y + CH);
+    });
+    const r = el.getBoundingClientRect();
+    const pad = 48;
+    const z = clampZ(Math.min((r.width - pad * 2) / (x1 - x0), (r.height - pad * 2) / (y1 - y0), 1));
+    viewRef.current = {
+      x: (r.width - (x1 - x0) * z) / 2 - x0 * z,
+      y: (r.height - (y1 - y0) * z) / 2 - y0 * z,
+      z,
+    };
+    applyViewNow();
+    setView({ ...viewRef.current });
+  }
   // F3 一键 AI 长出指示行:askOpen = 字段 k0 | null(✦/⟳ 点开,可空回车=默认指令)。
   const [askOpen, setAskOpen] = useState(null);
   const [askText, setAskText] = useState("");
@@ -327,7 +518,7 @@ export default function Create() {
     patch(kind, (d0) => ({ refs: (Array.isArray(d0.refs) ? d0.refs : []).filter((x) => x.label !== label) }));
   }
   function refFromCard(kk, card) {
-    const c = (card && card.data) || card || {};
+    const c = stripBid((card && card.data) || card || {}); // H0:视图 id 不进 prompt
     const nm = c.name || c.title || "未命名";
     const zh = (KINDS.find((t) => t.k === kk) || {}).zh || "卡";
     return makeRef("card", zh + "·" + nm, cardToRefText(kk, c));
@@ -356,9 +547,10 @@ export default function Create() {
       d.messages.length > 1 ||
       (d.questions || []).length > 0 ||
       (d.blueprint || []).length > 0;
-    if (draftHas) out.push({ key: "draft:" + t.k, kk: t.k, zh: t.zh, idx: -1, card: d.draft || {}, isDraft: true, kSeq: 0 });
+    if (draftHas) out.push({ key: "d:" + t.k, id: "d:" + t.k, kk: t.k, zh: t.zh, card: d.draft || {}, isDraft: true, kSeq: 0 });
     d.built.forEach((card, i) =>
-      out.push({ key: "built:" + t.k + ":" + i, kk: t.k, zh: t.zh, idx: i, card, isDraft: false, kSeq: out.length })
+      // _bid 由 desks 初始化器保证;万一缺失,兜底 key 必须带 kind 防跨台撞车
+      out.push({ key: "b:" + ((card && card._bid) || t.k + "#" + i), id: "b:" + ((card && card._bid) || t.k + "#" + i), kk: t.k, zh: t.zh, card, isDraft: false, kSeq: out.length })
     );
     return out;
   });
@@ -376,22 +568,31 @@ export default function Create() {
     return String(c.description || c.premise || c.background || c.personality || "").slice(0, 56);
   }
   function selectCard(bc) {
-    setBoardSel({ kk: bc.kk, idx: bc.idx });
+    setBoardSel({ kk: bc.kk, id: bc.id });
     const i = KINDS.findIndex((t) => t.k === bc.kk);
     if (i >= 0 && i !== ki) setKi(i);
   }
   function focusCard(bc) {
     selectCard(bc);
-    setBoardFocus({ kk: bc.kk, idx: bc.idx });
+    setBoardFocus({ kk: bc.kk, id: bc.id });
   }
   // 新建:该台草稿已在板上就选中聚焦它;全新空台=聚焦进构思流。
   function newCardOf(kk) {
     const i = KINDS.findIndex((t) => t.k === kk);
     if (i >= 0) setKi(i);
-    setBoardSel({ kk, idx: -1 });
-    setBoardFocus({ kk, idx: -1 });
+    setBoardSel({ kk, id: "d:" + kk });
+    setBoardFocus({ kk, id: "d:" + kk });
     requestAnimationFrame(() => dockInputRef.current && dockInputRef.current.focus());
   }
+  // H0 id 语义工具:draft 选中 / 按 id 解析 built 卡(卡没了=null,消费方按"无选中/卡不在了"降级)。
+  const isDraftId = (s) => !!(s && s.id && s.id.startsWith("d:"));
+  function resolveBuilt(s) {
+    if (!s || !s.id || !s.id.startsWith("b:")) return null;
+    const bid = s.id.slice(2);
+    return (desks[s.kk].built || []).find((c) => c && c._bid === bid) || null;
+  }
+  // 选中态活性:built 选中但卡已移除/已发布清台 → 视同无选中(dock 解锁回引导态,不再幽灵锁死)。
+  const selLive = boardSel && (isDraftId(boardSel) || resolveBuilt(boardSel)) ? boardSel : null;
   // Esc 关聚焦(输入框里按 Esc 不劫持——它们自己 stopPropagation 或先聚焦处理)
   useEffect(() => {
     if (!boardFocus) return;
@@ -402,7 +603,7 @@ export default function Create() {
     return () => window.removeEventListener("keydown", onKey);
   }, [boardFocus]);
   // 选中的 built 卡对象(dock 提示用)
-  const selBuilt = boardSel && boardSel.idx >= 0 ? (desks[boardSel.kk].built || [])[boardSel.idx] : null;
+  const selBuilt = resolveBuilt(boardSel);
 
   // G1 拖放:pointer 拖 + >4px 判拖(否则算单击);拖到 dock 上=挂引用。
   const dragRef = useRef(null); // {key, startX, startY, baseX, baseY, moved, bc}
@@ -414,8 +615,10 @@ export default function Create() {
   function onCardPointerMove(e) {
     const d = dragRef.current;
     if (!d) return;
-    const dx = e.clientX - d.startX, dy = e.clientY - d.startY;
-    if (!d.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+    // H1:屏幕位移 → 世界位移要除以缩放,否则非 100% 下拖卡落点漂
+    const z = viewRef.current.z || 1;
+    const dx = (e.clientX - d.startX) / z, dy = (e.clientY - d.startY) / z;
+    if (!d.moved && Math.abs(dx) + Math.abs(dy) < 4 / z) return;
     d.moved = true;
     setBoardPos((p) => ({ ...p, [d.key]: { x: Math.max(0, d.baseX + dx), y: Math.max(0, d.baseY + dy) } }));
   }
@@ -586,6 +789,7 @@ export default function Create() {
   function forkToDraft(item, kk = kind) {
     let card = (item && item.data) || item || {};
     if (card && card.data && typeof card.data === "object" && !Array.isArray(card.data)) card = card.data; // chara_card_v2 信封再剥一层
+    card = stripBid(card); // H0:板上身份不跟着改编稿走(收进本台时另发新 id)
     if (!card || !Object.keys(card).length) {
       flash("这张卡读不出内容");
       return false;
@@ -717,7 +921,7 @@ export default function Create() {
         ...blankDesk(kind),
         // D1:参考资料跨卡保留(一份资料常连造多张卡);tpl 不带 = 自然清(模板是单卡的事)。
         seed: ds[kind].seed || "",
-        built: [...ds[kind].built, cardDraft],
+        built: [...ds[kind].built, withBid(cardDraft)],
         messages: [{ who: "ai", text: "《" + nm + "》放进台子了(本台第 " + (ds[kind].built.length + 1) + " 张)。说说下一张?" }],
       },
     }));
@@ -784,12 +988,24 @@ export default function Create() {
       setBusy(false);
     }
   }
-  function removeBuilt(idx) {
+  function removeBuilt(kk, bid) {
     // 破坏性且不可撤销:收进本台时该卡的聊天记录已清,没另存卡库就找不回。先确认(镜像纯聊 ⟳ 范式,YOR-184)。
-    const c = desks[kind].built[idx];
-    const nm = (c && (c.name || c.title)) || "这张卡";
+    // H0:显式传台 + 按 _bid 定位——闭包旧 kind/下标前移那族误删从根上消失;找不到卡=如实提示不盲删。
+    const c = (desks[kk] && desks[kk].built ? desks[kk].built : []).find((x) => x && x._bid === bid);
+    if (!c) {
+      flash("这张卡不在了(可能已被移除)");
+      return;
+    }
+    const nm = c.name || c.title || "这张卡";
     if (!window.confirm("移除《" + nm + "》?它聊出来的对话已经清空,移除后找不回。确定?")) return;
-    setDesks((ds) => ({ ...ds, [kind]: { ...ds[kind], built: ds[kind].built.filter((_, i) => i !== idx) } }));
+    setDesks((ds) => ({ ...ds, [kk]: { ...ds[kk], built: (ds[kk].built || []).filter((x) => !x || x._bid !== bid) } }));
+    setBoardPos((p) => {
+      if (!p["b:" + bid]) return p;
+      const { ["b:" + bid]: _gone, ...rest } = p;
+      return rest;
+    });
+    setBoardSel((s) => (s && s.id === "b:" + bid ? null : s));
+    setBoardFocus((s) => (s && s.id === "b:" + bid ? null : s));
     flash("已从本台移除");
   }
   // 取一张卡的可读字段(查看本台已建用)。
@@ -854,7 +1070,7 @@ export default function Create() {
   // D5 导出:characters 套 chara_card_v2 信封(与酒馆 JSON 同构,可被 D2 导入原样吃回),
   // 其余卡种导裸 data;纯前端 Blob 下载,零请求。
   function exportCard(card, kk = kind) {
-    const c = (card && card.data) || card || {};
+    const c = stripBid((card && card.data) || card || {});
     if (!Object.keys(c).length) {
       flash("还没有可导出的内容");
       return;
@@ -891,10 +1107,10 @@ export default function Create() {
     const worlds = d.world ? [d.world] : [];
     const stories = d.story ? [d.story] : [];
     setDesks((ds) => ({
-      characters: { ...ds.characters, built: [...ds.characters.built, ...chars] },
-      players: { ...ds.players, built: [...ds.players.built, ...players] },
-      worlds: { ...ds.worlds, built: [...ds.worlds.built, ...worlds] },
-      stories: { ...ds.stories, built: [...ds.stories.built, ...stories] },
+      characters: { ...ds.characters, built: [...ds.characters.built, ...chars.map(withBid)] },
+      players: { ...ds.players, built: [...ds.players.built, ...players.map(withBid)] },
+      worlds: { ...ds.worlds, built: [...ds.worlds.built, ...worlds.map(withBid)] },
+      stories: { ...ds.stories, built: [...ds.stories.built, ...stories.map(withBid)] },
     }));
     setPresetsModal(null);
     flash(`已把《${p.name}》拆回四台(角色×${chars.length} 演出×${players.length} 世界×${worlds.length} 故事×${stories.length});发布会生成新预设`);
@@ -926,7 +1142,7 @@ export default function Create() {
       flash("这张卡读不出内容");
       return;
     }
-    setDesks((ds) => ({ ...ds, [kind]: { ...ds[kind], built: [...ds[kind].built, card] } }));
+    setDesks((ds) => ({ ...ds, [kind]: { ...ds[kind], built: [...ds[kind].built, withBid(card)] } }));
     setLibModal(null);
     flash("已加入本次创作");
   }
@@ -934,7 +1150,8 @@ export default function Create() {
   const deskCards = (k) => {
     const d = desks[k];
     const cur = d.draft && Object.keys(d.draft).length ? [d.draft] : [];
-    return [...d.built, ...cur];
+    // H0:_bid 是视图层身份,发布/预览拼装一律剥掉,不进 preset 数据
+    return [...d.built.map(stripBid), ...cur];
   };
 
   // 组装当前创作 → 故事 preset 形状(给「预览成详情页」用,复用发布那套拼装;不落库、纯本地)。
@@ -1462,21 +1679,29 @@ export default function Create() {
           <div className="create-studio is-board">
             <div
               className="create-board"
-              onPointerDown={(e) => {
-                if (e.target === e.currentTarget) setBoardSel(null); // 点空白=取消选中
-              }}
+              ref={boardElRef}
+              onPointerDown={onBoardPointerDown}
+              onPointerMove={onBoardPointerMove}
+              onPointerUp={onBoardPointerEnd}
+              onPointerCancel={onBoardPointerEnd}
             >
+              {/* H1 世界容器:pan/zoom 只动它一个 transform(手势中 rAF 直写,不过 React) */}
+              <div className="create-world" ref={worldRef} style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})` }}>
               {boardCards.map((bc, seq) => {
                 const c = (bc.card && bc.card.data) || bc.card || {};
                 const nm = c.name || c.title || (bc.isDraft ? "未命名草稿" : "未命名");
                 const pos = boardCardPos(bc, bc.kSeq); // 落位偏移按 kind 内序号(全局 seq 会把不同台的卡串到一条线上)
-                const on = boardSel && boardSel.kk === bc.kk && boardSel.idx === bc.idx;
+                const on = boardSel && boardSel.id === bc.id;
                 return (
                   <div
                     key={bc.key}
                     className={"create-bcard" + (on ? " is-on" : "") + (bc.isDraft ? " is-draft" : "")}
                     style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
-                    onPointerDown={(e) => { e.stopPropagation(); onCardPointerDown(e, bc, pos); }}
+                    onPointerDown={(e) => {
+                      if (spaceRef.current || e.button === 1) return; // 抓手/中键=板平移,让事件冒泡到板
+                      e.stopPropagation();
+                      onCardPointerDown(e, bc, pos);
+                    }}
                     onPointerMove={onCardPointerMove}
                     onPointerUp={(e) => onCardPointerUp(e, bc)}
                     onDoubleClick={() => focusCard(bc)}
@@ -1495,13 +1720,14 @@ export default function Create() {
                         <button onClick={(e) => { e.stopPropagation(); focusCard(bc); }} onPointerDown={(e) => e.stopPropagation()}>查看</button>
                         <button onClick={(e) => { e.stopPropagation(); addRef(refFromCard(bc.kk, bc.card)); }} onPointerDown={(e) => e.stopPropagation()}>引用</button>
                         <button onClick={(e) => { e.stopPropagation(); forkToDraft(bc.card, bc.kk); }} onPointerDown={(e) => e.stopPropagation()}>改编</button>
-                        <button onClick={(e) => { e.stopPropagation(); exportCard(bc.card); }} onPointerDown={(e) => e.stopPropagation()}>导出</button>
-                        <button onClick={(e) => { e.stopPropagation(); const i = KINDS.findIndex((t) => t.k === bc.kk); if (i >= 0) setKi(i); removeBuilt(bc.idx); }} onPointerDown={(e) => e.stopPropagation()}>移除</button>
+                        <button onClick={(e) => { e.stopPropagation(); exportCard(bc.card, bc.kk); }} onPointerDown={(e) => e.stopPropagation()}>导出</button>
+                        <button onClick={(e) => { e.stopPropagation(); removeBuilt(bc.kk, bc.card && bc.card._bid); }} onPointerDown={(e) => e.stopPropagation()}>移除</button>
                       </span>
                     )}
                   </div>
                 );
               })}
+              </div>
               {boardCards.length === 0 && (
                 <div className="create-board-empty">
                   <span className="create-card-blank-seal t-kai" aria-hidden="true">板</span>
@@ -1515,6 +1741,13 @@ export default function Create() {
                   </div>
                 </div>
               )}
+              {/* H1 缩放控件:± 板中心锚定;点 % 回 100%;适配=装下全部卡 */}
+              <div className="create-zoomctl t-meta" aria-label="画板缩放">
+                <button onClick={() => zoomTo(viewRef.current.z / 1.2)} aria-label="缩小">−</button>
+                <button className="create-zoomctl-pct" onClick={() => zoomTo(1)} title="回到 100%">{Math.round(view.z * 100)}%</button>
+                <button onClick={() => zoomTo(viewRef.current.z * 1.2)} aria-label="放大">＋</button>
+                <button onClick={fitAllCards} title="装下全部卡">适配</button>
+              </div>
             </div>
 
             {/* G0 聚焦态:双击放大编辑——draft=现有画布全套;built=只读字段 */}
@@ -1524,17 +1757,17 @@ export default function Create() {
                 <div className="create-focus-panel">
                   <div className="create-focus-top">
                     <button className="create-blank-link" onClick={() => setBoardFocus(null)}>← 回画板</button>
-                    {boardFocus.idx === -1 && (
+                    {isDraftId(boardFocus) && (
                       <span className="create-focus-acts">
                         <Button variant="line" onClick={nextCard} disabled={!hasDraft}>收进本台</Button>
                         <Button variant="line" onClick={saveCard} disabled={!hasDraft || savingCard}>{savingCard ? "收入中…" : "收入卡库"}</Button>
                       </span>
                     )}
                   </div>
-                  {boardFocus.idx >= 0 ? (
+                  {!isDraftId(boardFocus) ? (
                     <div className="create-focus-built">
                       {(() => {
-                        const card = (desks[boardFocus.kk].built || [])[boardFocus.idx];
+                        const card = resolveBuilt(boardFocus);
                         if (!card) return <div className="create-shelf-empty t-meta">这张卡不在了(可能已移除)。</div>;
                         const c = (card && card.data) || card || {};
                         return (
@@ -1848,7 +2081,7 @@ export default function Create() {
                   }
                 }}
               >
-                {boardSel && boardSel.idx === -1 && phase === "drafting" && (busy || lastAi) && (
+                {isDraftId(selLive) && phase === "drafting" && (busy || lastAi) && (
                   <button className="create-dock-note" onClick={() => setChatOpen(true)} title="展开完整对话">
                     <span className="create-say-who t-kai">助手</span>
                     <span className={"create-dock-note-tx t-ui-sm" + (busy ? " create-msg-typing" : "")}>
@@ -1856,7 +2089,7 @@ export default function Create() {
                     </span>
                   </button>
                 )}
-                {boardSel && boardSel.idx >= 0 && (
+                {selLive && !isDraftId(selLive) && (
                   <div className="create-dock-note" aria-live="polite">
                     <span className="create-say-who t-kai">这张卡</span>
                     <span className="create-dock-note-tx t-ui-sm">已收进台子——双击查看,或点卡上「改编」把它变成可聊的草稿。</span>
@@ -1879,11 +2112,11 @@ export default function Create() {
                     ref={dockInputRef}
                     rows={1}
                     value={desk.input}
-                    disabled={busy || !boardSel || boardSel.idx >= 0}
+                    disabled={busy || !isDraftId(selLive)}
                     placeholder={
-                      !boardSel
+                      !selLive
                         ? "点一张卡开始聊,或上面「+ 新建」"
-                        : boardSel.idx >= 0
+                        : !isDraftId(selLive)
                         ? "已收进台子的卡不能直接聊——先「改编」成草稿"
                         : KINDS[ki].ph
                     }
@@ -1928,7 +2161,7 @@ export default function Create() {
                     >
                       {deskRefs.length ? `@ 引用 · ${deskRefs.length}` : "@ 引用"}
                     </button>
-                    <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim() || !boardSel || boardSel.idx >= 0}>
+                    <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim() || !isDraftId(selLive)}>
                       发送
                     </Button>
                   </div>
@@ -2347,7 +2580,7 @@ export default function Create() {
                         <span className="create-built-name t-kai">{nm}</span>
                         {entries && <span className="create-built-count t-meta">{entries.length} 条条目</span>}
                         <button className="create-built-x create-built-export" onClick={() => exportCard(card)} title="下载为 JSON">导出</button>
-                        <button className="create-built-x" onClick={() => removeBuilt(i)}>移除</button>
+                        <button className="create-built-x" onClick={() => removeBuilt(kind, card && card._bid)}>移除</button>
                       </div>
                       {entries ? (
                         <div className="create-built-entries">
