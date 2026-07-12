@@ -2368,6 +2368,13 @@
     color: var(--fg);
     margin-right: 6px;
   }
+  .create-empty-news {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 2px 0 6px;
+  }
   .create-boardbar-new {
     background: none;
     border: 1px dashed color-mix(in srgb, var(--fg) 28%, transparent);

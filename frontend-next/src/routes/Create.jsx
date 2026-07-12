@@ -2030,7 +2030,17 @@ export default function Create() {
               {boardCards.length === 0 && (
                 <div className="create-board-empty">
                   <span className="create-card-blank-seal t-kai" aria-hidden="true">板</span>
-                  <span className="t-meta">板上还空着——点上面「+ 角色卡」起一张,或者:</span>
+                  <span className="t-meta">板上还空着——起一张:</span>
+                  {/* 修复(主理人审核反馈):新建入口就放在眼前——H3 把「+卡」搬去左 rail 后,
+                      空板文案曾指向已不存在的顶部按钮,新用户寸步难行 */}
+                  <div className="create-empty-news">
+                    {KINDS.map((t) => (
+                      <button key={t.k} className="create-boardbar-new" onClick={() => newCardOf(t.k)}>
+                        + {t.zh}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="t-meta">也可以双击空白任意处落卡,或:</span>
                   <div className="create-blank-more t-meta">
                     <button className="create-blank-link" onClick={() => setTplOpen(true)}>从模板起手</button>
                     ·
@@ -2437,7 +2447,7 @@ export default function Create() {
                     disabled={busy || !isDraftId(selLive)}
                     placeholder={
                       !selLive
-                        ? "点一张卡开始聊,或上面「+ 新建」"
+                        ? "先起一张卡再聊——双击画板空白,或左边工具栏「+」"
                         : !isDraftId(selLive)
                         ? "已收进台子的卡不能直接聊——先「改编」成草稿"
                         : KINDS[ki].ph
