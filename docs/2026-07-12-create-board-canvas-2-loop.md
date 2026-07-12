@@ -237,3 +237,9 @@ plan: docs/2026-07-12-create-board-canvas-2-plan.md
 - 排障插曲:一轮改完页面白卡(0 卡)——**aiPos 声明在引用它的 persist effect 之后,TDZ ReferenceError 崩整组件**;前移声明即愈。教训:往既有 effect 的 deps 加新 state 时,先确认声明顺序。
 - 验收(5199 真调环境):按压 220ms 采样=环在按压点+conic 填充+卡抬起态;满环 sidebar 开、textarea 3 行可打字;**清选中后输入仍可用**;拖 sidebar (−200,130) 精确、持久化 __ai、双击回位 translate(0,0)。
 - 测试残留:preview localStorage 留测试台与 sidebar 位置。
+
+## 部署 · 2026-07-13(主理人指令「部署」)
+
+- 合并:#165(H0-H1 地基盘,8df4f5f)→ #166 retarget main 后合入(H2-H7+I 系列+审核修复①-⑥,d6aebdc);分支已清(先改 base 再删——#160 教训生效)。
+- Render:手动触发 deploy `dep-d99s6pn7f7vs73b94230`,00:44 **live**;prod 验收:/api/health ok(db true/pool_avail 1/waiting 0/frontend true),资产哈希 index-C6WUzFqd.js 与 main dist 一致。
+- 本次上线合集:真画布(pan/zoom/工具栏/相机聚焦)、AI 统一入口(长按+sidebar)、E0/F0 门控与引用链路、阶段0修复批次、C→G 全系列——prod 创作页自此为画板形态。
