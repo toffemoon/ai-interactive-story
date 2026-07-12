@@ -2491,25 +2491,47 @@
     overflow: hidden;
     color: color-mix(in srgb, var(--fg) 55%, transparent);
   }
-  .create-bcard-acts {
-    display: flex;
-    gap: 8px;
-    margin-top: 2px;
-    opacity: 0;
-    transition: opacity var(--dur-fast) var(--ease-out);
+  /* H2:hover 即现的 .create-bcard-acts 退役,动作收进选中即见的上下文工具条 */
+  .create-ctxanchor {
+    position: absolute;
+    width: 0;
+    height: 0;
+    z-index: 6;
+    pointer-events: none;
   }
-  .create-bcard:hover .create-bcard-acts, .create-bcard.is-on .create-bcard-acts { opacity: 1; }
-  .create-bcard-acts button {
+  .create-ctxbar {
+    position: absolute;
+    left: 0;
+    bottom: 8px;
+    transform-origin: left bottom;
+    display: flex;
+    gap: 2px;
+    padding: 3px 5px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    box-shadow: var(--shadow-card);
+    white-space: nowrap;
+    pointer-events: auto;
+    animation: msgIn 0.18s var(--ease-out) both;
+  }
+  .create-ctxbar button {
     background: none;
     border: none;
-    padding: 0 0 1px;
+    padding: 3px 8px;
     cursor: pointer;
     color: var(--muted);
     font: inherit;
     font-size: 12px;
-    border-bottom: 1px dashed color-mix(in srgb, var(--fg) 25%, transparent);
+    border-radius: var(--r-sm);
+    transition: color var(--dur-fast) var(--ease-out);
   }
-  .create-bcard-acts button:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  .create-ctxbar button:hover {
+    color: var(--accent);
+  }
+  .create-ctxbar button.is-danger:hover {
+    color: var(--danger, #a33);
+  }
   .create-board-empty {
     position: absolute;
     top: 50%;

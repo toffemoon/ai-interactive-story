@@ -605,8 +605,11 @@ export default function Create() {
   // 选中的 built 卡对象(dock 提示用)
   const selBuilt = resolveBuilt(boardSel);
 
-  // G1 拖放:pointer 拖 + >4px 判拖(否则算单击);拖到 dock 上=挂引用。
+  // H2 BoardActionTrigger(template P0 姿势):手势 → 意图的唯一翻译层。
+  // 桌面:单击=select、双击=enter(聚焦)、拖>4px(世界系)=drag;触屏长按=enter 留接口未实装(手机不上画布)。
+  // 上层(工具条/聚焦)只认意图,不认具体手势——将来改主战场只动这一层。
   const dragRef = useRef(null); // {key, startX, startY, baseX, baseY, moved, bc}
+  const dragEndAtRef = useRef(0); // 拖后抑制原生 click/dblclick(浏览器拖完仍会派发)
   function onCardPointerDown(e, bc, pos) {
     if (e.button !== 0) return;
     dragRef.current = { key: bc.key, startX: e.clientX, startY: e.clientY, baseX: pos.x, baseY: pos.y, moved: false, bc };
@@ -615,6 +618,11 @@ export default function Create() {
   function onCardPointerMove(e) {
     const d = dragRef.current;
     if (!d) return;
+    // 兜底:pointercancel 丢失/跨卡残留(主键没按着还带拖态=脏)
+    if (!(e.buttons & 1) || d.key !== e.currentTarget.dataset.bckey) {
+      dragRef.current = null;
+      return;
+    }
     // H1:屏幕位移 → 世界位移要除以缩放,否则非 100% 下拖卡落点漂
     const z = viewRef.current.z || 1;
     const dx = (e.clientX - d.startX) / z, dy = (e.clientY - d.startY) / z;
@@ -630,6 +638,7 @@ export default function Create() {
       selectCard(bc);
       return;
     }
+    dragEndAtRef.current = performance.now(); // 拖完:300ms 内的 dblclick 不当「进入」
     // 落点在 dock 浮岛上=挂为引用(卡片回弹原位)
     const dock = document.querySelector(".create-dock");
     if (dock) {
@@ -639,6 +648,31 @@ export default function Create() {
         addRef(refFromCard(bc.kk, bc.card));
       }
     }
+  }
+  function onCardPointerCancel() {
+    dragRef.current = null; // 触控板手势/系统抢占等取消:清拖态,防悬停继续拖走原卡
+  }
+  function onCardEnter(bc) {
+    if (performance.now() - dragEndAtRef.current < 300) return; // 拖后误触抑制
+    focusCard(bc);
+  }
+  // 改编成草稿 + 语境迁移:fork 成功后选中迁到新草稿(dock 立即可聊,不再原地打转)。
+  function adaptFromBoard(bc) {
+    if (!forkToDraft(bc.card, bc.kk)) return;
+    setBoardSel({ kk: bc.kk, id: "d:" + bc.kk });
+  }
+  // 丢弃构思中的草稿卡:台子重置(seed/built 保留,镜像 collectToDesk 的保留口径)。
+  function discardDraft(kk) {
+    const d = desks[kk];
+    const has = Object.keys(d.draft || {}).length > 0;
+    if (!window.confirm(has ? "丢弃这张草稿和这轮构思对话?丢了就找不回。" : "收起这张构思中的卡?对话一并清空。")) return;
+    setDesks((ds) => ({
+      ...ds,
+      [kk]: { ...blankDesk(kk), seed: ds[kk].seed || "", built: ds[kk].built },
+    }));
+    setBoardSel((s) => (s && s.id === "d:" + kk ? null : s));
+    setBoardFocus((s) => (s && s.id === "d:" + kk ? null : s));
+    flash("已收起");
   }
   function quizAnswerOf(qu) {
     return (quizFree[qu.id] || "").trim() || quizAns[qu.id] || "";
@@ -1697,6 +1731,7 @@ export default function Create() {
                     key={bc.key}
                     className={"create-bcard" + (on ? " is-on" : "") + (bc.isDraft ? " is-draft" : "")}
                     style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
+                    data-bckey={bc.key}
                     onPointerDown={(e) => {
                       if (spaceRef.current || e.button === 1) return; // 抓手/中键=板平移,让事件冒泡到板
                       e.stopPropagation();
@@ -1704,7 +1739,9 @@ export default function Create() {
                     }}
                     onPointerMove={onCardPointerMove}
                     onPointerUp={(e) => onCardPointerUp(e, bc)}
-                    onDoubleClick={() => focusCard(bc)}
+                    onPointerCancel={onCardPointerCancel}
+                    onLostPointerCapture={onCardPointerCancel}
+                    onDoubleClick={() => onCardEnter(bc)}
                     role="button"
                     tabIndex={0}
                     aria-label={bc.zh + "·" + nm}
@@ -1715,18 +1752,53 @@ export default function Create() {
                     </span>
                     <span className="create-bcard-name t-kai">{nm}</span>
                     <span className="create-bcard-sub t-meta">{boardSub(bc.card) || (bc.isDraft ? "构思中……" : "已收进台子")}</span>
-                    {!bc.isDraft && (
-                      <span className="create-bcard-acts">
-                        <button onClick={(e) => { e.stopPropagation(); focusCard(bc); }} onPointerDown={(e) => e.stopPropagation()}>查看</button>
-                        <button onClick={(e) => { e.stopPropagation(); addRef(refFromCard(bc.kk, bc.card)); }} onPointerDown={(e) => e.stopPropagation()}>引用</button>
-                        <button onClick={(e) => { e.stopPropagation(); forkToDraft(bc.card, bc.kk); }} onPointerDown={(e) => e.stopPropagation()}>改编</button>
-                        <button onClick={(e) => { e.stopPropagation(); exportCard(bc.card, bc.kk); }} onPointerDown={(e) => e.stopPropagation()}>导出</button>
-                        <button onClick={(e) => { e.stopPropagation(); removeBuilt(bc.kk, bc.card && bc.card._bid); }} onPointerDown={(e) => e.stopPropagation()}>移除</button>
-                      </span>
-                    )}
                   </div>
                 );
               })}
+              {/* H2 上下文工具条:选中即见(替换 hover 即现的小钮——误触族的根)。
+                  锚点在世界系(随卡 pan/zoom),条本体逆缩放保持视觉恒定;动作按卡态给(块型×动作矩阵)。 */}
+              {selLive && (() => {
+                const bc = boardCards.find((b) => b.id === selLive.id);
+                if (!bc) return null;
+                const pos = boardCardPos(bc, bc.kSeq);
+                // 块型×动作矩阵(计划 §2):draft 按构思/落笔态,built 全套;selectCard 已把 ki 切到该台,phase 即该台相位
+                const acts = bc.isDraft
+                  ? phase === "drafting"
+                    ? [
+                        { t: "聚焦编辑", fn: () => focusCard(bc) },
+                        { t: "引用", fn: () => addRef(refFromCard(bc.kk, desks[bc.kk].draft)) },
+                        { t: "收进本台", fn: nextCard },
+                        { t: "导出", fn: () => exportCard(desks[bc.kk].draft, bc.kk) },
+                      ]
+                    : [
+                        { t: "聚焦构思", fn: () => focusCard(bc) },
+                        { t: "挂资料", fn: openSeed },
+                        { t: "丢弃", fn: () => discardDraft(bc.kk), danger: true },
+                      ]
+                  : [
+                      { t: "查看", fn: () => focusCard(bc) },
+                      { t: "引用", fn: () => addRef(refFromCard(bc.kk, bc.card)) },
+                      { t: "改编", fn: () => adaptFromBoard(bc) },
+                      { t: "导出", fn: () => exportCard(bc.card, bc.kk) },
+                      { t: "移除", fn: () => removeBuilt(bc.kk, bc.card && bc.card._bid), danger: true },
+                    ];
+                return (
+                  <div className="create-ctxanchor" style={{ left: pos.x, top: pos.y }}>
+                    <div
+                      className="create-ctxbar"
+                      style={{ transform: `scale(${1 / view.z})` }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onDoubleClick={(e) => e.stopPropagation()}
+                      role="toolbar"
+                      aria-label="卡片动作"
+                    >
+                      {acts.map((a) => (
+                        <button key={a.t} className={a.danger ? "is-danger" : ""} onClick={a.fn}>{a.t}</button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               </div>
               {boardCards.length === 0 && (
                 <div className="create-board-empty">
