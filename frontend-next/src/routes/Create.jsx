@@ -378,6 +378,79 @@ export default function Create() {
   // H3 工具态:select(默认)| hand(粘性抓手,Space=瞬时抓手不变);ref 镜像给 pointer 手势层用。
   const [tool, setTool] = useState("select");
   const [railNew, setRailNew] = useState(false); // rail「新建」飞出菜单(四卡种全名,可拖出落卡)
+  // ── I 系列(主理人审核拍板):AI 统一入口=长按——按住任何 AI 可作用的对象,
+  //    朱砂环沿模块四周描边生长(550ms),满环即开 AI 对话 sidebar;要改的对象同时进聚焦。
+  //    旧入口(✦/⟳ 指示行/批注笺/对话抽屉/dock 批注行)全部退役,对话住右侧 sidebar。 ──
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiCtx, setAiCtx] = useState(null); // null=卡级对话 | {type:"field", f}=字段定向 | {type:"built"}=成品卡提示
+  const LP_MS = 550;
+  const lpRef = useRef(null); // {iv, ring}
+  const lpFiredRef = useRef(false); // 满环后的 pointerup/click 不再当单击
+  function lpCancel() {
+    const l = lpRef.current;
+    if (!l) return;
+    clearInterval(l.iv);
+    l.ring.remove();
+    lpRef.current = null;
+  }
+  function lpStart(el, onFire) {
+    lpCancel();
+    const r = el.getBoundingClientRect();
+    const ring = document.createElement("div");
+    ring.className = "create-lpring";
+    Object.assign(ring.style, { left: r.left - 4 + "px", top: r.top - 4 + "px", width: r.width + 8 + "px", height: r.height + 8 + "px" });
+    const w = r.width + 5, h = r.height + 5;
+    const per = Math.round(2 * (w + h));
+    ring.innerHTML =
+      `<svg width="100%" height="100%" viewBox="0 0 ${w + 3} ${h + 3}">` +
+      `<rect x="1.5" y="1.5" width="${w}" height="${h}" rx="12" fill="none" stroke="var(--accent)" stroke-width="2.5" ` +
+      `stroke-dasharray="${per}" stroke-dashoffset="${per}" stroke-linecap="round"/></svg>`;
+    document.body.appendChild(ring);
+    const rect = ring.querySelector("rect");
+    const t0 = performance.now();
+    const iv = setInterval(() => {
+      const p = Math.min(1, (performance.now() - t0) / LP_MS);
+      rect.style.strokeDashoffset = String(per * (1 - p));
+      if (p >= 1) {
+        lpCancel();
+        lpFiredRef.current = true;
+        onFire();
+      }
+    }, 40);
+    lpRef.current = { iv, ring };
+  }
+  // 长按路由:卡=选中+(草稿)聚焦+开对话;字段=切字段语境+开对话
+  function openAiForCard(bc) {
+    selectCard(bc);
+    if (bc.isDraft) {
+      setAiCtx(null);
+      setBoardFocus({ kk: bc.kk, id: bc.id });
+      enterFocusCamera(boardCardPos(bc, bc.kSeq));
+    } else {
+      setAiCtx({ type: "built" });
+    }
+    setAiOpen(true);
+    setTimeout(() => dockInputRef.current && dockInputRef.current.focus(), 60);
+  }
+  function openAiForField(f) {
+    setAiCtx({ type: "field", f });
+    setAiOpen(true);
+    setTimeout(() => dockInputRef.current && dockInputRef.current.focus(), 60);
+  }
+  // sidebar 发送:字段语境=定向指令(可空发送=默认写法,单发即清语境);卡级=原 send 管线
+  function aiSend() {
+    if (busy) return;
+    const text = (desk.input || "").trim();
+    if (aiCtx && aiCtx.type === "field") {
+      const f = aiCtx.f;
+      patch(kind, { input: "" });
+      setAiCtx(null);
+      sendFieldDirective(f, f.empty ? "fill" : "rewrite", text);
+      return;
+    }
+    if (!text) return;
+    send();
+  }
   const toolRef = useRef("select");
   useEffect(() => {
     toolRef.current = tool;
@@ -735,20 +808,21 @@ export default function Create() {
   const selLive = boardSel && (isDraftId(boardSel) || resolveBuilt(boardSel)) ? boardSel : null;
   // Esc 关聚焦(输入框里按 Esc 不劫持——它们自己 stopPropagation 或先聚焦处理)
   useEffect(() => {
-    if (!boardFocus && !boardSel && !spawnAt) return;
+    if (!boardFocus && !boardSel && !spawnAt && !aiOpen) return;
     const onKey = (e) => {
       if (e.key !== "Escape") return;
       // H4 逐层退:字段编辑/指示行的 Esc 自己 preventDefault(只关自己)→ 这里不再抢;
       // 然后聚焦 → 选中,一层一层来(修预审「Esc 双关」)。
       if (e.defaultPrevented) return;
       if (spawnAt) setSpawnAt(null);
+      else if (aiOpen) setAiOpen(false);
       else if (boardFocus) exitFocus();
       else if (boardSel) setBoardSel(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boardFocus, boardSel, spawnAt]);
+  }, [boardFocus, boardSel, spawnAt, aiOpen]);
   // 选中的 built 卡对象(dock 提示用)
   const selBuilt = resolveBuilt(boardSel);
 
@@ -761,6 +835,10 @@ export default function Create() {
     if (e.button !== 0) return;
     dragRef.current = { key: bc.key, startX: e.clientX, startY: e.clientY, baseX: pos.x, baseY: pos.y, moved: false, bc };
     e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId);
+    lpStart(e.currentTarget, () => {
+      dragRef.current = null; // 满环=进 AI,本次手势不再是拖/点
+      openAiForCard(bc);
+    });
   }
   function onCardPointerMove(e) {
     const d = dragRef.current;
@@ -774,10 +852,17 @@ export default function Create() {
     const z = viewRef.current.z || 1;
     const dx = (e.clientX - d.startX) / z, dy = (e.clientY - d.startY) / z;
     if (!d.moved && Math.abs(dx) + Math.abs(dy) < 4 / z) return;
+    lpCancel(); // 动了=拖拽,长按环撤
     d.moved = true;
     setBoardPos((p) => ({ ...p, [d.key]: { x: Math.max(0, d.baseX + dx), y: Math.max(0, d.baseY + dy) } }));
   }
   function onCardPointerUp(e, bc) {
+    lpCancel();
+    if (lpFiredRef.current) {
+      lpFiredRef.current = false; // 长按已成:吞掉这次抬起,不选中不拖
+      dragRef.current = null;
+      return;
+    }
     const d = dragRef.current;
     dragRef.current = null;
     if (!d) return;
@@ -797,6 +882,7 @@ export default function Create() {
     }
   }
   function onCardPointerCancel() {
+    lpCancel();
     dragRef.current = null; // 触控板手势/系统抢占等取消:清拖态,防悬停继续拖走原卡
   }
   function onCardEnter(bc) {
@@ -1806,8 +1892,8 @@ export default function Create() {
                   </button>
                 );
               })()}
-              <button className="create-chat-btn" onClick={() => setChatOpen(true)} title="展开完整对话手记">
-                对话 · {desk.messages.length}
+              <button className={"create-chat-btn" + (aiOpen ? " is-on" : "")} onClick={() => setAiOpen((v) => !v)} title="AI 对话(长按任意卡/字段也能进入)">
+                AI 对话 · {desk.messages.length}
               </button>
               <Button variant="primary" onClick={openPreview} disabled={!hasChars} title={hasChars ? "预览并发布到探索(公开)" : "至少要一张角色卡"}>发布 · 公开</Button>
               <button
@@ -1961,29 +2047,7 @@ export default function Create() {
                   </div>
                 </div>
               )}
-              {/* H5 批注笺:AI 最新一句锚在活动卡旁(Lovart 姿势),点开完整对话抽屉 */}
-              {selLive && !boardFocus && isDraftId(selLive) && (lastAi || busy) && (() => {
-                const bc = boardCards.find((b) => b.id === selLive.id);
-                if (!bc) return null;
-                const pos = boardCardPos(bc, bc.kSeq);
-                return (
-                  <div className="create-noteanchor" style={{ left: pos.x + 234, top: pos.y }}>
-                    <button
-                      className="create-note"
-                      style={{ transform: `scale(${1 / view.z})` }}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onDoubleClick={(e) => e.stopPropagation()}
-                      onClick={() => setChatOpen(true)}
-                      title="展开完整对话手记"
-                    >
-                      <span className="create-note-who t-kai" aria-hidden="true">✒</span>
-                      <span className={"create-note-tx" + (busy ? " create-msg-typing" : "")}>
-                        {busy ? "正在想……" : (lastAi.show || lastAi.text)}
-                      </span>
-                    </button>
-                  </div>
-                );
-              })()}
+              {/* I 系列:H5 批注笺退役——AI 的话常驻 sidebar 对话流,不再飘卡旁 */}
               {/* H2 上下文工具条:选中即见(替换 hover 即现的小钮——误触族的根)。
                   锚点在世界系(随卡 pan/zoom),条本体逆缩放保持视觉恒定;动作按卡态给(块型×动作矩阵)。 */}
               {selLive && (() => {
@@ -2166,10 +2230,19 @@ export default function Create() {
                         className={
                           "create-field" +
                           (f.fresh ? " is-fresh" : "") +
-                          (editingKey === f.k0 ? " is-editing" : "")
+                          (editingKey === f.k0 ? " is-editing" : "") +
+                          (aiOpen && aiCtx && aiCtx.type === "field" && aiCtx.f.k0 === f.k0 ? " is-aictx" : "")
                         }
                         style={{ "--ci": Math.min(fi, 8) }}
                         key={f.k0}
+                        onPointerDown={(e) => {
+                          // I 系列:长按字段=唯一 AI 入口(朱砂环满即开对话,语境=这一块)
+                          if (e.button !== 0 || editingKey === f.k0) return;
+                          lpStart(e.currentTarget, () => openAiForField(f));
+                        }}
+                        onPointerUp={lpCancel}
+                        onPointerLeave={lpCancel}
+                        onPointerCancel={lpCancel}
                       >
                         <span className="create-field-k t-meta">
                           {f.k}
@@ -2197,51 +2270,20 @@ export default function Create() {
                         ) : (
                           <span className="create-field-v t-ui-sm">{f.hidden ? "(隐藏真相,玩家不可见)" + f.v : f.v}</span>
                         )}
-                        {editingKey !== f.k0 && (
+                        {editingKey !== f.k0 && f.editable && (
                           <span className="create-field-acts">
-                            {f.editable ? (
-                              <>
-                                <button
-                                  className={"create-field-act" + (askOpen === f.k0 ? " is-on" : "")}
-                                  disabled={busy}
-                                  title={f.empty ? "让 AI 补写这一块(可先写一句要求)" : "让 AI 把这一块改写得更立体(可先写一句要求)"}
-                                  aria-label={(f.empty ? "补写" : "改写") + f.k}
-                                  onClick={() => toggleFieldAsk(f)}
-                                >
-                                  {f.empty ? "✦" : "⟳"}
-                                </button>
-                                <button className="create-field-act" disabled={busy} title="就地手改" aria-label={"手改" + f.k} onClick={() => startFieldEdit(f)}>
-                                  ✎
-                                </button>
-                              </>
-                            ) : (
-                              <button className="create-field-act" disabled={busy} title="这块是结构化内容,到命令条聊着改" aria-label={"聊着改" + f.k} onClick={() => chatAboutField(f)}>
-                                聊
-                              </button>
-                            )}
+                            {/* I 系列:✦/⟳/「聊」/指示行退役——AI 统一走「长按这一块」;✎ 手改(非 AI)保留 */}
+                            <button
+                              className="create-field-act"
+                              disabled={busy}
+                              title="就地手改"
+                              aria-label={"手改" + f.k}
+                              onPointerDown={(e) => e.stopPropagation()}
+                              onClick={() => startFieldEdit(f)}
+                            >
+                              ✎
+                            </button>
                           </span>
-                        )}
-                        {/* F3 指示行:✦/⟳ 点开——写一句要求或直接回车用默认写法(AI 触点皆可控) */}
-                        {askOpen === f.k0 && (
-                          <input
-                            className="create-ask-line t-ui-sm"
-                            autoFocus
-                            value={askText}
-                            disabled={busy}
-                            placeholder={(f.empty ? "想怎么补?" : "想怎么改?") + "可留空直接回车"}
-                            onChange={(e) => setAskText(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && !(e.nativeEvent || e).isComposing) {
-                                e.preventDefault();
-                                commitFieldAsk(f);
-                              } else if (e.key === "Escape") {
-                                e.preventDefault(); // H4 逐层退:只关指示行,不连坐聚焦
-                                setAskOpen(null);
-                                setAskText("");
-                              }
-                            }}
-                            aria-label={"对" + f.k + "的要求"}
-                          />
                         )}
                       </div>
                     ))
@@ -2407,9 +2449,12 @@ export default function Create() {
               </div>
             )}
 
-            {/* F8→G0 助手小部件:底部中央浮岛命令条——选中即聊;批注行(最新一句,点开抽屉) */}
-            <div
-                className={"create-dock" + (refDragOver ? " is-dropping" : "")}
+            {/* I 系列:AI 对话 sidebar——唯一对话场所(长按任意 AI 对象即达);dock 浮岛/批注行退役 */}
+            {aiOpen && (
+              <aside
+                className={"create-ai" + (refDragOver ? " is-dropping" : "")}
+                role="complementary"
+                aria-label="AI 对话"
                 onDragOver={(e) => {
                   if ([...e.dataTransfer.types].includes("application/x-ais-ref")) {
                     e.preventDefault();
@@ -2430,20 +2475,32 @@ export default function Create() {
                   }
                 }}
               >
-                {isDraftId(selLive) && phase === "drafting" && (busy || lastAi) && (
-                  <button className="create-dock-note" onClick={() => setChatOpen(true)} title="展开完整对话">
-                    <span className="create-say-who t-kai">助手</span>
-                    <span className={"create-dock-note-tx t-ui-sm" + (busy ? " create-msg-typing" : "")}>
-                      {busy ? "正在想……" : (lastAi.show || lastAi.text)}
-                    </span>
+                <div className="create-ai-h">
+                  <span className="t-kai">AI 对话 · {KINDS[ki].zh}</span>
+                  <button className="create-modal-x" onClick={() => setAiOpen(false)} aria-label="收起对话">×</button>
+                </div>
+                {aiCtx && aiCtx.type === "field" && (
+                  <button className="create-ai-chip" onClick={() => setAiCtx(null)} title="点 × 回到整卡对话">
+                    正在{aiCtx.f.empty ? "补写" : "改写"}:「{aiCtx.f.k}」 ×
                   </button>
                 )}
-                {selLive && !isDraftId(selLive) && (
-                  <div className="create-dock-note" aria-live="polite">
-                    <span className="create-say-who t-kai">这张卡</span>
-                    <span className="create-dock-note-tx t-ui-sm">已收进台子——双击查看,或点卡上「改编」把它变成可聊的草稿。</span>
-                  </div>
+                {aiCtx && aiCtx.type === "built" && (
+                  <div className="create-ai-chip is-note" aria-live="polite">成品卡不能直接聊——卡上「改编」变成草稿后再来。</div>
                 )}
+                <div className="create-ai-flow" ref={chatRef}>
+                  {desk.messages.map((m, i) => (
+                    <div key={i} className={"create-say" + (m.who === "你" ? " is-me" : "")}>
+                      <span className="create-say-who t-kai">{m.who === "你" ? "你" : "助手"}</span>
+                      <span className="create-say-tx">{m.show || m.text}</span>
+                    </div>
+                  ))}
+                  {busy && (
+                    <div className="create-say">
+                      <span className="create-say-who t-kai">助手</span>
+                      <span className="create-say-tx create-msg-typing">正在想……</span>
+                    </div>
+                  )}
+                </div>
                 {(deskRefs.length > 0 || refDragOver) && (
                   <div className="create-refs" aria-label="挂在台上的引用">
                     {deskRefs.map((r) => (
@@ -2461,9 +2518,11 @@ export default function Create() {
                     ref={dockInputRef}
                     rows={1}
                     value={desk.input}
-                    disabled={busy || !isDraftId(selLive)}
+                    disabled={busy || (!isDraftId(selLive) && !(aiCtx && aiCtx.type === "field"))}
                     placeholder={
-                      !selLive
+                      aiCtx && aiCtx.type === "field"
+                        ? (aiCtx.f.empty ? "想怎么补「" + aiCtx.f.k + "」?留空直接发=默认写法" : "想怎么改「" + aiCtx.f.k + "」?留空直接发=默认写法")
+                        : !selLive
                         ? "先起一张卡再聊——双击画板空白,或左边工具栏「+」"
                         : !isDraftId(selLive)
                         ? "已收进台子的卡不能直接聊——先「改编」成草稿"
@@ -2482,14 +2541,11 @@ export default function Create() {
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
                         e.preventDefault();
-                        send();
+                        aiSend();
                       }
                     }}
                   />
                   <div className="create-composer-actions">
-                    <button className="create-chat-btn" onClick={() => setChatOpen(true)} title="展开完整对话手记">
-                      对话 · {desk.messages.length}
-                    </button>
                     <button className="create-upload" onClick={() => { uploadHintRef.current = ""; fileRef.current && fileRef.current.click(); }} disabled={busy}>
                       上传文档
                     </button>
@@ -2510,15 +2566,23 @@ export default function Create() {
                     >
                       {deskRefs.length ? `@ 引用 · ${deskRefs.length}` : "@ 引用"}
                     </button>
-                    <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim() || !isDraftId(selLive)}>
+                    <Button
+                      variant="primary"
+                      onClick={aiSend}
+                      disabled={
+                        busy ||
+                        (aiCtx && aiCtx.type === "field" ? false : !desk.input.trim() || !isDraftId(selLive))
+                      }
+                    >
                       发送
                     </Button>
                   </div>
                 </div>
-              </div>
+              </aside>
+            )}
 
-          {/* F8 对话手记抽屉:完整历史按需展开(稿纸对谈体原样) */}
-          {chatOpen && (
+          {/* I 系列:F8 对话手记抽屉退役——对话常驻 AI sidebar */}
+          {false && (
             <>
               <div className="create-drawer-shade" onClick={() => setChatOpen(false)} />
               <aside className="create-drawer" role="dialog" aria-label="对话手记">
@@ -2526,7 +2590,7 @@ export default function Create() {
                   <span className="t-kai">对话手记 · {KINDS[ki].zh}</span>
                   <button className="create-modal-x" onClick={() => setChatOpen(false)} aria-label="收起">×</button>
                 </div>
-                <div className="create-drawer-flow" ref={chatRef}>
+                <div className="create-drawer-flow">
                   {desk.messages.map((m, i) => (
                     <div key={i} className={"create-say" + (m.who === "你" ? " is-me" : "")}>
                       <span className="create-say-who t-kai">{m.who === "你" ? "你" : "助手"}</span>
