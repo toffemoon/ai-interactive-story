@@ -390,7 +390,11 @@ export default function Create() {
       } catch {}
       return;
     }
-    if (e.target === e.currentTarget || (worldRef.current && e.target === worldRef.current)) setBoardSel(null); // 点空白=取消选中
+    if (e.target === e.currentTarget || (worldRef.current && e.target === worldRef.current)) {
+      // 点空白:先退聚焦(拉回视口),再取消选中(逐层,同 Esc 口径)
+      if (boardFocus) exitFocus();
+      else setBoardSel(null);
+    }
   }
   function onBoardPointerMove(e) {
     const p = panRef.current;
@@ -603,9 +607,41 @@ export default function Create() {
     const i = KINDS.findIndex((t) => t.k === bc.kk);
     if (i >= 0 && i !== ki) setKi(i);
   }
+  // H4 相机聚焦:进入=记住当前视口 → 推进到该卡居中、zoom=1(编辑永远发生在 scale=1);
+  // 退出=拉回原视口。reduced-motion 跳切不过渡;transitionend 兜底 setTimeout(本环境不派发)。
+  const prevViewRef = useRef(null);
+  function tweenViewTo(target) {
+    const el = worldRef.current;
+    if (el && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      el.style.transition = "transform 0.32s cubic-bezier(0.22, 1, 0.36, 1)";
+      const clear = () => {
+        el.style.transition = "";
+        el.removeEventListener("transitionend", clear);
+      };
+      el.addEventListener("transitionend", clear);
+      setTimeout(clear, 450);
+    }
+    viewRef.current = { ...target };
+    applyViewNow();
+    setView({ ...target });
+  }
+  function enterFocusCamera(pos) {
+    prevViewRef.current = { ...viewRef.current };
+    const el = boardElRef.current;
+    const r = el ? el.getBoundingClientRect() : { width: 1280, height: 700 };
+    tweenViewTo({ x: r.width / 2 - (pos.x + 112), y: r.height / 2 - (pos.y + 80), z: 1 });
+  }
+  function exitFocus() {
+    setBoardFocus(null);
+    if (prevViewRef.current) {
+      tweenViewTo(prevViewRef.current);
+      prevViewRef.current = null;
+    }
+  }
   function focusCard(bc) {
     selectCard(bc);
     setBoardFocus({ kk: bc.kk, id: bc.id });
+    enterFocusCamera(boardCardPos(bc, bc.kSeq));
   }
   // 新建:该台草稿已在板上就选中聚焦它;全新空台=聚焦进构思流。
   function newCardOf(kk) {
@@ -613,6 +649,7 @@ export default function Create() {
     if (i >= 0) setKi(i);
     setBoardSel({ kk, id: "d:" + kk });
     setBoardFocus({ kk, id: "d:" + kk });
+    enterFocusCamera(boardPos["d:" + kk] || { x: (AUTO_ANCHOR[kk] || [48, 24])[0], y: (AUTO_ANCHOR[kk] || [48, 24])[1] });
     requestAnimationFrame(() => dockInputRef.current && dockInputRef.current.focus());
   }
   // H0 id 语义工具:draft 选中 / 按 id 解析 built 卡(卡没了=null,消费方按"无选中/卡不在了"降级)。
@@ -626,13 +663,19 @@ export default function Create() {
   const selLive = boardSel && (isDraftId(boardSel) || resolveBuilt(boardSel)) ? boardSel : null;
   // Esc 关聚焦(输入框里按 Esc 不劫持——它们自己 stopPropagation 或先聚焦处理)
   useEffect(() => {
-    if (!boardFocus) return;
+    if (!boardFocus && !boardSel) return;
     const onKey = (e) => {
-      if (e.key === "Escape") setBoardFocus(null);
+      if (e.key !== "Escape") return;
+      // H4 逐层退:字段编辑/指示行的 Esc 自己 preventDefault(只关自己)→ 这里不再抢;
+      // 然后聚焦 → 选中,一层一层来(修预审「Esc 双关」)。
+      if (e.defaultPrevented) return;
+      if (boardFocus) exitFocus();
+      else if (boardSel) setBoardSel(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [boardFocus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boardFocus, boardSel]);
   // 选中的 built 卡对象(dock 提示用)
   const selBuilt = resolveBuilt(boardSel);
 
@@ -1749,6 +1792,7 @@ export default function Create() {
               {/* H1 世界容器:pan/zoom 只动它一个 transform(手势中 rAF 直写,不过 React) */}
               <div className="create-world" ref={worldRef} style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})` }}>
               {boardCards.map((bc, seq) => {
+                if (boardFocus && boardFocus.id === bc.id) return null; // H4:聚焦中的卡由聚焦面板顶替,迷你投影隐去
                 const c = (bc.card && bc.card.data) || bc.card || {};
                 const nm = c.name || c.title || (bc.isDraft ? "未命名草稿" : "未命名");
                 const pos = boardCardPos(bc, bc.kSeq); // 落位偏移按 kind 内序号(全局 seq 会把不同台的卡串到一条线上)
@@ -1868,12 +1912,13 @@ export default function Create() {
             </div>
 
             {/* G0 聚焦态:双击放大编辑——draft=现有画布全套;built=只读字段 */}
+            {/* H4 相机聚焦:overlay 退役——面板落在板内(screen 空间,scale=1 编辑),相机已推进到卡位;
+                无 shade,点板空白/Esc/回画板=拉回原视口。z44 层级消失,抽屉/dock 恢复自然层序。 */}
             {boardFocus && (
-              <div className="create-focus">
-                <div className="create-focus-shade" onClick={() => setBoardFocus(null)} />
-                <div className="create-focus-panel">
+              <div className="create-focuscard" role="region" aria-label="聚焦编辑">
+                <div className="create-focuscard-in">
                   <div className="create-focus-top">
-                    <button className="create-blank-link" onClick={() => setBoardFocus(null)}>← 回画板</button>
+                    <button className="create-blank-link" onClick={exitFocus}>← 回画板</button>
                     {isDraftId(boardFocus) && (
                       <span className="create-focus-acts">
                         <Button variant="line" onClick={nextCard} disabled={!hasDraft}>收进本台</Button>
@@ -2004,6 +2049,7 @@ export default function Create() {
                                 e.preventDefault();
                                 commitFieldAsk(f);
                               } else if (e.key === "Escape") {
+                                e.preventDefault(); // H4 逐层退:只关指示行,不连坐聚焦
                                 setAskOpen(null);
                                 setAskText("");
                               }

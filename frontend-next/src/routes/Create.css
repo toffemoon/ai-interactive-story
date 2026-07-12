@@ -2586,20 +2586,21 @@
     text-align: center;
   }
 
-  /* 聚焦态:overlay 放大编辑(现有画布 JSX 原样住进来) */
-  .create-focus { position: fixed; inset: 0; z-index: 44; }
-  .create-focus-shade {
+  /* H4 相机聚焦:overlay(fixed z44+shade)退役——面板住进画板(screen 空间,scale=1 编辑),
+     相机已把卡位推到板中心;无遮罩,板上其余卡仍可见=空间感。 */
+  .create-studio.is-board { position: relative; }
+  .create-focuscard {
     position: absolute;
-    inset: 0;
-    background: color-mix(in srgb, var(--fg) 16%, transparent);
-  }
-  .create-focus-panel {
-    position: absolute;
-    top: 4vh;
+    top: 12px;
+    bottom: 210px; /* dock 浮岛最深形态(composer+纸签+批注行)≈190px,留足不遮挡;内容区自滚 */
     left: 50%;
     transform: translateX(-50%);
     width: min(920px, 94vw);
-    max-height: 84vh;
+    z-index: 7; /* 只压画板内容(卡 z 默认/ctxbar 6/rail·zoomctl 5),不与抽屉(40)/dock(46)抢层 */
+    animation: focusIn 0.24s var(--ease-out) both;
+  }
+  .create-focuscard-in {
+    height: 100%;
     display: flex;
     flex-direction: column;
     background: var(--panel);
@@ -2607,11 +2608,10 @@
     border-radius: var(--r-card);
     box-shadow: var(--shadow-card);
     padding: 12px 18px 14px;
-    animation: focusIn 0.24s var(--ease-out) both;
   }
   @keyframes focusIn {
-    from { transform: translateX(-50%) translateY(10px) scale(0.985); opacity: 0; }
-    to { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; }
+    from { transform: translateX(-50%) translateY(10px); opacity: 0; }
+    to { transform: translateX(-50%) translateY(0); opacity: 1; }
   }
   .create-focus-top {
     flex: none;
@@ -2622,13 +2622,14 @@
     padding-bottom: 6px;
   }
   .create-focus-acts { display: flex; gap: 8px; }
-  .create-focus-panel .create-canvas {
+  .create-focuscard-in .create-canvas {
     flex: 1;
     min-height: 0;
     width: 100%;
     border: none;
     box-shadow: none;
     padding: 4px 6px 8px;
+    overflow-y: auto;
   }
   .create-focus-built {
     flex: 1;
@@ -2659,6 +2660,6 @@
     background: transparent;
   }
   @media (prefers-reduced-motion: reduce) {
-    .create-focus-panel, .create-bcard-live { animation: none; }
+    .create-focuscard, .create-bcard-live { animation: none; }
   }
 }
