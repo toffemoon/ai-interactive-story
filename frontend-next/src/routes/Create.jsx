@@ -50,10 +50,10 @@ function useIsMobile(maxWidth = 860) {
 const KINDS = [
   // ph 是输入框 placeholder,手机端短一句即可(C3:原来一长串字段名在窄屏会被截断)。
   // opening 是空台子的助手开场白,和 ph 同一套按类分句的范式(YOR-174)。
-  { zh: "角色卡", k: "characters", ph: "说说这个角色……", opening: "想造谁?说一个画面、一句话都行——聊着聊着,人就立起来了。" },
-  { zh: "演出卡", k: "players", ph: "说说你要扮演的主角……", opening: "想亲自扮演谁?说说主角的身份、来历,一句话也行——聊着聊着,卡就长出来了。" },
-  { zh: "设定卡 · 世界书", k: "worlds", ph: "说说这个世界 / 设定……", opening: "想搭什么样的世界?一条规则、一个地名都能起头——聊着聊着,世界就有了轮廓。" },
-  { zh: "故事书", k: "stories", ph: "说说这个故事……", opening: "想讲什么样的故事?一个开头、一句梗概都行——聊着聊着,书就翻开了。" },
+  { zh: "角色卡", k: "characters", ph: "描述这个角色:身份、性格、背景", opening: "描述你要创建的角色:身份、性格、背景。信息足够后会生成完整角色卡。" },
+  { zh: "演出卡", k: "players", ph: "描述你要扮演的主角", opening: "描述你要扮演的主角:身份、来历、这一局的目标。" },
+  { zh: "设定卡 · 世界书", k: "worlds", ph: "描述这个世界的规则与设定", opening: "描述这个世界:核心规则、关键地点、势力。" },
+  { zh: "故事书", k: "stories", ph: "描述这个故事的前提与冲突", opening: "描述这个故事:前提、核心冲突、大致走向。" },
 ];
 const OPENINGS = Object.fromEntries(KINDS.map((t) => [t.k, t.opening]));
 // 空台引子(桌面 reskin):点一下把句子放进输入框(不代发,用户过目再发),降低冷启动门槛。
@@ -132,7 +132,7 @@ function worldEntries(card) {
 
 function blankDesk(kk) {
   return {
-    messages: [{ who: "ai", text: OPENINGS[kk] || "想造哪张卡?说一个画面、一句话都行——聊着聊着,卡就长出来了。" }],
+    messages: [{ who: "ai", text: OPENINGS[kk] || "选择卡种后,描述你要创建的内容。" }],
     draft: {},
     filled: [],
     input: "",
@@ -179,6 +179,11 @@ export default function Create() {
     for (const t of KINDS) {
       const b = ds[t.k] && ds[t.k].built;
       if (b && b.some((c) => !c || !c._bid)) ds[t.k] = { ...ds[t.k], built: b.map(withBid) };
+      // 文案迁移:老数据里持久化的旧开场白(仅当它是台上唯一一条消息时)换成现行直白版
+      const d = ds[t.k];
+      if (d && d.messages && d.messages.length === 1 && d.messages[0].who === "ai" && d.messages[0].text !== t.opening) {
+        ds[t.k] = { ...ds[t.k], messages: [{ who: "ai", text: t.opening }] };
+      }
     }
     return ds;
   });
@@ -237,7 +242,7 @@ export default function Create() {
       if (raw) {
         const v = JSON.parse(raw);
         if (!v || typeof v !== "object") return {};
-        const { __view, ...cards } = v; // __view 是视口保留键(H1),不是卡坐标
+        const { __view, __ai, ...cards } = v; // __view/__ai 是视口与 sidebar 位置保留键,不是卡坐标
         return cards;
       }
       const v1 = JSON.parse(localStorage.getItem("ais_create_board_v1") || "{}") || {};
@@ -271,6 +276,14 @@ export default function Create() {
     } catch {}
     return { x: 0, y: 0, z: 1 };
   });
+  // sidebar 位置(可拖动,I 系列)——声明必须在下方 persist effect 之前(deps 引用,TDZ)
+  const [aiPos, setAiPos] = useState(() => {
+    try {
+      const p = (JSON.parse(localStorage.getItem("ais_create_board_v2") || "{}") || {}).__ai;
+      if (p && typeof p.x === "number" && typeof p.y === "number") return p;
+    } catch {}
+    return { x: 0, y: 0 };
+  });
   const viewRef = useRef(view);
   const worldRef = useRef(null);
   const boardElRef = useRef(null);
@@ -301,9 +314,9 @@ export default function Create() {
   }, [view]);
   useEffect(() => {
     try {
-      localStorage.setItem("ais_create_board_v2", JSON.stringify({ ...boardPos, __view: view }));
+      localStorage.setItem("ais_create_board_v2", JSON.stringify({ ...boardPos, __view: view, __ai: aiPos }));
     } catch (e) {}
-  }, [boardPos, view]);
+  }, [boardPos, view, aiPos]);
   // wheel 要 preventDefault,React 合成 wheel 在根上是 passive——必须原生监听。
   // 约定:ctrl/cmd+wheel(含触控板捏合)=对准光标缩放;裸 wheel=平移。
   useEffect(() => {
@@ -350,8 +363,159 @@ export default function Create() {
       window.removeEventListener("keyup", up);
     };
   }, []);
+  // H3 快捷键:V 选择 / H 抓手 / ⌘·Ctrl+0 适配全部 / 1-4 新建·继续四卡种。
+  // 守卫:输入态与任何弹层/聚焦态下不劫持(Esc 另有专职监听)。
+  const kbdBlocked =
+    !!boardFocus || !!finalize || !!importOpen || seedOpen || !!refPanel || !!libModal ||
+    builtView || previewOpen || !!presetsModal || tplOpen || chatOpen;
+  useEffect(() => {
+    if (isMobile) return;
+    const typing = (t) => t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+    const onKey = (e) => {
+      if (typing(e.target) || kbdBlocked || e.altKey) return;
+      if ((e.metaKey || e.ctrlKey) && e.key === "0") {
+        e.preventDefault();
+        fitAllCards();
+        return;
+      }
+      if (e.metaKey || e.ctrlKey) return;
+      const k = e.key.toLowerCase();
+      if (k === "v") setTool("select");
+      else if (k === "h") setTool("hand");
+      else if (k >= "1" && k <= "4") newCardOf(KINDS[Number(k) - 1].k);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobile, kbdBlocked]);
+  // H3 工具态:select(默认)| hand(粘性抓手,Space=瞬时抓手不变);ref 镜像给 pointer 手势层用。
+  const [tool, setTool] = useState("select");
+  const [railNew, setRailNew] = useState(false); // rail「新建」飞出菜单(四卡种全名,可拖出落卡)
+  // ── I 系列(主理人审核拍板):AI 统一入口=长按——按住任何 AI 可作用的对象,
+  //    朱砂环沿模块四周描边生长(550ms),满环即开 AI 对话 sidebar;要改的对象同时进聚焦。
+  //    旧入口(✦/⟳ 指示行/批注笺/对话抽屉/dock 批注行)全部退役,对话住右侧 sidebar。 ──
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiCtx, setAiCtx] = useState(null); // null=卡级对话 | {type:"field", f}=字段定向 | {type:"built"}=成品卡提示
+  // sidebar 可拖动(主理人反馈):header 按住拖,直写 transform;松手 commit 进 ais_create_board_v2.__ai;双击复位
+  const aiElRef = useRef(null);
+  const aiDragRef = useRef(null);
+  function onAiHeadDown(e) {
+    if (e.button !== 0 || e.target.closest("button")) return;
+    aiDragRef.current = { sx: e.clientX, sy: e.clientY, bx: aiPos.x, by: aiPos.y };
+    e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function onAiHeadMove(e) {
+    const d = aiDragRef.current;
+    if (!d || !aiElRef.current) return;
+    d.nx = d.bx + (e.clientX - d.sx);
+    d.ny = d.by + (e.clientY - d.sy);
+    aiElRef.current.style.transform = `translate(${d.nx}px, ${d.ny}px)`; // 直写零重渲
+  }
+  function onAiHeadUp() {
+    const d = aiDragRef.current;
+    aiDragRef.current = null;
+    if (d && typeof d.nx === "number") setAiPos({ x: d.nx, y: d.ny });
+  }
+  const LP_MS = 550;
+  const lpRef = useRef(null); // {iv, ring}
+  const lpFiredRef = useRef(false); // 满环后的 pointerup/click 不再当单击
+  // 长按反馈重做(主理人:线条动画不行,找成熟范式):
+  // 按压点圆形进度环(conic 填充,小而聚焦——大卡描边周长太长,进度感知差)
+  // + 目标模块「按压抬起」态(轻微放大+底色渐亮,BlurHighlight 同族气质)。
+  // 完成=环收拢爆点、模块弹回;取消=环淡出、模块落回。零新依赖。
+  function lpCancel(fired = false) {
+    const l = lpRef.current;
+    if (!l) return;
+    lpRef.current = null;
+    clearInterval(l.iv);
+    cancelAnimationFrame(l.raf);
+    l.el.classList.remove("is-pressing");
+    l.ring.classList.add(fired ? "is-done" : "is-out");
+    setTimeout(() => l.ring.remove(), fired ? 260 : 140);
+  }
+  function lpStart(el, e, onFire) {
+    lpCancel();
+    const ring = document.createElement("div");
+    ring.className = "create-lpring";
+    ring.style.left = e.clientX + "px";
+    ring.style.top = e.clientY + "px";
+    ring.innerHTML = `<i></i>`;
+    document.body.appendChild(ring);
+    void ring.offsetWidth;
+    ring.classList.add("is-in");
+    el.classList.add("is-pressing");
+    const disc = ring.firstChild;
+    const t0 = performance.now();
+    const paint = () => {
+      const p = Math.min(1, (performance.now() - t0) / LP_MS);
+      disc.style.background = `conic-gradient(var(--accent) ${p * 360}deg, color-mix(in srgb, var(--accent) 14%, transparent) 0)`;
+      return p;
+    };
+    const tick = () => {
+      const l = lpRef.current;
+      if (!l || l.ring !== ring) return;
+      if (paint() >= 1) {
+        lpFiredRef.current = true;
+        lpCancel(true);
+        onFire();
+        return;
+      }
+      l.raf = requestAnimationFrame(tick);
+    };
+    lpRef.current = {
+      ring,
+      el,
+      raf: requestAnimationFrame(tick),
+      // rAF 节流环境兜底:低频补帧+保证触发
+      iv: setInterval(() => {
+        const l = lpRef.current;
+        if (!l || l.ring !== ring) return;
+        if (paint() >= 1) {
+          lpFiredRef.current = true;
+          lpCancel(true);
+          onFire();
+        }
+      }, 80),
+    };
+  }
+  // 长按路由:卡=选中+(草稿)聚焦+开对话;字段=切字段语境+开对话
+  function openAiForCard(bc) {
+    selectCard(bc);
+    if (bc.isDraft) {
+      setAiCtx(null);
+      setBoardFocus({ kk: bc.kk, id: bc.id });
+      enterFocusCamera(boardCardPos(bc, bc.kSeq));
+    } else {
+      setAiCtx({ type: "built" });
+    }
+    setAiOpen(true);
+    setTimeout(() => dockInputRef.current && dockInputRef.current.focus(), 60);
+  }
+  function openAiForField(f) {
+    setAiCtx({ type: "field", f });
+    setAiOpen(true);
+    setTimeout(() => dockInputRef.current && dockInputRef.current.focus(), 60);
+  }
+  // sidebar 发送:字段语境=定向指令(可空发送=默认写法,单发即清语境);卡级=原 send 管线
+  function aiSend() {
+    if (busy) return;
+    const text = (desk.input || "").trim();
+    if (aiCtx && aiCtx.type === "field") {
+      const f = aiCtx.f;
+      patch(kind, { input: "" });
+      setAiCtx(null);
+      sendFieldDirective(f, f.empty ? "fill" : "rewrite", text);
+      return;
+    }
+    if (!text) return;
+    send();
+  }
+  const toolRef = useRef("select");
+  useEffect(() => {
+    toolRef.current = tool;
+  }, [tool]);
   function onBoardPointerDown(e) {
-    if (e.button === 1 || (e.button === 0 && spaceRef.current)) {
+    if (e.button === 1 || (e.button === 0 && (spaceRef.current || toolRef.current === "hand"))) {
       panRef.current = { sx: e.clientX, sy: e.clientY, bx: viewRef.current.x, by: viewRef.current.y };
       e.preventDefault();
       try {
@@ -359,7 +523,13 @@ export default function Create() {
       } catch {}
       return;
     }
-    if (e.target === e.currentTarget || (worldRef.current && e.target === worldRef.current)) setBoardSel(null); // 点空白=取消选中
+    if (e.target === e.currentTarget || (worldRef.current && e.target === worldRef.current)) {
+      // 点空白:收 rail 飞出/落卡菜单 → 退聚焦(拉回视口)→ 取消选中(逐层,同 Esc 口径)
+      if (railNew) setRailNew(false);
+      if (spawnAt) setSpawnAt(null);
+      else if (boardFocus) exitFocus();
+      else setBoardSel(null);
+    }
   }
   function onBoardPointerMove(e) {
     const p = panRef.current;
@@ -370,7 +540,76 @@ export default function Create() {
   function onBoardPointerEnd() {
     if (!panRef.current) return;
     panRef.current = null;
+    dragEndAtRef.current = performance.now(); // pan 刚结束的 dblclick 不当「双击空白落卡」
     setView({ ...viewRef.current });
+  }
+  // ── H6 空白起草:双击空白=四卡种落卡菜单;rail 拖出/文件拖入=按位置落 ──
+  const [spawnAt, setSpawnAt] = useState(null); // {x, y} 世界坐标 | null
+  const [boardDragOver, setBoardDragOver] = useState(false);
+  function screenToWorld(clientX, clientY) {
+    const r = boardElRef.current.getBoundingClientRect();
+    const v = viewRef.current;
+    return { x: (clientX - r.left - v.x) / v.z, y: (clientY - r.top - v.y) / v.z };
+  }
+  // 该台还没聊开=把 draft 卡落在指定位置;已有构思/草稿=不搬卡,只跳过去(newCardOf 会选中聚焦)
+  function spawnDraftAt(kk, wpos) {
+    const dd = desks[kk];
+    const has =
+      Object.keys(dd.draft || {}).length > 0 || dd.messages.length > 1 ||
+      (dd.questions || []).length > 0 || (dd.blueprint || []).length > 0;
+    if (!has) {
+      setBoardPos((p) => ({ ...p, ["d:" + kk]: { x: Math.max(0, wpos.x - 112), y: Math.max(0, wpos.y - 20) } }));
+    }
+    setSpawnAt(null);
+    newCardOf(kk);
+  }
+  function onBoardDblClick(e) {
+    if (e.target !== e.currentTarget && e.target !== worldRef.current) return; // 只认空白
+    if (performance.now() - dragEndAtRef.current < 300) return; // 拖拽/平移刚结束=误触,不落卡
+    setSpawnAt(screenToWorld(e.clientX, e.clientY));
+  }
+  const dtHasSpawnOrFiles = (e) => {
+    const t = e.dataTransfer && e.dataTransfer.types;
+    return !!t && ([...t].includes("application/x-ais-spawn") || [...t].includes("Files"));
+  };
+  function onBoardDragOver(e) {
+    if (!dtHasSpawnOrFiles(e)) return; // 其它载荷(如卡引用 MIME)不接,不高亮——误触不落卡
+    e.preventDefault();
+    if (!boardDragOver) setBoardDragOver(true);
+  }
+  function onBoardDrop(e) {
+    const dt = e.dataTransfer;
+    setBoardDragOver(false);
+    if (!dt) return;
+    const wpos = screenToWorld(e.clientX, e.clientY);
+    const spawnKk = dt.getData("application/x-ais-spawn");
+    if (spawnKk && KINDS.some((t) => t.k === spawnKk)) {
+      e.preventDefault();
+      spawnDraftAt(spawnKk, wpos);
+      return;
+    }
+    const file = dt.files && dt.files[0];
+    if (!file) return; // 无合法载荷=不落卡
+    e.preventDefault();
+    // 文件按类型分流:酒馆卡(.json/.png)→ 角色台本地解析;文档(.txt/.md/.docx)→ 当前台 identify。
+    // 卡落在 drop 位置(该台未聊开才搬坐标,口径同 spawnDraftAt);导入被取消时坐标改动无卡可见,无感。
+    const isTavern = /\.(json|png)$/i.test(file.name);
+    const kk = isTavern ? "characters" : kind;
+    const dd = desks[kk];
+    const has =
+      Object.keys(dd.draft || {}).length > 0 || dd.messages.length > 1 ||
+      (dd.questions || []).length > 0 || (dd.blueprint || []).length > 0;
+    if (!has) {
+      setBoardPos((p) => ({ ...p, ["d:" + kk]: { x: Math.max(0, wpos.x - 112), y: Math.max(0, wpos.y - 20) } }));
+    }
+    const fakeEv = { target: { files: [file], value: "" } };
+    if (isTavern) {
+      const i = KINDS.findIndex((t) => t.k === "characters");
+      if (i >= 0) setKi(i);
+      onTavernFile(fakeEv);
+    } else {
+      onUpload(fakeEv);
+    }
   }
   // 缩放控件:± 以板中心为锚;% 点击=回 100%;「适配」=装下全部卡。
   function zoomTo(nz, anchor) {
@@ -572,9 +811,41 @@ export default function Create() {
     const i = KINDS.findIndex((t) => t.k === bc.kk);
     if (i >= 0 && i !== ki) setKi(i);
   }
+  // H4 相机聚焦:进入=记住当前视口 → 推进到该卡居中、zoom=1(编辑永远发生在 scale=1);
+  // 退出=拉回原视口。reduced-motion 跳切不过渡;transitionend 兜底 setTimeout(本环境不派发)。
+  const prevViewRef = useRef(null);
+  function tweenViewTo(target) {
+    const el = worldRef.current;
+    if (el && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      el.style.transition = "transform 0.32s cubic-bezier(0.22, 1, 0.36, 1)";
+      const clear = () => {
+        el.style.transition = "";
+        el.removeEventListener("transitionend", clear);
+      };
+      el.addEventListener("transitionend", clear);
+      setTimeout(clear, 450);
+    }
+    viewRef.current = { ...target };
+    applyViewNow();
+    setView({ ...target });
+  }
+  function enterFocusCamera(pos) {
+    prevViewRef.current = { ...viewRef.current };
+    const el = boardElRef.current;
+    const r = el ? el.getBoundingClientRect() : { width: 1280, height: 700 };
+    tweenViewTo({ x: r.width / 2 - (pos.x + 112), y: r.height / 2 - (pos.y + 80), z: 1 });
+  }
+  function exitFocus() {
+    setBoardFocus(null);
+    if (prevViewRef.current) {
+      tweenViewTo(prevViewRef.current);
+      prevViewRef.current = null;
+    }
+  }
   function focusCard(bc) {
     selectCard(bc);
     setBoardFocus({ kk: bc.kk, id: bc.id });
+    enterFocusCamera(boardCardPos(bc, bc.kSeq));
   }
   // 新建:该台草稿已在板上就选中聚焦它;全新空台=聚焦进构思流。
   function newCardOf(kk) {
@@ -582,6 +853,7 @@ export default function Create() {
     if (i >= 0) setKi(i);
     setBoardSel({ kk, id: "d:" + kk });
     setBoardFocus({ kk, id: "d:" + kk });
+    enterFocusCamera(boardPos["d:" + kk] || { x: (AUTO_ANCHOR[kk] || [48, 24])[0], y: (AUTO_ANCHOR[kk] || [48, 24])[1] });
     requestAnimationFrame(() => dockInputRef.current && dockInputRef.current.focus());
   }
   // H0 id 语义工具:draft 选中 / 按 id 解析 built 卡(卡没了=null,消费方按"无选中/卡不在了"降级)。
@@ -595,34 +867,68 @@ export default function Create() {
   const selLive = boardSel && (isDraftId(boardSel) || resolveBuilt(boardSel)) ? boardSel : null;
   // Esc 关聚焦(输入框里按 Esc 不劫持——它们自己 stopPropagation 或先聚焦处理)
   useEffect(() => {
-    if (!boardFocus) return;
+    if (!boardFocus && !boardSel && !spawnAt && !aiOpen) return;
     const onKey = (e) => {
-      if (e.key === "Escape") setBoardFocus(null);
+      if (e.key !== "Escape") return;
+      // H4 逐层退:字段编辑/指示行的 Esc 自己 preventDefault(只关自己)→ 这里不再抢;
+      // 然后聚焦 → 选中,一层一层来(修预审「Esc 双关」)。
+      if (e.defaultPrevented) return;
+      if (spawnAt) setSpawnAt(null);
+      else if (aiOpen) setAiOpen(false);
+      else if (boardFocus) exitFocus();
+      else if (boardSel) setBoardSel(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [boardFocus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boardFocus, boardSel, spawnAt, aiOpen]);
   // 选中的 built 卡对象(dock 提示用)
   const selBuilt = resolveBuilt(boardSel);
 
-  // G1 拖放:pointer 拖 + >4px 判拖(否则算单击);拖到 dock 上=挂引用。
+  // H2 BoardActionTrigger(template P0 姿势):手势 → 意图的唯一翻译层。
+  // 桌面:单击=select、双击=enter(聚焦)、拖>4px(世界系)=drag;触屏长按=enter 留接口未实装(手机不上画布)。
+  // 上层(工具条/聚焦)只认意图,不认具体手势——将来改主战场只动这一层。
   const dragRef = useRef(null); // {key, startX, startY, baseX, baseY, moved, bc}
+  const dragEndAtRef = useRef(0); // 拖后抑制原生 click/dblclick(浏览器拖完仍会派发)
   function onCardPointerDown(e, bc, pos) {
     if (e.button !== 0) return;
     dragRef.current = { key: bc.key, startX: e.clientX, startY: e.clientY, baseX: pos.x, baseY: pos.y, moved: false, bc };
     e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId);
+    lpStart(e.currentTarget, e, () => {
+      dragRef.current = null; // 满环=进 AI,本次手势不再是拖/点
+      openAiForCard(bc);
+    });
   }
   function onCardPointerMove(e) {
     const d = dragRef.current;
     if (!d) return;
+    // 兜底:pointercancel 丢失/跨卡残留(主键没按着还带拖态=脏)
+    if (!(e.buttons & 1) || d.key !== e.currentTarget.dataset.bckey) {
+      dragRef.current = null;
+      return;
+    }
     // H1:屏幕位移 → 世界位移要除以缩放,否则非 100% 下拖卡落点漂
     const z = viewRef.current.z || 1;
     const dx = (e.clientX - d.startX) / z, dy = (e.clientY - d.startY) / z;
     if (!d.moved && Math.abs(dx) + Math.abs(dy) < 4 / z) return;
-    d.moved = true;
-    setBoardPos((p) => ({ ...p, [d.key]: { x: Math.max(0, d.baseX + dx), y: Math.max(0, d.baseY + dy) } }));
+    lpCancel(); // 动了=拖拽,长按环撤
+    if (!d.moved) {
+      d.moved = true;
+      d.el = e.currentTarget;
+      boardElRef.current && boardElRef.current.classList.add("is-dragging");
+    }
+    // I 系列性能:拖动中 transform 直写(零 React 重渲——sidebar 开着也不掉帧),松手才 commit
+    d.nx = Math.max(0, d.baseX + dx);
+    d.ny = Math.max(0, d.baseY + dy);
+    d.el.style.transform = `translate(${d.nx}px, ${d.ny}px)`;
   }
   function onCardPointerUp(e, bc) {
+    lpCancel();
+    if (lpFiredRef.current) {
+      lpFiredRef.current = false; // 长按已成:吞掉这次抬起,不选中不拖
+      dragRef.current = null;
+      return;
+    }
     const d = dragRef.current;
     dragRef.current = null;
     if (!d) return;
@@ -630,15 +936,46 @@ export default function Create() {
       selectCard(bc);
       return;
     }
-    // 落点在 dock 浮岛上=挂为引用(卡片回弹原位)
-    const dock = document.querySelector(".create-dock");
-    if (dock) {
-      const r = dock.getBoundingClientRect();
+    dragEndAtRef.current = performance.now(); // 拖完:300ms 内的 dblclick 不当「进入」
+    boardElRef.current && boardElRef.current.classList.remove("is-dragging");
+    // 落点在 AI 对话栏上=挂为引用(卡片回弹原位);否则 commit 拖动终点(拖动中是直写,这里才进 state)
+    const aiBar = document.querySelector(".create-ai");
+    if (aiBar) {
+      const r = aiBar.getBoundingClientRect();
       if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
-        setBoardPos((p) => ({ ...p, [d.key]: { x: d.baseX, y: d.baseY } }));
+        if (d.el) d.el.style.transform = `translate(${d.baseX}px, ${d.baseY}px)`;
         addRef(refFromCard(bc.kk, bc.card));
+        return;
       }
     }
+    setBoardPos((p) => ({ ...p, [d.key]: { x: d.nx, y: d.ny } }));
+  }
+  function onCardPointerCancel() {
+    lpCancel();
+    boardElRef.current && boardElRef.current.classList.remove("is-dragging");
+    dragRef.current = null; // 触控板手势/系统抢占等取消:清拖态,防悬停继续拖走原卡
+  }
+  function onCardEnter(bc) {
+    if (performance.now() - dragEndAtRef.current < 300) return; // 拖后误触抑制
+    focusCard(bc);
+  }
+  // 改编成草稿 + 语境迁移:fork 成功后选中迁到新草稿(dock 立即可聊,不再原地打转)。
+  function adaptFromBoard(bc) {
+    if (!forkToDraft(bc.card, bc.kk)) return;
+    setBoardSel({ kk: bc.kk, id: "d:" + bc.kk });
+  }
+  // 丢弃构思中的草稿卡:台子重置(seed/built 保留,镜像 collectToDesk 的保留口径)。
+  function discardDraft(kk) {
+    const d = desks[kk];
+    const has = Object.keys(d.draft || {}).length > 0;
+    if (!window.confirm(has ? "丢弃这张草稿和这轮构思对话?丢了就找不回。" : "收起这张构思中的卡?对话一并清空。")) return;
+    setDesks((ds) => ({
+      ...ds,
+      [kk]: { ...blankDesk(kk), seed: ds[kk].seed || "", built: ds[kk].built },
+    }));
+    setBoardSel((s) => (s && s.id === "d:" + kk ? null : s));
+    setBoardFocus((s) => (s && s.id === "d:" + kk ? null : s));
+    flash("已收起");
   }
   function quizAnswerOf(qu) {
     return (quizFree[qu.id] || "").trim() || quizAns[qu.id] || "";
@@ -774,7 +1111,7 @@ export default function Create() {
       filled: Object.keys(draft),
       // E5 快速通道:已带内容,直通 drafting,清构思残留
       phase: "drafting", comp: 0, questions: [], blueprint: [],
-      messages: [...d0.messages, { who: "ai", text: "《" + nm + "》解析好了,已铺上画布,顺手也收进了你的卡库(私密)。哪里不对,聊着改。" }],
+      messages: [...d0.messages, { who: "ai", text: "《" + nm + "》已解析并铺上画布,同时已存入卡库(私密)。" }],
     }));
     return nm;
   }
@@ -808,9 +1145,9 @@ export default function Create() {
       filled: Object.keys(card),
       tpl: undefined,
       phase: "drafting", comp: 0, questions: [], blueprint: [], // E5 快速通道
-      messages: [...d0.messages, { who: "ai", text: "《" + nm + "》已铺开——基于它改;原卡不动,入库时按新名字另存。" }],
+      messages: [...d0.messages, { who: "ai", text: "已创建改编稿《" + nm + "》。原卡保留,保存时按新名字另存。" }],
     }));
-    flash("已铺开改编稿《" + nm + "》");
+    flash("已创建改编稿《" + nm + "》");
     return true;
   }
 
@@ -876,7 +1213,7 @@ export default function Create() {
         draft: { ...parsed.draft, ...pickPics(d0.draft) },
         filled: Object.keys(parsed.draft),
         phase: "drafting", comp: 0, questions: [], blueprint: [], // E5 快速通道
-        messages: [...d0.messages, { who: "ai", text: "《" + nm + "》从酒馆卡读进来了(本地解析,没入库、不耗额度)。" + droppedNote + "哪里不对,聊着改。" }],
+        messages: [...d0.messages, { who: "ai", text: "《" + nm + "》已从酒馆卡导入(本地解析,不入库、不消耗额度)。" + droppedNote }],
       }));
       // PNG 本体顺手压成立绘(draft.image 空着才填,不覆盖用户已传的)
       if (!isJson) {
@@ -922,7 +1259,7 @@ export default function Create() {
         // D1:参考资料跨卡保留(一份资料常连造多张卡);tpl 不带 = 自然清(模板是单卡的事)。
         seed: ds[kind].seed || "",
         built: [...ds[kind].built, withBid(cardDraft)],
-        messages: [{ who: "ai", text: "《" + nm + "》放进台子了(本台第 " + (ds[kind].built.length + 1) + " 张)。说说下一张?" }],
+        messages: [{ who: "ai", text: "《" + nm + "》已收进本台(第 " + (ds[kind].built.length + 1) + " 张)。" }],
       },
     }));
     setCardExpanded(false);
@@ -1308,7 +1645,7 @@ export default function Create() {
       ...(t.skeleton ? { phase: "drafting", comp: 0, questions: [], blueprint: [] } : {}),
     });
     setTplOpen(false);
-    flash(t.skeleton ? `已铺开「${t.name}」骨架——空字段都是 ✦ 补写目标` : `「${t.name}」的开场指令已放进输入框`);
+    flash(t.skeleton ? `已应用「${t.name}」模板——长按空字段可让 AI 补写` : `「${t.name}」的开场指令已放进输入框`);
     requestAnimationFrame(() => dockInputRef.current && dockInputRef.current.focus());
   }
 
@@ -1610,11 +1947,7 @@ export default function Create() {
           <div className="create-boardbar">
             <div className="create-boardbar-l">
               <span className="create-boardbar-title t-kai">创作</span>
-              {KINDS.map((t) => (
-                <button key={t.k} className="create-boardbar-new" onClick={() => newCardOf(t.k)} title={"新建 / 继续" + t.zh}>
-                  + {t.zh}
-                </button>
-              ))}
+              {/* H3:四个「+ 卡」搬去左侧工具 rail,boardbar 瘦身成文件级 */}
             </div>
             <div className="create-boardbar-r">
               {(() => {
@@ -1629,8 +1962,8 @@ export default function Create() {
                   </button>
                 );
               })()}
-              <button className="create-chat-btn" onClick={() => setChatOpen(true)} title="展开完整对话手记">
-                对话 · {desk.messages.length}
+              <button className={"create-chat-btn" + (aiOpen ? " is-on" : "")} onClick={() => setAiOpen((v) => !v)} title="AI 对话(长按任意卡/字段也能进入)">
+                AI 对话 · {desk.messages.length}
               </button>
               <Button variant="primary" onClick={openPreview} disabled={!hasChars} title={hasChars ? "预览并发布到探索(公开)" : "至少要一张角色卡"}>发布 · 公开</Button>
               <button
@@ -1678,16 +2011,21 @@ export default function Create() {
           {/* G0 全屏画板:四台物料全部挂板(可拖可选可聚焦);台账线/kind tabs 已退役进 boardbar */}
           <div className="create-studio is-board">
             <div
-              className="create-board"
+              className={"create-board" + (tool === "hand" ? " is-pan" : "") + (boardDragOver ? " is-dropover" : "")}
               ref={boardElRef}
               onPointerDown={onBoardPointerDown}
               onPointerMove={onBoardPointerMove}
               onPointerUp={onBoardPointerEnd}
               onPointerCancel={onBoardPointerEnd}
+              onDoubleClick={onBoardDblClick}
+              onDragOver={onBoardDragOver}
+              onDragLeave={() => setBoardDragOver(false)}
+              onDrop={onBoardDrop}
             >
               {/* H1 世界容器:pan/zoom 只动它一个 transform(手势中 rAF 直写,不过 React) */}
               <div className="create-world" ref={worldRef} style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})` }}>
               {boardCards.map((bc, seq) => {
+                if (boardFocus && boardFocus.id === bc.id) return null; // H4:聚焦中的卡由聚焦面板顶替,迷你投影隐去
                 const c = (bc.card && bc.card.data) || bc.card || {};
                 const nm = c.name || c.title || (bc.isDraft ? "未命名草稿" : "未命名");
                 const pos = boardCardPos(bc, bc.kSeq); // 落位偏移按 kind 内序号(全局 seq 会把不同台的卡串到一条线上)
@@ -1697,6 +2035,7 @@ export default function Create() {
                     key={bc.key}
                     className={"create-bcard" + (on ? " is-on" : "") + (bc.isDraft ? " is-draft" : "")}
                     style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
+                    data-bckey={bc.key}
                     onPointerDown={(e) => {
                       if (spaceRef.current || e.button === 1) return; // 抓手/中键=板平移,让事件冒泡到板
                       e.stopPropagation();
@@ -1704,7 +2043,16 @@ export default function Create() {
                     }}
                     onPointerMove={onCardPointerMove}
                     onPointerUp={(e) => onCardPointerUp(e, bc)}
-                    onDoubleClick={() => focusCard(bc)}
+                    onPointerCancel={onCardPointerCancel}
+                    onLostPointerCapture={onCardPointerCancel}
+                    onDoubleClick={() => onCardEnter(bc)}
+                    onKeyDown={(e) => {
+                      // H3 纯键盘流:Tab 到卡,Enter=选中,已选中再 Enter=进入(镜像单击/双击)
+                      if (e.key !== "Enter" || e.target !== e.currentTarget) return;
+                      e.preventDefault();
+                      if (boardSel && boardSel.id === bc.id) onCardEnter(bc);
+                      else selectCard(bc);
+                    }}
                     role="button"
                     tabIndex={0}
                     aria-label={bc.zh + "·" + nm}
@@ -1715,23 +2063,121 @@ export default function Create() {
                     </span>
                     <span className="create-bcard-name t-kai">{nm}</span>
                     <span className="create-bcard-sub t-meta">{boardSub(bc.card) || (bc.isDraft ? "构思中……" : "已收进台子")}</span>
-                    {!bc.isDraft && (
-                      <span className="create-bcard-acts">
-                        <button onClick={(e) => { e.stopPropagation(); focusCard(bc); }} onPointerDown={(e) => e.stopPropagation()}>查看</button>
-                        <button onClick={(e) => { e.stopPropagation(); addRef(refFromCard(bc.kk, bc.card)); }} onPointerDown={(e) => e.stopPropagation()}>引用</button>
-                        <button onClick={(e) => { e.stopPropagation(); forkToDraft(bc.card, bc.kk); }} onPointerDown={(e) => e.stopPropagation()}>改编</button>
-                        <button onClick={(e) => { e.stopPropagation(); exportCard(bc.card, bc.kk); }} onPointerDown={(e) => e.stopPropagation()}>导出</button>
-                        <button onClick={(e) => { e.stopPropagation(); removeBuilt(bc.kk, bc.card && bc.card._bid); }} onPointerDown={(e) => e.stopPropagation()}>移除</button>
-                      </span>
-                    )}
+                    {/* H5 信号上卡(template P2:信号=一等可点对象):busy 墨点/火候线→圈选/蓝图徽→批准 */}
+                    {bc.isDraft && (() => {
+                      const dd = desks[bc.kk];
+                      const dPhase = deskPhase(dd);
+                      if (bc.kk === kind && busy) {
+                        return <span className="create-bsig-busy" title="AI 正在写……" aria-label="AI 处理中" />;
+                      }
+                      if (dPhase === "understand" && ((dd.comp || 0) > 0 || (dd.questions || []).length)) {
+                        return (
+                          <button
+                            className="create-bsig"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => { e.stopPropagation(); focusCard(bc); }}
+                            title={"完整度 " + (dd.comp || 0) + " · 点开继续构思"}
+                          >
+                            <span className="create-bsig-line"><span style={{ width: (dd.comp || 0) + "%" }} /></span>
+                            <span className="t-meta">构思中 · {dd.comp || 0}</span>
+                          </button>
+                        );
+                      }
+                      if (dPhase === "blueprint") {
+                        return (
+                          <button
+                            className="create-bsig create-bsig-bp"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => { e.stopPropagation(); focusCard(bc); }}
+                            title="蓝图已出,点开批准落笔"
+                          >
+                            蓝图待批 ✦
+                          </button>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                 );
               })}
+              {/* H6 双击空白:四卡种落卡菜单(世界锚点+逆缩放;点空白/Esc 由 board pointerdown 收) */}
+              {spawnAt && (
+                <div className="create-ctxanchor" style={{ left: spawnAt.x, top: spawnAt.y }}>
+                  <div
+                    className="create-ctxbar create-spawnmenu"
+                    style={{ transform: `scale(${1 / view.z})` }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onDoubleClick={(e) => e.stopPropagation()}
+                    role="menu"
+                    aria-label="在此落一张卡"
+                  >
+                    {KINDS.map((t) => (
+                      <button key={t.k} onClick={() => spawnDraftAt(t.k, spawnAt)}>{t.zh}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* I 系列:H5 批注笺退役——AI 的话常驻 sidebar 对话流,不再飘卡旁 */}
+              {/* H2 上下文工具条:选中即见(替换 hover 即现的小钮——误触族的根)。
+                  锚点在世界系(随卡 pan/zoom),条本体逆缩放保持视觉恒定;动作按卡态给(块型×动作矩阵)。
+                  聚焦态不渲染——迷你卡已隐,工具条留在原地会成孤儿(主理人截图坐实)。 */}
+              {selLive && !boardFocus && (() => {
+                const bc = boardCards.find((b) => b.id === selLive.id);
+                if (!bc) return null;
+                const pos = boardCardPos(bc, bc.kSeq);
+                // 块型×动作矩阵(计划 §2):draft 按构思/落笔态,built 全套;selectCard 已把 ki 切到该台,phase 即该台相位
+                const acts = bc.isDraft
+                  ? phase === "drafting"
+                    ? [
+                        { t: "聚焦编辑", fn: () => focusCard(bc) },
+                        { t: "引用", fn: () => addRef(refFromCard(bc.kk, desks[bc.kk].draft)) },
+                        { t: "收进本台", fn: nextCard },
+                        { t: "导出", fn: () => exportCard(desks[bc.kk].draft, bc.kk) },
+                      ]
+                    : [
+                        { t: "聚焦构思", fn: () => focusCard(bc) },
+                        { t: "挂资料", fn: openSeed },
+                        { t: "丢弃", fn: () => discardDraft(bc.kk), danger: true },
+                      ]
+                  : [
+                      { t: "查看", fn: () => focusCard(bc) },
+                      { t: "引用", fn: () => addRef(refFromCard(bc.kk, bc.card)) },
+                      { t: "改编", fn: () => adaptFromBoard(bc) },
+                      { t: "导出", fn: () => exportCard(bc.card, bc.kk) },
+                      { t: "移除", fn: () => removeBuilt(bc.kk, bc.card && bc.card._bid), danger: true },
+                    ];
+                return (
+                  <div className="create-ctxanchor" style={{ left: pos.x, top: pos.y }}>
+                    <div
+                      className="create-ctxbar"
+                      style={{ transform: `scale(${1 / view.z})` }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onDoubleClick={(e) => e.stopPropagation()}
+                      role="toolbar"
+                      aria-label="卡片动作"
+                    >
+                      {acts.map((a) => (
+                        <button key={a.t} className={a.danger ? "is-danger" : ""} onClick={a.fn}>{a.t}</button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               </div>
               {boardCards.length === 0 && (
                 <div className="create-board-empty">
                   <span className="create-card-blank-seal t-kai" aria-hidden="true">板</span>
-                  <span className="t-meta">板上还空着——点上面「+ 角色卡」起一张,或者:</span>
+                  <span className="t-meta">板上还空着——起一张:</span>
+                  {/* 修复(主理人审核反馈):新建入口就放在眼前——H3 把「+卡」搬去左 rail 后,
+                      空板文案曾指向已不存在的顶部按钮,新用户寸步难行 */}
+                  <div className="create-empty-news">
+                    {KINDS.map((t) => (
+                      <button key={t.k} className="create-boardbar-new" onClick={() => newCardOf(t.k)}>
+                        + {t.zh}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="t-meta">也可以双击空白任意处落卡,或:</span>
                   <div className="create-blank-more t-meta">
                     <button className="create-blank-link" onClick={() => setTplOpen(true)}>从模板起手</button>
                     ·
@@ -1741,6 +2187,42 @@ export default function Create() {
                   </div>
                 </div>
               )}
+              {/* 工具 rail=能力总入口(主理人审核拍板):所有已有功能带字可见——
+                  工具(选择/抓手)/起手(新建/模板/导入)/内容源(资料/引用/素材/拆回)/产出(导出)。
+                  装订/发布/对话留在顶部 boardbar(文件级);快捷键 V/H/1-4/⌘0 不变 */}
+              <div className="create-rail" role="toolbar" aria-label="画板工具" aria-orientation="vertical">
+                <button className={tool === "select" ? "is-on" : ""} onClick={() => setTool("select")} title="选择 (V)">选择</button>
+                <button className={tool === "hand" ? "is-on" : ""} onClick={() => setTool("hand")} title="抓手·平移画板 (H,按住 Space 也行)">抓手</button>
+                <span className="create-rail-sep" aria-hidden="true" />
+                <button className={railNew ? "is-on" : ""} onClick={() => setRailNew((v) => !v)} title="新建一张卡 (1-4,或双击画板空白)" aria-expanded={railNew}>新建</button>
+                <button onClick={() => { setRailNew(false); setTplOpen(true); }} title="从模板起手:骨架直落画布">模板</button>
+                <button onClick={() => { setRailNew(false); setImportOpen({ step: "pick", text: "", err: "" }); }} title="导入已有内容:粘贴/上传文档/酒馆卡">导入</button>
+                <span className="create-rail-sep" aria-hidden="true" />
+                <button className={desk.seed ? "is-on" : ""} onClick={() => { setRailNew(false); openSeed(); }} title="挂参考资料:AI 每轮都参考">资料</button>
+                <button className={deskRefs.length ? "is-on" : ""} onClick={() => { setRailNew(false); refPanel ? setRefPanel(null) : openRefPanel("desk"); }} title="引用已有卡/提示词(输入 @ 也能唤起)">引用</button>
+                <button onClick={() => { setRailNew(false); openLib(); }} title="从我的卡库补素材到本台">素材</button>
+                <button onClick={() => { setRailNew(false); openPresets(); }} title="从我发布的故事整组拆回四台">拆回</button>
+                <span className="create-rail-sep" aria-hidden="true" />
+                <button onClick={() => exportCard(desk.draft)} disabled={!hasDraft} title={hasDraft ? "导出当前草稿 JSON" : "画布上还没有草稿"}>导出</button>
+                {railNew && (
+                  <div className="create-rail-fly" role="menu" aria-label="新建卡种">
+                    {KINDS.map((t, i) => (
+                      <button
+                        key={t.k}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("application/x-ais-spawn", t.k); // 拖出到画布=按位置落卡
+                          e.dataTransfer.effectAllowed = "copy";
+                        }}
+                        onClick={() => { setRailNew(false); newCardOf(t.k); }}
+                        title={"点击新建,或拖到画布上落卡 (" + (i + 1) + ")"}
+                      >
+                        + {t.zh}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               {/* H1 缩放控件:± 板中心锚定;点 % 回 100%;适配=装下全部卡 */}
               <div className="create-zoomctl t-meta" aria-label="画板缩放">
                 <button onClick={() => zoomTo(viewRef.current.z / 1.2)} aria-label="缩小">−</button>
@@ -1751,12 +2233,13 @@ export default function Create() {
             </div>
 
             {/* G0 聚焦态:双击放大编辑——draft=现有画布全套;built=只读字段 */}
+            {/* H4 相机聚焦:overlay 退役——面板落在板内(screen 空间,scale=1 编辑),相机已推进到卡位;
+                无 shade,点板空白/Esc/回画板=拉回原视口。z44 层级消失,抽屉/dock 恢复自然层序。 */}
             {boardFocus && (
-              <div className="create-focus">
-                <div className="create-focus-shade" onClick={() => setBoardFocus(null)} />
-                <div className="create-focus-panel">
+              <div className="create-focuscard" role="region" aria-label="聚焦编辑">
+                <div className="create-focuscard-in">
                   <div className="create-focus-top">
-                    <button className="create-blank-link" onClick={() => setBoardFocus(null)}>← 回画板</button>
+                    <button className="create-blank-link" onClick={exitFocus}>← 回画板</button>
                     {isDraftId(boardFocus) && (
                       <span className="create-focus-acts">
                         <Button variant="line" onClick={nextCard} disabled={!hasDraft}>收进本台</Button>
@@ -1818,10 +2301,19 @@ export default function Create() {
                         className={
                           "create-field" +
                           (f.fresh ? " is-fresh" : "") +
-                          (editingKey === f.k0 ? " is-editing" : "")
+                          (editingKey === f.k0 ? " is-editing" : "") +
+                          (aiOpen && aiCtx && aiCtx.type === "field" && aiCtx.f.k0 === f.k0 ? " is-aictx" : "")
                         }
                         style={{ "--ci": Math.min(fi, 8) }}
                         key={f.k0}
+                        onPointerDown={(e) => {
+                          // I 系列:长按字段=唯一 AI 入口(按压点进度环,语境=这一块)
+                          if (e.button !== 0 || editingKey === f.k0) return;
+                          lpStart(e.currentTarget, e, () => openAiForField(f));
+                        }}
+                        onPointerUp={lpCancel}
+                        onPointerLeave={lpCancel}
+                        onPointerCancel={lpCancel}
                       >
                         <span className="create-field-k t-meta">
                           {f.k}
@@ -1843,56 +2335,26 @@ export default function Create() {
                             {tplHints[f.k0]
                               ? tplHints[f.k0] + (f.editable ? "(✦ 补写 / ✎ 手写)" : "(点「聊」到命令条补)")
                               : f.editable
-                              ? "还空着——✦ 让 AI 补写,或 ✎ 手写"
-                              : "还空着——点「聊」到命令条补"}
+                              ? "空——长按这一块让 AI 补写,或 ✎ 手写"
+                              : "空——长按这一块让 AI 补写"}
                           </span>
                         ) : (
                           <span className="create-field-v t-ui-sm">{f.hidden ? "(隐藏真相,玩家不可见)" + f.v : f.v}</span>
                         )}
-                        {editingKey !== f.k0 && (
+                        {editingKey !== f.k0 && f.editable && (
                           <span className="create-field-acts">
-                            {f.editable ? (
-                              <>
-                                <button
-                                  className={"create-field-act" + (askOpen === f.k0 ? " is-on" : "")}
-                                  disabled={busy}
-                                  title={f.empty ? "让 AI 补写这一块(可先写一句要求)" : "让 AI 把这一块改写得更立体(可先写一句要求)"}
-                                  aria-label={(f.empty ? "补写" : "改写") + f.k}
-                                  onClick={() => toggleFieldAsk(f)}
-                                >
-                                  {f.empty ? "✦" : "⟳"}
-                                </button>
-                                <button className="create-field-act" disabled={busy} title="就地手改" aria-label={"手改" + f.k} onClick={() => startFieldEdit(f)}>
-                                  ✎
-                                </button>
-                              </>
-                            ) : (
-                              <button className="create-field-act" disabled={busy} title="这块是结构化内容,到命令条聊着改" aria-label={"聊着改" + f.k} onClick={() => chatAboutField(f)}>
-                                聊
-                              </button>
-                            )}
+                            {/* I 系列:✦/⟳/「聊」/指示行退役——AI 统一走「长按这一块」;✎ 手改(非 AI)保留 */}
+                            <button
+                              className="create-field-act"
+                              disabled={busy}
+                              title="就地手改"
+                              aria-label={"手改" + f.k}
+                              onPointerDown={(e) => e.stopPropagation()}
+                              onClick={() => startFieldEdit(f)}
+                            >
+                              ✎
+                            </button>
                           </span>
-                        )}
-                        {/* F3 指示行:✦/⟳ 点开——写一句要求或直接回车用默认写法(AI 触点皆可控) */}
-                        {askOpen === f.k0 && (
-                          <input
-                            className="create-ask-line t-ui-sm"
-                            autoFocus
-                            value={askText}
-                            disabled={busy}
-                            placeholder={(f.empty ? "想怎么补?" : "想怎么改?") + "可留空直接回车"}
-                            onChange={(e) => setAskText(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && !(e.nativeEvent || e).isComposing) {
-                                e.preventDefault();
-                                commitFieldAsk(f);
-                              } else if (e.key === "Escape") {
-                                setAskOpen(null);
-                                setAskText("");
-                              }
-                            }}
-                            aria-label={"对" + f.k + "的要求"}
-                          />
                         )}
                       </div>
                     ))
@@ -2015,7 +2477,7 @@ export default function Create() {
                     <div className="create-card-blank">
                       <span className="create-card-blank-seal t-kai" aria-hidden="true">卡</span>
                       <span className="create-card-blank-tx t-meta">
-                        {phase !== "drafting" ? "构思中——在下面说说你想要什么,完整度过线、蓝图点头,再落笔。" : OPENINGS[kind]}
+                        {phase !== "drafting" ? "构思阶段:回答下方问题提高完整度,达到 60 生成创作蓝图,批准后开始写卡。" : OPENINGS[kind]}
                       </span>
                       {/* 空台引子:起手句进画布空卡里(点了只进输入框,不代发) */}
                       {desk.messages.length <= 1 && !busy && (
@@ -2058,9 +2520,14 @@ export default function Create() {
               </div>
             )}
 
-            {/* F8→G0 助手小部件:底部中央浮岛命令条——选中即聊;批注行(最新一句,点开抽屉) */}
-            <div
-                className={"create-dock" + (refDragOver ? " is-dropping" : "")}
+            {/* I 系列:AI 对话 sidebar——唯一对话场所(长按任意 AI 对象即达);dock 浮岛/批注行退役 */}
+            {aiOpen && (
+              <aside
+                ref={aiElRef}
+                className={"create-ai" + (refDragOver ? " is-dropping" : "")}
+                style={{ transform: `translate(${aiPos.x}px, ${aiPos.y}px)` }}
+                role="complementary"
+                aria-label="AI 对话"
                 onDragOver={(e) => {
                   if ([...e.dataTransfer.types].includes("application/x-ais-ref")) {
                     e.preventDefault();
@@ -2081,20 +2548,40 @@ export default function Create() {
                   }
                 }}
               >
-                {isDraftId(selLive) && phase === "drafting" && (busy || lastAi) && (
-                  <button className="create-dock-note" onClick={() => setChatOpen(true)} title="展开完整对话">
-                    <span className="create-say-who t-kai">助手</span>
-                    <span className={"create-dock-note-tx t-ui-sm" + (busy ? " create-msg-typing" : "")}>
-                      {busy ? "正在想……" : (lastAi.show || lastAi.text)}
-                    </span>
+                <div
+                  className="create-ai-h"
+                  onPointerDown={onAiHeadDown}
+                  onPointerMove={onAiHeadMove}
+                  onPointerUp={onAiHeadUp}
+                  onPointerCancel={onAiHeadUp}
+                  onDoubleClick={() => setAiPos({ x: 0, y: 0 })}
+                  title="按住拖动·双击回位"
+                >
+                  <span className="t-kai">AI 对话 · {KINDS[ki].zh}</span>
+                  <button className="create-modal-x" onClick={() => setAiOpen(false)} aria-label="收起对话">×</button>
+                </div>
+                {aiCtx && aiCtx.type === "field" && (
+                  <button className="create-ai-chip" onClick={() => setAiCtx(null)} title="点 × 回到整卡对话">
+                    正在{aiCtx.f.empty ? "补写" : "改写"}:「{aiCtx.f.k}」 ×
                   </button>
                 )}
-                {selLive && !isDraftId(selLive) && (
-                  <div className="create-dock-note" aria-live="polite">
-                    <span className="create-say-who t-kai">这张卡</span>
-                    <span className="create-dock-note-tx t-ui-sm">已收进台子——双击查看,或点卡上「改编」把它变成可聊的草稿。</span>
-                  </div>
+                {aiCtx && aiCtx.type === "built" && (
+                  <div className="create-ai-chip is-note" aria-live="polite">成品卡不能直接聊——卡上「改编」变成草稿后再来。</div>
                 )}
+                <div className="create-ai-flow" ref={chatRef}>
+                  {desk.messages.map((m, i) => (
+                    <div key={i} className={"create-say" + (m.who === "你" ? " is-me" : "")}>
+                      <span className="create-say-who t-kai">{m.who === "你" ? "你" : "助手"}</span>
+                      <span className="create-say-tx">{m.show || m.text}</span>
+                    </div>
+                  ))}
+                  {busy && (
+                    <div className="create-say">
+                      <span className="create-say-who t-kai">助手</span>
+                      <span className="create-say-tx create-msg-typing">正在想……</span>
+                    </div>
+                  )}
+                </div>
                 {(deskRefs.length > 0 || refDragOver) && (
                   <div className="create-refs" aria-label="挂在台上的引用">
                     {deskRefs.map((r) => (
@@ -2110,14 +2597,14 @@ export default function Create() {
                 <div className="create-composer">
                   <textarea
                     ref={dockInputRef}
-                    rows={1}
+                    rows={3}
                     value={desk.input}
-                    disabled={busy || !isDraftId(selLive)}
+                    disabled={busy || (aiCtx && aiCtx.type === "built")}
                     placeholder={
-                      !selLive
-                        ? "点一张卡开始聊,或上面「+ 新建」"
-                        : !isDraftId(selLive)
-                        ? "已收进台子的卡不能直接聊——先「改编」成草稿"
+                      aiCtx && aiCtx.type === "field"
+                        ? (aiCtx.f.empty ? "补写「" + aiCtx.f.k + "」的要求,留空直接发=默认写法" : "改写「" + aiCtx.f.k + "」的要求,留空直接发=默认写法")
+                        : aiCtx && aiCtx.type === "built"
+                        ? "成品卡不能直接改——先「改编」成草稿"
                         : KINDS[ki].ph
                     }
                     onChange={(e) => {
@@ -2133,14 +2620,11 @@ export default function Create() {
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
                         e.preventDefault();
-                        send();
+                        aiSend();
                       }
                     }}
                   />
                   <div className="create-composer-actions">
-                    <button className="create-chat-btn" onClick={() => setChatOpen(true)} title="展开完整对话手记">
-                      对话 · {desk.messages.length}
-                    </button>
                     <button className="create-upload" onClick={() => { uploadHintRef.current = ""; fileRef.current && fileRef.current.click(); }} disabled={busy}>
                       上传文档
                     </button>
@@ -2161,15 +2645,24 @@ export default function Create() {
                     >
                       {deskRefs.length ? `@ 引用 · ${deskRefs.length}` : "@ 引用"}
                     </button>
-                    <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim() || !isDraftId(selLive)}>
+                    <Button
+                      variant="primary"
+                      onClick={aiSend}
+                      disabled={
+                        busy ||
+                        (aiCtx && aiCtx.type === "built") ||
+                        (aiCtx && aiCtx.type === "field" ? false : !desk.input.trim())
+                      }
+                    >
                       发送
                     </Button>
                   </div>
                 </div>
-              </div>
+              </aside>
+            )}
 
-          {/* F8 对话手记抽屉:完整历史按需展开(稿纸对谈体原样) */}
-          {chatOpen && (
+          {/* I 系列:F8 对话手记抽屉退役——对话常驻 AI sidebar */}
+          {false && (
             <>
               <div className="create-drawer-shade" onClick={() => setChatOpen(false)} />
               <aside className="create-drawer" role="dialog" aria-label="对话手记">
@@ -2177,7 +2670,7 @@ export default function Create() {
                   <span className="t-kai">对话手记 · {KINDS[ki].zh}</span>
                   <button className="create-modal-x" onClick={() => setChatOpen(false)} aria-label="收起">×</button>
                 </div>
-                <div className="create-drawer-flow" ref={chatRef}>
+                <div className="create-drawer-flow">
                   {desk.messages.map((m, i) => (
                     <div key={i} className={"create-say" + (m.who === "你" ? " is-me" : "")}>
                       <span className="create-say-who t-kai">{m.who === "你" ? "你" : "助手"}</span>
