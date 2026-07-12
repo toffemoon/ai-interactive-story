@@ -124,3 +124,20 @@ plan: docs/2026-07-12-create-board-canvas-2-plan.md
 - 验收证据(5199 preview 真调):rail 六键就位、boardbar「+」退役;rail 与 dock/zoomctl 矩形互不相交(几何断言);H → rail 高亮+board is-pan,V 复位;hand 态左键拖板 (60,30) → __view 精确 +(60,30);⌘0 → fit 落 v2(z=1 居中);「2」落卡开聚焦;**守卫实证:聚焦态按 V/H 被拦(测试序列先把自己锁了,分析后确认是设计行为非 bug)、textarea 里按「3」不切台**;纯键盘流:focus 卡 → Enter 选中(工具条现身)→ Enter 进聚焦 → Esc 退出;手机 390:.ct 就位,rail/board 零泄漏;build 2.00s 过。
 - 如实边界:①rail 图标用汉字字形(零依赖,纸墨皮肤一致),非图标库;②Enter 流的 Tab 顺序依赖 DOM 顺序(=boardCards 顺序),未做方向键空间导航(留观真实反馈);③hand 工具下卡完全不可点(Figma 同口径)。
 - 测试残留:同上,preview 测试数据未清。
+
+## H-R6 · 2026-07-12 —— H4 相机聚焦 ✅(commit 58b9934)
+
+- 实现:
+  - **相机聚焦**:双击=记住当前视口 → tween(0.32s,reduced-motion 跳切,transitionend+setTimeout 双兜底)推进到卡位居中、zoom=1;聚焦面板 `.create-focuscard` 落在**画板内 screen 空间**(920px 居中,top 12/bottom 210 给最深形态 dock 留身位)——编辑永远发生在 scale=1,文本模糊/光标怪癖不存在;F8 画布 JSX 原样住进面板;聚焦中的迷你卡隐去由面板顶替。取舍如实:计划 D3 写「原地放大编辑」,落地为「相机推进到卡位 + 面板现于板中心(=卡此刻所在)」——机制目标(推进/scale1/overlay 退役/逐层 Esc)全达成,面板不随 world 缩放(规避 transform 容器内编辑的浏览器坑)。
+  - **overlay 退役**:fixed z44+shade 删除;预审「z-index 倒挂(抽屉 40 被 44 压)」随层消失;出口三路(Esc/回画板/点空白)统一 exitFocus=拉回原视口。
+  - **Esc 逐层退**:字段编辑(editKeys)/指示行(askOpen,本片补 preventDefault)只关自己;窗口监听查 e.defaultPrevented 再逐层:聚焦 → 选中。
+- 验收证据(5199 preview + 8017 新代码后端真调):
+  - 双击《甲二·改》→ focuscard 渲染、旧 overlay/shade 零残留、迷你卡隐去、相机 commit 至 z=1(world transform=目标精确值)、F8 画布字段在面板内;
+  - **Esc 三层逐退实测**:✎ 编辑器开 → Esc① 只关编辑器(面板仍在)→ Esc② 退聚焦+**相机精确拉回**(423.876/223 逐位)→ Esc③ 取消选中——预审「Esc 双关」根治;
+  - **聚焦态构思真调闭环**(8017):圈选「阴郁」→ 提交合成「基调? —— 阴郁」→ 真回包:AI 顺着追问、新 3 题圈选渲染在面板、火候线 30%、**硬门槛 draft 仍空**;
+  - **聚焦态蓝图批准真调闭环**:种蓝图态(5 要点)→ 面板显蓝图 → 【批准,开始写】→ 真调落笔 → phase=drafting、世界书 5 条 entries 上卡、火候线退场;
+  - 抽屉在聚焦态:「对话·N」实点开(27 条对谈体渲染)、×实点关;z 分析:40 之上已无遮挡层(44 已删,46 dock 是底部小岛);面板与 dock 几何不相交(660≤669,含纸签行最深形态);
+  - 手机 390:.ct 就位,focuscard/board 零泄漏;build 2.02s 过。
+- 排障插曲(记档):①preview 的 vite 代理(家目录 launch.json)钉死 AIS_API_TARGET=8017(E2 时代),8017 已死 → 经代理 API 全 500 而直打 8000 正常——**用 ais-cutover 配置把 8017 用当前工作树新代码拉起**,代理即通且真调的是 E0 门控链路(8000 是合链前旧代码进程,无门控键);②抽屉 elementFromPoint 假阴性=本环境 **CSS animation 冻结**(drawerIn 停在 from 帧 opacity:0,与 rAF 节流同源),真浏览器无此问题——功能证据(实点开关/内容渲染/z 分析)收口。
+- 如实边界:①本环境 tween/入场动画不可视(动画时钟冻结),动画正确性以终态断言+真浏览器留观;②聚焦态下 wheel/pan 仍可用(Figma 口径,面板不动板动);③dock 身位按最深形态(≈190px)留白,面板有效高度 860 屏下≈638px,内容自滚。
+- 测试残留:test 库经 8017 真调落了构思/蓝图轮次(无入库写操作);preview localStorage 留雾之世界 drafting 台数据。
