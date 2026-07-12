@@ -244,3 +244,13 @@ plan: docs/2026-07-12-create-board-canvas-2-plan.md
 - 治本顺手账:Home.css 5 处硬编码米色(#fffdfa/#d8d2c7)收编回 var(--panel)/var(--line);Styleguide 色卡同步新值。
 - 验收:body 计算色 rgb(255,255,255);创作页与首页扫描三个旧米色 hex 计算色零残留;画板层次(沉底/点阵/边界)由 fg color-mix 派生自动适配白底。
 - 备注:tokens 注释原写「raw 色板(不可变)」——本次是主理人显式改主题,注释已同步改口;若后续要双主题切换(米/白),在语义层加 data-theme 变体即可,raw 结构已就绪。
+
+## 第二轮 · 2026-07-13(全栈米色清剿 + 长按换 C 描金,同在 PR #169)
+
+- **全栈米色清剿**(主理人:「创作页面似乎依然不是全白,寻找全栈类似的米色改成白色」——实因 #169 未合,本机/线上仍旧版;顺势把 token 之外的硬编码米色全数清掉):
+  - Login.css 整卡最大残留:米色渐变底+茶色描边+暖字全套 → panel/line/fg/muted/accent-2 语义 token;
+  - StaggeredMenu 暖纸面板 #fbf8f2×3 → var(--paper-panel),墨字 → var(--ink);
+  - Home 白胶囊按钮/对话坞、Explore 浮条 rgba 暖纸底 → 纯白;ui.css 发送气泡字 → on-accent;depth-card 光斑去暖;AppShell 菜单钮新墨。
+  - **保留判定**:暗色场景上的暖色文字/鎏金饰(galgame 首页立绘区、卡背书脊纹理、stage 主题、身份卡纸质感)全部不动——米色治理只针对亮面底色。
+- **长按反馈换 C·描金一圈**(主理人四案试样〔conic 环/墨浸/描金/饼形对勾〕后拍板 C):鎏金线沿模块圆角 pathLength 归一自描一周,画满触发;松手快退、按满溅墨收拍。引擎(rAF+interval 兜底/is-pressing/lpFired)不变,零新依赖。注:I 系列曾废弃「线条描边」,当时败因=按周长走进度不归一+朱砂细线弱对比;C 案 pathLength=100 + 鎏金 2px + 封印帧,试样过关。
+- 验收(5199 preview):Login 卡计算色纯白+中性线;首页全元素扫描米色底命中=0;菜单面板 oklab≈1=纯白;长按全链路(trace 出现/rx 贴圆角/鎏金描边→触发开 AI sidebar→清场)与松手回退(is-out+dashoffset 回 100)实测通过,console 零报错。
