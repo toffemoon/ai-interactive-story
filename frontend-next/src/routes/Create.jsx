@@ -9,6 +9,8 @@ import CharDetailModal from "../components/CharDetailModal";
 import StaggeredText from "../components/staggered-text";
 import DepthCard from "../components/react-bits/depth-card"; // C4 本台架 mini 卡(画布本体不倾斜)
 import { BlurHighlight } from "../components/react-bits/blur-highlight";
+import { parseJsonCard, parsePngCard } from "../lib/tavernCard"; // D2 酒馆卡纯前端解析
+import { TEMPLATES, getTpl } from "./createTemplates"; // D3 创作模板(文案归内容侧,来源 card-templates/)
 import { useAuth } from "../state/auth";
 import "./Create.css";
 
@@ -183,6 +185,16 @@ export default function Create() {
   // C2 叙述层:AI 的话降级为「最新一句」浮条 + 全史进手记抽屉;对话数据结构(desk.messages)不动。
   const [journalOpen, setJournalOpen] = useState(false);
   const [narrClosed, setNarrClosed] = useState(false);
+  // D1 参考资料:desks[kind].seed(可选键,兼容扩展)。弹窗内编辑用本地 seedText,确认才 patch。
+  const [seedOpen, setSeedOpen] = useState(false);
+  const [seedText, setSeedText] = useState("");
+  // D2 导入面板:null | { step: "pick"|"paste", text, err }。酒馆解析是同步的,不需要独立 step。
+  const [importOpen, setImportOpen] = useState(null);
+  const tavernRef = useRef(null); // 酒馆卡文件 input(.json/.png)
+  // D3 模板选择器;desks[kind].tpl 只存模板 id(hints 从常量派生,localStorage 零膨胀)。
+  const [tplOpen, setTplOpen] = useState(false);
+  // D4 「从我发布的故事继续」:presets 列表弹层({items}|null),选一条拆回四台 built。
+  const [presetsModal, setPresetsModal] = useState(null);
   const fileRef = useRef(null);
   const coverRef = useRef(null);
   const chatRef = useRef(null);
@@ -246,7 +258,9 @@ export default function Create() {
     }));
     patch(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text }], ...(clearInput ? { input: "" } : {}) }));
     try {
-      const r = await postJSON("/api/build_card", { kind: kk, messages: apiMsgs, draft: cur.draft, seed: "" });
+      // D1:seed = 挂在台上的参考资料(desks[kind].seed,可选键;老草稿无此键走 || "" 兜底)。
+      // 后端非空时截前 6000 字拼进 system prompt(「基于已有资料完善,定向追问弱字段」,src/identify.py)。
+      const r = await postJSON("/api/build_card", { kind: kk, messages: apiMsgs, draft: cur.draft, seed: cur.seed || "" });
       const ask = [r.reply, r.next_question].filter(Boolean).join(" ");
       patch(kk, (d0) => {
         const nextDraft = r.draft ? { ...r.draft, ...pickPics(d0.draft) } : d0.draft; // 保住已上传的头像/立绘
@@ -280,6 +294,51 @@ export default function Create() {
     return sendText(text);
   }
 
+  // D2 共享:把 identify 的返回铺上画布(上传/粘贴两路共用)。identify 副作用=后端已自动收进卡库,文案如实。
+  function applyIdentified(out, kk) {
+    const draft = kk === "characters" ? out.data || out : out;
+    const nm = draft.name || draft.title || "未命名";
+    patch(kk, (d0) => ({
+      draft: { ...draft, ...pickPics(d0.draft) }, // 保住已上传的头像/立绘
+      filled: Object.keys(draft),
+      messages: [...d0.messages, { who: "ai", text: "《" + nm + "》解析好了,已铺上画布,顺手也收进了你的卡库(私密)。哪里不对,聊着改。" }],
+    }));
+    return nm;
+  }
+  // 导入会整卡替换画布草稿:有未收草稿先确认(镜像 removeBuilt 的破坏性确认范式)。
+  function confirmReplaceDraft() {
+    if (!hasDraft) return true;
+    return window.confirm("画布上已有草稿《" + draftName + "》,导入会替换它(已收进本台 / 卡库的不受影响)。继续?");
+  }
+
+  // D4 改编:把一张已有卡 fork 成指定台的草稿。名字加「·改」——/api/library/save 按名 upsert,
+  // 不改名会覆盖原卡;改编稿入库=另存新卡,原卡不动。
+  function forkToDraft(item, kk = kind) {
+    let card = (item && item.data) || item || {};
+    if (card && card.data && typeof card.data === "object" && !Array.isArray(card.data)) card = card.data; // chara_card_v2 信封再剥一层
+    if (!card || !Object.keys(card).length) {
+      flash("这张卡读不出内容");
+      return false;
+    }
+    const tgt = desks[kk];
+    const tgtHas = Object.keys((tgt && tgt.draft) || {}).length > 0;
+    if (tgtHas) {
+      const tn = tgt.draft.name || (tgt.draft.data && tgt.draft.data.name) || tgt.draft.title || "未命名";
+      if (!window.confirm(`「${KINDS.find((t) => t.k === kk).zh}」台上已有草稿《${tn}》,改编会替换它。继续?`)) return false;
+    }
+    const useTitle = "title" in card && !("name" in card);
+    const base = card[useTitle ? "title" : "name"] || "未命名";
+    const nm = /·改$/.test(base) ? base : base + "·改";
+    patch(kk, (d0) => ({
+      draft: { ...card, [useTitle ? "title" : "name"]: nm },
+      filled: Object.keys(card),
+      tpl: undefined,
+      messages: [...d0.messages, { who: "ai", text: "《" + nm + "》已铺开——基于它改;原卡不动,入库时按新名字另存。" }],
+    }));
+    flash("已铺开改编稿《" + nm + "》");
+    return true;
+  }
+
   async function onUpload(ev) {
     const file = ev.target.files && ev.target.files[0];
     ev.target.value = "";
@@ -290,19 +349,69 @@ export default function Create() {
     try {
       const text = await uploadFile(file);
       const out = await postJSON(IDENTIFY_EP[kk], { text });
-      const draft = kk === "characters" ? out.data || out : out;
-      const nm = draft.name || draft.title || "未命名";
-      patch(kk, (d0) => ({
-        draft: { ...draft, ...pickPics(d0.draft) }, // 保住已上传的头像/立绘
-        filled: Object.keys(draft),
-        messages: [...d0.messages, { who: "ai", text: "《" + nm + "》解析好了,已填进草稿卡,顺手也收进了你的卡库。哪里不对,聊着改。" }],
-      }));
+      applyIdentified(out, kk);
       flash("已解析并收入卡库");
     } catch (e) {
       patch(kk, (d0) => ({ messages: [...d0.messages, { who: "ai", text: "(解析失败:" + e.message + ")" }] }));
       flash("解析失败");
     } finally {
       setBusy(false);
+    }
+  }
+
+  // D2 粘贴直通:文本直接调 identify(跳过 /api/upload,不占上传限流)。
+  async function importPaste() {
+    const t = ((importOpen && importOpen.text) || "").trim();
+    if (!t || busy) return;
+    if (!confirmReplaceDraft()) return;
+    const kk = kind;
+    setBusy(true);
+    try {
+      const out = await postJSON(IDENTIFY_EP[kk], { text: t });
+      const nm = applyIdentified(out, kk);
+      setImportOpen(null);
+      flash("已解析《" + nm + "》并收入卡库");
+    } catch (e) {
+      setImportOpen((m) => (m ? { ...m, err: "解析失败:" + e.message } : m));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // D2 酒馆卡(.json / PNG 内嵌卡):纯前端解析直落 draft——零请求、零入库、不耗额度(与 identify 路径口径相反,UI 已写明)。
+  async function onTavernFile(ev) {
+    const file = ev.target.files && ev.target.files[0];
+    ev.target.value = "";
+    if (!file) return;
+    try {
+      const isJson = /\.json$/i.test(file.name);
+      const parsed = isJson ? parseJsonCard(await file.text()) : parsePngCard(await file.arrayBuffer());
+      if (!confirmReplaceDraft()) return;
+      const nm = parsed.draft.name || "未命名";
+      const droppedNote = parsed.dropped.length
+        ? "有 " + parsed.dropped.length + " 个酒馆特有字段暂不支持,已略过:" +
+          parsed.dropped.slice(0, 6).join("、") + (parsed.dropped.length > 6 ? "…" : "") + "。"
+        : "";
+      patch(kind, (d0) => ({
+        draft: { ...parsed.draft, ...pickPics(d0.draft) },
+        filled: Object.keys(parsed.draft),
+        messages: [...d0.messages, { who: "ai", text: "《" + nm + "》从酒馆卡读进来了(本地解析,没入库、不耗额度)。" + droppedNote + "哪里不对,聊着改。" }],
+      }));
+      // PNG 本体顺手压成立绘(draft.image 空着才填,不覆盖用户已传的)
+      if (!isJson) {
+        try {
+          const dataUrl = await fileToCompressedDataURL(file, { maxW: 768, maxH: 1152, quality: 0.82 });
+          patch(kind, (d0) => (d0.draft.image ? {} : { draft: { ...d0.draft, image: dataUrl } }));
+        } catch (e) {}
+      }
+      // 卡自带世界书 → 桥到 D1 参考资料(截 6000),AI 每轮可参考
+      if (parsed.bookText && window.confirm("这张卡自带世界书条目(" + parsed.bookText.length + " 字)。挂为「参考资料」让 AI 每轮参考?(可随时清除)")) {
+        patch(kind, { seed: parsed.bookText.slice(0, 6000) });
+      }
+      setImportOpen(null);
+      flash("已导入《" + nm + "》(本地,未入库)");
+    } catch (e) {
+      setImportOpen((m) => (m ? { ...m, err: "导入失败:" + e.message } : { step: "pick", text: "", err: "导入失败:" + e.message }));
     }
   }
 
@@ -329,6 +438,8 @@ export default function Create() {
       ...ds,
       [kind]: {
         ...blankDesk(kind),
+        // D1:参考资料跨卡保留(一份资料常连造多张卡);tpl 不带 = 自然清(模板是单卡的事)。
+        seed: ds[kind].seed || "",
         built: [...ds[kind].built, cardDraft],
         messages: [{ who: "ai", text: "《" + nm + "》放进台子了(本台第 " + (ds[kind].built.length + 1) + " 张)。说说下一张?" }],
       },
@@ -364,7 +475,7 @@ export default function Create() {
             "请根据已有设定,为这个角色写一段第三人称的「角色介绍」(外貌、性格、来历、当前处境,200 字以内),写进 description 字段。",
         },
       ];
-      const r = await postJSON("/api/build_card", { kind, messages: apiMsgs, draft: cur.draft, seed: "" });
+      const r = await postJSON("/api/build_card", { kind, messages: apiMsgs, draft: cur.draft, seed: cur.seed || "" });
       if (r.draft) {
         patch(kind, (d0) => ({ draft: { ...r.draft, ...pickPics(d0.draft) }, filled: r.filled || Object.keys(r.draft) }));
       } else if (r.reply) {
@@ -442,6 +553,55 @@ export default function Create() {
   // 弹窗里直接编辑角色介绍(description)。
   function setDraftDesc(text) {
     patch(kind, (d0) => ({ draft: { ...d0.draft, description: text } }));
+  }
+
+  // D5 导出:characters 套 chara_card_v2 信封(与酒馆 JSON 同构,可被 D2 导入原样吃回),
+  // 其余卡种导裸 data;纯前端 Blob 下载,零请求。
+  function exportCard(card, kk = kind) {
+    const c = (card && card.data) || card || {};
+    if (!Object.keys(c).length) {
+      flash("还没有可导出的内容");
+      return;
+    }
+    const obj = kk === "characters" ? wrapCard(c) : c;
+    const nm = c.name || c.title || "未命名";
+    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nm + ".json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    flash("已导出《" + nm + "》.json");
+  }
+
+  // D4 故事级拆回:/api/presets 列表已含完整卡组 data,选一条把四类卡追加回各台 built
+  // (不清现有、不动原预设;发布时按新名字生成新预设,不碰权属)。
+  async function openPresets() {
+    try {
+      const items = await getJSON("/api/presets");
+      setPresetsModal({ items: Array.isArray(items) ? items : [] });
+    } catch (e) {
+      flash("读故事列表失败:" + e.message);
+    }
+  }
+  function unpackPreset(p) {
+    const d = (p && p.data) || {};
+    const unwrap = (c) => (c && c.data) || c;
+    const chars = (d.characters || []).map(unwrap).filter(Boolean);
+    const players = ((d.playables && d.playables.length ? d.playables : d.player ? [d.player] : []) || []).map(unwrap).filter(Boolean);
+    const worlds = d.world ? [d.world] : [];
+    const stories = d.story ? [d.story] : [];
+    setDesks((ds) => ({
+      characters: { ...ds.characters, built: [...ds.characters.built, ...chars] },
+      players: { ...ds.players, built: [...ds.players.built, ...players] },
+      worlds: { ...ds.worlds, built: [...ds.worlds.built, ...worlds] },
+      stories: { ...ds.stories, built: [...ds.stories.built, ...stories] },
+    }));
+    setPresetsModal(null);
+    flash(`已把《${p.name}》拆回四台(角色×${chars.length} 演出×${players.length} 世界×${worlds.length} 故事×${stories.length});发布会生成新预设`);
   }
 
   // 素材复用:列我的库 → 搜索/挑一张推进对应台子的 built。
@@ -593,11 +753,72 @@ export default function Create() {
       }));
   }, [desk.draft, desk.filled]);
 
-  // 切卡种时丢弃未提交的就地编辑(编辑目标已不在场),手记抽屉一并合上。
+  // 切卡种时丢弃未提交的就地编辑(编辑目标已不在场),手记抽屉/参考资料弹窗一并合上。
   useEffect(() => {
     setEditingKey(null);
     setJournalOpen(false);
+    setSeedOpen(false);
+    setImportOpen(null);
+    setTplOpen(false);
+    setPresetsModal(null);
   }, [kind]);
+
+  // D4:接「我的 · 去改编」带来的卡(sessionStorage 一次性 payload,读完即删,刷新不重复触发)。
+  useEffect(() => {
+    let raw = null;
+    try {
+      raw = sessionStorage.getItem("ais_create_adapt");
+      if (raw) sessionStorage.removeItem("ais_create_adapt");
+    } catch (e) {}
+    if (!raw) return;
+    try {
+      const payload = JSON.parse(raw);
+      const idx = KINDS.findIndex((t) => t.k === payload.kind);
+      if (idx >= 0) setKi(idx);
+      forkToDraft(payload.card, payload.kind);
+    } catch (e) {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // —— D3 模板:铺骨架进 draft(空串字段=✦ 补写目标),opener 只进输入框不代发 ——
+  const tplHints = useMemo(() => {
+    const t = getTpl(kind, desk.tpl);
+    return (t && t.hints) || {};
+  }, [kind, desk.tpl]);
+  function applyTemplate(t) {
+    if (!confirmReplaceDraft()) return;
+    patch(kind, {
+      draft: t.skeleton ? { ...t.skeleton } : {},
+      filled: [],
+      tpl: t.id,
+      input: t.opener || "",
+    });
+    setTplOpen(false);
+    flash(t.skeleton ? `已铺开「${t.name}」骨架——空字段都是 ✦ 补写目标` : `「${t.name}」的开场指令已放进输入框`);
+    requestAnimationFrame(() => dockInputRef.current && dockInputRef.current.focus());
+  }
+
+  // —— D1 参考资料:打开弹窗时把当前 seed 带进编辑框;确认时 trim+截 6000(存储即截断,所见即所发) ——
+  function openSeed() {
+    setSeedText(desk.seed || "");
+    setSeedOpen(true);
+  }
+  function commitSeed() {
+    const t = seedText.trim().slice(0, 6000);
+    patch(kind, { seed: t });
+    setSeedOpen(false);
+    flash(t ? "参考资料已挂上——AI 之后每一轮都会参考它" : "参考资料已清空");
+  }
+  function clearSeed() {
+    patch(kind, { seed: "" });
+    setSeedOpen(false);
+    flash("参考资料已清除");
+  }
+  // 徽章字数:<1000 显示整数字,否则 x.xk
+  function seedLenLabel(s) {
+    const n = (s || "").length;
+    return n < 1000 ? `${n}字` : `${(n / 1000).toFixed(1)}k字`;
+  }
 
   // 叙述条:取最后一条 AI 消息;新回复到来(消息数变化)自动重新亮起。
   const lastAi = useMemo(() => {
@@ -764,6 +985,13 @@ export default function Create() {
                   查看本台已建({desk.built.length})
                 </button>
                 <button onClick={openLib}>从卡库补素材</button>
+                {/* D6 手机最小入口:只加两项,弹窗与桌面共用;.ct 布局不动 */}
+                <button onClick={() => { setMoreOpen(false); setImportOpen({ step: "pick", text: "", err: "" }); }}>
+                  导入已有内容
+                </button>
+                <button onClick={() => { setMoreOpen(false); openSeed(); }}>
+                  {desk.seed ? `参考资料 · ${seedLenLabel(desk.seed)}(查看 / 清除)` : "挂参考资料"}
+                </button>
                 <button className="ct-more-pub" onClick={openPreview} disabled={!hasChars}>预览并发布到探索 · 公开</button>
                 {/* 禁用原因触屏可见(桌面版的 title 手机看不到,同 YOR-173 范式) */}
                 {!hasChars && <span className="ct-more-note t-meta">至少要一张角色卡——先聊一张,或从卡库补一张</span>}
@@ -900,8 +1128,14 @@ export default function Create() {
                             onBlur={commitFieldEdit}
                             aria-label={"编辑" + f.k}
                           />
-                        ) : f.empty ? (
-                          <span className="create-field-v create-field-v-empty t-ui-sm">还空着——✦ 让 AI 补写,或 ✎ 手写</span>
+                        ) : f.empty || !f.v.trim() ? (
+                          <span className="create-field-v create-field-v-empty t-ui-sm">
+                            {tplHints[f.k0]
+                              ? tplHints[f.k0] + (f.editable ? "(✦ 补写 / ✎ 手写)" : "(点「聊」到命令条补)")
+                              : f.editable
+                              ? "还空着——✦ 让 AI 补写,或 ✎ 手写"
+                              : "还空着——点「聊」到命令条补"}
+                          </span>
                         ) : (
                           <span className="create-field-v t-ui-sm">{f.hidden ? "(隐藏真相,玩家不可见)" + f.v : f.v}</span>
                         )}
@@ -953,6 +1187,20 @@ export default function Create() {
                           </div>
                         </div>
                       )}
+                      {/* D1/D2/D3:已有内容优先的入口行——模板起手 / 导入成卡 / 挂参考资料 */}
+                      <div className="create-blank-more t-meta">
+                        <button className="create-blank-link" onClick={() => setTplOpen(true)}>
+                          从模板起手
+                        </button>
+                        ·
+                        <button className="create-blank-link" onClick={() => setImportOpen({ step: "pick", text: "", err: "" })}>
+                          导入已有内容
+                        </button>
+                        ·
+                        <button className="create-blank-link" onClick={openSeed}>
+                          {desk.seed ? `参考资料 · ${seedLenLabel(desk.seed)}` : "挂参考资料"}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -999,6 +1247,9 @@ export default function Create() {
                   收进本台 · 再建一张
                 </Button>
                 <Button variant="line" onClick={openLib}>从卡库补素材</Button>
+                <Button variant="line" onClick={() => exportCard(desk.draft)} disabled={!hasDraft} title={hasDraft ? "下载当前草稿为 JSON(角色卡=chara_card_v2,可再导入)" : "先聊出一张卡再导出"}>
+                  导出草稿 JSON
+                </Button>
                 <div className="create-actions-sep" aria-hidden="true" />
                 <Button
                   variant="primary"
@@ -1035,6 +1286,10 @@ export default function Create() {
                     {mf.anySecret && (
                       <div className="create-bind-warn t-meta">⚠ 带「隐藏真相」的卡会随发布公开,发布前核对</div>
                     )}
+                    {/* D4 故事级改编:把发布过的故事整组拆回四台继续编(追加进 built,不动原预设) */}
+                    <button className="create-bind-resume" onClick={openPresets}>
+                      ↺ 从我发布的故事继续改
+                    </button>
                   </div>
                 );
               })()}
@@ -1085,6 +1340,14 @@ export default function Create() {
                   上传文档
                 </button>
                 <input ref={fileRef} type="file" accept=".txt,.md,.docx" hidden onChange={onUpload} />
+                <button
+                  className={"create-seed-btn" + (desk.seed ? " has-seed" : "")}
+                  onClick={openSeed}
+                  disabled={busy}
+                  title={desk.seed ? "查看 / 修改 / 清除参考资料(AI 每轮都在参考它)" : "挂一份已有设定 / 旧卡文本,AI 之后每轮都基于它来完善"}
+                >
+                  {desk.seed ? `参考 · ${seedLenLabel(desk.seed)}` : "挂资料"}
+                </button>
                 <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim()}>
                   发送
                 </Button>
@@ -1123,6 +1386,8 @@ export default function Create() {
               </div>
             </div>
           )}
+
+
         </>
       )}
 
@@ -1147,6 +1412,159 @@ export default function Create() {
 
       {/* —————————————— 以下弹层桌面 / 手机共用 —————————————— */}
 
+      {/* D1 参考资料弹窗:粘贴已有设定/旧卡,存 desks[kind].seed(≤6000 字,存储即截断);
+          成本明示:每一轮 build_card 都会带上它。 */}
+      {seedOpen && (
+        <div className="create-modal" onClick={() => setSeedOpen(false)}>
+          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="参考资料" onClick={(e) => e.stopPropagation()}>
+            <button className="create-modal-x" onClick={() => setSeedOpen(false)} aria-label="关闭">×</button>
+            <h2 className="t-h2">参考资料 · {KINDS[ki].zh}</h2>
+            <p className="create-seed-note t-meta">
+              把已有的设定 / 旧卡文本挂在台上:之后每一轮 AI 都会基于它来完善、对空缺处定向追问。
+              每轮都参考意味着回复更慢也更贵——用完记得清除。只保存前 6000 字。
+            </p>
+            <textarea
+              className="create-seed-ta t-ui-sm"
+              rows={10}
+              maxLength={8000}
+              value={seedText}
+              onChange={(e) => setSeedText(e.target.value)}
+              placeholder="粘贴已有设定、旧卡文本、世界观笔记……"
+            />
+            <div className={"create-seed-count t-meta" + (seedText.length > 6000 ? " is-over" : "")}>
+              {seedText.length > 6000
+                ? `${seedText.length} 字——超出 6000 字的部分不会保存`
+                : `${seedText.length} / 6000 字`}
+            </div>
+            <div className="create-seed-actions">
+              {(desk.seed || "") && (
+                <Button variant="line" onClick={clearSeed}>清除</Button>
+              )}
+              <Button variant="primary" onClick={commitSeed}>挂上</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* D4 故事拆回:选一条已发布预设,四类卡追加回各台 built(官方故事也可拆——拆的是副本,发布生成新预设)。 */}
+      {presetsModal && (
+        <div className="create-modal" onClick={() => setPresetsModal(null)}>
+          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="从故事继续" onClick={(e) => e.stopPropagation()}>
+            <button className="create-modal-x" onClick={() => setPresetsModal(null)} aria-label="关闭">×</button>
+            <h2 className="t-h2">从已发布的故事继续改</h2>
+            <p className="create-seed-note t-meta">
+              选一条,里面的角色 / 演出 / 世界书 / 故事书会整组追加回四个台子(原故事不动;改完发布=新故事)。
+            </p>
+            <div className="create-lib-list">
+              {presetsModal.items.length ? (
+                presetsModal.items.map((p, i) => {
+                  const d = p.data || {};
+                  const cnt = (d.characters || []).length;
+                  return (
+                    <div className="create-lib-item create-lib-item--row" key={i}>
+                      <span className="create-lib-item-tx">
+                        <span className="t-ui-sm">
+                          {p.name}
+                          {p.official && <span className="create-tpl-badge t-meta">官方</span>}
+                        </span>
+                        <span className="t-meta">
+                          角色×{cnt}{d.world ? " · 世界书" : ""}{d.story ? " · 故事书" : ""}{(d.playables || []).length || d.player ? " · 演出卡" : ""}
+                        </span>
+                      </span>
+                      <span className="create-lib-item-acts">
+                        <button className="create-shelf-act" onClick={() => unpackPreset(p)}>拆回四台</button>
+                      </span>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="t-ui create-sub">还没有已发布的故事。</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* D3 模板选择器:骨架铺上画布,空字段自带引导;opener 只进输入框不代发。 */}
+      {tplOpen && (
+        <div className="create-modal" onClick={() => setTplOpen(false)}>
+          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="创作模板" onClick={(e) => e.stopPropagation()}>
+            <button className="create-modal-x" onClick={() => setTplOpen(false)} aria-label="关闭">×</button>
+            <h2 className="t-h2">从模板起手 · {KINDS[ki].zh}</h2>
+            <p className="create-seed-note t-meta">
+              选一套骨架铺上画布:空字段自带引导,✦ 让 AI 补、✎ 自己写;开场指令会放进输入框,过目再发。
+            </p>
+            <div className="create-import-picks">
+              {(TEMPLATES[kind] || []).map((t) => (
+                <button key={t.id} className="create-import-pick" onClick={() => applyTemplate(t)}>
+                  <span className="create-import-pick-t t-ui">
+                    {t.name}
+                    <span className="create-tpl-badge t-meta">{t.skeleton ? `${Object.keys(t.skeleton).length} 字段` : "纯引导"}</span>
+                  </span>
+                  <span className="create-import-pick-d t-meta">{t.hint}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* D2 导入面板:把已有内容直接变成卡——粘贴文本(identify,会入库)/上传文档(现有链路)/
+          酒馆卡(纯前端解析,不入库不耗额度)。两种口径都当面写清。 */}
+      {importOpen && (
+        <div className="create-modal" onClick={() => setImportOpen(null)}>
+          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="导入成卡" onClick={(e) => e.stopPropagation()}>
+            <button className="create-modal-x" onClick={() => setImportOpen(null)} aria-label="关闭">×</button>
+            <h2 className="t-h2">导入成卡 · {KINDS[ki].zh}</h2>
+            {importOpen.step === "pick" ? (
+              <>
+                <p className="create-seed-note t-meta">把已有的内容直接变成一张卡,不用从零聊。</p>
+                <div className="create-import-picks">
+                  <button className="create-import-pick" onClick={() => setImportOpen({ step: "paste", text: "", err: "" })}>
+                    <span className="create-import-pick-t t-ui">粘贴文本</span>
+                    <span className="create-import-pick-d t-meta">散文设定 / 旧卡文字,AI 解析成卡(会同时收进你的卡库 · 私密)</span>
+                  </button>
+                  <button className="create-import-pick" onClick={() => { setImportOpen(null); fileRef.current && fileRef.current.click(); }}>
+                    <span className="create-import-pick-t t-ui">上传文档</span>
+                    <span className="create-import-pick-d t-meta">.txt / .md / .docx,抽出文字后同上(≤2MB)</span>
+                  </button>
+                  {kind === "characters" && (
+                    <button className="create-import-pick" onClick={() => tavernRef.current && tavernRef.current.click()}>
+                      <span className="create-import-pick-t t-ui">酒馆角色卡</span>
+                      <span className="create-import-pick-d t-meta">SillyTavern 的 .json / PNG 内嵌卡——本地解析,不入库、不耗额度</span>
+                    </button>
+                  )}
+                </div>
+                {importOpen.err && <div className="create-import-err t-meta">{importOpen.err}</div>}
+                <input ref={tavernRef} type="file" accept=".json,.png" hidden onChange={onTavernFile} />
+              </>
+            ) : (
+              <>
+                <p className="create-seed-note t-meta">
+                  粘贴散文设定 / 旧卡文字,AI 解析成{KINDS[ki].zh};解析成功会同时把这张卡存进你的卡库(私密),可去「我的」删除。
+                  超长文本(两万字以上)建议分段导入,或改挂「参考资料」。
+                </p>
+                <textarea
+                  className="create-seed-ta t-ui-sm"
+                  rows={10}
+                  value={importOpen.text}
+                  onChange={(e) => setImportOpen((m) => ({ ...m, text: e.target.value, err: "" }))}
+                  placeholder="把设定粘进来……"
+                />
+                <div className="create-seed-count t-meta">{importOpen.text.length} 字</div>
+                {importOpen.err && <div className="create-import-err t-meta">{importOpen.err}</div>}
+                <div className="create-seed-actions">
+                  <Button variant="line" onClick={() => setImportOpen({ step: "pick", text: "", err: "" })}>返回</Button>
+                  <Button variant="primary" onClick={importPaste} disabled={busy || !importOpen.text.trim()}>
+                    {busy ? "解析中…" : "解析成卡"}
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 补素材 modal */}
       {libModal && (
         <div className="create-modal" onClick={() => setLibModal(null)}>
@@ -1167,14 +1585,25 @@ export default function Create() {
                 );
                 if (!libModal.items.length) return <p className="t-ui create-sub">这个分类的卡库还空着。</p>;
                 if (!list.length) return <p className="t-ui create-sub">没有匹配的卡。换个关键词。</p>;
+                {/* D4:行改双动作(按钮不能嵌按钮,行由 button 改 div)——加入本台=原样;改编成草稿=fork(·改) */}
                 return list.map((it, i) => (
-                  <button className="create-lib-item" key={i} onClick={() => libAdd(it)}>
+                  <div className="create-lib-item create-lib-item--row" key={i}>
                     <span className="create-lib-item-tx">
                       <span className="t-ui-sm">{libName(it)}</span>
                       <span className="t-meta">{libDesc(it).slice(0, 40)}</span>
                     </span>
-                    <span className="t-meta">加入 →</span>
-                  </button>
+                    <span className="create-lib-item-acts">
+                      <button className="create-shelf-act" onClick={() => libAdd(it)}>加入本台</button>
+                      <button
+                        className="create-shelf-act"
+                        onClick={() => {
+                          if (forkToDraft(it)) setLibModal(null);
+                        }}
+                      >
+                        改编成草稿
+                      </button>
+                    </span>
+                  </div>
                 ));
               })()}
             </div>
@@ -1199,6 +1628,7 @@ export default function Create() {
                       <div className="create-built-head">
                         <span className="create-built-name t-kai">{nm}</span>
                         {entries && <span className="create-built-count t-meta">{entries.length} 条条目</span>}
+                        <button className="create-built-x create-built-export" onClick={() => exportCard(card)} title="下载为 JSON">导出</button>
                         <button className="create-built-x" onClick={() => removeBuilt(i)}>移除</button>
                       </div>
                       {entries ? (

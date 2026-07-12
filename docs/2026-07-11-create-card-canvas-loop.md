@@ -115,3 +115,69 @@ plan: docs/2026-07-11-create-card-canvas-plan.md
 - 红线全程未破:手机 .ct 分支零改动;API 契约(/api/build_card /identify* /library/save /presets)与 desks localStorage 形状不动;三弹层沿用;npm 零新增依赖;视觉全语义 token;.env 未读写;main 未碰。
 - 已知边界(如实):①「尽量别动其他字段」是 prompt 约定,diff 墨晕兜底显形;②结构化字段(entries/timeline/tags)v1 只读走「聊」;③真发布未在测试中执行;④无头环境 blur/autoFocus 弱,真浏览器无此问题。
 - 测试残留:test 库 library 多两行私密卡(苏晚棠/未命名守夜人),preview 浏览器 localStorage 留有测试台数据(与用户浏览器无关)。
+
+---
+
+# D 系列(创作者功能)· 同 journal 续记
+
+> 方案:.claude 计划已批(2026-07-11 晚),D 系列=prompt 脚手架+从现有内容 generate。分支 gengyue/create-creator-tools(基于 rebase 后的 create-canvas-rework@47cf57c,PR #159 已随 rebase 更新)。
+> 切片:D1 seed 参考资料 / D2 导入即成卡(粘贴/上传/酒馆 JSON+PNG) / D3 模板库(card-templates 提炼) / D4 改编(卡级+故事级) / D5 导出 / D6 手机最小入口 / D7 回归+PR。
+
+## D1 · 2026-07-11 20:41 ✅ 参考资料(seed 喂料)
+
+- 实现:sendText/genIntro 传 desks[kind].seed(可选键,老数据 || "" 兜底);collectToDesk 保留 seed 清 tpl;命令条「挂资料」钮/鎏金徽章(参考 · N字);空卡入口行;弹窗(6000 存储即截断+超长高亮提示+成本明示「每轮都参考,更慢更贵」+清除)。
+- 验收(5199 实测,真后端):
+  - 挂 103 字私设 → 载荷 seed 完整;**考题实锤**:问「她怕什么」,AI 答「根据资料,她唯一害怕的是打雷,因为母亲在雷雨夜失踪」并写进 draft.description——从"从零聊"变"基于我的资料长";
+  - 7500 字粘贴 → 计数红提示"超出不保存" → 存 6000,徽章 6.0k字;
+  - worlds 老 desk(无 seed 键)→ 拦截验载荷 seed:""(零真调用),行为同现状;
+  - 收进本台 → seed 保留(6000 仍在,built+1,draft 清);刷新 → 徽章仍亮;
+  - console 零报错;build 过。
+
+## D2 · 2026-07-11 21:0x ✅ 导入即成卡(粘贴/上传/酒馆 JSON+PNG)
+
+- 实现:空卡「直接导入成卡」面板三入口——粘贴文本(直调 identify,跳过 /api/upload)/上传文档(现有链路,抽出共享 applyIdentified)/酒馆角色卡(.json/PNG,仅 characters;lib/tavernCard.js 纯前端解析)。两种口径当面写清:identify 路径「会同时收进你的卡库(私密)」,酒馆路径「本地解析,不入库、不耗额度」。已有草稿导入前 confirm 替换。白名单与后端 model_fields 对齐(15 键),酒馆特有字段如实播报略过;character_book 自动提文本并询问「挂为参考资料」(桥接 D1);PNG 本体压缩后顺手填 draft.image(空才填);zTXt/iTXt 压缩变体诚实报错引导导 JSON;大 chunk 分块解码防栈溢。
+- 验收(5199 实测):
+  - 粘贴散文「林默」→ 真 identify → 16 字段铺上画布、面板自关、卡库入库(文案已预告);
+  - 酒馆 V2 JSON「白栎」→ 白名单进 draft(creator_notes 被滤),叙述条播报「4 个酒馆特有字段暂不支持:creator_notes、alternate_greetings、system_prompt…」;**character_book 两条目桥成 seed(42 字)——D1/D2 打通**;
+  - 手工构造 PNG(tEXt chara chunk)→「PNG测试·砚青」纯本地解析进 draft,零网络请求;
+  - 坏文件(JPG 改名 .png)→ 面板内红字「导入失败:不是 PNG 文件」,不关不崩;
+  - console 零报错;build 2.03s。
+
+## D3 · 2026-07-11 21:2x ✅ 创作模板库(card-templates 提炼)
+
+- 实现:createTemplates.js(文案归内容侧,来源逐套标注)——characters 两套(主要NPC 13 字段/隐藏角色 11 字段;**次要NPC 忠于 2026-06-08 内容侧决定不做**,已收进设定卡)、演出卡、世界书(纯 opener)、故事书;skeleton 键名全部 ∈ 后端模型字段。空卡「从模板起手」入口+选择器(复用导入卡片样式+字段数徽章);applyTemplate:骨架直落 draft(空串=✦ 目标、空数组=「聊」目标)、opener 只进输入框、tpl 只存 id;空值渲染统一接 hints(文本+数组都显引导,替换默认「还空着」)。
+- 验收(5199 实测):
+  - 选主要NPC → 13 键骨架铺开、锚点/说话规则等字段显专属引导、opener 预填未发送、tpl=npc-main 落盘;
+  - ✦ 补写锚点(真调)→ **骨架 13/13 键全部过后端存活**(_validate_build_draft 键名铁律实证);anchor 内容取自 seed(D2 桥进来的伞骨信世界书)——模板骨架×seed 资料×字段补写三者协同;diff 墨晕如实标出模型顺手动的 tags/versions;
+  - 刷新 → tpl/骨架/引导文案全持久;
+  - 世界书模板 → 纯 opener 进输入框,draft 保持空;
+  - console 零报错;build 1.78s。
+- 边界如实:模板入口只在空卡态(有草稿时不可达,confirmReplaceDraft 分支保护的是「只有图无字段」的边缘态);「已有草稿时选模板 confirm」未实测(该状态在 UI 上不可达,逻辑保留)。
+
+## D4 · 2026-07-11 深夜 ✅ 从已有改编(卡级+故事级)
+
+- 实现:forkToDraft(双层解包兼容 chara_card_v2 信封;名字加「·改」防 library upsert 覆盖原卡;目标台有草稿先 confirm);「从卡库补素材」行改双动作(加入本台/改编成草稿,行由 button 改 div 防按钮嵌套);Mine「我创建的」详情弹层加「去改编」(CharDetailModal 可选 onAdapt prop,sessionStorage 一次性 payload 复刻探索→纯聊范式,读完即删);故事级:「↺ 从我发布的故事继续改」(装订区入口)→ /api/presets 列表 → 整组拆回四台 built(追加不覆盖、不动原预设,官方故事也可拆——拆的是副本)。
+- 验收(5199 实测):
+  - 卡级 fork:《林默》→《林默·改》16 字段铺画布、弹层自关、原卡在库;
+  - Mine 链路:发送端在本地 AUTH off 环境不可达(「我创建的」按 official 过滤,匿名保存的卡全记官方名下——环境语义非 bug,真机 AUTH on 复查留 D7 备注);**接收端实测**:注入 payload →《白栎·改》铺画布+自动切角色卡 tab+payload 读完即删(刷新不重复);反向验证以代码判定收口(onAdapt 仅 Mine created 传);
+  - 故事级拆回:官方《雨夜档案-第七站台》→ 角色 3→6、演出 0→1、世界 0→1、故事 0→1(追加语义,原 3 张保留),toast 精确汇报,装订清单实时联动(角色卡 ×7…);
+  - build 1.88s。
+- ⚠ 插曲如实:D4 编辑中途 console 出现 6 条 Create 崩溃(同一事件×6 订阅通道)——分批 Edit 的 HMR 中间帧(kind effect 先引用 setPresetsModal、state 声明后落)。冷加载复验:error 计数零新增、全功能正常,最终代码干净。教训:同组 state+引用应一次 Edit 落盘,已记。
+
+## D5 · 2026-07-12 凌晨 ✅ 导出 JSON
+
+- 实现:exportCard——characters 走现成 wrapCard 套 chara_card_v2 信封(与酒馆 JSON 同构,**可被 D2 导入原样吃回**),其余卡种导裸 data;Blob+<a download> 纯前端零请求。入口:动作列「导出草稿 JSON」(无草稿置灰)+ builtView 每卡「导出」。
+- 验收:点击导出 → toast「已导出《白栎·改》.json」(链路无异常);builtView 6 卡各带导出钮;round-trip 由同构性成立(D2 已实测解析 {spec,data} 信封);build 过(1.80s)。
+
+## D6 · 2026-07-12 凌晨 ✅ 手机最小入口
+
+- 实现:①结构修正——D1-D4 四个弹窗从桌面分支迁到「桌面/手机共用弹层区」(python 锚点搬移+缩进归一,否则手机触发状态弹窗不渲染);②.ct「更多」面板加两项:导入已有内容(开 D2 面板)/参考资料徽章行(字数+查看/清除)。.ct 布局其余零改动。
+- 验收(390px 实测):ct-more 五项就位;导入面板在手机打开(3 入口)、seed 弹窗打开(42 字徽章正确);.ct 聊天/composer 原样;桌面 1366 回归:seed 弹窗/presets 弹窗迁移后照常可开;build 过。
+
+## D7 · 2026-07-12 凌晨 —— D 系列收尾账 ✅
+
+- 冷加载全量回归(5199):画布(白栎·改)/本台架 ×6/seed 徽章(42字)/装订清单(角色×7+世界+演出+故事)+拆回入口/导出按钮/字段动作条全部就位;手机 390(D6 轮)/桌面弹窗迁移回归已各自验;console error 总数封在 6(全部为 D4 编辑中途一次 HMR 瞬时事件,冷加载零新增);build 1.73s。
+- 六切片六 commit:D1 3cfdd7c / D2 52b11c6 / D3 0187242 / D4 04d095e / D5 4dbea99 / D6 e084d38;分支 gengyue/create-creator-tools(基于 rebase 后的 create-canvas-rework,stacked 于 PR #159)。
+- 红线:API 契约零改动(seed 用的是后端已实现参数);desks 兼容扩展(seed/tpl 可选键,双向兼容);手机 .ct 仅 ct-more 两项(主理人拍板的例外);三弹层沿用;npm 零新增;token 皮肤;main 未碰。
+- 已知边界(带进 PR):seed 每轮计费(UI 三重明示);「别动其他字段」是 prompt 约定(diff 墨晕兜底);酒馆 zTXt 不支持(诚实报错);Mine「去改编」发送端在 AUTH off 本地不可达(环境语义),真机 AUTH on 建议走查;identify 入库 vs 酒馆本地的双口径已当面写清。
+- 测试残留:test 库 library 新增若干私密卡(林默等),preview 浏览器 localStorage 留测试台数据(与用户浏览器无关)。
