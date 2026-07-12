@@ -67,3 +67,15 @@ plan-source: 参照 template repo docs/onboarding/07-frontend-interaction-plan.m
 1. **分支策略:先合 #159–#163 链(连同预审修复批次),H 系列从合并后的 main 干净起步**;本文档随 create-board 分支一起上 main。不再往链上摞第六层。
 2. 快捷键进 H3(OC 创作者=半专业工具用户,成本半天)。
 3. 手机不跟画布范式:桌面=工作台(画布),手机=对话流(.ct 现状),两端各扬所长;BoardActionTrigger 留长按接口即可。
+
+## 7. 开发阶段(执行排期,阶段 gate 全绿才进下一阶段)
+
+> 节奏参照 C→G 实测产能(一个系列 ≈ 一个 loop 场次);H 全程零后端,无压测环节,验收=5199 preview 实测+几何/DOM 断言。
+
+- **阶段 0 · 合链与清账(前置,双线并行)**:①主理人审 #159–#163(重点 E0/F0 引擎核心;含 refs-计入-完整度的一行模板修正与 _smoke_refs case4 复跑);②预审修复批次(onUpload 确认/genIntro 并发/酒馆类型校验/E6 手机门控样式等非画板项)做成链上收尾切片一并进审。合 main → 手动触发 Render 部署。**Gate:main 创作板块冷加载全链路回归绿 + 部署 live。**
+- **阶段 1 · 地基盘(H0+H1,一个 loop)**:稳定 id + 视口引擎。**Gate:下标族 bug 全不复现、老数据无缝、pan/zoom 零 React 重渲。** 单独成 PR 先审合(风险隔离:后面交互盘反复不动摇地基)。
+- **阶段 2 · 交互盘上(H2+H3,一个 loop)**:窄路径 select→act→inline-apply 先绿 → 铺满动作矩阵 → 工具 rail+快捷键。**Gate:引用 loop 端到端真调、hover 钮退役、纯键盘流可用。**
+- **阶段 3 · 交互盘下(H4+H5,一个 loop,最大坑位)**:相机聚焦替 overlay + 信号上卡。**Gate:聚焦态 ✎/⟳/✦/圈选/批准全链路真调、Esc 逐层退、卡面信号直达处置。**
+- **阶段 4 · 收尾(H6+H7,半个 loop)**:空白起草三入口 + 手机零泄漏/reduced-motion/性能账回归 → 交互盘 PR(H2–H7 一条分支切片 commit)。**Gate:同 H7 DoD;性能账对 07-11 基线无回退红线(主 JS 增幅要有账)。**
+
+PR 形态:**两个 PR**——地基盘(H0-H1)与交互盘(H2-H7),不再摞五层链;每片一 commit,journal 开新文件 `docs/2026-07-1x-create-board-canvas-2-loop.md` 续记账。
