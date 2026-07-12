@@ -117,3 +117,10 @@ plan: docs/2026-07-12-create-board-canvas-2-plan.md
   - 手机 390:.ct 就位,ctxbar/board 零泄漏;`npx vite build` 2.02s 过。
 - 如实边界:①工具条逆缩放用的是已 commit 的 view.z,pan/zoom 手势进行中有短暂尺寸偏差(200ms 内自愈,真实使用无感);②触屏长按=enter 只留了接口未实装(拍板③手机不上画布);③draft 卡「导出」导的是当下草稿(未 finalize),与台账线菜单口径一致。
 - 测试残留:preview localStorage 有《甲二·改》草稿与 worlds 台重置痕迹(测试数据,与用户无关)。
+
+## H-R5 · 2026-07-12 —— H3 工具 rail+快捷键 ✅(commit 515af5b)
+
+- 实现:左侧工具 rail(选/手 + 四卡种落卡,自 boardbar 迁入——boardbar 只剩文件级:装订/发布/对话/菜单);抓手=粘性工具(H)或瞬时(Space),hand 态左键拖板即平移、卡 pointer-events:none 不截胡;快捷键 V/H/⌘·Ctrl+0(适配)/1-4(落卡),守卫=输入态/聚焦态/全部弹层不劫持、手机不挂;卡片 Enter 键流(Tab 到卡 → Enter 选中 → 已选中再 Enter 进入,镜像单击/双击)。
+- 验收证据(5199 preview 真调):rail 六键就位、boardbar「+」退役;rail 与 dock/zoomctl 矩形互不相交(几何断言);H → rail 高亮+board is-pan,V 复位;hand 态左键拖板 (60,30) → __view 精确 +(60,30);⌘0 → fit 落 v2(z=1 居中);「2」落卡开聚焦;**守卫实证:聚焦态按 V/H 被拦(测试序列先把自己锁了,分析后确认是设计行为非 bug)、textarea 里按「3」不切台**;纯键盘流:focus 卡 → Enter 选中(工具条现身)→ Enter 进聚焦 → Esc 退出;手机 390:.ct 就位,rail/board 零泄漏;build 2.00s 过。
+- 如实边界:①rail 图标用汉字字形(零依赖,纸墨皮肤一致),非图标库;②Enter 流的 Tab 顺序依赖 DOM 顺序(=boardCards 顺序),未做方向键空间导航(留观真实反馈);③hand 工具下卡完全不可点(Figma 同口径)。
+- 测试残留:同上,preview 测试数据未清。
