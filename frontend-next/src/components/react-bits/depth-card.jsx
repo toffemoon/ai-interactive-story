@@ -11,7 +11,7 @@ export default function DepthCard({
   className = "",
   maxRotation = 7,
   spotlight = true,
-  spotlightColor = "rgba(255, 250, 238, 0.6)",
+  spotlightColor = "rgba(255, 255, 255, 0.6)",
 }) {
   const cardRef = useRef(null);
   const innerRef = useRef(null);

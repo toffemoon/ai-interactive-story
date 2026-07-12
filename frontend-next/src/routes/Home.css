@@ -133,7 +133,7 @@
   font-size: var(--fs-ui);
   letter-spacing: 0.12em;
   border-radius: var(--r-pill);
-  background: rgba(250, 247, 242, 0.94);
+  background: rgba(255, 255, 255, 0.94);
   border: 1px solid rgba(255, 255, 255, 0.62);
   box-shadow: 0 8px 22px -8px rgba(0, 0, 0, 0.6);
   transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out),
@@ -148,7 +148,7 @@
 }
 /* 开始故事(primary):朱砂字,呼应菜单胶囊里「沐言」的朱砂 */
 .home .btn--primary.home-go {
-  background: rgba(250, 247, 242, 0.94);
+  background: rgba(255, 255, 255, 0.94);
   color: var(--cinnabar);
 }
 .home .btn--primary.home-go:hover:not(:disabled) {
@@ -156,8 +156,8 @@
 }
 /* 继续故事(secondary):墨字次级,同白胶囊 */
 .home .btn--secondary.home-go {
-  background: rgba(250, 247, 242, 0.88);
-  color: #3a2f24;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--ink);
 }
 .home .btn--secondary.home-go:hover:not(:disabled) {
   background: var(--panel);
@@ -197,12 +197,12 @@
 /* 对话框:坞内静态(在按钮行下方);浅色卡 + 深色字(YOR-136 反馈) */
 .home-dialogue {
   width: 100%;
-  background: rgba(250, 247, 241, 0.8);
-  border: 1px solid rgba(34, 26, 18, 0.14);
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(31, 31, 30, 0.13);
   border-radius: var(--r-lg);
   padding: var(--sp-4) var(--sp-5) var(--sp-4);
   box-shadow: 0 18px 50px -20px rgba(0, 0, 0, 0.6);
-  color: #20201d;
+  color: var(--ink);
 }
 .home-dlg-head {
   display: flex;
@@ -236,7 +236,7 @@
     transform var(--dur-fast) var(--ease-out);
 }
 .home-tool:hover:not(:disabled) {
-  color: #20201d;
+  color: var(--ink);
   border-color: var(--cinnabar);
 }
 .home-tool:active:not(:disabled) {
@@ -247,7 +247,7 @@
   cursor: default;
 }
 .home-dlg-line {
-  color: #20201d;
+  color: var(--ink);
   min-height: 3.2em;
   margin: 0 0 var(--sp-3);
 }
@@ -270,11 +270,11 @@
   height: 44px;
   font-family: var(--font-sans);
   font-size: var(--fs-ui);
-  color: #20201d;
+  color: var(--ink);
   outline: none;
 }
 .home-input::placeholder {
-  color: #9a9183;
+  color: #9a9a96;
 }
 .home-input:focus {
   border-color: var(--cinnabar);

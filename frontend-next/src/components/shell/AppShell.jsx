@@ -96,8 +96,8 @@ export default function AppShell({ children }) {
           displayItemNumbering
           colors={["#c79a4e", "#8f3c32"]}
           accentColor="#8f3c32"
-          menuButtonColor={atHome ? "#ece3d2" : "#20201d"}
-          openMenuButtonColor="#20201d"
+          menuButtonColor={atHome ? "#ece3d2" : "#1f1f1e"}
+          openMenuButtonColor="#1f1f1e"
           onItemClick={(item) => navigate(item.link)}
         />
       )}

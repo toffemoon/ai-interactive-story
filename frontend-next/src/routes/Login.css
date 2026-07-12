@@ -8,8 +8,8 @@
 .login-card {
   position: relative;
   width: min(430px, 92vw);
-  background: linear-gradient(180deg, #f6efdd, #efe6cf);
-  border: 1px solid rgba(203, 176, 121, 0.7);
+  background: var(--panel);
+  border: 1px solid var(--line);
   padding: 38px 42px 30px;
   box-shadow: var(--shadow-pop);
   animation: login-in 0.38s var(--ease-out) both;
@@ -18,7 +18,7 @@
   content: "";
   position: absolute;
   inset: 5px;
-  border: 1px solid rgba(43, 38, 32, 0.14);
+  border: 1px solid color-mix(in srgb, var(--fg) 12%, transparent);
   pointer-events: none;
 }
 @keyframes login-in {
@@ -37,21 +37,21 @@
   font-size: 24px;
   letter-spacing: 0.18em;
   font-weight: 700;
-  color: #2b2620;
+  color: var(--fg);
   text-align: center;
 }
 .login-en {
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.3em;
-  color: #a98a63;
+  color: var(--muted);
   text-align: center;
   margin-top: 7px;
 }
 .login-tabs {
   display: flex;
   margin: 24px 0 18px;
-  border-bottom: 1px solid #c4b388;
+  border-bottom: 1px solid var(--line);
 }
 .login-tabs button {
   flex: 1;
@@ -62,11 +62,11 @@
   font-family: var(--font-serif);
   font-size: 15px;
   letter-spacing: 0.18em;
-  color: #9a907a;
+  color: var(--muted);
   position: relative;
 }
 .login-tabs button.on {
-  color: #2b2620;
+  color: var(--fg);
   font-weight: 700;
 }
 .login-tabs button.on::after {
@@ -76,21 +76,21 @@
   right: 24%;
   bottom: -1px;
   height: 2px;
-  background: #34463d;
+  background: var(--accent-2);
 }
 .login-input {
   width: 100%;
-  background: rgba(255, 255, 255, 0.5);
-  border: 1px solid #c4b388;
+  background: var(--panel);
+  border: 1px solid var(--line);
   font-family: var(--font-sans);
   font-size: 16px; /* ≥16px 防 iOS 聚焦缩放 */
-  color: #2b2620;
+  color: var(--fg);
   padding: 11px 13px;
   outline: none;
   margin-bottom: 12px;
 }
 .login-input:focus {
-  border-color: #34463d;
+  border-color: var(--accent-2);
 }
 .login-coderow {
   display: flex;
@@ -102,7 +102,7 @@
 .login-codebtn {
   flex: none;
   background: #163b57;
-  color: #f3ead6;
+  color: #ffffff;
   border: 1px solid #0d2f49;
   font-family: var(--font-serif);
   font-size: 13px;
@@ -115,7 +115,7 @@
 }
 .login-hint {
   font-size: 12px;
-  color: #34463d;
+  color: var(--accent-2);
   margin: -2px 0 10px;
 }
 .login-err {
@@ -139,11 +139,11 @@
   border: none;
   font-family: var(--font-sans);
   font-size: 12.5px;
-  color: #6f6757;
+  color: var(--muted);
   cursor: pointer;
 }
 .login-guest:hover {
-  color: #2b2620;
+  color: var(--fg);
   text-decoration: underline;
 }
 
@@ -159,10 +159,10 @@
   border: none;
   font-family: var(--font-sans);
   font-size: 12.5px;
-  color: #6f6757;
+  color: var(--muted);
   cursor: pointer;
 }
 .login-alt:hover {
-  color: #2b2620;
+  color: var(--fg);
   text-decoration: underline;
 }

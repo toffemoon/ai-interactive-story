@@ -80,7 +80,7 @@
 /* 开关颜色按主题/开合用 CSS 驱动(不用 gsap,根治切页时残留 tween 写错色):
    纸页=墨色;立绘主页(暖夜)=月白;菜单开(面板在左、压在开关之下)=墨色。 */
 [data-theme="paper"] .sm-toggle {
-  color: #20201d;
+  color: var(--ink);
 }
 /* D6(2026-06-30 真机反馈):B1 那层毛玻璃胶囊底原本是手机端用的(滚动时盖住筛选 chip)。
    现在手机已换 Pill Nav、StaggeredMenu 只在桌面出现,这颗底在桌面就成了「飘在顶栏的孤立按钮」。
@@ -89,7 +89,7 @@
   color: #ece3d2;
 }
 .staggered-menu-wrapper[data-open] .sm-toggle {
-  color: #20201d;
+  color: var(--ink);
 }
 
 .sm-toggle:focus-visible {
@@ -155,7 +155,7 @@
   right: 0;
   width: clamp(210px, 24vw, 300px);
   height: 100%;
-  background: #fbf8f2; /* 暖纸面板(不透明,免 backdrop-filter) */
+  background: var(--paper-panel); /* 纸面板(不透明,免 backdrop-filter;2026-07-13 全白主题随 token 走) */
   display: flex;
   flex-direction: column;
   padding: 6em 2em 2em 2em;
@@ -241,7 +241,7 @@
 .sm-socials-link {
   font-size: 1.1rem;
   font-weight: 500;
-  color: #20201d;
+  color: var(--ink);
   text-decoration: none;
   position: relative;
   padding: 2px 0;
@@ -265,7 +265,7 @@
 /* 菜单项:中文适配(去大写、宋体、字号收到 2.4rem、正常字距) */
 .sm-panel-item {
   position: relative;
-  color: #20201d;
+  color: var(--ink);
   font-family: var(--font-serif);
   font-weight: 600;
   font-size: 2.4rem;
@@ -457,9 +457,9 @@
 .sm-hover-rail .sm-prelayer {
   opacity: 1;
 }
-/* 暖纸盖层 = 原版菜单的纸底(#fbf8f2),最后落定后就是展开菜单的底色 */
+/* 纸底盖层 = 原版菜单的纸底(随 --paper-panel),最后落定后就是展开菜单的底色 */
 .sm-prelayer--cover {
-  background: #fbf8f2;
+  background: var(--paper-panel);
 }
 
 /* 图标列:面板内的收起态内容,占住 rail 条(展开时 gsap 让位、收回时归位;
@@ -493,7 +493,7 @@
   backdrop-filter: blur(14px) saturate(1.08);
 }
 [data-theme="stage"] .sm-hover-rail[data-open] .staggered-menu-panel {
-  background: #fbf8f2;
+  background: var(--paper-panel);
 }
 [data-theme="stage"] .sm-hover-rail .sm-rail-list::before {
   background: rgba(236, 227, 210, 0.2);
