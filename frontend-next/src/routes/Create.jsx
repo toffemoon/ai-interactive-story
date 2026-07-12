@@ -7,10 +7,11 @@ import ImageCropField from "../components/ImageCropField";
 import StoryHero from "../components/StoryHero";
 import CharDetailModal from "../components/CharDetailModal";
 import StaggeredText from "../components/staggered-text";
-import DepthCard from "../components/react-bits/depth-card"; // C4 本台架 mini 卡(画布本体不倾斜)
 import { BlurHighlight } from "../components/react-bits/blur-highlight";
 import { parseJsonCard, parsePngCard } from "../lib/tavernCard"; // D2 酒馆卡纯前端解析
 import { TEMPLATES, getTpl } from "./createTemplates"; // D3 创作模板(文案归内容侧,来源 card-templates/)
+import { loadPrompts, addPrompt, removePrompt } from "../lib/promptLib"; // F1 提示词库(localStorage)
+import { cardToRefText, makeRef } from "../lib/refText"; // F2 卡→引用文本(refs 通道)
 import { useAuth } from "../state/auth";
 import "./Create.css";
 
@@ -185,13 +186,31 @@ export default function Create() {
   // D1 参考资料:desks[kind].seed(可选键,兼容扩展)。弹窗内编辑用本地 seedText,确认才 patch。
   const [seedOpen, setSeedOpen] = useState(false);
   const [seedText, setSeedText] = useState("");
-  // D2 导入面板:null | { step: "pick"|"paste", text, err }。酒馆解析是同步的,不需要独立 step。
+  // D2 导入面板:null | { step: "pick"|"paste", text, err, hint }。酒馆解析是同步的,不需要独立 step。
+  // F5:hint = 用户对解析口味的指示(可选,identify 的 hint 通道);面板点「上传文档」会先关面板再弹文件框,
+  // hint 经 uploadHintRef 递给 onUpload(命令条直传时 ref 为空 = 无指示,旧行为)。
   const [importOpen, setImportOpen] = useState(null);
+  const uploadHintRef = useRef("");
   const tavernRef = useRef(null); // 酒馆卡文件 input(.json/.png)
   // D3 模板选择器;desks[kind].tpl 只存模板 id(hints 从常量派生,localStorage 零膨胀)。
   const [tplOpen, setTplOpen] = useState(false);
   // D4 「从我发布的故事继续」:presets 列表弹层({items}|null),选一条拆回四台 built。
   const [presetsModal, setPresetsModal] = useState(null);
+  // F2 引用体系:desks[kind].refs 可选键(挂台常驻,每轮请求都带,纸签可摘;后端上限 4 条)。
+  // 面板 tab:desk=桌上的卡(四台 built+draft) / lib=我的卡库(四 kind 可切) / prompt=提示词库。
+  const [refPanel, setRefPanel] = useState(null); // null | {tab, kk, items, loading, err}
+  const [prompts, setPrompts] = useState(loadPrompts);
+  const [promptDraft, setPromptDraft] = useState(""); // 「存为提示词」输入(提示词 tab 内)
+  const [refDragOver, setRefDragOver] = useState(false); // F4 拖拽接收态(命令条区)
+  // F7 画布重排:产出侧 240px 列退场,收编成画布顶部台账线;弹层 null|'bind'|'menu'。
+  const [ledgerPop, setLedgerPop] = useState(null);
+  // F8 画布即主界面:助手退成画布底一条命令条;完整对话历史收进抽屉(chatOpen)。
+  const [chatOpen, setChatOpen] = useState(false);
+  // F3 一键 AI 长出指示行:askOpen = 字段 k0 | null(✦/⟳ 点开,可空回车=默认指令)。
+  const [askOpen, setAskOpen] = useState(null);
+  const [askText, setAskText] = useState("");
+  const [bpNote, setBpNote] = useState(""); // 蓝图批准附言(可空)
+  const [introAsk, setIntroAsk] = useState(""); // 自动生成角色介绍的口味指示(可空)
   const fileRef = useRef(null);
   const coverRef = useRef(null);
   const chatRef = useRef(null);
@@ -253,6 +272,8 @@ export default function Create() {
   }
   const phase = deskPhase(desk);
   const COMP_THRESHOLD = 60;
+  // F8:助手最新一句(构思期长在画布上;落笔期在 dock 批注行)。
+  const lastAi = [...desk.messages].reverse().find((m) => m.who !== "你") || null;
 
   // E3 问题作答(本地态,题目换了就清;答案不进 desks——提交后化成一条用户消息即是历史)。
   const [quizAns, setQuizAns] = useState({});
@@ -261,6 +282,53 @@ export default function Create() {
     setQuizAns({});
     setQuizFree({});
   }, [desk.questions, kind]);
+  // F2/F3 局部态跟台走:切卡种清指示行/附言/面板(引用纸签本身在 desks 里,各台各留各的)。
+  useEffect(() => {
+    setAskOpen(null);
+    setAskText("");
+    setBpNote("");
+    setRefPanel(null);
+  }, [kind]);
+
+  // ── F2 引用体系:挂台纸签(desks[kind].refs 可选键,后端 refs 通道上限 4 条) ──
+  const deskRefs = Array.isArray(desk.refs) ? desk.refs : [];
+  function addRef(r) {
+    if (!r || !r.text) return;
+    const cur = Array.isArray(desks[kind].refs) ? desks[kind].refs : [];
+    if (cur.some((x) => x.label === r.label)) {
+      flash("「" + r.label + "」已经挂着了");
+      return;
+    }
+    if (cur.length >= 4) {
+      flash("最多同时引用 4 个(再挂先摘一个)");
+      return;
+    }
+    patch(kind, { refs: [...cur, r] });
+    setRefPanel(null);
+    flash("已引用「" + r.label + "」——之后每轮 AI 都会参考,随时可摘");
+  }
+  function removeRef(label) {
+    patch(kind, (d0) => ({ refs: (Array.isArray(d0.refs) ? d0.refs : []).filter((x) => x.label !== label) }));
+  }
+  function refFromCard(kk, card) {
+    const c = (card && card.data) || card || {};
+    const nm = c.name || c.title || "未命名";
+    const zh = (KINDS.find((t) => t.k === kk) || {}).zh || "卡";
+    return makeRef("card", zh + "·" + nm, cardToRefText(kk, c));
+  }
+  async function openRefPanel(tab = "desk", kk = kind) {
+    if (tab === "lib") {
+      setRefPanel({ tab, kk, items: [], loading: true });
+      try {
+        const items = await getJSON("/api/library/" + kk);
+        setRefPanel((p) => (p && p.tab === "lib" ? { ...p, kk, items: Array.isArray(items) ? items : [], loading: false } : p));
+      } catch (e) {
+        setRefPanel((p) => (p && p.tab === "lib" ? { ...p, loading: false, err: "读库失败:" + e.message } : p));
+      }
+    } else {
+      setRefPanel({ tab, kk, items: [], loading: false });
+    }
+  }
   function quizAnswerOf(qu) {
     return (quizFree[qu.id] || "").trim() || quizAns[qu.id] || "";
   }
@@ -275,16 +343,22 @@ export default function Create() {
     sendText(lines.join("\n"));
   }
   // E4 蓝图批准:切 drafting + 让 AI 按蓝图一次落笔(此后回到既有创作行为)。
+  // F3:批准可带一句附言(落笔前最后的口味要求),可空。
   function approveBlueprint() {
     const bp = desk.blueprint || [];
+    const note = (bpNote || "").trim();
+    setBpNote("");
     patch(kind, { phase: "drafting" });
     sendText(
-      "就按这份蓝图开始写卡,把已经聊清的内容一次填进字段,别再反问:\n" + bp.map((b) => "- " + b).join("\n"),
-      { phaseOverride: "drafting" }
+      "就按这份蓝图开始写卡,把已经聊清的内容一次填进字段,别再反问:\n" +
+        bp.map((b) => "- " + b).join("\n") +
+        (note ? `\n落笔时额外注意(用户附言,优先遵守):${note}` : ""),
+      { phaseOverride: "drafting", display: `批准蓝图,开始落笔${note ? ` —— ${note}` : ""}` }
     );
   }
 
-  async function sendText(rawText, { clearInput = false, phaseOverride = null } = {}) {
+  // F7:display = 会话流里给人看的短句(合成指令别把整段 prompt 亮给用户);API 载荷仍用完整 text。
+  async function sendText(rawText, { clearInput = false, phaseOverride = null, display = null } = {}) {
     const kk = kind;
     const cur = desks[kk];
     const text = (rawText || "").trim();
@@ -294,17 +368,23 @@ export default function Create() {
       role: m.who === "你" ? "user" : "assistant",
       content: m.text,
     }));
-    patch(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text }], ...(clearInput ? { input: "" } : {}) }));
+    patch(kk, (d0) => ({
+      messages: [...d0.messages, { who: "你", text, ...(display ? { show: display } : {}) }],
+      ...(clearInput ? { input: "" } : {}),
+    }));
     try {
       // D1:seed = 挂在台上的参考资料;E2:understand/blueprint 态带 phase=understand(后端只评分提问,硬不写卡)。
       // phaseOverride:批准蓝图那一发要立即按 drafting 走(setState 异步,闭包里的 desks 还是旧 phase)。
       const curPhase = phaseOverride || deskPhase(cur);
       const gated = curPhase === "understand" || curPhase === "blueprint";
+      // F2:挂台引用随每轮走(后端独立标签段);旧后端 Pydantic 忽略未知字段,优雅降级。
+      const refsPayload = (Array.isArray(cur.refs) ? cur.refs : []).map((x) => ({ label: x.label, text: x.text }));
       const r = await postJSON("/api/build_card", {
         kind: kk,
         messages: apiMsgs,
         draft: cur.draft,
         seed: cur.seed || "",
+        ...(refsPayload.length ? { refs: refsPayload } : {}),
         ...(gated ? { phase: "understand", threshold: COMP_THRESHOLD } : {}),
       });
       if (r.phase === "understand") {
@@ -344,12 +424,34 @@ export default function Create() {
   }
   // C3 字段级 AI 动作:⟳ 改写 / ✦ 补写 = 合成定向指令走同一管线。
   // 「尽量别动其他字段」是 prompt 约定不是硬锁;实际动了哪些,filled diff 全部墨晕显形。
-  function sendFieldDirective(f, mode) {
-    const text =
+  // F3(AI 触点可控):extra = 用户在指示行写的口味要求,拼进指令;空=默认写法。
+  function sendFieldDirective(f, mode, extra = "") {
+    const base =
       mode === "fill"
         ? `请直接补写「${f.k}」(${f.k0}):按已有设定写出这一块的内容并填进 ${f.k0} 字段。不要反问、不要只解释,这一轮就把内容写出来。尽量别动其他字段。`
         : `请直接把「${f.k}」(${f.k0})改写得更具体、更立体,写回 ${f.k0} 字段。不要反问,这一轮就改完。尽量别动其他字段。`;
-    return sendText(text);
+    const ex = (extra || "").trim();
+    const icon = mode === "fill" ? "✦ 补写" : "⟳ 改写";
+    return sendText(ex ? base + `\n用户对这一块的要求(优先遵守):${ex}` : base, {
+      display: `${icon}「${f.k}」${ex ? ` —— ${ex}` : ""}`,
+    });
+  }
+  // F3:点 ✦/⟳ 先展开指示行(可空回车=默认);再点同一颗收起。
+  function toggleFieldAsk(f) {
+    if (askOpen === f.k0) {
+      setAskOpen(null);
+      setAskText("");
+    } else {
+      setAskOpen(f.k0);
+      setAskText("");
+    }
+  }
+  function commitFieldAsk(f) {
+    const mode = f.empty ? "fill" : "rewrite";
+    const ex = askText;
+    setAskOpen(null);
+    setAskText("");
+    return sendFieldDirective(f, mode, ex);
   }
 
   // D2 共享:把 identify 的返回铺上画布(上传/粘贴两路共用)。identify 副作用=后端已自动收进卡库,文案如实。
@@ -409,7 +511,10 @@ export default function Create() {
     patch(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text: "(上传了《" + file.name + "》)" }] }));
     try {
       const text = await uploadFile(file);
-      const out = await postJSON(IDENTIFY_EP[kk], { text });
+      // F5:导入面板给的解析指示(hint);命令条直传时为空 = 旧行为
+      const hint = (uploadHintRef.current || "").trim();
+      uploadHintRef.current = "";
+      const out = await postJSON(IDENTIFY_EP[kk], { text, ...(hint ? { hint } : {}) });
       applyIdentified(out, kk);
       flash("已解析并收入卡库");
     } catch (e) {
@@ -428,7 +533,8 @@ export default function Create() {
     const kk = kind;
     setBusy(true);
     try {
-      const out = await postJSON(IDENTIFY_EP[kk], { text: t });
+      const hint = ((importOpen && importOpen.hint) || "").trim(); // F5 解析指示
+      const out = await postJSON(IDENTIFY_EP[kk], { text: t, ...(hint ? { hint } : {}) });
       const nm = applyIdentified(out, kk);
       setImportOpen(null);
       flash("已解析《" + nm + "》并收入卡库");
@@ -525,19 +631,26 @@ export default function Create() {
   }
 
   // 「完善角色卡」/ 详情预览里「自动生成」:调现有 build_card,按已填设定补一段角色介绍写进 description。
+  // F3:introAsk = 用户对介绍的口味指示(可空);F2:挂台引用一并带上。
   async function genIntro() {
     if (genBusy) return;
     const cur = desks[kind];
     setGenBusy(true);
     try {
+      const ex = (introAsk || "").trim();
       const apiMsgs = [
         {
           role: "user",
           content:
-            "请根据已有设定,为这个角色写一段第三人称的「角色介绍」(外貌、性格、来历、当前处境,200 字以内),写进 description 字段。",
+            "请根据已有设定,为这个角色写一段第三人称的「角色介绍」(外貌、性格、来历、当前处境,200 字以内),写进 description 字段。" +
+            (ex ? `\n用户对这段介绍的要求(优先遵守):${ex}` : ""),
         },
       ];
-      const r = await postJSON("/api/build_card", { kind, messages: apiMsgs, draft: cur.draft, seed: cur.seed || "" });
+      const refsPayload = (Array.isArray(cur.refs) ? cur.refs : []).map((x) => ({ label: x.label, text: x.text }));
+      const r = await postJSON("/api/build_card", {
+        kind, messages: apiMsgs, draft: cur.draft, seed: cur.seed || "",
+        ...(refsPayload.length ? { refs: refsPayload } : {}),
+      });
       if (r.draft) {
         patch(kind, (d0) => ({ draft: { ...r.draft, ...pickPics(d0.draft) }, filled: r.filled || Object.keys(r.draft) }));
       } else if (r.reply) {
@@ -1021,7 +1134,7 @@ export default function Create() {
             {desk.messages.map((m, i) => (
               <div key={i} className={"create-msg" + (m.who === "你" ? " is-me" : "")}>
                 <span className="create-msg-who t-meta">{m.who === "你" ? "你" : "助手"}</span>
-                <p className="create-msg-text t-ui">{m.text}</p>
+                <p className="create-msg-text t-ui">{m.show || m.text}</p>
               </div>
             ))}
             {/* E6:问题圈选与蓝图进手机对话流(复用桌面组件类,样式已通用) */}
@@ -1057,6 +1170,14 @@ export default function Create() {
                 {desk.blueprint.map((b, i) => (
                   <div className="create-bp-item t-ui" key={i}>—— {b}</div>
                 ))}
+                <input
+                  className="create-ask-line t-ui-sm"
+                  value={bpNote}
+                  disabled={busy}
+                  placeholder="落笔前补一句要求(可空)"
+                  onChange={(e) => setBpNote(e.target.value)}
+                  aria-label="落笔附言"
+                />
                 <div className="create-bp-foot">
                   <Button variant="primary" onClick={approveBlueprint}>批准,开始写</Button>
                   <button className="create-blank-link" onClick={() => patch(kind, { phase: "understand" })}>再聊聊</button>
@@ -1086,9 +1207,25 @@ export default function Create() {
                 <button onClick={() => { setMoreOpen(false); openSeed(); }}>
                   {desk.seed ? `参考资料 · ${seedLenLabel(desk.seed)}(查看 / 清除)` : "挂参考资料"}
                 </button>
+                {/* F6 手机最小入口:引用面板(弹窗与桌面共用);纸签行在 composer 上方 */}
+                <button onClick={() => { setMoreOpen(false); openRefPanel("desk"); }}>
+                  {deskRefs.length ? `引用卡 / 提示词 · 已挂 ${deskRefs.length}` : "引用卡 / 提示词"}
+                </button>
                 <button className="ct-more-pub" onClick={openPreview} disabled={!hasChars}>预览并发布到探索 · 公开</button>
                 {/* 禁用原因触屏可见(桌面版的 title 手机看不到,同 YOR-173 范式) */}
                 {!hasChars && <span className="ct-more-note t-meta">至少要一张角色卡——先聊一张,或从卡库补一张</span>}
+              </div>
+            )}
+            {/* F6:挂台纸签在手机也常显可摘(同一套类名,CSS 通用) */}
+            {deskRefs.length > 0 && (
+              <div className="create-refs" aria-label="挂在台上的引用">
+                {deskRefs.map((r) => (
+                  <span className="create-ref-chip t-ui-sm" key={r.label}>
+                    <span className="create-ref-t">{r.type === "prompt" ? "词" : "卡"}</span>
+                    {r.label}
+                    <button className="create-ref-x" onClick={() => removeRef(r.label)} aria-label={"摘下" + r.label}>×</button>
+                  </span>
+                ))}
               </div>
             )}
             <div className="ct-composer">
@@ -1097,7 +1234,17 @@ export default function Create() {
                 value={desk.input}
                 disabled={busy}
                 placeholder={KINDS[ki].ph}
-                onChange={(e) => patch(kind, { input: e.target.value })}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  const old = desk.input || "";
+                  // F6:手机输入 @ 同样唤起引用面板(与桌面同规则)
+                  if (v.length === old.length + 1 && v.endsWith("@") && (v.length === 1 || /\s/.test(v[v.length - 2]))) {
+                    patch(kind, { input: v.slice(0, -1) });
+                    openRefPanel("desk");
+                    return;
+                  }
+                  patch(kind, { input: v });
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
                     e.preventDefault();
@@ -1160,153 +1307,93 @@ export default function Create() {
               右 artifact 区 = 原 stage(卡画布+产出侧)。key=kind:切卡种整段重挂当转场。
               叙述条/手记抽屉自此退役——会话流就是历史本身。 */}
           <div className="create-studio" key={kind}>
-            <section className="create-session" aria-label="创作对话">
-              {/* E2 完整度火候线(signature):一根从墨到鎏金渐染的细线,60 处一粒朱点=落笔线;
-                  只在构思/蓝图阶段出现——落笔后它的任务就完成了。 */}
-              {phase !== "drafting" && (
-                <div
-                  className="create-comp"
-                  role="progressbar"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={desk.comp || 0}
-                  aria-label="这张卡的完整度"
-                >
-                  <span className="create-comp-label t-meta">
-                    完整度 {desk.comp || 0}
-                    <span className="create-comp-hint">{(desk.comp || 0) >= COMP_THRESHOLD ? " · 过线,可以落笔" : ` · 过 ${COMP_THRESHOLD} 才落笔`}</span>
-                  </span>
-                  <span className="create-comp-line" aria-hidden="true">
-                    <span className="create-comp-fill" style={{ width: `${Math.min(100, desk.comp || 0)}%` }} />
-                    <span className="create-comp-mark" style={{ left: `${COMP_THRESHOLD}%` }} />
-                  </span>
-                </div>
-              )}
-              <div className="create-session-flow" ref={chatRef}>
-                {desk.messages.map((m, i) => (
-                  <div key={i} className={"create-say" + (m.who === "你" ? " is-me" : "")}>
-                    <span className="create-say-who t-kai">{m.who === "你" ? "你" : "助手"}</span>
-                    <div className="create-say-tx t-ui">{m.text}</div>
-                  </div>
-                ))}
-                {/* E3 问题作答:稿纸圈选词——虚线下划的可点词组,点选转朱砂实线;「其他」是填空线。零卡片零边框。 */}
-                {phase === "understand" && (desk.questions || []).length > 0 && !busy && (
-                  <div className="create-quiz">
-                    {desk.questions.map((qu) => (
-                      <div className="create-quiz-q" key={qu.id}>
-                        <div className="create-quiz-label t-ui">{qu.label}</div>
-                        <div className="create-quiz-opts">
-                          {(qu.options || []).map((o) => (
-                            <button
-                              key={o}
-                              className={"create-quiz-opt" + (quizAns[qu.id] === o ? " is-on" : "")}
-                              onClick={() =>
-                                setQuizAns((a) => ({ ...a, [qu.id]: a[qu.id] === o ? undefined : o }))
-                              }
-                            >
-                              {o}
-                            </button>
-                          ))}
-                          {qu.allow_free !== false && (
-                            <input
-                              className="create-quiz-free t-ui-sm"
-                              placeholder="其他,自己写……"
-                              value={quizFree[qu.id] || ""}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                setQuizFree((f) => ({ ...f, [qu.id]: v }));
-                                if (v) setQuizAns((a) => ({ ...a, [qu.id]: undefined }));
-                              }}
-                            />
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                    <div className="create-quiz-foot">
-                      <Button
-                        variant="primary"
-                        disabled={!(desk.questions || []).some((qu) => quizAnswerOf(qu))}
-                        onClick={submitQuiz}
-                      >
-                        就按这些答
-                      </Button>
-                      <span className="create-quiz-skip t-meta">没答全没关系,也可以直接在下面说</span>
-                    </div>
-                  </div>
-                )}
-                {/* E4 蓝图:破折号要点直排纸面;唯一的重元素是那颗批准钮。 */}
-                {phase === "blueprint" && (desk.blueprint || []).length > 0 && !busy && (
-                  <div className="create-bp">
-                    <div className="create-bp-h t-kai">蓝图 · 这张卡打算这么写</div>
-                    {desk.blueprint.map((b, i) => (
-                      <div className="create-bp-item t-ui" key={i}>—— {b}</div>
-                    ))}
-                    <div className="create-bp-foot">
-                      <Button variant="primary" onClick={approveBlueprint}>批准,开始写</Button>
-                      <button
-                        className="create-blank-link"
-                        onClick={() => {
-                          patch(kind, { phase: "understand" });
-                          requestAnimationFrame(() => dockInputRef.current && dockInputRef.current.focus());
-                        }}
-                      >
-                        再聊聊
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {busy && (
-                  <div className="create-say">
-                    <span className="create-say-who t-kai">助手</span>
-                    <div className="create-say-tx t-ui create-msg-typing">
-                      <span className="create-dot" aria-hidden="true" />
-                      <span className="create-dot" aria-hidden="true" />
-                      <span className="create-dot" aria-hidden="true" />
-                      正在想……
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="create-dock">
-                <div className="create-composer">
-                  <textarea
-                    ref={dockInputRef}
-                    rows={1}
-                    value={desk.input}
-                    disabled={busy}
-                    placeholder={KINDS[ki].ph}
-                    onChange={(e) => patch(kind, { input: e.target.value })}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
-                        e.preventDefault();
-                        send();
-                      }
-                    }}
-                  />
-                  <div className="create-composer-actions">
-                    <button className="create-upload" onClick={() => fileRef.current && fileRef.current.click()} disabled={busy}>
-                      上传文档
-                    </button>
-                    <input ref={fileRef} type="file" accept=".txt,.md,.docx" hidden onChange={onUpload} />
-                    <button
-                      className={"create-seed-btn" + (desk.seed ? " has-seed" : "")}
-                      onClick={openSeed}
-                      disabled={busy}
-                      title={desk.seed ? "查看 / 修改 / 清除参考资料(AI 每轮都在参考它)" : "挂一份已有设定 / 旧卡文本,AI 之后每轮都基于它来完善"}
-                    >
-                      {desk.seed ? `参考 · ${seedLenLabel(desk.seed)}` : "挂资料"}
-                    </button>
-                    <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim()}>
-                      发送
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </section>
+            {/* F8:双栏退场——画布即主界面;会话流收进抽屉,构思组件长在画布纸面上,dock 挪画布底。 */}
 
             <div className="create-stage">
             {/* 卡画布:正在长的这张卡铺在中央 */}
             <div className="create-canvas-col">
+              {/* F7 台账线:一行小字管本台架+装订+收纳/发布(原 240px 产出列收编;少框,hairline 一条) */}
+              <div className="create-ledger">
+                <div className="create-ledger-info t-meta">
+                  <span>本台已建 {desk.built.length}</span>
+                  {desk.built.slice(0, 3).map((card, i) => {
+                    const c = (card && card.data) || card || {};
+                    const nm = c.name || c.title || "未命名";
+                    return (
+                      <button
+                        key={nm + i}
+                        className="create-ledger-chip"
+                        draggable
+                        title="点开查看;拖到左下命令条=挂为引用"
+                        onDragStart={(e) => e.dataTransfer.setData("application/x-ais-ref", JSON.stringify({ kk: kind, card }))}
+                        onClick={() => setBuiltView(true)}
+                      >
+                        {nm}
+                      </button>
+                    );
+                  })}
+                  {desk.built.length > 3 && (
+                    <button className="create-ledger-chip" onClick={() => setBuiltView(true)}>+{desk.built.length - 3}</button>
+                  )}
+                  <span className="create-ledger-sep" aria-hidden="true">·</span>
+                  {(() => {
+                    const mf = publishManifest();
+                    const total = mf.chars.length + mf.worlds + mf.players.length + (mf.story ? 1 : 0);
+                    return (
+                      <button
+                        className={"create-ledger-link" + (ledgerPop === "bind" ? " is-on" : "")}
+                        onClick={() => setLedgerPop((p) => (p === "bind" ? null : "bind"))}
+                      >
+                        装订 {total} 卡{mf.anySecret ? " ⚠" : ""}
+                      </button>
+                    );
+                  })()}
+                </div>
+                <div className="create-ledger-acts">
+                  <Button variant="line" onClick={nextCard} disabled={!hasDraft} title={hasDraft ? "把当前草稿收进台子,再建下一张" : "先聊出一张卡"}>收进本台</Button>
+                  <Button variant="line" onClick={saveCard} disabled={!hasDraft || savingCard} title={hasDraft ? "存进你的卡库(私密)" : "先聊出一张卡"}>{savingCard ? "收入中…" : "收入卡库"}</Button>
+                  <Button variant="primary" onClick={openPreview} disabled={!hasChars} title={hasChars ? "预览并发布到探索(公开)" : "至少要一张角色卡"}>发布 · 公开</Button>
+                  <button
+                    className={"create-ledger-more" + (ledgerPop === "menu" ? " is-on" : "")}
+                    onClick={() => setLedgerPop((p) => (p === "menu" ? null : "menu"))}
+                    aria-label="更多动作"
+                  >
+                    ⋯
+                  </button>
+                </div>
+                {ledgerPop && <div className="create-ledger-shade" onClick={() => setLedgerPop(null)} />}
+                {ledgerPop === "bind" && (() => {
+                  const mf = publishManifest();
+                  return (
+                    <div className="create-ledger-pop" role="dialog" aria-label="装订清单">
+                      <div className="create-bind-h t-meta">装订 · 发布时打包(看到的=会发的)</div>
+                      <ul className="create-bind-list t-meta">
+                        <li>
+                          角色卡 ×{mf.chars.length}
+                          {mf.chars.length > 0 && ":" + mf.chars.map((c) => c.name + (c.secret ? " ⚠" : "")).join("、")}
+                        </li>
+                        {mf.worlds > 0 && <li>设定卡 · 世界书 ×{mf.worlds}</li>}
+                        {mf.players.length > 0 && <li>演出卡 ×{mf.players.length}:{mf.players.join("、")}</li>}
+                        {mf.story && (
+                          <li>
+                            故事书:{mf.story}
+                            {mf.storyExtra > 0 && `(另 ${mf.storyExtra} 张不发)`}
+                          </li>
+                        )}
+                        {!mf.chars.length && <li className="create-bind-empty">还没有角色卡——发布至少要一张</li>}
+                      </ul>
+                      {mf.anySecret && <div className="create-bind-warn t-meta">⚠ 带「隐藏真相」的卡会随发布公开,发布前核对</div>}
+                    </div>
+                  );
+                })()}
+                {ledgerPop === "menu" && (
+                  <div className="create-ledger-pop create-ledger-menu" role="menu">
+                    <button onClick={() => { setLedgerPop(null); openLib(); }}>从卡库补素材</button>
+                    <button disabled={!hasDraft} onClick={() => { setLedgerPop(null); exportCard(desk.draft); }}>导出草稿 JSON</button>
+                    <button onClick={() => { setLedgerPop(null); openPresets(); }}>↺ 从我发布的故事继续改</button>
+                  </div>
+                )}
+              </div>
               <section className="create-canvas" aria-label="卡画布">
                 <div className="create-card-kind t-meta">{KINDS[ki].zh}{desk.built.length > 0 && ` · 本台已建 ${desk.built.length}`}</div>
                 {editingKey === "__name" ? (
@@ -1375,11 +1462,11 @@ export default function Create() {
                             {f.editable ? (
                               <>
                                 <button
-                                  className="create-field-act"
+                                  className={"create-field-act" + (askOpen === f.k0 ? " is-on" : "")}
                                   disabled={busy}
-                                  title={f.empty ? "让 AI 补写这一块" : "让 AI 把这一块改写得更立体"}
+                                  title={f.empty ? "让 AI 补写这一块(可先写一句要求)" : "让 AI 把这一块改写得更立体(可先写一句要求)"}
                                   aria-label={(f.empty ? "补写" : "改写") + f.k}
-                                  onClick={() => sendFieldDirective(f, f.empty ? "fill" : "rewrite")}
+                                  onClick={() => toggleFieldAsk(f)}
                                 >
                                   {f.empty ? "✦" : "⟳"}
                                 </button>
@@ -1394,13 +1481,149 @@ export default function Create() {
                             )}
                           </span>
                         )}
+                        {/* F3 指示行:✦/⟳ 点开——写一句要求或直接回车用默认写法(AI 触点皆可控) */}
+                        {askOpen === f.k0 && (
+                          <input
+                            className="create-ask-line t-ui-sm"
+                            autoFocus
+                            value={askText}
+                            disabled={busy}
+                            placeholder={(f.empty ? "想怎么补?" : "想怎么改?") + "可留空直接回车"}
+                            onChange={(e) => setAskText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !(e.nativeEvent || e).isComposing) {
+                                e.preventDefault();
+                                commitFieldAsk(f);
+                              } else if (e.key === "Escape") {
+                                setAskOpen(null);
+                                setAskText("");
+                              }
+                            }}
+                            aria-label={"对" + f.k + "的要求"}
+                          />
+                        )}
                       </div>
                     ))
+                  ) : phase !== "drafting" &&
+                    (desk.messages.length > 1 || (desk.questions || []).length > 0 || (desk.blueprint || []).length > 0) ? (
+                    /* F8 构思纸面:聊开(或已有构思产物)之后,火候线/助手追问/圈选词/蓝图直接长在画布上 */
+                    <div className="create-muse">
+                      <div
+                        className="create-comp"
+                        role="progressbar"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={desk.comp || 0}
+                        aria-label="这张卡的完整度"
+                      >
+                        <span className="create-comp-label t-meta">
+                          完整度 {desk.comp || 0}
+                          <span className="create-comp-hint">{(desk.comp || 0) >= COMP_THRESHOLD ? " · 过线,可以落笔" : ` · 过 ${COMP_THRESHOLD} 才落笔`}</span>
+                        </span>
+                        <span className="create-comp-line" aria-hidden="true">
+                          <span className="create-comp-fill" style={{ width: `${Math.min(100, desk.comp || 0)}%` }} />
+                          <span className="create-comp-mark" style={{ left: `${COMP_THRESHOLD}%` }} />
+                        </span>
+                      </div>
+                      <div className="create-muse-say">
+                        <span className="create-say-who t-kai">助手</span>
+                        {busy ? (
+                          <div className="create-muse-tx t-ui create-msg-typing">
+                            <span className="create-dot" aria-hidden="true" />
+                            <span className="create-dot" aria-hidden="true" />
+                            <span className="create-dot" aria-hidden="true" />
+                            正在想……
+                          </div>
+                        ) : (
+                          <div className="create-muse-tx t-ui">{lastAi ? lastAi.show || lastAi.text : ""}</div>
+                        )}
+                      </div>
+                      {/* E3 圈选词(F8 迁进画布):虚线下划可点词组,点选转朱砂实线;「其他」=填空线 */}
+                      {phase === "understand" && (desk.questions || []).length > 0 && !busy && (
+                        <div className="create-quiz">
+                          {desk.questions.map((qu) => (
+                            <div className="create-quiz-q" key={qu.id}>
+                              <div className="create-quiz-label t-ui">{qu.label}</div>
+                              <div className="create-quiz-opts">
+                                {(qu.options || []).map((o) => (
+                                  <button
+                                    key={o}
+                                    className={"create-quiz-opt" + (quizAns[qu.id] === o ? " is-on" : "")}
+                                    onClick={() =>
+                                      setQuizAns((a) => ({ ...a, [qu.id]: a[qu.id] === o ? undefined : o }))
+                                    }
+                                  >
+                                    {o}
+                                  </button>
+                                ))}
+                                {qu.allow_free !== false && (
+                                  <input
+                                    className="create-quiz-free t-ui-sm"
+                                    placeholder="其他,自己写……"
+                                    value={quizFree[qu.id] || ""}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      setQuizFree((f) => ({ ...f, [qu.id]: v }));
+                                      if (v) setQuizAns((a) => ({ ...a, [qu.id]: undefined }));
+                                    }}
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                          <div className="create-quiz-foot">
+                            <Button
+                              variant="primary"
+                              disabled={!(desk.questions || []).some((qu) => quizAnswerOf(qu))}
+                              onClick={submitQuiz}
+                            >
+                              就按这些答
+                            </Button>
+                            <span className="create-quiz-skip t-meta">没答全没关系,也可以直接在下面说</span>
+                          </div>
+                        </div>
+                      )}
+                      {/* E4 蓝图(F8 迁进画布):破折号要点直排纸面;唯一的重元素是那颗批准钮 */}
+                      {phase === "blueprint" && (desk.blueprint || []).length > 0 && !busy && (
+                        <div className="create-bp">
+                          <div className="create-bp-h t-kai">蓝图 · 这张卡打算这么写</div>
+                          {desk.blueprint.map((b, i) => (
+                            <div className="create-bp-item t-ui" key={i}>—— {b}</div>
+                          ))}
+                          <input
+                            className="create-ask-line t-ui-sm"
+                            value={bpNote}
+                            disabled={busy}
+                            placeholder="落笔前补一句要求(可空)——比如:对话多一点,别太文绉绉"
+                            onChange={(e) => setBpNote(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !(e.nativeEvent || e).isComposing && !busy) {
+                                e.preventDefault();
+                                approveBlueprint();
+                              }
+                            }}
+                            aria-label="落笔附言"
+                          />
+                          <div className="create-bp-foot">
+                            <Button variant="primary" onClick={approveBlueprint}>批准,开始写</Button>
+                            <button
+                              className="create-blank-link"
+                              onClick={() => {
+                                patch(kind, { phase: "understand" });
+                                requestAnimationFrame(() => dockInputRef.current && dockInputRef.current.focus());
+                              }}
+                            >
+                              再聊聊
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div className="create-card-blank">
                       <span className="create-card-blank-seal t-kai" aria-hidden="true">卡</span>
                       <span className="create-card-blank-tx t-meta">
-                        {phase !== "drafting" ? "构思中——左边聊清楚要什么,完整度过线、蓝图点头,再落笔。" : OPENINGS[kind]}
+                        {phase !== "drafting" ? "构思中——在下面说说你想要什么,完整度过线、蓝图点头,再落笔。" : OPENINGS[kind]}
                       </span>
                       {/* 空台引子:起手句进画布空卡里(点了只进输入框,不代发) */}
                       {desk.messages.length <= 1 && !busy && (
@@ -1438,96 +1661,139 @@ export default function Create() {
                   )}
                 </div>
               </section>
+              {/* F8 助手小部件:画布底一条命令条——落笔期批注行(最新一句,点开抽屉)+输入+动作 */}
+              <div
+                className={"create-dock" + (refDragOver ? " is-dropping" : "")}
+                onDragOver={(e) => {
+                  if ([...e.dataTransfer.types].includes("application/x-ais-ref")) {
+                    e.preventDefault();
+                    setRefDragOver(true);
+                  }
+                }}
+                onDragLeave={() => setRefDragOver(false)}
+                onDrop={(e) => {
+                  setRefDragOver(false);
+                  const raw = e.dataTransfer.getData("application/x-ais-ref");
+                  if (!raw) return;
+                  e.preventDefault();
+                  try {
+                    const p = JSON.parse(raw);
+                    addRef(refFromCard(p.kk, p.card));
+                  } catch {
+                    flash("这张卡拖不进来(数据读不出)");
+                  }
+                }}
+              >
+                {phase === "drafting" && (busy || lastAi) && (
+                  <button className="create-dock-note" onClick={() => setChatOpen(true)} title="展开完整对话">
+                    <span className="create-say-who t-kai">助手</span>
+                    <span className={"create-dock-note-tx t-ui-sm" + (busy ? " create-msg-typing" : "")}>
+                      {busy ? "正在想……" : (lastAi.show || lastAi.text)}
+                    </span>
+                  </button>
+                )}
+                {(deskRefs.length > 0 || refDragOver) && (
+                  <div className="create-refs" aria-label="挂在台上的引用">
+                    {deskRefs.map((r) => (
+                      <span className="create-ref-chip t-ui-sm" key={r.label} title={"AI 每轮都会参考「" + r.label + "」"}>
+                        <span className="create-ref-t">{r.type === "prompt" ? "词" : "卡"}</span>
+                        {r.label}
+                        <button className="create-ref-x" onClick={() => removeRef(r.label)} aria-label={"摘下" + r.label}>×</button>
+                      </span>
+                    ))}
+                    {refDragOver && <span className="create-ref-hint t-meta">松手,挂为引用</span>}
+                  </div>
+                )}
+                <div className="create-composer">
+                  <textarea
+                    ref={dockInputRef}
+                    rows={1}
+                    value={desk.input}
+                    disabled={busy}
+                    placeholder={KINDS[ki].ph}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      const old = desk.input || "";
+                      if (v.length === old.length + 1 && v.endsWith("@") && (v.length === 1 || /\s/.test(v[v.length - 2]))) {
+                        patch(kind, { input: v.slice(0, -1) });
+                        openRefPanel("desk");
+                        return;
+                      }
+                      patch(kind, { input: v });
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
+                        e.preventDefault();
+                        send();
+                      }
+                    }}
+                  />
+                  <div className="create-composer-actions">
+                    <button className="create-chat-btn" onClick={() => setChatOpen(true)} title="展开完整对话手记">
+                      对话 · {desk.messages.length}
+                    </button>
+                    <button className="create-upload" onClick={() => fileRef.current && fileRef.current.click()} disabled={busy}>
+                      上传文档
+                    </button>
+                    <input ref={fileRef} type="file" accept=".txt,.md,.docx" hidden onChange={onUpload} />
+                    <button
+                      className={"create-seed-btn" + (desk.seed ? " has-seed" : "")}
+                      onClick={openSeed}
+                      disabled={busy}
+                      title={desk.seed ? "查看 / 修改 / 清除参考资料(AI 每轮都在参考它)" : "挂一份已有设定 / 旧卡文本,AI 之后每轮都基于它来完善"}
+                    >
+                      {desk.seed ? `参考 · ${seedLenLabel(desk.seed)}` : "挂资料"}
+                    </button>
+                    <button
+                      className={"create-seed-btn" + (deskRefs.length ? " has-seed" : "")}
+                      onClick={() => (refPanel ? setRefPanel(null) : openRefPanel("desk"))}
+                      disabled={busy}
+                      title="引用已有的卡或提示词,AI 每轮都会参考(输入框里敲 @ 也能唤起;桌面还可以直接把卡拖进来)"
+                    >
+                      {deskRefs.length ? `@ 引用 · ${deskRefs.length}` : "@ 引用"}
+                    </button>
+                    <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim()}>
+                      发送
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* 产出侧:本台架(看得见的成品)→ 收纳动作 → 装订区(发布清单常显) */}
-            <aside className="create-side">
-              <div className="create-shelf">
-                <div className="create-shelf-h t-meta">本台已建 · {desk.built.length}</div>
-                {desk.built.length ? (
-                  <div className="create-shelf-list">
-                    {desk.built.map((card, i) => {
-                      const c = (card && card.data) || card || {};
-                      const nm = c.name || c.title || "未命名";
-                      const entries = worldEntries(card);
-                      const firstField = cardFields(card)[0];
-                      return (
-                        <DepthCard key={nm + i} className="create-shelf-tilt" maxRotation={5}>
-                          <div className="create-shelf-card">
-                            <span className="create-shelf-name t-kai">{nm}</span>
-                            <span className="create-shelf-sub t-meta">
-                              {entries ? `${entries.length} 条条目` : firstField ? firstField.v.slice(0, 22) : "已收进本台"}
-                            </span>
-                            <span className="create-shelf-acts">
-                              <button className="create-shelf-act" onClick={() => setBuiltView(true)}>查看</button>
-                              <button className="create-shelf-act" onClick={() => removeBuilt(i)}>移除</button>
-                            </span>
-                          </div>
-                        </DepthCard>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="create-shelf-empty t-meta">还空着——聊出一张,点「收进本台」。</div>
-                )}
-              </div>
-
-              <div className="create-actions">
-                <Button variant="line" onClick={saveCard} disabled={!hasDraft || savingCard} title={hasDraft ? undefined : "先聊出一张卡再收入卡库"}>
-                  {savingCard ? "收入中…" : "收入卡库 · 私密"}
-                </Button>
-                <Button variant="line" onClick={nextCard} disabled={!hasDraft} title={hasDraft ? undefined : "先聊出一张卡再收进本台"}>
-                  收进本台 · 再建一张
-                </Button>
-                <Button variant="line" onClick={openLib}>从卡库补素材</Button>
-                <Button variant="line" onClick={() => exportCard(desk.draft)} disabled={!hasDraft} title={hasDraft ? "下载当前草稿为 JSON(角色卡=chara_card_v2,可再导入)" : "先聊出一张卡再导出"}>
-                  导出草稿 JSON
-                </Button>
-                <div className="create-actions-sep" aria-hidden="true" />
-                <Button
-                  variant="primary"
-                  full
-                  disabled={!hasChars}
-                  title={hasChars ? undefined : "至少要一张角色卡才能预览并发布"}
-                  onClick={openPreview}
-                >
-                  预览并发布到探索 · 公开
-                </Button>
-              </div>
-
-              {/* 装订区:本次发布会打包什么,常显(与 publish 同源 deskCards,「看到的=会发的」YOR-192) */}
-              {(() => {
-                const mf = publishManifest();
-                return (
-                  <div className="create-bind">
-                    <div className="create-bind-h t-meta">装订 · 发布时打包</div>
-                    <ul className="create-bind-list t-meta">
-                      <li>
-                        角色卡 ×{mf.chars.length}
-                        {mf.chars.length > 0 && ":" + mf.chars.map((c) => c.name + (c.secret ? " ⚠" : "")).join("、")}
-                      </li>
-                      {mf.worlds > 0 && <li>设定卡 · 世界书 ×{mf.worlds}</li>}
-                      {mf.players.length > 0 && <li>演出卡 ×{mf.players.length}:{mf.players.join("、")}</li>}
-                      {mf.story && (
-                        <li>
-                          故事书:{mf.story}
-                          {mf.storyExtra > 0 && `(另 ${mf.storyExtra} 张不发)`}
-                        </li>
-                      )}
-                      {!mf.chars.length && <li className="create-bind-empty">还没有角色卡——发布至少要一张</li>}
-                    </ul>
-                    {mf.anySecret && (
-                      <div className="create-bind-warn t-meta">⚠ 带「隐藏真相」的卡会随发布公开,发布前核对</div>
-                    )}
-                    {/* D4 故事级改编:把发布过的故事整组拆回四台继续编(追加进 built,不动原预设) */}
-                    <button className="create-bind-resume" onClick={openPresets}>
-                      ↺ 从我发布的故事继续改
-                    </button>
-                  </div>
-                );
-              })()}
-            </aside>
+            {/* F7:产出侧 240px 列退场——本台架/收纳/装订全部收编进画布顶部台账线,画布拿回整幅宽 */}
           </div>
+
+          {/* F8 对话手记抽屉:完整历史按需展开(稿纸对谈体原样) */}
+          {chatOpen && (
+            <>
+              <div className="create-drawer-shade" onClick={() => setChatOpen(false)} />
+              <aside className="create-drawer" role="dialog" aria-label="对话手记">
+                <div className="create-drawer-h">
+                  <span className="t-kai">对话手记 · {KINDS[ki].zh}</span>
+                  <button className="create-modal-x" onClick={() => setChatOpen(false)} aria-label="收起">×</button>
+                </div>
+                <div className="create-drawer-flow" ref={chatRef}>
+                  {desk.messages.map((m, i) => (
+                    <div key={i} className={"create-say" + (m.who === "你" ? " is-me" : "")}>
+                      <span className="create-say-who t-kai">{m.who === "你" ? "你" : "助手"}</span>
+                      <div className="create-say-tx t-ui">{m.show || m.text}</div>
+                    </div>
+                  ))}
+                  {busy && (
+                    <div className="create-say">
+                      <span className="create-say-who t-kai">助手</span>
+                      <div className="create-say-tx t-ui create-msg-typing">
+                        <span className="create-dot" aria-hidden="true" />
+                        <span className="create-dot" aria-hidden="true" />
+                        <span className="create-dot" aria-hidden="true" />
+                        正在想……
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </aside>
+            </>
+          )}
 
           </div>
 
@@ -1592,6 +1858,128 @@ export default function Create() {
       )}
 
       {/* D4 故事拆回:选一条已发布预设,四类卡追加回各台 built(官方故事也可拆——拆的是副本,发布生成新预设)。 */}
+      {/* F2 引用面板:桌上的卡 / 我的卡库 / 提示词——选一个挂为引用(@ 或按钮唤起) */}
+      {refPanel && (
+        <div className="create-modal" onClick={() => setRefPanel(null)}>
+          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="引用" onClick={(e) => e.stopPropagation()}>
+            <button className="create-modal-x" onClick={() => setRefPanel(null)} aria-label="关闭">×</button>
+            <h2 className="t-h2">引用 · AI 每轮都会参考</h2>
+            <div className="create-ref-tabs">
+              {[["desk", "桌上的卡"], ["lib", "我的卡库"], ["prompt", "提示词"]].map(([t, zh]) => (
+                <button
+                  key={t}
+                  className={"create-ref-tab t-ui-sm" + (refPanel.tab === t ? " is-on" : "")}
+                  onClick={() => openRefPanel(t, refPanel.kk || kind)}
+                >
+                  {zh}
+                </button>
+              ))}
+            </div>
+            {refPanel.tab === "desk" && (
+              <div className="create-ref-list">
+                {KINDS.flatMap((t) => deskCards(t.k).map((c, i) => ({ kk: t.k, zh: t.zh, c, i }))).map(({ kk, zh, c, i }) => {
+                  const nm = c.name || c.title || "未命名";
+                  return (
+                    <button className="create-ref-row" key={kk + i + nm} onClick={() => addRef(refFromCard(kk, c))}>
+                      <span className="create-ref-row-t t-ui">{nm}</span>
+                      <span className="create-ref-row-d t-meta">{zh}</span>
+                    </button>
+                  );
+                })}
+                {!KINDS.some((t) => deskCards(t.k).length) && (
+                  <div className="create-shelf-empty t-meta">四个台子都还空着——先聊出点东西,或去「我的卡库」引用。</div>
+                )}
+              </div>
+            )}
+            {refPanel.tab === "lib" && (
+              <>
+                <div className="create-ref-tabs create-ref-kinds">
+                  {KINDS.map((t) => (
+                    <button
+                      key={t.k}
+                      className={"create-ref-tab t-ui-sm" + ((refPanel.kk || kind) === t.k ? " is-on" : "")}
+                      onClick={() => openRefPanel("lib", t.k)}
+                    >
+                      {t.zh}
+                    </button>
+                  ))}
+                </div>
+                <div className="create-ref-list">
+                  {refPanel.loading ? (
+                    <div className="create-shelf-empty t-meta">翻库中……</div>
+                  ) : refPanel.err ? (
+                    <div className="create-import-err t-meta">{refPanel.err}</div>
+                  ) : refPanel.items.length ? (
+                    refPanel.items.map((it, i) => (
+                      <button
+                        className="create-ref-row"
+                        key={(it.name || i) + i}
+                        draggable
+                        onDragStart={(e) => {
+                          const raw = it && it.data ? it.data : it;
+                          e.dataTransfer.setData("application/x-ais-ref", JSON.stringify({ kk: refPanel.kk || kind, card: raw }));
+                        }}
+                        onClick={() => {
+                          const raw = it && it.data ? it.data : it;
+                          addRef(refFromCard(refPanel.kk || kind, raw));
+                        }}
+                      >
+                        <span className="create-ref-row-t t-ui">{libName(it)}</span>
+                        <span className="create-ref-row-d t-meta">{(libDesc(it) || "").slice(0, 40)}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="create-shelf-empty t-meta">这一类还没有入库的卡。</div>
+                  )}
+                </div>
+              </>
+            )}
+            {refPanel.tab === "prompt" && (
+              <div className="create-ref-list">
+                <div className="create-prompt-add">
+                  <input
+                    className="create-ask-line t-ui-sm"
+                    value={promptDraft}
+                    placeholder="写一条常用提示词存起来——比如:文风偏冷,句子短,不用成语"
+                    onChange={(e) => setPromptDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !(e.nativeEvent || e).isComposing && promptDraft.trim()) {
+                        e.preventDefault();
+                        setPrompts(addPrompt("", promptDraft));
+                        setPromptDraft("");
+                      }
+                    }}
+                  />
+                  <button
+                    className="create-blank-link"
+                    disabled={!promptDraft.trim()}
+                    onClick={() => {
+                      setPrompts(addPrompt("", promptDraft));
+                      setPromptDraft("");
+                    }}
+                  >
+                    存入
+                  </button>
+                </div>
+                {prompts.length ? (
+                  prompts.map((p) => (
+                    <div className="create-ref-row create-prompt-row" key={p.id}>
+                      <button className="create-prompt-use" onClick={() => addRef(makeRef("prompt", "提示词·" + p.name, p.text))}>
+                        <span className="create-ref-row-t t-ui">{p.name}</span>
+                        <span className="create-ref-row-d t-meta">{p.text.slice(0, 46)}</span>
+                      </button>
+                      <button className="create-ref-x" onClick={() => setPrompts(removePrompt(p.id))} aria-label={"删除提示词" + p.name}>×</button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="create-shelf-empty t-meta">还没存过提示词——上面写一条,以后任何台子都能引用。</div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {presetsModal && (
         <div className="create-modal" onClick={() => setPresetsModal(null)}>
           <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="从故事继续" onClick={(e) => e.stopPropagation()}>
@@ -1664,12 +2052,19 @@ export default function Create() {
             {importOpen.step === "pick" ? (
               <>
                 <p className="create-seed-note t-meta">把已有的内容直接变成一张卡,不用从零聊。</p>
+                {/* F5:解析指示(可选)——AI 解析的两条路(粘贴/上传)都会带上;酒馆卡是本地解析,吃不到 */}
+                <input
+                  className="create-ask-line t-ui-sm"
+                  value={importOpen.hint || ""}
+                  onChange={(e) => setImportOpen((m) => ({ ...m, hint: e.target.value }))}
+                  placeholder="解析要求(可空)——比如:重点抽性格和说话风格,标签用中文"
+                />
                 <div className="create-import-picks">
-                  <button className="create-import-pick" onClick={() => setImportOpen({ step: "paste", text: "", err: "" })}>
+                  <button className="create-import-pick" onClick={() => setImportOpen((m) => ({ step: "paste", text: "", err: "", hint: (m && m.hint) || "" }))}>
                     <span className="create-import-pick-t t-ui">粘贴文本</span>
                     <span className="create-import-pick-d t-meta">散文设定 / 旧卡文字,AI 解析成卡(会同时收进你的卡库 · 私密)</span>
                   </button>
-                  <button className="create-import-pick" onClick={() => { setImportOpen(null); fileRef.current && fileRef.current.click(); }}>
+                  <button className="create-import-pick" onClick={() => { uploadHintRef.current = (importOpen && importOpen.hint) || ""; setImportOpen(null); fileRef.current && fileRef.current.click(); }}>
                     <span className="create-import-pick-t t-ui">上传文档</span>
                     <span className="create-import-pick-d t-meta">.txt / .md / .docx,抽出文字后同上(≤2MB)</span>
                   </button>
@@ -1696,10 +2091,16 @@ export default function Create() {
                   onChange={(e) => setImportOpen((m) => ({ ...m, text: e.target.value, err: "" }))}
                   placeholder="把设定粘进来……"
                 />
+                <input
+                  className="create-ask-line t-ui-sm"
+                  value={importOpen.hint || ""}
+                  onChange={(e) => setImportOpen((m) => ({ ...m, hint: e.target.value }))}
+                  placeholder="解析要求(可空)——比如:重点抽性格和说话风格,标签用中文"
+                />
                 <div className="create-seed-count t-meta">{importOpen.text.length} 字</div>
                 {importOpen.err && <div className="create-import-err t-meta">{importOpen.err}</div>}
                 <div className="create-seed-actions">
-                  <Button variant="line" onClick={() => setImportOpen({ step: "pick", text: "", err: "" })}>返回</Button>
+                  <Button variant="line" onClick={() => setImportOpen((m) => ({ step: "pick", text: "", err: "", hint: (m && m.hint) || "" }))}>返回</Button>
                   <Button variant="primary" onClick={importPaste} disabled={busy || !importOpen.text.trim()}>
                     {busy ? "解析中…" : "解析成卡"}
                   </Button>
@@ -1818,47 +2219,68 @@ export default function Create() {
       {/* 完善角色卡:立绘大图在上 + 头像圆居中名字在下 + 角色介绍可编辑,确认后 收进本台 / 收入卡库 */}
       {finalize && (
         <div className="create-modal" onClick={() => setFinalize(null)}>
-          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="完善角色卡" onClick={(e) => e.stopPropagation()}>
+          <div className="create-modal-card ct-finalize-card" role="dialog" aria-modal="true" aria-label="完善角色卡" onClick={(e) => e.stopPropagation()}>
             <button className="create-modal-x" onClick={() => setFinalize(null)} aria-label="关闭">×</button>
             <h2 className="t-h2">完善角色卡</h2>
-            {/* 立绘大图在上(主视觉,单独放大) */}
-            <div className="ct-finalize-portrait">
-              <ImageCropField
-                label="立绘(主图)"
-                hint="详情页 / 看板 / 纯聊右侧"
-                value={desk.draft.image || ""}
-                aspect={2 / 3}
-                output={{ maxW: 768, maxH: 1152, quality: 0.82 }}
-                onChange={(url) => setDraftPic("image", url)}
-              />
+            {/* F7b 左右结构(桌面):左=立绘主图;右=头像+名字一行 + 角色介绍。手机保持纵排。 */}
+            <div className="ct-finalize-cols">
+              <div className="ct-finalize-figure">
+                <div className="ct-finalize-portrait">
+                  <ImageCropField
+                    label="立绘(主图)"
+                    hint="详情页 / 看板 / 纯聊右侧"
+                    value={desk.draft.image || ""}
+                    aspect={2 / 3}
+                    output={{ maxW: 768, maxH: 1152, quality: 0.82 }}
+                    onChange={(url) => setDraftPic("image", url)}
+                  />
+                </div>
+              </div>
+              <div className="ct-finalize-body">
+                {/* 头像与名字同一行(桌面);手机沿用纵排居中 */}
+                <div className="ct-finalize-avatar">
+                  <ImageCropField
+                    label="头像"
+                    hint="纯聊圆头像"
+                    value={desk.draft.avatar || ""}
+                    aspect={1}
+                    round
+                    output={{ maxW: 256, maxH: 256, quality: 0.85 }}
+                    onChange={(url) => setDraftPic("avatar", url)}
+                  />
+                  <div className="ct-finalize-name t-kai">{draftName}</div>
+                </div>
+                <div className="create-preview-introhead">
+                  <span className="t-h3">角色介绍</span>
+                  <button className="create-gen-btn" disabled={genBusy} onClick={genIntro}>
+                    {genBusy ? "生成中…" : "自动生成"}
+                  </button>
+                </div>
+                {/* F3:生成的口味指示(可空)——回车即生成 */}
+                <input
+                  className="create-ask-line t-ui-sm"
+                  value={introAsk}
+                  disabled={genBusy}
+                  placeholder="对介绍的要求(可空)——比如:第一人称、带点自嘲"
+                  onChange={(e) => setIntroAsk(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !(e.nativeEvent || e).isComposing && !genBusy) {
+                      e.preventDefault();
+                      genIntro();
+                    }
+                  }}
+                  aria-label="对角色介绍的要求"
+                />
+                {/* 角色介绍可直接编辑 */}
+                <textarea
+                  className="ct-finalize-introedit"
+                  rows={7}
+                  value={desk.draft.description || ""}
+                  onChange={(e) => setDraftDesc(e.target.value)}
+                  placeholder="写角色介绍,或点「自动生成」让 AI 按已填设定写一段。"
+                />
+              </div>
             </div>
-            {/* 头像居中 + 名字在头像下方 */}
-            <div className="ct-finalize-avatar">
-              <ImageCropField
-                label="头像"
-                hint="纯聊圆头像"
-                value={desk.draft.avatar || ""}
-                aspect={1}
-                round
-                output={{ maxW: 256, maxH: 256, quality: 0.85 }}
-                onChange={(url) => setDraftPic("avatar", url)}
-              />
-              <div className="ct-finalize-name t-kai">{draftName}</div>
-            </div>
-            <div className="create-preview-introhead">
-              <span className="t-h3">角色介绍</span>
-              <button className="create-gen-btn" disabled={genBusy} onClick={genIntro}>
-                {genBusy ? "生成中…" : "自动生成"}
-              </button>
-            </div>
-            {/* 角色介绍可直接编辑 */}
-            <textarea
-              className="ct-finalize-introedit"
-              rows={4}
-              value={desk.draft.description || ""}
-              onChange={(e) => setDraftDesc(e.target.value)}
-              placeholder="写角色介绍,或点「自动生成」让 AI 按已填设定写一段。"
-            />
             {/* 钉在弹窗可视底边:矮屏下内容超出 84vh 时主 CTA 不再沉到折叠线下(YOR-148) */}
             <div className="ct-finalize-footer">
               <Button variant="primary" full onClick={confirmFinalize}>

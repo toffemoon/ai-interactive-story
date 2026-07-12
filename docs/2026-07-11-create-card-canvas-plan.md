@@ -95,3 +95,35 @@ understand(新空台默认,只问不写) → 完整度≥60 → blueprint(蓝图
 - **E4 蓝图与批准**:要点排版呈现+【批准,开始写】(切 drafting+自动发落笔指令)/【再聊聊】。
 - **E5 快速通道**:导入/fork/模板直通 drafting;seed 在 understand 照常参与;老数据无缝。
 - **E6 手机+回归+PR**:.ct 对话流渲染问题/蓝图/完整度组件(布局不动);全链路回归;stacked PR(#159→#160→#161)。
+
+
+---
+
+# F 系列:AI 触点皆可控(2026-07-12 主理人宗旨)
+
+> 宗旨:**任何用到 AI 的地方(改写/从零写/解析),用户都必须能——写提示词、拖拽、或 refer(提示词/角色卡等)**。
+> 两拍板:引用通道**动后端做干净**(refs/hint 可选参数,默认空=旧行为,单独 commit+主理人审+压测);一键 AI 按钮改成**点开一行指示输入,可空回车=默认**。
+
+## 现状落差(盘点结论)
+
+全站 AI 收敛到两端点:build_card(富:draft+seed+对话)/identify*(贫:只吃 text)。黑盒触点:✦ 补写/⟳ 改写(Create.jsx:347-353 固定指令)、批准蓝图(:282)、自动生成介绍(genIntro:528-552)——全是一键无输入;导入解析(TextReq 只有 text)完全带不了指示;refer 载体只有 seed 一条(6000 字,语义混装);提示词库/拖拽零实现(green field)。
+
+## 通道设计
+
+- **build_card 加 `refs: list[{label,text}]`**(≤4 条,单条 text 截 3000、label 截 60):拼接在 seed 之后 draft 之前,每条独立标签段「【用户引用:label——优先照它的口味/设定来,别整段照抄】」;understand 阶段同样吃(完整度评分计入引用材料)。
+- **identify 四函数加 `hint: str`**(截 1000,共享 `_hint_block`):「【用户对这次解析的额外要求——不破坏 JSON 格式前提下优先遵守】」;世界书 markdown 快路径在 hint 非空时跳过(用户给了指示=要 AI 按指示重组,纯代码切分吃不到指示)。
+- **前端 desk 加可选键 `refs`**(挂台常驻,chips 可摘,随每轮请求走;与 seed 双轨:seed=散文资料,refs=结构化引用);提示词库 localStorage `ais_prompt_lib_v1`。
+
+## 切片
+
+- **F0 后端通道(引擎核心,单独 commit,主理人审+压测)**:BuildCardReq+refs / TextReq+hint / identify.py 五处注入;压测 4 用例(refs 空=旧行为;带 ref 卡→内容被参考;hint 空=旧行为;hint 可验证指令生效)。
+- **F1 提示词库**:localStorage 存/删/改名;引用面板一个 tab;「把当前输入存为提示词」。
+- **F2 引用面板+纸签 chips**:composer 上方 refs 纸签行(小字+hairline+×,少框);「@ 引用」命令条按钮+输入 @ 唤起;面板 tab=本台已建/我的卡库(四 kind 可切)/提示词库;卡→cardToRefText(核心字段拼可读文本)。
+- **F3 一键 AI 长出指示行**:✦/⟳ 点开内联一行(可空回车=默认指令,Esc 收);生成介绍同款;批准蓝图旁可选附言拼进落笔指令。零后端(extra 拼指令文本)。
+- **F4 拖拽引用(桌面)**:台架/装订区/卡库行 draggable;composer 区 onDrop=落纸签;拖起时接收区淡纸底+虚线 hairline 提示。手机不做(@ 面板覆盖)。
+- **F5 导入解析指示**:导入面板(粘贴/上传)加可选「解析要求」一行→请求带 hint;酒馆卡纯本地解析无 AI,如实不加。
+- **F6 手机+回归+PR**:ct-composer 加 @ 按钮与纸签行(布局红线内);全链路回归;stacked PR #162(base=E 分支)。
+
+## 边界(如实)
+
+refs 每轮随请求进 prompt=token 成本随挂随涨(纸签常显可摘,与 seed 同口径);identify hint 属解析口味微调,不保证字段级服从(prompt 约定);拖拽 HTML5 原生 API,无第三方依赖。

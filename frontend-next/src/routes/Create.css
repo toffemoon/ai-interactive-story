@@ -1269,7 +1269,7 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 240px; /* E1:产出侧瘦身,画布让位给三栏 */
+    grid-template-columns: minmax(0, 1fr); /* F7:产出列退场(收编台账线),画布拿回整幅 */
     gap: var(--sp-5);
     animation: createRise 0.45s var(--ease-out) both;
     animation-delay: 0.1s;
@@ -1277,10 +1277,12 @@
   .create-canvas-col {
     min-height: 0;
     display: flex;
+    flex-direction: column; /* F7:台账线在顶,画布吃剩余高度自己滚 */
   }
-  /* 卡画布 = 一张摊开的宣纸大卡:居中 ~680,自己滚,页面不滚 */
+  /* 卡画布 = 一张摊开的宣纸大卡:居中 ~880(F7 放宽),自己滚,页面不滚 */
   .create-canvas {
-    width: min(680px, 100%);
+    width: min(880px, 100%);
+    flex: 1;
     margin: 0 auto;
     min-height: 0;
     overflow-y: auto;
@@ -1337,18 +1339,36 @@
    纯文本字段 ✎ 行内编辑;结构化字段(entries/timeline/tags…)「聊」跳命令条。
    ———————————————————————————————————————————————————————————— */
 @media (min-width: 861px) {
+  /* F7 字段块式:名+动作一行,正文全宽在下——长字段不再挤成窄条 */
   .create-canvas .create-field {
     position: relative;
-    padding-right: 76px; /* C3:动作条最多两钮(⟳/✦ + ✎) */
+    display: block;
+    padding-right: 0;
     border-radius: var(--r-sm);
     transition: background var(--dur-fast) var(--ease-out);
+  }
+  .create-canvas .create-field-k {
+    width: auto;
+    min-height: 26px; /* 名行自己给动作钮留高,正文不缩 */
+    padding-right: 76px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .create-canvas .create-field-v {
+    display: block;
+    margin-top: 2px;
+    max-width: 620px; /* 阅读行宽上限:宽画布下正文不摊成超长行 */
+  }
+  .create-canvas .create-field .create-ask-line {
+    max-width: 620px; /* 指示行与正文同宽(修 F3 掉进旧 flex 窄槽的 bug) */
   }
   .create-canvas .create-field:hover {
     background: color-mix(in srgb, var(--fg) 3%, transparent);
   }
   .create-field-acts {
     position: absolute;
-    top: 6px;
+    top: 2px;
     right: 4px;
     display: flex;
     gap: 4px;
@@ -1758,8 +1778,8 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    /* 会话栏随屏自适应(1366≈355 / 1920=400);画布优先吃剩余 */
-    grid-template-columns: clamp(320px, 26vw, 400px) minmax(0, 1fr);
+    /* F8:画布即主界面——会话栏退场(历史进抽屉,构思上画布,dock 缩在画布底) */
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--sp-5);
     animation: createRise 0.45s var(--ease-out) both;
     animation-delay: 0.1s;
@@ -1947,4 +1967,372 @@
   cursor: pointer;
   text-decoration: underline dashed;
   text-underline-offset: 3px;
+}
+
+/* ── F 系列:AI 触点皆可控(指示行 / 引用纸签 / 引用面板 / 拖拽接收) ── */
+
+/* F3 指示行:一条填空线,零边框零底色(沐言少框);出现处=字段下/蓝图前/生成介绍旁/导入面板 */
+.create-ask-line {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px dashed color-mix(in srgb, var(--fg) 30%, transparent);
+  padding: 4px 2px 5px;
+  margin: 6px 0 2px;
+  color: var(--fg);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.create-ask-line:focus {
+  outline: none;
+  border-bottom: 1px solid var(--accent);
+}
+.create-ask-line::placeholder { color: color-mix(in srgb, var(--fg) 38%, transparent); }
+.create-field-act.is-on { color: var(--accent); }
+
+/* F2 引用纸签:小字 + hairline 下边线 + 摘除,不做胶囊不画框 */
+.create-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 4px 2px 2px;
+}
+.create-ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent-3) 55%, transparent);
+  color: var(--fg);
+}
+.create-ref-t {
+  font-size: 10px;
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 2px;
+  padding: 0 3px;
+  line-height: 1.5;
+}
+.create-ref-x {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  cursor: pointer;
+  color: color-mix(in srgb, var(--fg) 45%, transparent);
+  font-size: 13px;
+  line-height: 1;
+}
+.create-ref-x:hover { color: var(--accent); }
+.create-ref-hint { color: var(--accent); }
+
+/* F4 拖拽接收态:淡纸底 + 虚 hairline,松手即挂 */
+.create-dock.is-dropping {
+  background: color-mix(in srgb, var(--accent-3) 7%, transparent);
+  outline: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: -4px;
+}
+.create-shelf-card[draggable="true"] { cursor: grab; }
+.create-shelf-card[draggable="true"]:active { cursor: grabbing; }
+
+/* F2 引用面板:tab=下划线切换;行=hairline 分隔,零卡片 */
+.create-ref-tabs {
+  display: flex;
+  gap: 14px;
+  margin: 8px 0 4px;
+}
+.create-ref-kinds { margin-top: 2px; gap: 10px; }
+.create-ref-tab {
+  background: none;
+  border: none;
+  padding: 2px 0 4px;
+  cursor: pointer;
+  color: color-mix(in srgb, var(--fg) 55%, transparent);
+  border-bottom: 2px solid transparent;
+}
+.create-ref-tab.is-on {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+}
+.create-ref-list {
+  max-height: 46vh;
+  overflow-y: auto;
+  margin-top: 6px;
+}
+.create-ref-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--fg) 10%, transparent);
+  padding: 8px 2px;
+  cursor: pointer;
+}
+.create-ref-row:hover .create-ref-row-t { color: var(--accent); }
+.create-ref-row-t { flex: none; }
+.create-ref-row-d {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.create-prompt-add {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.create-prompt-add .create-ask-line { flex: 1; margin: 0; }
+.create-prompt-row { padding: 0 2px; }
+.create-prompt-row .create-prompt-use {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 8px 0;
+  cursor: pointer;
+}
+.create-prompt-row .create-prompt-use:hover .create-ref-row-t { color: var(--accent); }
+
+/* ── F7 台账线:原 240px 产出列收编成画布顶一行(hairline,少框);浮层=装订清单/更多菜单 ── */
+.create-ledger {
+  position: relative;
+  flex: none;
+  width: min(880px, 100%);
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 0 2px 8px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--sp-3);
+}
+.create-ledger-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+}
+.create-ledger-chip {
+  background: none;
+  border: none;
+  padding: 0 0 1px;
+  cursor: grab;
+  color: var(--fg);
+  font: inherit;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent-3) 55%, transparent);
+}
+.create-ledger-chip:hover { color: var(--accent); }
+.create-ledger-chip:active { cursor: grabbing; }
+.create-ledger-sep { color: color-mix(in srgb, var(--fg) 30%, transparent); }
+.create-ledger-link {
+  background: none;
+  border: none;
+  padding: 0 0 1px;
+  cursor: pointer;
+  color: var(--muted);
+  font: inherit;
+  text-decoration: underline dashed;
+  text-underline-offset: 3px;
+}
+.create-ledger-link:hover, .create-ledger-link.is-on { color: var(--accent); }
+.create-ledger-acts {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.create-ledger-more {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  min-width: 30px;
+  height: 30px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+}
+.create-ledger-more:hover, .create-ledger-more.is-on { color: var(--accent); border-color: var(--accent); }
+.create-ledger-shade {
+  position: fixed;
+  inset: 0;
+  z-index: 29;
+  background: transparent;
+}
+.create-ledger-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  min-width: 280px;
+  max-width: 420px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-3) var(--sp-4);
+}
+.create-ledger-menu {
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  padding: var(--sp-2);
+}
+.create-ledger-menu button {
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 9px 10px;
+  cursor: pointer;
+  color: var(--fg);
+  font: inherit;
+  border-radius: var(--r-sm);
+}
+.create-ledger-menu button:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 4%, transparent); color: var(--accent); }
+.create-ledger-menu button:disabled { color: color-mix(in srgb, var(--fg) 30%, transparent); cursor: default; }
+
+/* ── F7b「完善角色卡」左右结构(桌面):左立绘 | 右头像行+名字+介绍;手机保持纵排 ── */
+@media (min-width: 861px) {
+  .create-modal-card.ct-finalize-card {
+    width: min(780px, 92vw);
+  }
+  .ct-finalize-cols {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: var(--sp-5);
+    align-items: start;
+    margin-top: var(--sp-3);
+  }
+  .ct-finalize-cols .ct-finalize-portrait {
+    margin-top: 0;
+  }
+  .ct-finalize-cols .ct-finalize-portrait .icf-thumb {
+    width: 100%; /* 立绘吃满左栏(240 → 2:3 约 240×360) */
+  }
+  /* 头像+名字横排,左对齐(原纵排居中是手机形态) */
+  .ct-finalize-cols .ct-finalize-avatar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--sp-4);
+    margin: 0 0 var(--sp-3);
+  }
+  .ct-finalize-cols .ct-finalize-avatar .icf {
+    align-items: flex-start;
+  }
+  .ct-finalize-cols .create-preview-introhead {
+    margin-top: var(--sp-2);
+  }
+}
+
+/* ── F8 画布即主界面:dock 缩在画布底、批注行、对话手记抽屉、构思纸面(muse) ── */
+@media (min-width: 861px) {
+  /* dock 归画布同宽,贴画布下沿一条 */
+  .create-canvas-col .create-dock {
+    flex: none;
+    width: min(880px, 100%);
+    margin: 0 auto;
+    padding-top: var(--sp-2);
+  }
+  /* 构思纸面:火候线+助手追问+圈选/蓝图长在画布上 */
+  .create-muse {
+    max-width: 640px;
+    margin: var(--sp-3) auto 0;
+    padding: var(--sp-2) 0;
+  }
+  .create-muse .create-comp { margin-bottom: var(--sp-5); }
+  .create-muse-say { margin-bottom: var(--sp-4); }
+  .create-muse-say .create-say-who { display: block; margin-bottom: 4px; color: var(--muted); letter-spacing: 0.12em; }
+  .create-muse-tx {
+    font-size: 17px;
+    line-height: var(--lh-body);
+    color: var(--fg);
+    white-space: pre-wrap;
+  }
+}
+/* 批注行:dock 顶一行小字(最新一句),点开抽屉 */
+.create-dock-note {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 2px 2px 6px;
+  cursor: pointer;
+  text-align: left;
+}
+.create-dock-note .create-say-who { flex: none; color: var(--muted); letter-spacing: 0.1em; }
+.create-dock-note-tx {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--fg) 72%, transparent);
+}
+.create-dock-note:hover .create-dock-note-tx { color: var(--fg); }
+.create-chat-btn {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 6px 10px;
+  cursor: pointer;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+}
+.create-chat-btn:hover { color: var(--accent); border-color: var(--accent); }
+/* 对话手记抽屉:左滑纸面,稿纸对谈体原样 */
+.create-drawer-shade {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+  background: color-mix(in srgb, var(--fg) 14%, transparent);
+}
+.create-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 40;
+  width: min(420px, 92vw);
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  animation: drawerIn 0.28s var(--ease-out) both;
+}
+@keyframes drawerIn {
+  from { transform: translateX(-24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.create-drawer-h {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-4) var(--sp-5) var(--sp-2);
+}
+.create-drawer-h .create-modal-x { position: static; }
+.create-drawer-flow {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sp-2) var(--sp-5) var(--sp-5);
+}
+@media (prefers-reduced-motion: reduce) {
+  .create-drawer { animation: none; }
 }
