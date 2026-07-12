@@ -254,3 +254,10 @@ plan: docs/2026-07-12-create-board-canvas-2-plan.md
   - **保留判定**:暗色场景上的暖色文字/鎏金饰(galgame 首页立绘区、卡背书脊纹理、stage 主题、身份卡纸质感)全部不动——米色治理只针对亮面底色。
 - **长按反馈换 C·描金一圈**(主理人四案试样〔conic 环/墨浸/描金/饼形对勾〕后拍板 C):鎏金线沿模块圆角 pathLength 归一自描一周,画满触发;松手快退、按满溅墨收拍。引擎(rAF+interval 兜底/is-pressing/lpFired)不变,零新依赖。注:I 系列曾废弃「线条描边」,当时败因=按周长走进度不归一+朱砂细线弱对比;C 案 pathLength=100 + 鎏金 2px + 封印帧,试样过关。
 - 验收(5199 preview):Login 卡计算色纯白+中性线;首页全元素扫描米色底命中=0;菜单面板 oklab≈1=纯白;长按全链路(trace 出现/rx 贴圆角/鎏金描边→触发开 AI sidebar→清场)与松手回退(is-out+dashoffset 回 100)实测通过,console 零报错。
+
+## 审核修复⑧ · 2026-07-13(主理人:「侧边的点击一直会失效」)
+
+- **病灶(永久性)**:`onBoardPointerDown` 的抓手/Space pan 分支对 target 不加区分——rail/缩放控件/空板引导都在 `.create-board` 内又没 stopPropagation,pointerdown 一到画布就 `setPointerCapture`,pointerup 被重定向、按钮 click 永不触发。**进了抓手整列点死,连「选择」都点不回**(只剩键盘 V 逃生);截图里抓手高亮正是这个状态。
+- 修:rail/缩放/空板加 `stopPropagation`(与 ctxbar/spawnmenu 既有口径对齐);另修连带伤——抓手/Space 下卡片不再起拖拽和长按(原来 pan 途中卡的长按机照跑,550ms 满环会误开 AI sidebar)。
+- **顺手记录(瞬时性,未动)**:路由涟漪 `.page-reveal` 扩圈期间(0.24~0.65s)`clip-path` 连带裁 hit-test,刚切进创作页立点 rail 会吞第一下;自愈短暂,若再被反馈可考虑涟漪只裁视觉克隆层。
+- 验收(5199 **真实鼠标**点击,headless 需先中和冻结的涟漪动画):进抓手→点「新建」(飞出菜单开)→点回「选择」全通;抓手下按卡片无描金无误开 AI;console 零报错。教训:**合成 dispatchEvent 绕过 hit-test 与 pointer capture,验证点击类 bug 必须走真实鼠标**(此前合成事件全绿、真点全死)。
