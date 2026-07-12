@@ -58,3 +58,26 @@ plan: docs/2026-07-12-create-board-canvas-2-plan.md
 ## H-R1 · 2026-07-12 —— 停等(1/2)
 
 - 现场:工作树净;origin/main 仍 @c94c70a(#158),#159–#163 全 OPEN。前置(合链)未满足,本轮不动代码;若主理人正在审合,下一轮自动接上 H0。
+
+## 合链插曲 · 2026-07-12(主理人口头授权「已看过,你去推」)
+
+- 按栈序合并:#159 合入时 `--delete-branch` 触发 GitHub 把 #160 **直接 CLOSED**(base 分支没了,不可 reopen/改 base)——补救:同 head 开替代 PR **#164** 合入;#161/#162/#163 改为「先 retarget 到 main 再合、最后统一删分支」,全部落地。main 顶=8695504(五个 merge:159/164/161/162/163)。
+- ⚠️ 经验:**合 stacked 链不要用 `--delete-branch`,先改下一个 PR 的 base 再删分支**。
+- `tests/test_db_health.py` 实为本地未跟踪脚手架(从未入库),此前"main 里已跟踪"判断有误,无冲突。
+
+## H-R2 · 2026-07-12 —— H0 画板地基 ✅(commit ddfd194,分支 gengyue/create-canvas2-base)
+
+- 实现:
+  - **稳定 id**:built 卡挂 `_bid`(NON_FIELD_KEYS 收编);在 **desks useState 初始化器**同步补齐老数据并持久——第一版走 mount effect,实测暴露两个真问题后重构:①首帧无 id 的兜底 key `b:i0` 跨台撞车(React 重复 key 留幽灵 DOM 节点);②坐标持久化 effect 挂载即写空 v2,抢在迁移前(时序竞态)。教训:**一次性数据迁移放 useState 初始化器,别放 effect**。
+  - **坐标 v2**:`ais_create_board_v2` 按 id key(`d:<kind>`/`b:<bid>`),v1 下标 key 在 boardPos 初始化器同步解析迁移;v1 原样保留,回滚=删 v2 一个键。
+  - **选中/聚焦换 id**:boardSel/boardFocus={kk,id};`selLive` 活性判定(built 选中但卡已没了=视同无选中);removeBuilt(kk,bid) 显式传台+按 id 定位+剪 v2 坐标+清 sel/focus;出口全 stripBid(导出/发布拼装/改编/引用文本)。
+  - 四个下标 bug 修复点:移除按钮不再 setKi+闭包下标;导出补传 bc.kk;坐标不随下标漂;幽灵选中自动解锁。
+- 验收证据(5199 preview 实测,真后端 8000):
+  - **老数据无缝**:种 v1 格式(2 角色+1 世界,无 _bid,v1 下标坐标)→ 刷新 → _bid 全补齐并持久、v1 四条坐标逐个精确迁到 v2 id key(100,50/300,60/620,40/draft 10,10)、v1 原样保留、板上 3 卡零幽灵;
+  - **跨台导出**:tab=角色台导出世界书卡 → 捕获 JSON=裸 data(无 chara_card_v2 信封)、无 _bid;
+  - **幽灵选中**:真选中甲一(dock 显 built 语境)→ 移除 → 选中自动清、dock 回「点一张卡开始聊」引导态;甲二坐标纹丝不动(300,60),v2 剪掉甲一键;
+  - **跨台移除**:tab=角色台点世界书卡「移除」→ confirm 弹《雾镇》(修前弹错台卡名)、只删 worlds、角色台完好;
+  - 全新用户路径:清库刷新 → 空板引导正常、v2={}、零卡;手机 390:.ct 四 tab/composer 就位,board/boardbar/dock/focus 零泄漏;
+  - console:修复后两次刷新零新增(缓冲区仅存修前那 2 条 b:i0 重复 key 旧错,该 key 现行代码不可能产生);`npx vite build` 2.04s 过(Create chunk 98.49kB)。
+- 如实边界:①发布清台不剪 v2 里 built 坐标(id 键幽灵条目无害——永不匹配任何活卡,留 H 系列顺路清);②测试用 confirm/URL.createObjectURL/setPointerCapture 均为页面内测试垫片,未触真下载;③无头环境 resize 不派发事件,手机回归靠手动 dispatch(历轮已知怪癖)。
+- 测试残留:preview 浏览器 localStorage 已清回全新态。
