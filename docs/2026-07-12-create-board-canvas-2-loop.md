@@ -219,3 +219,10 @@ plan: docs/2026-07-12-create-board-canvas-2-plan.md
 - ④**拖拽性能**:卡拖动改 transform 直写(拖动中 boardPos state 实测零变化,sidebar 开着不掉帧),松手 commit(延迟读 v2=直写终值逐位一致);拖动中工具条/批注锚件暂隐;挂引用落点从已退役的 dock 改判 AI 对话栏。
 - 排障如实:commit 值一度看似回退到 base——实为**同拍读 localStorage 读到 persist effect 未落盘的旧值**(测量时序问题,非机制 bug),延迟 400ms 复读证实正确;环入场 opacity 过渡在本环境动画时钟冻结下不可见(class 状态机断言正确,真浏览器生效)。
 - 测试残留:同上。
+
+## 审核修复⑤ · 2026-07-13(主理人截图「直接偏移掉了」,commit 2bdc399)
+
+- 根因:focuscard 居中用 `transform: translateX(-50%)`,而 focusIn 入场动画 fill:both 的终帧 transform 覆盖了 sidebar 态的 `transform:none` → 面板整体左移半宽出屏;截图另坐实两个次生问题。
+- 修:①居中改 `margin-left: calc(min(920px,94vw)/-2)`(不占 transform),keyframes 只动 translateY——两态互不干扰;②聚焦态不渲染上下文工具条(迷你卡隐后它成板中孤儿);③localStorage 里持久化的旧开场白(「聊着聊着」)就地迁移为现行文案(仅当它是台上唯一消息——不动真实对话史);④dock 退役后 focuscard 底部身位 210→24(面板更高)。
+- 验(种旧开场白+草稿复现):长按进 AI → 面板全屏内(96..898)+回画板可见+与 sidebar 零重叠;关 sidebar → 居中(±8px)920 宽;孤儿工具条零渲染;开场白迁移生效(store+sidebar 双确认)。
+- 教训:**transform 是 CSS 动画与静态定位的共享资源**——凡有 fill 动画的元素,定位不要依赖 transform(margin/inset 更稳)。
