@@ -2398,8 +2398,13 @@
     position: relative;
     height: calc(100dvh - 52px - 46px); /* 顶导航 + boardbar */
     overflow: hidden; /* H1:pan/zoom 取代滚动兜底 */
-    background-image: radial-gradient(color-mix(in srgb, var(--fg) 7%, transparent) 1px, transparent 1px);
+    /* 画布边界明确化(主理人反馈):底色比页面沉一档+点阵加深+内描边+顶缘内阴影 */
+    background-color: color-mix(in srgb, var(--fg) 2.5%, transparent);
+    background-image: radial-gradient(color-mix(in srgb, var(--fg) 11%, transparent) 1px, transparent 1px);
     background-size: 26px 26px;
+    box-shadow:
+      inset 0 0 0 1px var(--line),
+      inset 0 12px 20px -16px color-mix(in srgb, var(--fg) 30%, transparent);
     touch-action: none;
   }
   .create-board.is-pan {
