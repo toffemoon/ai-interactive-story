@@ -925,6 +925,7 @@ export default function Create() {
   const dragEndAtRef = useRef(0); // 拖后抑制原生 click/dblclick(浏览器拖完仍会派发)
   function onCardPointerDown(e, bc, pos) {
     if (e.button !== 0) return;
+    if (spaceRef.current || toolRef.current === "hand") return; // 抓手/Space=让 board pan 接管,不起卡拖也不起长按(否则 pan 中途满环误开 AI)
     dragRef.current = { key: bc.key, startX: e.clientX, startY: e.clientY, baseX: pos.x, baseY: pos.y, moved: false, bc };
     e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId);
     lpStart(e.currentTarget, e, () => {
@@ -2198,7 +2199,7 @@ export default function Create() {
               })()}
               </div>
               {boardCards.length === 0 && (
-                <div className="create-board-empty">
+                <div className="create-board-empty" onPointerDown={(e) => e.stopPropagation()}>
                   <span className="create-card-blank-seal t-kai" aria-hidden="true">板</span>
                   <span className="t-meta">板上还空着——起一张:</span>
                   {/* 修复(主理人审核反馈):新建入口就放在眼前——H3 把「+卡」搬去左 rail 后,
@@ -2223,7 +2224,7 @@ export default function Create() {
               {/* 工具 rail=能力总入口(主理人审核拍板):所有已有功能带字可见——
                   工具(选择/抓手)/起手(新建/模板/导入)/内容源(资料/引用/素材/拆回)/产出(导出)。
                   装订/发布/对话留在顶部 boardbar(文件级);快捷键 V/H/1-4/⌘0 不变 */}
-              <div className="create-rail" role="toolbar" aria-label="画板工具" aria-orientation="vertical">
+              <div className="create-rail" role="toolbar" aria-label="画板工具" aria-orientation="vertical" onPointerDown={(e) => e.stopPropagation()}>
                 <button className={tool === "select" ? "is-on" : ""} onClick={() => setTool("select")} title="选择 (V)">选择</button>
                 <button className={tool === "hand" ? "is-on" : ""} onClick={() => setTool("hand")} title="抓手·平移画板 (H,按住 Space 也行)">抓手</button>
                 <span className="create-rail-sep" aria-hidden="true" />
@@ -2257,7 +2258,7 @@ export default function Create() {
                 )}
               </div>
               {/* H1 缩放控件:± 板中心锚定;点 % 回 100%;适配=装下全部卡 */}
-              <div className="create-zoomctl t-meta" aria-label="画板缩放">
+              <div className="create-zoomctl t-meta" aria-label="画板缩放" onPointerDown={(e) => e.stopPropagation()}>
                 <button onClick={() => zoomTo(viewRef.current.z / 1.2)} aria-label="缩小">−</button>
                 <button className="create-zoomctl-pct" onClick={() => zoomTo(1)} title="回到 100%">{Math.round(view.z * 100)}%</button>
                 <button onClick={() => zoomTo(viewRef.current.z * 1.2)} aria-label="放大">＋</button>
