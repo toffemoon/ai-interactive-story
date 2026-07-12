@@ -2578,11 +2578,43 @@
     overflow: hidden;
     color: color-mix(in srgb, var(--fg) 55%, transparent);
   }
-  /* I 系列:长按环(唯一 AI 入口的进度反馈)——朱砂描边沿模块四周生长 */
+  /* I 系列:长按环(唯一 AI 入口的进度反馈)——朱砂描边沿模块四周生长。
+     三态:入场淡入微缩即位 / 取消快退淡出 / 完成脉冲一拍再散 */
   .create-lpring {
     position: fixed;
     z-index: 60;
     pointer-events: none;
+    opacity: 0;
+    transform: scale(1.03);
+    transition: opacity 0.12s var(--ease-out), transform 0.14s var(--ease-out);
+  }
+  .create-lpring.is-in {
+    opacity: 1;
+    transform: scale(1);
+  }
+  .create-lpring.is-out {
+    opacity: 0;
+    transform: scale(0.99);
+    transition: opacity 0.14s var(--ease-out), transform 0.14s var(--ease-out);
+  }
+  .create-lpring.is-out rect {
+    transition: stroke-dashoffset 0.14s var(--ease-out);
+  }
+  .create-lpring.is-done {
+    animation: lpDone 0.24s var(--ease-out) both;
+  }
+  .create-lpring.is-done rect {
+    stroke-width: 3.5;
+  }
+  @keyframes lpDone {
+    0% { opacity: 1; transform: scale(1); }
+    35% { opacity: 1; transform: scale(1.035); }
+    100% { opacity: 0; transform: scale(1.06); }
+  }
+  /* 拖动中(直写期):工具条/锚件暂隐,松手随 commit 归位 */
+  .create-board.is-dragging .create-ctxanchor,
+  .create-board.is-dragging .create-noteanchor {
+    opacity: 0;
   }
   /* I 系列:AI 对话 sidebar(dock 浮岛退役) */
   .create-ai {
@@ -2645,15 +2677,34 @@
   .create-ai .create-refs {
     flex: none;
   }
-  /* sidebar 开着时聚焦面板让位(不被右栏压住) */
+  /* sidebar 开着时:聚焦面板吃满左侧剩余空间(比常态更大——长按进 AI=真正的放大聚焦) */
   .create-studio.is-board:has(.create-ai) .create-focuscard {
-    left: calc((100% - 356px) / 2);
-    width: min(880px, calc(100% - 400px));
+    left: 24px;
+    right: 372px;
+    width: auto;
+    transform: none;
+  }
+  /* 聚焦态排版放大:阅读/编辑主场,字号整体上调 */
+  .create-focuscard .create-card-name {
+    font-size: 30px;
+  }
+  .create-focuscard .create-field-k {
+    font-size: 13px;
+  }
+  .create-focuscard .create-field-v {
+    font-size: 15.5px;
+    line-height: 1.78;
   }
   .create-field.is-aictx {
     outline: 2px solid color-mix(in srgb, var(--accent) 50%, transparent);
-    outline-offset: 2px;
+    outline-offset: 3px;
     border-radius: var(--r-sm);
+    background: color-mix(in srgb, var(--accent) 4%, transparent);
+  }
+  .create-field.is-aictx .create-field-v {
+    font-size: 17px;
+    line-height: 1.8;
+    color: var(--fg);
   }
   .create-chat-btn.is-on {
     color: var(--accent);

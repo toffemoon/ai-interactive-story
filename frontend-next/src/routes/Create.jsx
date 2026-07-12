@@ -50,10 +50,10 @@ function useIsMobile(maxWidth = 860) {
 const KINDS = [
   // ph 是输入框 placeholder,手机端短一句即可(C3:原来一长串字段名在窄屏会被截断)。
   // opening 是空台子的助手开场白,和 ph 同一套按类分句的范式(YOR-174)。
-  { zh: "角色卡", k: "characters", ph: "说说这个角色……", opening: "想造谁?说一个画面、一句话都行——聊着聊着,人就立起来了。" },
-  { zh: "演出卡", k: "players", ph: "说说你要扮演的主角……", opening: "想亲自扮演谁?说说主角的身份、来历,一句话也行——聊着聊着,卡就长出来了。" },
-  { zh: "设定卡 · 世界书", k: "worlds", ph: "说说这个世界 / 设定……", opening: "想搭什么样的世界?一条规则、一个地名都能起头——聊着聊着,世界就有了轮廓。" },
-  { zh: "故事书", k: "stories", ph: "说说这个故事……", opening: "想讲什么样的故事?一个开头、一句梗概都行——聊着聊着,书就翻开了。" },
+  { zh: "角色卡", k: "characters", ph: "描述这个角色:身份、性格、背景", opening: "描述你要创建的角色:身份、性格、背景。信息足够后会生成完整角色卡。" },
+  { zh: "演出卡", k: "players", ph: "描述你要扮演的主角", opening: "描述你要扮演的主角:身份、来历、这一局的目标。" },
+  { zh: "设定卡 · 世界书", k: "worlds", ph: "描述这个世界的规则与设定", opening: "描述这个世界:核心规则、关键地点、势力。" },
+  { zh: "故事书", k: "stories", ph: "描述这个故事的前提与冲突", opening: "描述这个故事:前提、核心冲突、大致走向。" },
 ];
 const OPENINGS = Object.fromEntries(KINDS.map((t) => [t.k, t.opening]));
 // 空台引子(桌面 reskin):点一下把句子放进输入框(不代发,用户过目再发),降低冷启动门槛。
@@ -132,7 +132,7 @@ function worldEntries(card) {
 
 function blankDesk(kk) {
   return {
-    messages: [{ who: "ai", text: OPENINGS[kk] || "想造哪张卡?说一个画面、一句话都行——聊着聊着,卡就长出来了。" }],
+    messages: [{ who: "ai", text: OPENINGS[kk] || "选择卡种后,描述你要创建的内容。" }],
     draft: {},
     filled: [],
     input: "",
@@ -386,38 +386,76 @@ export default function Create() {
   const LP_MS = 550;
   const lpRef = useRef(null); // {iv, ring}
   const lpFiredRef = useRef(false); // 满环后的 pointerup/click 不再当单击
-  function lpCancel() {
+  // 环动画三态(主理人反馈打磨):入场=淡入+微缩即位;进行=rAF 逐帧描边(setInterval 兜底,
+  // 无 rAF 环境也能走完);取消=描边快退+淡出;完成=满环脉冲一拍再散,给确定的"进入了"手感。
+  function lpCancel(fired = false) {
     const l = lpRef.current;
     if (!l) return;
-    clearInterval(l.iv);
-    l.ring.remove();
     lpRef.current = null;
+    clearInterval(l.iv);
+    cancelAnimationFrame(l.raf);
+    if (fired) {
+      l.ring.classList.add("is-done");
+      setTimeout(() => l.ring.remove(), 240);
+    } else {
+      l.ring.classList.add("is-out");
+      const rect = l.ring.querySelector("rect");
+      if (rect) rect.style.strokeDashoffset = String(l.per); // 描边回退
+      setTimeout(() => l.ring.remove(), 160);
+    }
   }
   function lpStart(el, onFire) {
     lpCancel();
     const r = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    const rx = Math.min(16, parseFloat(cs.borderTopLeftRadius) || 12) + 3;
     const ring = document.createElement("div");
     ring.className = "create-lpring";
-    Object.assign(ring.style, { left: r.left - 4 + "px", top: r.top - 4 + "px", width: r.width + 8 + "px", height: r.height + 8 + "px" });
-    const w = r.width + 5, h = r.height + 5;
+    Object.assign(ring.style, { left: r.left - 5 + "px", top: r.top - 5 + "px", width: r.width + 10 + "px", height: r.height + 10 + "px" });
+    const w = r.width + 6, h = r.height + 6;
     const per = Math.round(2 * (w + h));
     ring.innerHTML =
-      `<svg width="100%" height="100%" viewBox="0 0 ${w + 3} ${h + 3}">` +
-      `<rect x="1.5" y="1.5" width="${w}" height="${h}" rx="12" fill="none" stroke="var(--accent)" stroke-width="2.5" ` +
+      `<svg width="100%" height="100%" viewBox="0 0 ${w + 4} ${h + 4}">` +
+      `<rect x="2" y="2" width="${w}" height="${h}" rx="${rx}" fill="none" stroke="var(--accent)" stroke-width="2.5" ` +
       `stroke-dasharray="${per}" stroke-dashoffset="${per}" stroke-linecap="round"/></svg>`;
     document.body.appendChild(ring);
+    // 强制 reflow 后进场(淡入+微缩即位由 CSS 过渡完成)
+    void ring.offsetWidth;
+    ring.classList.add("is-in");
     const rect = ring.querySelector("rect");
     const t0 = performance.now();
-    const iv = setInterval(() => {
-      const p = Math.min(1, (performance.now() - t0) / LP_MS);
-      rect.style.strokeDashoffset = String(per * (1 - p));
-      if (p >= 1) {
-        lpCancel();
+    const tick = () => {
+      const l = lpRef.current;
+      if (!l || l.ring !== ring) return;
+      const raw = Math.min(1, (performance.now() - t0) / LP_MS);
+      const p = raw < 0.12 ? raw * 0.6 : 0.072 + (raw - 0.12) * 1.0545; // 起步稍缓,后段匀速(可预期)
+      rect.style.strokeDashoffset = String(per * (1 - Math.min(1, p)));
+      if (raw >= 1) {
         lpFiredRef.current = true;
+        lpCancel(true);
         onFire();
+        return;
       }
-    }, 40);
-    lpRef.current = { iv, ring };
+      l.raf = requestAnimationFrame(tick);
+    };
+    lpRef.current = {
+      ring,
+      per,
+      raf: requestAnimationFrame(tick),
+      // rAF 被节流的环境(后台标签/无头)兜底:低频检查完成,不描帧但保证能进
+      iv: setInterval(() => {
+        const l = lpRef.current;
+        if (!l || l.ring !== ring) return;
+        if (performance.now() - t0 >= LP_MS) {
+          rect.style.strokeDashoffset = "0";
+          lpFiredRef.current = true;
+          lpCancel(true);
+          onFire();
+        } else {
+          rect.style.strokeDashoffset = String(per * (1 - Math.min(1, (performance.now() - t0) / LP_MS)));
+        }
+      }, 80),
+    };
   }
   // 长按路由:卡=选中+(草稿)聚焦+开对话;字段=切字段语境+开对话
   function openAiForCard(bc) {
@@ -853,8 +891,15 @@ export default function Create() {
     const dx = (e.clientX - d.startX) / z, dy = (e.clientY - d.startY) / z;
     if (!d.moved && Math.abs(dx) + Math.abs(dy) < 4 / z) return;
     lpCancel(); // 动了=拖拽,长按环撤
-    d.moved = true;
-    setBoardPos((p) => ({ ...p, [d.key]: { x: Math.max(0, d.baseX + dx), y: Math.max(0, d.baseY + dy) } }));
+    if (!d.moved) {
+      d.moved = true;
+      d.el = e.currentTarget;
+      boardElRef.current && boardElRef.current.classList.add("is-dragging");
+    }
+    // I 系列性能:拖动中 transform 直写(零 React 重渲——sidebar 开着也不掉帧),松手才 commit
+    d.nx = Math.max(0, d.baseX + dx);
+    d.ny = Math.max(0, d.baseY + dy);
+    d.el.style.transform = `translate(${d.nx}px, ${d.ny}px)`;
   }
   function onCardPointerUp(e, bc) {
     lpCancel();
@@ -871,18 +916,22 @@ export default function Create() {
       return;
     }
     dragEndAtRef.current = performance.now(); // 拖完:300ms 内的 dblclick 不当「进入」
-    // 落点在 dock 浮岛上=挂为引用(卡片回弹原位)
-    const dock = document.querySelector(".create-dock");
-    if (dock) {
-      const r = dock.getBoundingClientRect();
+    boardElRef.current && boardElRef.current.classList.remove("is-dragging");
+    // 落点在 AI 对话栏上=挂为引用(卡片回弹原位);否则 commit 拖动终点(拖动中是直写,这里才进 state)
+    const aiBar = document.querySelector(".create-ai");
+    if (aiBar) {
+      const r = aiBar.getBoundingClientRect();
       if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
-        setBoardPos((p) => ({ ...p, [d.key]: { x: d.baseX, y: d.baseY } }));
+        if (d.el) d.el.style.transform = `translate(${d.baseX}px, ${d.baseY}px)`;
         addRef(refFromCard(bc.kk, bc.card));
+        return;
       }
     }
+    setBoardPos((p) => ({ ...p, [d.key]: { x: d.nx, y: d.ny } }));
   }
   function onCardPointerCancel() {
     lpCancel();
+    boardElRef.current && boardElRef.current.classList.remove("is-dragging");
     dragRef.current = null; // 触控板手势/系统抢占等取消:清拖态,防悬停继续拖走原卡
   }
   function onCardEnter(bc) {
@@ -1041,7 +1090,7 @@ export default function Create() {
       filled: Object.keys(draft),
       // E5 快速通道:已带内容,直通 drafting,清构思残留
       phase: "drafting", comp: 0, questions: [], blueprint: [],
-      messages: [...d0.messages, { who: "ai", text: "《" + nm + "》解析好了,已铺上画布,顺手也收进了你的卡库(私密)。哪里不对,聊着改。" }],
+      messages: [...d0.messages, { who: "ai", text: "《" + nm + "》已解析并铺上画布,同时已存入卡库(私密)。" }],
     }));
     return nm;
   }
@@ -1075,9 +1124,9 @@ export default function Create() {
       filled: Object.keys(card),
       tpl: undefined,
       phase: "drafting", comp: 0, questions: [], blueprint: [], // E5 快速通道
-      messages: [...d0.messages, { who: "ai", text: "《" + nm + "》已铺开——基于它改;原卡不动,入库时按新名字另存。" }],
+      messages: [...d0.messages, { who: "ai", text: "已创建改编稿《" + nm + "》。原卡保留,保存时按新名字另存。" }],
     }));
-    flash("已铺开改编稿《" + nm + "》");
+    flash("已创建改编稿《" + nm + "》");
     return true;
   }
 
@@ -1143,7 +1192,7 @@ export default function Create() {
         draft: { ...parsed.draft, ...pickPics(d0.draft) },
         filled: Object.keys(parsed.draft),
         phase: "drafting", comp: 0, questions: [], blueprint: [], // E5 快速通道
-        messages: [...d0.messages, { who: "ai", text: "《" + nm + "》从酒馆卡读进来了(本地解析,没入库、不耗额度)。" + droppedNote + "哪里不对,聊着改。" }],
+        messages: [...d0.messages, { who: "ai", text: "《" + nm + "》已从酒馆卡导入(本地解析,不入库、不消耗额度)。" + droppedNote }],
       }));
       // PNG 本体顺手压成立绘(draft.image 空着才填,不覆盖用户已传的)
       if (!isJson) {
@@ -1189,7 +1238,7 @@ export default function Create() {
         // D1:参考资料跨卡保留(一份资料常连造多张卡);tpl 不带 = 自然清(模板是单卡的事)。
         seed: ds[kind].seed || "",
         built: [...ds[kind].built, withBid(cardDraft)],
-        messages: [{ who: "ai", text: "《" + nm + "》放进台子了(本台第 " + (ds[kind].built.length + 1) + " 张)。说说下一张?" }],
+        messages: [{ who: "ai", text: "《" + nm + "》已收进本台(第 " + (ds[kind].built.length + 1) + " 张)。" }],
       },
     }));
     setCardExpanded(false);
@@ -1575,7 +1624,7 @@ export default function Create() {
       ...(t.skeleton ? { phase: "drafting", comp: 0, questions: [], blueprint: [] } : {}),
     });
     setTplOpen(false);
-    flash(t.skeleton ? `已铺开「${t.name}」骨架——空字段都是 ✦ 补写目标` : `「${t.name}」的开场指令已放进输入框`);
+    flash(t.skeleton ? `已应用「${t.name}」模板——长按空字段可让 AI 补写` : `「${t.name}」的开场指令已放进输入框`);
     requestAnimationFrame(() => dockInputRef.current && dockInputRef.current.focus());
   }
 
@@ -2264,8 +2313,8 @@ export default function Create() {
                             {tplHints[f.k0]
                               ? tplHints[f.k0] + (f.editable ? "(✦ 补写 / ✎ 手写)" : "(点「聊」到命令条补)")
                               : f.editable
-                              ? "还空着——✦ 让 AI 补写,或 ✎ 手写"
-                              : "还空着——点「聊」到命令条补"}
+                              ? "空——长按这一块让 AI 补写,或 ✎ 手写"
+                              : "空——长按这一块让 AI 补写"}
                           </span>
                         ) : (
                           <span className="create-field-v t-ui-sm">{f.hidden ? "(隐藏真相,玩家不可见)" + f.v : f.v}</span>
@@ -2406,7 +2455,7 @@ export default function Create() {
                     <div className="create-card-blank">
                       <span className="create-card-blank-seal t-kai" aria-hidden="true">卡</span>
                       <span className="create-card-blank-tx t-meta">
-                        {phase !== "drafting" ? "构思中——在下面说说你想要什么,完整度过线、蓝图点头,再落笔。" : OPENINGS[kind]}
+                        {phase !== "drafting" ? "构思阶段:回答下方问题提高完整度,达到 60 生成创作蓝图,批准后开始写卡。" : OPENINGS[kind]}
                       </span>
                       {/* 空台引子:起手句进画布空卡里(点了只进输入框,不代发) */}
                       {desk.messages.length <= 1 && !busy && (
