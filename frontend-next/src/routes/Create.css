@@ -77,33 +77,6 @@
   color: var(--on-accent);
 }
 
-/* 两区主体 */
-.create-body {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 1fr 360px;
-  gap: var(--sp-5);
-  min-height: 0;
-}
-
-/* 对话区 */
-.create-chat {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  background: var(--panel);
-  overflow: hidden;
-  min-height: 420px;
-}
-.create-msgs {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--sp-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-4);
-}
 .create-msg {
   max-width: 90%;
 }
@@ -177,19 +150,6 @@
   margin-left: auto;
 }
 
-/* 实时卡预览 */
-.create-preview {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-4);
-}
-.create-card {
-  border: 1px solid var(--line);
-  border-radius: var(--r-card);
-  background: var(--panel);
-  padding: var(--sp-4);
-  box-shadow: var(--shadow-card);
-}
 .create-card-kind {
   color: var(--accent-3);
 }
@@ -1111,18 +1071,6 @@
 
 /* 布局:对话区吃满视口高(页面基本不滚,只滚消息流),右栏 sticky 跟随 */
 @media (min-width: 861px) {
-  .create-chat {
-    height: calc(100dvh - 268px);
-    min-height: 460px;
-  }
-  .create-preview {
-    position: sticky;
-    top: 64px;
-    align-self: start;
-    max-height: calc(100dvh - 84px);
-    overflow-y: auto;
-  }
-
   /* 入场:标题 → tab 错峰 → 主体;.create-body 带 key=kind,切卡种时同段动效当转场 */
   .create-head {
     animation: createRise 0.5s var(--ease-out) both;
@@ -1130,10 +1078,6 @@
   .create-kind {
     animation: createRise 0.45s var(--ease-out) both;
     animation-delay: calc(80ms + var(--ci, 0) * 60ms);
-  }
-  .create-body {
-    animation: createRise 0.45s var(--ease-out) both;
-    animation-delay: 0.12s;
   }
 }
 @keyframes createRise {
@@ -1154,7 +1098,6 @@
 
 /* 空台引子:贴在消息流底部(靠近输入框),三条起手句错峰浮上来 */
 .create-starters {
-  margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
@@ -1235,12 +1178,6 @@
   }
 }
 
-/* 草稿卡:投影交给 DepthCard(否则倾斜时影子不跟着卡走) */
-.create-card-tilt .create-card {
-  box-shadow: none;
-  border-radius: var(--r-card);
-}
-
 /* 宣纸空卡:虚线内框 + 呼吸的「卡」印(与侧栏「沐」印同一记号语言)+ 极淡朱金晕 */
 .create-card.is-blank .create-card-name {
   color: var(--muted);
@@ -1306,12 +1243,477 @@
 @media (prefers-reduced-motion: reduce) {
   .create-head,
   .create-kind,
-  .create-body,
+  .create-stage,
+  .create-canvas .create-field,
   .create-msg,
   .create-starter,
   .create-field.is-fresh,
   .create-card-blank-seal,
   .create-dot {
     animation: none !important;
+  }
+}
+
+/* ————————————————————————————————————————————————————————————
+   C0 骨架(卡即界面,2026-07-11 方案):画布 | 产出侧 + 底部信笺坞。
+   旧 .create-body/.create-chat/.create-preview/.create-card 布局类自此不再被
+   桌面 JSX 引用(样式暂留,C5 清理);.create-msg/.create-composer/字段/空卡/
+   起个头等内容类原样复用。
+   ———————————————————————————————————————————————————————————— */
+@media (min-width: 861px) {
+  .create {
+    height: calc(100dvh - 52px);
+    overflow: hidden;
+  }
+  .create-stage {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: var(--sp-5);
+    animation: createRise 0.45s var(--ease-out) both;
+    animation-delay: 0.1s;
+  }
+  .create-canvas-col {
+    min-height: 0;
+    display: flex;
+  }
+  /* 卡画布 = 一张摊开的宣纸大卡:居中 ~680,自己滚,页面不滚 */
+  .create-canvas {
+    width: min(680px, 100%);
+    margin: 0 auto;
+    min-height: 0;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--r-card);
+    background: var(--panel);
+    box-shadow: var(--shadow-card);
+    padding: var(--sp-5) var(--sp-6) var(--sp-6);
+  }
+  .create-canvas .create-card-name {
+    font-size: var(--fs-display);
+  }
+  .create-canvas .create-card-blank {
+    min-height: 320px;
+  }
+  .create-side {
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+    padding-top: var(--sp-2);
+  }
+  /* 信笺坞:叙述条 + 命令条(消息条已随 C2 退役进手记抽屉) */
+  .create-dock {
+    flex: none;
+    width: min(680px, 100%);
+    margin: var(--sp-4) auto 0;
+  }
+  .create-dock .create-composer {
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    background: var(--panel);
+    padding: var(--sp-3);
+    box-shadow: var(--shadow-card);
+  }
+  .create-dock .create-composer textarea:focus {
+    border-color: var(--accent);
+  }
+  /* 起个头挪进画布空卡:居中排,和印章一体 */
+  .create-card-blank .create-starters {
+    margin-top: var(--sp-2);
+    align-items: center;
+  }
+  .create-card-blank .create-starters-row {
+    justify-content: center;
+  }
+  .create-card-blank .create-starters-h {
+    text-align: center;
+  }
+}
+
+/* ————————————————————————————————————————————————————————————
+   C1 字段块化(卡即界面):hover 动作条 + 就地手改。
+   纯文本字段 ✎ 行内编辑;结构化字段(entries/timeline/tags…)「聊」跳命令条。
+   ———————————————————————————————————————————————————————————— */
+@media (min-width: 861px) {
+  .create-canvas .create-field {
+    position: relative;
+    padding-right: 76px; /* C3:动作条最多两钮(⟳/✦ + ✎) */
+    border-radius: var(--r-sm);
+    transition: background var(--dur-fast) var(--ease-out);
+  }
+  .create-canvas .create-field:hover {
+    background: color-mix(in srgb, var(--fg) 3%, transparent);
+  }
+  .create-field-acts {
+    position: absolute;
+    top: 6px;
+    right: 4px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity var(--dur-fast) var(--ease-out);
+  }
+  .create-canvas .create-field:hover .create-field-acts,
+  .create-canvas .create-field:focus-within .create-field-acts {
+    opacity: 1;
+  }
+  .create-field-act {
+    display: grid;
+    place-items: center;
+    min-width: 26px;
+    height: 26px;
+    padding: 0 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    background: var(--panel);
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+  }
+  .create-field-act:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .create-field-edit {
+    flex: 1;
+    min-width: 0;
+    resize: vertical;
+    background: var(--bg);
+    border: 1px solid var(--accent);
+    border-radius: var(--r-sm);
+    padding: 8px 10px;
+    font-family: var(--font-kai);
+    font-size: 14px;
+    line-height: var(--lh-body);
+    color: var(--fg);
+    outline: none;
+  }
+  .create-field.is-editing {
+    background: color-mix(in srgb, var(--accent-3) 6%, transparent);
+  }
+  /* 卡名:静态是按钮(hover 出 ✎ 提示),点开变虚线底输入 */
+  .create-name-btn {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: text;
+    text-align: left;
+  }
+  .create-name-hint {
+    font-size: 14px;
+    color: var(--muted);
+    opacity: 0;
+    transition: opacity var(--dur-fast) var(--ease-out);
+  }
+  .create-name-btn:hover .create-name-hint,
+  .create-name-btn:focus-visible .create-name-hint {
+    opacity: 1;
+  }
+  .create-name-edit {
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed var(--accent);
+    outline: none;
+    color: var(--fg);
+    padding: 0 0 2px;
+  }
+  /* 「密」印:隐藏真相字段的内联标记 */
+  .create-field-seal {
+    display: inline-grid;
+    place-items: center;
+    margin-left: 6px;
+    width: 16px;
+    height: 16px;
+    border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    border-radius: 3px;
+    color: var(--accent);
+    font-size: 10px;
+    line-height: 1;
+  }
+}
+
+/* ————————————————————————————————————————————————————————————
+   C2 叙述层(卡即界面):页头「创作手记」入口 + 叙述条(AI 最新一句)+
+   手记抽屉(全史)。对话数据结构不动,只是显示降级。
+   ———————————————————————————————————————————————————————————— */
+@media (min-width: 861px) {
+  .create-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--sp-4);
+  }
+  .create-journal-btn {
+    flex: none;
+    margin-top: 6px;
+    padding: 7px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-pill);
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--font-kai);
+    cursor: pointer;
+    transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+  }
+  .create-journal-btn:hover {
+    color: var(--fg);
+    border-color: var(--accent-2);
+  }
+
+  /* 叙述条:一句 AI 的话浮在命令条上方,像笺纸上的批注 */
+  .create-narr {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sp-2);
+    margin-bottom: var(--sp-2);
+    padding: 9px 12px;
+    border: 1px solid color-mix(in srgb, var(--accent-3) 35%, var(--line));
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--accent-3) 6%, var(--panel));
+    animation: msgIn 0.3s var(--ease-out) both;
+  }
+  .create-narr-mark {
+    flex: none;
+    color: var(--accent-3);
+    font-size: 15px;
+    line-height: 1.4;
+  }
+  .create-narr-tx {
+    flex: 1;
+    min-width: 0;
+    color: var(--fg);
+    line-height: var(--lh-body);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .create-narr-x {
+    flex: none;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1;
+    padding: 2px 4px;
+    cursor: pointer;
+  }
+  .create-narr-x:hover {
+    color: var(--fg);
+  }
+
+  /* 手记抽屉:右滑入的笺纸,全史可滚 */
+  .create-journal {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+  }
+  .create-journal-scrim {
+    position: absolute;
+    inset: 0;
+    background: var(--scrim);
+    animation: journalFade 0.25s var(--ease-out) both;
+  }
+  .create-journal-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(420px, 92vw);
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+    border-left: 1px solid var(--line);
+    box-shadow: var(--shadow-pop);
+    animation: journalSlide 0.3s var(--ease-out) both;
+  }
+  .create-journal-head {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--sp-4) var(--sp-5);
+    border-bottom: 1px solid var(--line);
+  }
+  .create-journal-x {
+    position: static;
+  }
+  .create-journal-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+    padding: var(--sp-4) var(--sp-5) var(--sp-5);
+  }
+}
+@keyframes journalSlide {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes journalFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .create-narr,
+  .create-journal-scrim,
+  .create-journal-panel {
+    animation: none !important;
+  }
+}
+
+/* ———— C3 字段级 AI 动作:空字段=✦ 补写目标,不再是空行 ———— */
+@media (min-width: 861px) {
+  .create-field-v-empty {
+    color: var(--muted);
+    opacity: 0.7;
+    font-family: var(--font-kai);
+  }
+  .create-field-act:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+}
+
+/* ————————————————————————————————————————————————————————————
+   C4 本台架 + 装订区(卡即界面):built 的卡看得见,发布清单常显。
+   ———————————————————————————————————————————————————————————— */
+@media (min-width: 861px) {
+  .create-shelf-h,
+  .create-bind-h {
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    margin-bottom: var(--sp-2);
+  }
+  .create-shelf-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+  .create-shelf-tilt .depth-card {
+    border-radius: var(--r-md);
+  }
+  .create-shelf-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: var(--sp-3) var(--sp-4);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: var(--panel);
+  }
+  .create-shelf-card::before {
+    /* 书脊:左缘一条鎏金细带,与卡库/书卡记号呼应 */
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    border-radius: var(--r-pill);
+    background: linear-gradient(180deg, var(--accent-3), color-mix(in srgb, var(--accent-3) 40%, transparent));
+  }
+  .create-shelf-name {
+    font-size: 17px;
+    color: var(--fg);
+  }
+  .create-shelf-sub {
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .create-shelf-acts {
+    position: absolute;
+    top: var(--sp-2);
+    right: var(--sp-2);
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity var(--dur-fast) var(--ease-out);
+  }
+  .create-shelf-card:hover .create-shelf-acts,
+  .create-shelf-card:focus-within .create-shelf-acts {
+    opacity: 1;
+  }
+  .create-shelf-act {
+    padding: 3px 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    background: var(--panel);
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+  }
+  .create-shelf-act:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .create-shelf-empty {
+    color: var(--muted);
+    padding: var(--sp-3);
+    border: 1px dashed var(--line);
+    border-radius: var(--r-md);
+    text-align: center;
+  }
+  /* 装订区:淡沉底,像订书线 */
+  .create-bind {
+    padding: var(--sp-3) var(--sp-4);
+    border: 1px dashed color-mix(in srgb, var(--accent-2) 40%, var(--line));
+    border-radius: var(--r-md);
+    background: color-mix(in srgb, var(--accent-2) 5%, transparent);
+  }
+  .create-bind-h {
+    margin-bottom: var(--sp-1);
+  }
+  .create-bind-list {
+    margin: 0;
+    padding-left: 1.2em;
+    color: var(--muted);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .create-bind-empty {
+    list-style: none;
+    margin-left: -1.2em;
+    opacity: 0.8;
+  }
+  .create-bind-warn {
+    margin-top: var(--sp-2);
+    color: var(--accent);
+  }
+}
+
+/* ————————————————————————————————————————————————————————————
+   C5 打磨:字段错峰铺纸入场(≤8 级封顶,长卡不拖沓)。
+   死样式(旧 .create-body/.create-chat/.create-msgs/.create-preview/.create-card
+   布局层)已随本轮删除;.create-msg/.create-field 等内容类继续服役。
+   ———————————————————————————————————————————————————————————— */
+@media (min-width: 861px) {
+  .create-canvas .create-field {
+    animation: createRise 0.35s var(--ease-out) both;
+    animation-delay: calc(0.12s + var(--ci, 0) * 40ms);
   }
 }

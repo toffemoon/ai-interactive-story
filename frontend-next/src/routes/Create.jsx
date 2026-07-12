@@ -7,7 +7,7 @@ import ImageCropField from "../components/ImageCropField";
 import StoryHero from "../components/StoryHero";
 import CharDetailModal from "../components/CharDetailModal";
 import StaggeredText from "../components/staggered-text";
-import DepthCard from "../components/react-bits/depth-card";
+import DepthCard from "../components/react-bits/depth-card"; // C4 本台架 mini 卡(画布本体不倾斜)
 import { BlurHighlight } from "../components/react-bits/blur-highlight";
 import { useAuth } from "../state/auth";
 import "./Create.css";
@@ -75,6 +75,8 @@ const LABELS = {
   premise: "前提", title: "标题", entries: "条目", role: "身份", tags: "标签",
   content: "内容", comment: "条目", keys: "关键词", source: "来源",
   timeline: "时间线", events: "事件节点", main: "主线", anchor: "锚点", tension: "矛盾",
+  // C5 补:引擎新骨架带的键,别再裸奔英文
+  known_public: "公开设定", known_hidden: "隐藏设定", versions: "多版本", relationships: "关系",
 };
 const STORE_KEY = "ais_create_desks_v1";
 const KI_KEY = "ais_create_ki_v1"; // 记住当前卡种 tab(YOR-200)
@@ -174,6 +176,13 @@ export default function Create() {
   const [previewChar, setPreviewChar] = useState(null); // 预览里角色「查看详情」
   const [cardExpanded, setCardExpanded] = useState(false); // 手机草稿细条展开看立绘 + 全部字段
   const [moreOpen, setMoreOpen] = useState(false); // 手机底部「更多」动作面板
+  // C1 字段块就地手改(桌面画布):editingKey = 字段原始 key | "__name"(卡名) | null。
+  const [editingKey, setEditingKey] = useState(null);
+  const [editVal, setEditVal] = useState("");
+  const dockInputRef = useRef(null); // 命令条输入框(「聊着改」把光标带过去)
+  // C2 叙述层:AI 的话降级为「最新一句」浮条 + 全史进手记抽屉;对话数据结构(desk.messages)不动。
+  const [journalOpen, setJournalOpen] = useState(false);
+  const [narrClosed, setNarrClosed] = useState(false);
   const fileRef = useRef(null);
   const coverRef = useRef(null);
   const chatRef = useRef(null);
@@ -208,7 +217,7 @@ export default function Create() {
   useEffect(() => {
     const el = chatRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [desk.messages, busy]);
+  }, [desk.messages, busy, journalOpen]); // journalOpen:手记抽屉打开那刻滚到底
 
   // go = 可选去处路由:带去处的 toast 多留一会儿,不然来不及点(YOR-170)
   function flash(msg, go = null) {
@@ -223,30 +232,52 @@ export default function Create() {
   const patch = (kk, p) =>
     setDesks((ds) => ({ ...ds, [kk]: { ...ds[kk], ...(typeof p === "function" ? p(ds[kk]) : p) } }));
 
-  async function send() {
+  // 发一句话进建卡管线(命令条 send 与字段级指令共用;messages/draft 契约不动)。
+  // filled 改为客户端 diff:如实标出这一轮实际变化的字段(C3 坦白原则——模型可能顺手动别处,全部显形)。
+  async function sendText(rawText, { clearInput = false } = {}) {
     const kk = kind;
     const cur = desks[kk];
-    const text = (cur.input || "").trim();
+    const text = (rawText || "").trim();
     if (!text || busy) return;
     setBusy(true);
     const apiMsgs = [...cur.messages, { who: "你", text }].map((m) => ({
       role: m.who === "你" ? "user" : "assistant",
       content: m.text,
     }));
-    patch(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text }], input: "" }));
+    patch(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text }], ...(clearInput ? { input: "" } : {}) }));
     try {
       const r = await postJSON("/api/build_card", { kind: kk, messages: apiMsgs, draft: cur.draft, seed: "" });
       const ask = [r.reply, r.next_question].filter(Boolean).join(" ");
-      patch(kk, (d0) => ({
-        messages: [...d0.messages, { who: "ai", text: ask || "(这轮没接住——换个说法,或把内容分短一点再说一次)" }],
-        draft: r.draft ? { ...r.draft, ...pickPics(d0.draft) } : d0.draft, // 保住已上传的头像/立绘
-        filled: r.filled || (r.draft ? Object.keys(r.draft) : d0.filled),
-      }));
+      patch(kk, (d0) => {
+        const nextDraft = r.draft ? { ...r.draft, ...pickPics(d0.draft) } : d0.draft; // 保住已上传的头像/立绘
+        const changed = r.draft
+          ? Object.keys(nextDraft).filter(
+              (k) => JSON.stringify(nextDraft[k]) !== JSON.stringify((d0.draft || {})[k])
+            )
+          : d0.filled;
+        return {
+          messages: [...d0.messages, { who: "ai", text: ask || "(这轮没接住——换个说法,或把内容分短一点再说一次)" }],
+          draft: nextDraft,
+          filled: changed,
+        };
+      });
     } catch (e) {
       patch(kk, (d0) => ({ messages: [...d0.messages, { who: "ai", text: "(建卡出错:" + e.message + ")" }] }));
     } finally {
       setBusy(false);
     }
+  }
+  function send() {
+    return sendText(desks[kind].input, { clearInput: true });
+  }
+  // C3 字段级 AI 动作:⟳ 改写 / ✦ 补写 = 合成定向指令走同一管线。
+  // 「尽量别动其他字段」是 prompt 约定不是硬锁;实际动了哪些,filled diff 全部墨晕显形。
+  function sendFieldDirective(f, mode) {
+    const text =
+      mode === "fill"
+        ? `请直接补写「${f.k}」(${f.k0}):按已有设定写出这一块的内容并填进 ${f.k0} 字段。不要反问、不要只解释,这一轮就把内容写出来。尽量别动其他字段。`
+        : `请直接把「${f.k}」(${f.k0})改写得更具体、更立体,写回 ${f.k0} 字段。不要反问,这一轮就改完。尽量别动其他字段。`;
+    return sendText(text);
   }
 
   async function onUpload(ev) {
@@ -550,12 +581,90 @@ export default function Create() {
     return Object.keys(d)
       .filter((k) => !NON_FIELD_KEYS.includes(k))
       .map((k) => ({
+        k0: k, // 原始 key(就地手改/定向指令回写用)
         k: LABELS[k] || k,
         v: fmtVal(d[k]),
+        // 纯文本字段可就地手改;对象/数组(世界书 entries、故事 timeline、tags…)v1 只读走「聊着改」
+        editable: typeof d[k] === "string",
+        // AI 骨架常带空串字段:收编成 ✦ 补写目标,不再是意义不明的空行
+        empty: typeof d[k] === "string" && !d[k].trim(),
         fresh: (desk.filled || []).includes(k),
         hidden: /secret|隐藏|真相/i.test(k),
       }));
   }, [desk.draft, desk.filled]);
+
+  // 切卡种时丢弃未提交的就地编辑(编辑目标已不在场),手记抽屉一并合上。
+  useEffect(() => {
+    setEditingKey(null);
+    setJournalOpen(false);
+  }, [kind]);
+
+  // 叙述条:取最后一条 AI 消息;新回复到来(消息数变化)自动重新亮起。
+  const lastAi = useMemo(() => {
+    for (let i = desk.messages.length - 1; i >= 0; i--) {
+      if (desk.messages[i].who !== "你") return desk.messages[i];
+    }
+    return null;
+  }, [desk.messages]);
+  useEffect(() => {
+    setNarrClosed(false);
+  }, [desk.messages.length, kind]);
+
+  // 手记抽屉 Esc 关闭。
+  useEffect(() => {
+    if (!journalOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === "Escape") setJournalOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [journalOpen]);
+
+  // —— C1 就地手改:手改直接写 draft(draft 即共享真相,AI 下轮基于改后内容继续长) ——
+  function startFieldEdit(f) {
+    if (!f.editable) return;
+    setEditingKey(f.k0);
+    setEditVal(desk.draft[f.k0] || "");
+  }
+  function commitFieldEdit() {
+    if (editingKey === null) return;
+    const key = editingKey;
+    const val = editVal;
+    setEditingKey(null);
+    if (key === "__name") {
+      const v = val.trim();
+      if (!v) return; // 名字不许清空成空串,留旧值
+      // 写到卡名实际所在的键:故事书等用 title(且没有 name)就写 title,其余写 name。
+      patch(kind, (d0) => {
+        const useTitle = "title" in (d0.draft || {}) && !("name" in (d0.draft || {}));
+        return { draft: { ...d0.draft, [useTitle ? "title" : "name"]: v } };
+      });
+      return;
+    }
+    patch(kind, (d0) => ({ draft: { ...d0.draft, [key]: val } }));
+  }
+  function cancelFieldEdit() {
+    setEditingKey(null);
+  }
+  // 复杂字段(对象/数组)不就地改:预填一句定向指令、光标带到命令条,聊着改。
+  function chatAboutField(f) {
+    patch(kind, { input: `把「${f.k}」这部分改一下:` });
+    requestAnimationFrame(() => dockInputRef.current && dockInputRef.current.focus());
+  }
+  function startNameEdit() {
+    setEditingKey("__name");
+    setEditVal(draftName === "未命名" ? "" : draftName);
+  }
+  // 编辑框通用键位:⌘/Ctrl+Enter 或 Enter(单行语义的名字)提交,Esc 取消。
+  function editKeys(e, single = false) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      cancelFieldEdit();
+    } else if ((e.key === "Enter" && (e.metaKey || e.ctrlKey)) || (single && e.key === "Enter" && !(e.nativeEvent || e).isComposing)) {
+      e.preventDefault();
+      commitFieldEdit();
+    }
+  }
 
   const portrait = desk.draft.image || ""; // 立绘
   const avatar = desk.draft.avatar || ""; // 头像
@@ -707,6 +816,13 @@ export default function Create() {
                 </BlurHighlight>
               </p>
             </div>
+            <button
+              className="create-journal-btn t-ui-sm"
+              onClick={() => setJournalOpen(true)}
+              title="这张卡聊过的全部对话"
+            >
+              ✒ 创作手记{desk.messages.length > 1 ? ` · ${desk.messages.length}` : ""}
+            </button>
           </div>
           <div className="create-kinds">
             {KINDS.map((t, i) => {
@@ -725,102 +841,155 @@ export default function Create() {
             })}
           </div>
 
-          {/* key=kind:切卡种时整个主体重挂,吃同一段入场动效当作切换转场 */}
-          <div className="create-body" key={kind}>
-            {/* 对话区 */}
-            <div className="create-chat">
-              <div className="create-msgs" ref={chatRef}>
-                {desk.messages.map((m, i) => (
-                  <div key={i} className={"create-msg" + (m.who === "你" ? " is-me" : "")}>
-                    <span className="create-msg-who t-meta">{m.who === "你" ? "你" : "助手"}</span>
-                    <p className="create-msg-text t-ui">{m.text}</p>
-                  </div>
-                ))}
-                {/* 空台引子:还没聊起来时给三条可点的起手句(点了只进输入框,不代发) */}
-                {desk.messages.length <= 1 && !busy && (
-                  <div className="create-starters">
-                    <span className="create-starters-h t-meta">起个头</span>
-                    <div className="create-starters-row">
-                      {(SUGGESTS[kind] || []).map((s, i) => (
-                        <button
-                          key={s}
-                          className="create-starter t-ui-sm"
-                          style={{ "--ci": i }}
-                          onClick={() => patch(kind, { input: s })}
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {busy && (
-                  <div className="create-msg">
-                    <span className="create-msg-who t-meta">助手</span>
-                    <p className="create-msg-text t-ui create-msg-typing">
-                      <span className="create-dot" aria-hidden="true" />
-                      <span className="create-dot" aria-hidden="true" />
-                      <span className="create-dot" aria-hidden="true" />
-                      正在想……
-                    </p>
-                  </div>
-                )}
-              </div>
-              <div className="create-composer">
-                <textarea
-                  rows={2}
-                  value={desk.input}
-                  disabled={busy}
-                  placeholder={KINDS[ki].ph}
-                  onChange={(e) => patch(kind, { input: e.target.value })}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
-                      e.preventDefault();
-                      send();
-                    }
-                  }}
-                />
-                <div className="create-composer-actions">
-                  <button className="create-upload" onClick={() => fileRef.current && fileRef.current.click()} disabled={busy}>
-                    上传文档
+          {/* C0 骨架(卡即界面,方案 docs/2026-07-11-create-card-canvas-plan.md):
+              中央卡画布 = 页面本体;右栏 = 产出侧(收纳/发布,本台架 C4 补);
+              底部信笺坞 = 消息条(临时,C2 换叙述条+手记)+ 命令条(原 composer 原样搬家)。
+              key=kind:切卡种整段重挂,吃入场动效当转场。 */}
+          <div className="create-stage" key={kind}>
+            {/* 卡画布:正在长的这张卡铺在中央 */}
+            <div className="create-canvas-col">
+              <section className="create-canvas" aria-label="卡画布">
+                <div className="create-card-kind t-meta">{KINDS[ki].zh}{desk.built.length > 0 && ` · 本台已建 ${desk.built.length}`}</div>
+                {editingKey === "__name" ? (
+                  <input
+                    className="create-card-name create-name-edit t-kai"
+                    autoFocus
+                    value={editVal}
+                    placeholder="起个名字…"
+                    onChange={(e) => setEditVal(e.target.value)}
+                    onKeyDown={(e) => editKeys(e, true)}
+                    onBlur={commitFieldEdit}
+                    aria-label="卡名"
+                  />
+                ) : (
+                  <button className="create-card-name create-name-btn t-kai" onClick={startNameEdit} title="点击改名">
+                    {draftName}
+                    <span className="create-name-hint" aria-hidden="true">✎</span>
                   </button>
-                  <input ref={fileRef} type="file" accept=".txt,.md,.docx" hidden onChange={onUpload} />
-                  <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim()}>
-                    发送
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            {/* 实时卡预览(卡片化 YOR-55;YOR-211 reskin:DepthCard 视差 + 空态改宣纸空卡) */}
-            <aside className="create-preview">
-              <DepthCard className="create-card-tilt">
-                <div className={"create-card" + (fields.length ? "" : " is-blank")}>
-                  <div className="create-card-kind t-meta">{KINDS[ki].zh}{desk.built.length > 0 && ` · 本台已建 ${desk.built.length}`}</div>
-                  <div className="create-card-name t-kai">{draftName}</div>
-                  {kind === "characters" && (avatar || portrait) && (
-                    <div className="create-pics-preview">
-                      {avatar && <span className="create-pics-av" style={{ backgroundImage: `url("${avatar}")` }} aria-label="头像" />}
-                      {portrait && <span className="create-pics-portrait" style={{ backgroundImage: `url("${portrait}")` }} aria-label="立绘" />}
+                )}
+                {kind === "characters" && (avatar || portrait) && (
+                  <div className="create-pics-preview">
+                    {avatar && <span className="create-pics-av" style={{ backgroundImage: `url("${avatar}")` }} aria-label="头像" />}
+                    {portrait && <span className="create-pics-portrait" style={{ backgroundImage: `url("${portrait}")` }} aria-label="立绘" />}
+                  </div>
+                )}
+                <div className="create-card-fields">
+                  {fields.length ? (
+                    fields.map((f, fi) => (
+                      <div
+                        className={
+                          "create-field" +
+                          (f.fresh ? " is-fresh" : "") +
+                          (editingKey === f.k0 ? " is-editing" : "")
+                        }
+                        style={{ "--ci": Math.min(fi, 8) }}
+                        key={f.k0}
+                      >
+                        <span className="create-field-k t-meta">
+                          {f.k}
+                          {f.hidden && <span className="create-field-seal" title="隐藏真相,玩家不可见">密</span>}
+                        </span>
+                        {editingKey === f.k0 ? (
+                          <textarea
+                            className="create-field-edit t-ui-sm"
+                            autoFocus
+                            rows={Math.min(8, Math.max(2, Math.ceil((editVal.length + 1) / 26)))}
+                            value={editVal}
+                            onChange={(e) => setEditVal(e.target.value)}
+                            onKeyDown={(e) => editKeys(e)}
+                            onBlur={commitFieldEdit}
+                            aria-label={"编辑" + f.k}
+                          />
+                        ) : f.empty ? (
+                          <span className="create-field-v create-field-v-empty t-ui-sm">还空着——✦ 让 AI 补写,或 ✎ 手写</span>
+                        ) : (
+                          <span className="create-field-v t-ui-sm">{f.hidden ? "(隐藏真相,玩家不可见)" + f.v : f.v}</span>
+                        )}
+                        {editingKey !== f.k0 && (
+                          <span className="create-field-acts">
+                            {f.editable ? (
+                              <>
+                                <button
+                                  className="create-field-act"
+                                  disabled={busy}
+                                  title={f.empty ? "让 AI 补写这一块" : "让 AI 把这一块改写得更立体"}
+                                  aria-label={(f.empty ? "补写" : "改写") + f.k}
+                                  onClick={() => sendFieldDirective(f, f.empty ? "fill" : "rewrite")}
+                                >
+                                  {f.empty ? "✦" : "⟳"}
+                                </button>
+                                <button className="create-field-act" disabled={busy} title="就地手改" aria-label={"手改" + f.k} onClick={() => startFieldEdit(f)}>
+                                  ✎
+                                </button>
+                              </>
+                            ) : (
+                              <button className="create-field-act" disabled={busy} title="这块是结构化内容,到命令条聊着改" aria-label={"聊着改" + f.k} onClick={() => chatAboutField(f)}>
+                                聊
+                              </button>
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="create-card-blank">
+                      <span className="create-card-blank-seal t-kai" aria-hidden="true">卡</span>
+                      <span className="create-card-blank-tx t-meta">{OPENINGS[kind]}</span>
+                      {/* 空台引子:起手句进画布空卡里(点了只进输入框,不代发) */}
+                      {desk.messages.length <= 1 && !busy && (
+                        <div className="create-starters">
+                          <span className="create-starters-h t-meta">起个头</span>
+                          <div className="create-starters-row">
+                            {(SUGGESTS[kind] || []).map((s, i) => (
+                              <button
+                                key={s}
+                                className="create-starter t-ui-sm"
+                                style={{ "--ci": i }}
+                                onClick={() => patch(kind, { input: s })}
+                              >
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
-                  <div className="create-card-fields">
-                    {fields.length ? (
-                      fields.map((f, i) => (
-                        <div className={"create-field" + (f.fresh ? " is-fresh" : "")} key={i}>
-                          <span className="create-field-k t-meta">{f.k}</span>
-                          <span className="create-field-v t-ui-sm">{f.hidden ? "(隐藏真相,玩家不可见)" + f.v : f.v}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="create-card-blank">
-                        <span className="create-card-blank-seal t-kai" aria-hidden="true">卡</span>
-                        <span className="create-card-blank-tx t-meta">聊着聊着,卡就长出来了。</span>
-                      </div>
-                    )}
-                  </div>
                 </div>
-              </DepthCard>
+              </section>
+            </div>
+
+            {/* 产出侧:本台架(看得见的成品)→ 收纳动作 → 装订区(发布清单常显) */}
+            <aside className="create-side">
+              <div className="create-shelf">
+                <div className="create-shelf-h t-meta">本台已建 · {desk.built.length}</div>
+                {desk.built.length ? (
+                  <div className="create-shelf-list">
+                    {desk.built.map((card, i) => {
+                      const c = (card && card.data) || card || {};
+                      const nm = c.name || c.title || "未命名";
+                      const entries = worldEntries(card);
+                      const firstField = cardFields(card)[0];
+                      return (
+                        <DepthCard key={nm + i} className="create-shelf-tilt" maxRotation={5}>
+                          <div className="create-shelf-card">
+                            <span className="create-shelf-name t-kai">{nm}</span>
+                            <span className="create-shelf-sub t-meta">
+                              {entries ? `${entries.length} 条条目` : firstField ? firstField.v.slice(0, 22) : "已收进本台"}
+                            </span>
+                            <span className="create-shelf-acts">
+                              <button className="create-shelf-act" onClick={() => setBuiltView(true)}>查看</button>
+                              <button className="create-shelf-act" onClick={() => removeBuilt(i)}>移除</button>
+                            </span>
+                          </div>
+                        </DepthCard>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="create-shelf-empty t-meta">还空着——聊出一张,点「收进本台」。</div>
+                )}
+              </div>
 
               <div className="create-actions">
                 <Button variant="line" onClick={saveCard} disabled={!hasDraft || savingCard} title={hasDraft ? undefined : "先聊出一张卡再收入卡库"}>
@@ -829,9 +998,6 @@ export default function Create() {
                 <Button variant="line" onClick={nextCard} disabled={!hasDraft} title={hasDraft ? undefined : "先聊出一张卡再收进本台"}>
                   收进本台 · 再建一张
                 </Button>
-                {desk.built.length > 0 && (
-                  <Button variant="line" onClick={() => setBuiltView(true)}>查看本台已建({desk.built.length})</Button>
-                )}
                 <Button variant="line" onClick={openLib}>从卡库补素材</Button>
                 <div className="create-actions-sep" aria-hidden="true" />
                 <Button
@@ -844,8 +1010,119 @@ export default function Create() {
                   预览并发布到探索 · 公开
                 </Button>
               </div>
+
+              {/* 装订区:本次发布会打包什么,常显(与 publish 同源 deskCards,「看到的=会发的」YOR-192) */}
+              {(() => {
+                const mf = publishManifest();
+                return (
+                  <div className="create-bind">
+                    <div className="create-bind-h t-meta">装订 · 发布时打包</div>
+                    <ul className="create-bind-list t-meta">
+                      <li>
+                        角色卡 ×{mf.chars.length}
+                        {mf.chars.length > 0 && ":" + mf.chars.map((c) => c.name + (c.secret ? " ⚠" : "")).join("、")}
+                      </li>
+                      {mf.worlds > 0 && <li>设定卡 · 世界书 ×{mf.worlds}</li>}
+                      {mf.players.length > 0 && <li>演出卡 ×{mf.players.length}:{mf.players.join("、")}</li>}
+                      {mf.story && (
+                        <li>
+                          故事书:{mf.story}
+                          {mf.storyExtra > 0 && `(另 ${mf.storyExtra} 张不发)`}
+                        </li>
+                      )}
+                      {!mf.chars.length && <li className="create-bind-empty">还没有角色卡——发布至少要一张</li>}
+                    </ul>
+                    {mf.anySecret && (
+                      <div className="create-bind-warn t-meta">⚠ 带「隐藏真相」的卡会随发布公开,发布前核对</div>
+                    )}
+                  </div>
+                );
+              })()}
             </aside>
           </div>
+
+          {/* 信笺坞:叙述条(AI 最新一句,可关;busy=墨点)+ 命令条(原 composer 逻辑原样)。
+              全部对话史在「创作手记」抽屉,消息数据结构不动,只是显示降级。 */}
+          <div className="create-dock">
+            {busy ? (
+              <div className="create-narr" role="status">
+                <span className="create-narr-mark t-kai" aria-hidden="true">✒</span>
+                <span className="create-msg-typing t-ui-sm">
+                  <span className="create-dot" aria-hidden="true" />
+                  <span className="create-dot" aria-hidden="true" />
+                  <span className="create-dot" aria-hidden="true" />
+                  正在想……
+                </span>
+              </div>
+            ) : !narrClosed && lastAi && lastAi.text !== OPENINGS[kind] ? (
+              <div className="create-narr" role="status" key={desk.messages.length}>
+                <span className="create-narr-mark t-kai" aria-hidden="true">✒</span>
+                <span className="create-narr-tx t-ui-sm">
+                  <BlurHighlight blurDuration={0.6} viewportOptions={{ once: true, amount: 0.1 }}>
+                    {lastAi.text}
+                  </BlurHighlight>
+                </span>
+                <button className="create-narr-x" aria-label="收起这句" onClick={() => setNarrClosed(true)}>×</button>
+              </div>
+            ) : null}
+            <div className="create-composer">
+              <textarea
+                ref={dockInputRef}
+                rows={1}
+                value={desk.input}
+                disabled={busy}
+                placeholder={KINDS[ki].ph}
+                onChange={(e) => patch(kind, { input: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
+              />
+              <div className="create-composer-actions">
+                <button className="create-upload" onClick={() => fileRef.current && fileRef.current.click()} disabled={busy}>
+                  上传文档
+                </button>
+                <input ref={fileRef} type="file" accept=".txt,.md,.docx" hidden onChange={onUpload} />
+                <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim()}>
+                  发送
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* 创作手记:这张卡聊过的全部对话(降级存档,想看才看)。数据=desk.messages 原样。 */}
+          {journalOpen && (
+            <div className="create-journal" role="dialog" aria-modal="true" aria-label="创作手记">
+              <div className="create-journal-scrim" onClick={() => setJournalOpen(false)} />
+              <div className="create-journal-panel">
+                <div className="create-journal-head">
+                  <span className="t-h3">创作手记 · {KINDS[ki].zh}</span>
+                  <button className="create-modal-x create-journal-x" onClick={() => setJournalOpen(false)} aria-label="关闭">×</button>
+                </div>
+                <div className="create-journal-list" ref={chatRef}>
+                  {desk.messages.map((m, i) => (
+                    <div key={i} className={"create-msg" + (m.who === "你" ? " is-me" : "")}>
+                      <span className="create-msg-who t-meta">{m.who === "你" ? "你" : "助手"}</span>
+                      <p className="create-msg-text t-ui">{m.text}</p>
+                    </div>
+                  ))}
+                  {busy && (
+                    <div className="create-msg">
+                      <span className="create-msg-who t-meta">助手</span>
+                      <p className="create-msg-text t-ui create-msg-typing">
+                        <span className="create-dot" aria-hidden="true" />
+                        <span className="create-dot" aria-hidden="true" />
+                        <span className="create-dot" aria-hidden="true" />
+                        正在想……
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 
