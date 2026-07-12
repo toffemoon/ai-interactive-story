@@ -182,9 +182,6 @@ export default function Create() {
   const [editingKey, setEditingKey] = useState(null);
   const [editVal, setEditVal] = useState("");
   const dockInputRef = useRef(null); // 命令条输入框(「聊着改」把光标带过去)
-  // C2 叙述层:AI 的话降级为「最新一句」浮条 + 全史进手记抽屉;对话数据结构(desk.messages)不动。
-  const [journalOpen, setJournalOpen] = useState(false);
-  const [narrClosed, setNarrClosed] = useState(false);
   // D1 参考资料:desks[kind].seed(可选键,兼容扩展)。弹窗内编辑用本地 seedText,确认才 patch。
   const [seedOpen, setSeedOpen] = useState(false);
   const [seedText, setSeedText] = useState("");
@@ -229,7 +226,7 @@ export default function Create() {
   useEffect(() => {
     const el = chatRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [desk.messages, busy, journalOpen]); // journalOpen:手记抽屉打开那刻滚到底
+  }, [desk.messages, busy]);
 
   // go = 可选去处路由:带去处的 toast 多留一会儿,不然来不及点(YOR-170)
   function flash(msg, go = null) {
@@ -246,7 +243,48 @@ export default function Create() {
 
   // 发一句话进建卡管线(命令条 send 与字段级指令共用;messages/draft 契约不动)。
   // filled 改为客户端 diff:如实标出这一轮实际变化的字段(C3 坦白原则——模型可能顺手动别处,全部显形)。
-  async function sendText(rawText, { clearInput = false } = {}) {
+  // E2 完整度门控:台子的创作阶段(desks[kind].phase 可选键)。
+  // 兼容规则:显式 phase 优先;老数据无 phase → 有草稿或已聊开(消息>1)视为 drafting(别把进行中的老会话拽回门控),
+  // 全新空台才进 understand(构思:只问不写,后端硬门槛)。
+  function deskPhase(d) {
+    if (d.phase) return d.phase;
+    if (Object.keys(d.draft || {}).length) return "drafting";
+    return d.messages.length <= 1 ? "understand" : "drafting";
+  }
+  const phase = deskPhase(desk);
+  const COMP_THRESHOLD = 60;
+
+  // E3 问题作答(本地态,题目换了就清;答案不进 desks——提交后化成一条用户消息即是历史)。
+  const [quizAns, setQuizAns] = useState({});
+  const [quizFree, setQuizFree] = useState({});
+  useEffect(() => {
+    setQuizAns({});
+    setQuizFree({});
+  }, [desk.questions, kind]);
+  function quizAnswerOf(qu) {
+    return (quizFree[qu.id] || "").trim() || quizAns[qu.id] || "";
+  }
+  function submitQuiz() {
+    const lines = (desk.questions || [])
+      .map((qu) => {
+        const a = quizAnswerOf(qu);
+        return a ? `${qu.label} —— ${a}` : null;
+      })
+      .filter(Boolean);
+    if (!lines.length) return;
+    sendText(lines.join("\n"));
+  }
+  // E4 蓝图批准:切 drafting + 让 AI 按蓝图一次落笔(此后回到既有创作行为)。
+  function approveBlueprint() {
+    const bp = desk.blueprint || [];
+    patch(kind, { phase: "drafting" });
+    sendText(
+      "就按这份蓝图开始写卡,把已经聊清的内容一次填进字段,别再反问:\n" + bp.map((b) => "- " + b).join("\n"),
+      { phaseOverride: "drafting" }
+    );
+  }
+
+  async function sendText(rawText, { clearInput = false, phaseOverride = null } = {}) {
     const kk = kind;
     const cur = desks[kk];
     const text = (rawText || "").trim();
@@ -258,23 +296,43 @@ export default function Create() {
     }));
     patch(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text }], ...(clearInput ? { input: "" } : {}) }));
     try {
-      // D1:seed = 挂在台上的参考资料(desks[kind].seed,可选键;老草稿无此键走 || "" 兜底)。
-      // 后端非空时截前 6000 字拼进 system prompt(「基于已有资料完善,定向追问弱字段」,src/identify.py)。
-      const r = await postJSON("/api/build_card", { kind: kk, messages: apiMsgs, draft: cur.draft, seed: cur.seed || "" });
-      const ask = [r.reply, r.next_question].filter(Boolean).join(" ");
-      patch(kk, (d0) => {
-        const nextDraft = r.draft ? { ...r.draft, ...pickPics(d0.draft) } : d0.draft; // 保住已上传的头像/立绘
-        const changed = r.draft
-          ? Object.keys(nextDraft).filter(
-              (k) => JSON.stringify(nextDraft[k]) !== JSON.stringify((d0.draft || {})[k])
-            )
-          : d0.filled;
-        return {
-          messages: [...d0.messages, { who: "ai", text: ask || "(这轮没接住——换个说法,或把内容分短一点再说一次)" }],
-          draft: nextDraft,
-          filled: changed,
-        };
+      // D1:seed = 挂在台上的参考资料;E2:understand/blueprint 态带 phase=understand(后端只评分提问,硬不写卡)。
+      // phaseOverride:批准蓝图那一发要立即按 drafting 走(setState 异步,闭包里的 desks 还是旧 phase)。
+      const curPhase = phaseOverride || deskPhase(cur);
+      const gated = curPhase === "understand" || curPhase === "blueprint";
+      const r = await postJSON("/api/build_card", {
+        kind: kk,
+        messages: apiMsgs,
+        draft: cur.draft,
+        seed: cur.seed || "",
+        ...(gated ? { phase: "understand", threshold: COMP_THRESHOLD } : {}),
       });
+      if (r.phase === "understand") {
+        // 构思轮:不动 draft(后端已回传 prev);存完整度/问题/蓝图;拿到蓝图即切待批态。
+        patch(kk, (d0) => ({
+          messages: [...d0.messages, { who: "ai", text: r.reply || "(这轮没接住——换个说法再说一次)" }],
+          comp: r.completeness || 0,
+          questions: r.questions || [],
+          blueprint: r.blueprint || [],
+          phase: (r.blueprint || []).length ? "blueprint" : "understand",
+        }));
+      } else {
+        const ask = [r.reply, r.next_question].filter(Boolean).join(" ");
+        patch(kk, (d0) => {
+          const nextDraft = r.draft ? { ...r.draft, ...pickPics(d0.draft) } : d0.draft; // 保住已上传的头像/立绘
+          const changed = r.draft
+            ? Object.keys(nextDraft).filter(
+                (k) => JSON.stringify(nextDraft[k]) !== JSON.stringify((d0.draft || {})[k])
+              )
+            : d0.filled;
+          return {
+            messages: [...d0.messages, { who: "ai", text: ask || "(这轮没接住——换个说法,或把内容分短一点再说一次)" }],
+            draft: nextDraft,
+            filled: changed,
+            phase: "drafting",
+          };
+        });
+      }
     } catch (e) {
       patch(kk, (d0) => ({ messages: [...d0.messages, { who: "ai", text: "(建卡出错:" + e.message + ")" }] }));
     } finally {
@@ -301,6 +359,8 @@ export default function Create() {
     patch(kk, (d0) => ({
       draft: { ...draft, ...pickPics(d0.draft) }, // 保住已上传的头像/立绘
       filled: Object.keys(draft),
+      // E5 快速通道:已带内容,直通 drafting,清构思残留
+      phase: "drafting", comp: 0, questions: [], blueprint: [],
       messages: [...d0.messages, { who: "ai", text: "《" + nm + "》解析好了,已铺上画布,顺手也收进了你的卡库(私密)。哪里不对,聊着改。" }],
     }));
     return nm;
@@ -333,6 +393,7 @@ export default function Create() {
       draft: { ...card, [useTitle ? "title" : "name"]: nm },
       filled: Object.keys(card),
       tpl: undefined,
+      phase: "drafting", comp: 0, questions: [], blueprint: [], // E5 快速通道
       messages: [...d0.messages, { who: "ai", text: "《" + nm + "》已铺开——基于它改;原卡不动,入库时按新名字另存。" }],
     }));
     flash("已铺开改编稿《" + nm + "》");
@@ -395,6 +456,7 @@ export default function Create() {
       patch(kind, (d0) => ({
         draft: { ...parsed.draft, ...pickPics(d0.draft) },
         filled: Object.keys(parsed.draft),
+        phase: "drafting", comp: 0, questions: [], blueprint: [], // E5 快速通道
         messages: [...d0.messages, { who: "ai", text: "《" + nm + "》从酒馆卡读进来了(本地解析,没入库、不耗额度)。" + droppedNote + "哪里不对,聊着改。" }],
       }));
       // PNG 本体顺手压成立绘(draft.image 空着才填,不覆盖用户已传的)
@@ -756,7 +818,6 @@ export default function Create() {
   // 切卡种时丢弃未提交的就地编辑(编辑目标已不在场),手记抽屉/参考资料弹窗一并合上。
   useEffect(() => {
     setEditingKey(null);
-    setJournalOpen(false);
     setSeedOpen(false);
     setImportOpen(null);
     setTplOpen(false);
@@ -792,6 +853,8 @@ export default function Create() {
       filled: [],
       tpl: t.id,
       input: t.opener || "",
+      // E5:骨架模板=已有结构直通 drafting(✦ 补写可用);纯 opener 模板(世界书)留在构思阶段
+      ...(t.skeleton ? { phase: "drafting", comp: 0, questions: [], blueprint: [] } : {}),
     });
     setTplOpen(false);
     flash(t.skeleton ? `已铺开「${t.name}」骨架——空字段都是 ✦ 补写目标` : `「${t.name}」的开场指令已放进输入框`);
@@ -819,27 +882,6 @@ export default function Create() {
     const n = (s || "").length;
     return n < 1000 ? `${n}字` : `${(n / 1000).toFixed(1)}k字`;
   }
-
-  // 叙述条:取最后一条 AI 消息;新回复到来(消息数变化)自动重新亮起。
-  const lastAi = useMemo(() => {
-    for (let i = desk.messages.length - 1; i >= 0; i--) {
-      if (desk.messages[i].who !== "你") return desk.messages[i];
-    }
-    return null;
-  }, [desk.messages]);
-  useEffect(() => {
-    setNarrClosed(false);
-  }, [desk.messages.length, kind]);
-
-  // 手记抽屉 Esc 关闭。
-  useEffect(() => {
-    if (!journalOpen) return undefined;
-    const onKey = (e) => {
-      if (e.key === "Escape") setJournalOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [journalOpen]);
 
   // —— C1 就地手改:手改直接写 draft(draft 即共享真相,AI 下轮基于改后内容继续长) ——
   function startFieldEdit(f) {
@@ -963,12 +1005,64 @@ export default function Create() {
 
           {/* 中:对话(唯一滚动区) */}
           <div className="ct-chat" ref={chatRef}>
+            {/* E6:完整度火候线进手机对话流(布局不动,只是流内多一行) */}
+            {phase !== "drafting" && (
+              <div className="create-comp" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={desk.comp || 0} aria-label="这张卡的完整度">
+                <span className="create-comp-label t-meta">
+                  完整度 {desk.comp || 0}
+                  <span className="create-comp-hint">{(desk.comp || 0) >= COMP_THRESHOLD ? " · 过线,可以落笔" : ` · 过 ${COMP_THRESHOLD} 才落笔`}</span>
+                </span>
+                <span className="create-comp-line" aria-hidden="true">
+                  <span className="create-comp-fill" style={{ width: `${Math.min(100, desk.comp || 0)}%` }} />
+                  <span className="create-comp-mark" style={{ left: `${COMP_THRESHOLD}%` }} />
+                </span>
+              </div>
+            )}
             {desk.messages.map((m, i) => (
               <div key={i} className={"create-msg" + (m.who === "你" ? " is-me" : "")}>
                 <span className="create-msg-who t-meta">{m.who === "你" ? "你" : "助手"}</span>
                 <p className="create-msg-text t-ui">{m.text}</p>
               </div>
             ))}
+            {/* E6:问题圈选与蓝图进手机对话流(复用桌面组件类,样式已通用) */}
+            {phase === "understand" && (desk.questions || []).length > 0 && !busy && (
+              <div className="create-quiz">
+                {desk.questions.map((qu) => (
+                  <div className="create-quiz-q" key={qu.id}>
+                    <div className="create-quiz-label t-ui">{qu.label}</div>
+                    <div className="create-quiz-opts">
+                      {(qu.options || []).map((o) => (
+                        <button key={o} className={"create-quiz-opt" + (quizAns[qu.id] === o ? " is-on" : "")}
+                          onClick={() => setQuizAns((a) => ({ ...a, [qu.id]: a[qu.id] === o ? undefined : o }))}>
+                          {o}
+                        </button>
+                      ))}
+                      {qu.allow_free !== false && (
+                        <input className="create-quiz-free t-ui-sm" placeholder="其他,自己写……" value={quizFree[qu.id] || ""}
+                          onChange={(e) => { const v = e.target.value; setQuizFree((f) => ({ ...f, [qu.id]: v })); if (v) setQuizAns((a) => ({ ...a, [qu.id]: undefined })); }} />
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <div className="create-quiz-foot">
+                  <Button variant="primary" disabled={!(desk.questions || []).some((qu) => quizAnswerOf(qu))} onClick={submitQuiz}>
+                    就按这些答
+                  </Button>
+                </div>
+              </div>
+            )}
+            {phase === "blueprint" && (desk.blueprint || []).length > 0 && !busy && (
+              <div className="create-bp">
+                <div className="create-bp-h t-kai">蓝图 · 这张卡打算这么写</div>
+                {desk.blueprint.map((b, i) => (
+                  <div className="create-bp-item t-ui" key={i}>—— {b}</div>
+                ))}
+                <div className="create-bp-foot">
+                  <Button variant="primary" onClick={approveBlueprint}>批准,开始写</Button>
+                  <button className="create-blank-link" onClick={() => patch(kind, { phase: "understand" })}>再聊聊</button>
+                </div>
+              </div>
+            )}
             {busy && (
               <div className="create-msg">
                 <span className="create-msg-who t-meta">助手</span>
@@ -1044,13 +1138,6 @@ export default function Create() {
                 </BlurHighlight>
               </p>
             </div>
-            <button
-              className="create-journal-btn t-ui-sm"
-              onClick={() => setJournalOpen(true)}
-              title="这张卡聊过的全部对话"
-            >
-              ✒ 创作手记{desk.messages.length > 1 ? ` · ${desk.messages.length}` : ""}
-            </button>
           </div>
           <div className="create-kinds">
             {KINDS.map((t, i) => {
@@ -1069,11 +1156,155 @@ export default function Create() {
             })}
           </div>
 
-          {/* C0 骨架(卡即界面,方案 docs/2026-07-11-create-card-canvas-plan.md):
-              中央卡画布 = 页面本体;右栏 = 产出侧(收纳/发布,本台架 C4 补);
-              底部信笺坞 = 消息条(临时,C2 换叙述条+手记)+ 命令条(原 composer 原样搬家)。
-              key=kind:切卡种整段重挂,吃入场动效当转场。 */}
-          <div className="create-stage" key={kind}>
+          {/* E1 双栏(artifact 式,方案 E 章):左会话流(对谈体,零气泡框,命令条钉底)|
+              右 artifact 区 = 原 stage(卡画布+产出侧)。key=kind:切卡种整段重挂当转场。
+              叙述条/手记抽屉自此退役——会话流就是历史本身。 */}
+          <div className="create-studio" key={kind}>
+            <section className="create-session" aria-label="创作对话">
+              {/* E2 完整度火候线(signature):一根从墨到鎏金渐染的细线,60 处一粒朱点=落笔线;
+                  只在构思/蓝图阶段出现——落笔后它的任务就完成了。 */}
+              {phase !== "drafting" && (
+                <div
+                  className="create-comp"
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={desk.comp || 0}
+                  aria-label="这张卡的完整度"
+                >
+                  <span className="create-comp-label t-meta">
+                    完整度 {desk.comp || 0}
+                    <span className="create-comp-hint">{(desk.comp || 0) >= COMP_THRESHOLD ? " · 过线,可以落笔" : ` · 过 ${COMP_THRESHOLD} 才落笔`}</span>
+                  </span>
+                  <span className="create-comp-line" aria-hidden="true">
+                    <span className="create-comp-fill" style={{ width: `${Math.min(100, desk.comp || 0)}%` }} />
+                    <span className="create-comp-mark" style={{ left: `${COMP_THRESHOLD}%` }} />
+                  </span>
+                </div>
+              )}
+              <div className="create-session-flow" ref={chatRef}>
+                {desk.messages.map((m, i) => (
+                  <div key={i} className={"create-say" + (m.who === "你" ? " is-me" : "")}>
+                    <span className="create-say-who t-kai">{m.who === "你" ? "你" : "助手"}</span>
+                    <div className="create-say-tx t-ui">{m.text}</div>
+                  </div>
+                ))}
+                {/* E3 问题作答:稿纸圈选词——虚线下划的可点词组,点选转朱砂实线;「其他」是填空线。零卡片零边框。 */}
+                {phase === "understand" && (desk.questions || []).length > 0 && !busy && (
+                  <div className="create-quiz">
+                    {desk.questions.map((qu) => (
+                      <div className="create-quiz-q" key={qu.id}>
+                        <div className="create-quiz-label t-ui">{qu.label}</div>
+                        <div className="create-quiz-opts">
+                          {(qu.options || []).map((o) => (
+                            <button
+                              key={o}
+                              className={"create-quiz-opt" + (quizAns[qu.id] === o ? " is-on" : "")}
+                              onClick={() =>
+                                setQuizAns((a) => ({ ...a, [qu.id]: a[qu.id] === o ? undefined : o }))
+                              }
+                            >
+                              {o}
+                            </button>
+                          ))}
+                          {qu.allow_free !== false && (
+                            <input
+                              className="create-quiz-free t-ui-sm"
+                              placeholder="其他,自己写……"
+                              value={quizFree[qu.id] || ""}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setQuizFree((f) => ({ ...f, [qu.id]: v }));
+                                if (v) setQuizAns((a) => ({ ...a, [qu.id]: undefined }));
+                              }}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    <div className="create-quiz-foot">
+                      <Button
+                        variant="primary"
+                        disabled={!(desk.questions || []).some((qu) => quizAnswerOf(qu))}
+                        onClick={submitQuiz}
+                      >
+                        就按这些答
+                      </Button>
+                      <span className="create-quiz-skip t-meta">没答全没关系,也可以直接在下面说</span>
+                    </div>
+                  </div>
+                )}
+                {/* E4 蓝图:破折号要点直排纸面;唯一的重元素是那颗批准钮。 */}
+                {phase === "blueprint" && (desk.blueprint || []).length > 0 && !busy && (
+                  <div className="create-bp">
+                    <div className="create-bp-h t-kai">蓝图 · 这张卡打算这么写</div>
+                    {desk.blueprint.map((b, i) => (
+                      <div className="create-bp-item t-ui" key={i}>—— {b}</div>
+                    ))}
+                    <div className="create-bp-foot">
+                      <Button variant="primary" onClick={approveBlueprint}>批准,开始写</Button>
+                      <button
+                        className="create-blank-link"
+                        onClick={() => {
+                          patch(kind, { phase: "understand" });
+                          requestAnimationFrame(() => dockInputRef.current && dockInputRef.current.focus());
+                        }}
+                      >
+                        再聊聊
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {busy && (
+                  <div className="create-say">
+                    <span className="create-say-who t-kai">助手</span>
+                    <div className="create-say-tx t-ui create-msg-typing">
+                      <span className="create-dot" aria-hidden="true" />
+                      <span className="create-dot" aria-hidden="true" />
+                      <span className="create-dot" aria-hidden="true" />
+                      正在想……
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="create-dock">
+                <div className="create-composer">
+                  <textarea
+                    ref={dockInputRef}
+                    rows={1}
+                    value={desk.input}
+                    disabled={busy}
+                    placeholder={KINDS[ki].ph}
+                    onChange={(e) => patch(kind, { input: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
+                        e.preventDefault();
+                        send();
+                      }
+                    }}
+                  />
+                  <div className="create-composer-actions">
+                    <button className="create-upload" onClick={() => fileRef.current && fileRef.current.click()} disabled={busy}>
+                      上传文档
+                    </button>
+                    <input ref={fileRef} type="file" accept=".txt,.md,.docx" hidden onChange={onUpload} />
+                    <button
+                      className={"create-seed-btn" + (desk.seed ? " has-seed" : "")}
+                      onClick={openSeed}
+                      disabled={busy}
+                      title={desk.seed ? "查看 / 修改 / 清除参考资料(AI 每轮都在参考它)" : "挂一份已有设定 / 旧卡文本,AI 之后每轮都基于它来完善"}
+                    >
+                      {desk.seed ? `参考 · ${seedLenLabel(desk.seed)}` : "挂资料"}
+                    </button>
+                    <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim()}>
+                      发送
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <div className="create-stage">
             {/* 卡画布:正在长的这张卡铺在中央 */}
             <div className="create-canvas-col">
               <section className="create-canvas" aria-label="卡画布">
@@ -1168,7 +1399,9 @@ export default function Create() {
                   ) : (
                     <div className="create-card-blank">
                       <span className="create-card-blank-seal t-kai" aria-hidden="true">卡</span>
-                      <span className="create-card-blank-tx t-meta">{OPENINGS[kind]}</span>
+                      <span className="create-card-blank-tx t-meta">
+                        {phase !== "drafting" ? "构思中——左边聊清楚要什么,完整度过线、蓝图点头,再落笔。" : OPENINGS[kind]}
+                      </span>
                       {/* 空台引子:起手句进画布空卡里(点了只进输入框,不代发) */}
                       {desk.messages.length <= 1 && !busy && (
                         <div className="create-starters">
@@ -1296,96 +1529,8 @@ export default function Create() {
             </aside>
           </div>
 
-          {/* 信笺坞:叙述条(AI 最新一句,可关;busy=墨点)+ 命令条(原 composer 逻辑原样)。
-              全部对话史在「创作手记」抽屉,消息数据结构不动,只是显示降级。 */}
-          <div className="create-dock">
-            {busy ? (
-              <div className="create-narr" role="status">
-                <span className="create-narr-mark t-kai" aria-hidden="true">✒</span>
-                <span className="create-msg-typing t-ui-sm">
-                  <span className="create-dot" aria-hidden="true" />
-                  <span className="create-dot" aria-hidden="true" />
-                  <span className="create-dot" aria-hidden="true" />
-                  正在想……
-                </span>
-              </div>
-            ) : !narrClosed && lastAi && lastAi.text !== OPENINGS[kind] ? (
-              <div className="create-narr" role="status" key={desk.messages.length}>
-                <span className="create-narr-mark t-kai" aria-hidden="true">✒</span>
-                <span className="create-narr-tx t-ui-sm">
-                  <BlurHighlight blurDuration={0.6} viewportOptions={{ once: true, amount: 0.1 }}>
-                    {lastAi.text}
-                  </BlurHighlight>
-                </span>
-                <button className="create-narr-x" aria-label="收起这句" onClick={() => setNarrClosed(true)}>×</button>
-              </div>
-            ) : null}
-            <div className="create-composer">
-              <textarea
-                ref={dockInputRef}
-                rows={1}
-                value={desk.input}
-                disabled={busy}
-                placeholder={KINDS[ki].ph}
-                onChange={(e) => patch(kind, { input: e.target.value })}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
-                    e.preventDefault();
-                    send();
-                  }
-                }}
-              />
-              <div className="create-composer-actions">
-                <button className="create-upload" onClick={() => fileRef.current && fileRef.current.click()} disabled={busy}>
-                  上传文档
-                </button>
-                <input ref={fileRef} type="file" accept=".txt,.md,.docx" hidden onChange={onUpload} />
-                <button
-                  className={"create-seed-btn" + (desk.seed ? " has-seed" : "")}
-                  onClick={openSeed}
-                  disabled={busy}
-                  title={desk.seed ? "查看 / 修改 / 清除参考资料(AI 每轮都在参考它)" : "挂一份已有设定 / 旧卡文本,AI 之后每轮都基于它来完善"}
-                >
-                  {desk.seed ? `参考 · ${seedLenLabel(desk.seed)}` : "挂资料"}
-                </button>
-                <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim()}>
-                  发送
-                </Button>
-              </div>
-            </div>
           </div>
 
-          {/* 创作手记:这张卡聊过的全部对话(降级存档,想看才看)。数据=desk.messages 原样。 */}
-          {journalOpen && (
-            <div className="create-journal" role="dialog" aria-modal="true" aria-label="创作手记">
-              <div className="create-journal-scrim" onClick={() => setJournalOpen(false)} />
-              <div className="create-journal-panel">
-                <div className="create-journal-head">
-                  <span className="t-h3">创作手记 · {KINDS[ki].zh}</span>
-                  <button className="create-modal-x create-journal-x" onClick={() => setJournalOpen(false)} aria-label="关闭">×</button>
-                </div>
-                <div className="create-journal-list" ref={chatRef}>
-                  {desk.messages.map((m, i) => (
-                    <div key={i} className={"create-msg" + (m.who === "你" ? " is-me" : "")}>
-                      <span className="create-msg-who t-meta">{m.who === "你" ? "你" : "助手"}</span>
-                      <p className="create-msg-text t-ui">{m.text}</p>
-                    </div>
-                  ))}
-                  {busy && (
-                    <div className="create-msg">
-                      <span className="create-msg-who t-meta">助手</span>
-                      <p className="create-msg-text t-ui create-msg-typing">
-                        <span className="create-dot" aria-hidden="true" />
-                        <span className="create-dot" aria-hidden="true" />
-                        <span className="create-dot" aria-hidden="true" />
-                        正在想……
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
 
 
         </>

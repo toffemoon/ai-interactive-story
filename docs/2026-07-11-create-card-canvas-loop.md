@@ -181,3 +181,59 @@ plan: docs/2026-07-11-create-card-canvas-plan.md
 - 红线:API 契约零改动(seed 用的是后端已实现参数);desks 兼容扩展(seed/tpl 可选键,双向兼容);手机 .ct 仅 ct-more 两项(主理人拍板的例外);三弹层沿用;npm 零新增;token 皮肤;main 未碰。
 - 已知边界(带进 PR):seed 每轮计费(UI 三重明示);「别动其他字段」是 prompt 约定(diff 墨晕兜底);酒馆 zTXt 不支持(诚实报错);Mine「去改编」发送端在 AUTH off 本地不可达(环境语义),真机 AUTH on 建议走查;identify 入库 vs 酒馆本地的双口径已当面写清。
 - 测试残留:test 库 library 新增若干私密卡(林默等),preview 浏览器 localStorage 留测试台数据(与用户浏览器无关)。
+
+---
+
+# E 系列(完整度门控)· journal 续记
+
+> 分支 gengyue/create-completeness-gate(stacked on create-creator-tools/#160);方案见 plan 文档 E 章。
+
+## E0 · 2026-07-12 01:54 ✅ 后端完整度门控(引擎核心,请主理人重点审)
+
+- 实现(src/identify.py + src/api.py):build_card 加 phase(默认 "drafting"=原行为,旧前端/MCP/冒烟零影响)+threshold(默认 60);understand 阶段独立 system 模板(按 kind 给评估维度)——completeness 0-100 自评+questions(≤3 题,每题 3-5 具体选项,_normalize_questions 容错规整,复刻 StoryChoice 姿势)+达标出 blueprint(≤8 条);**代码强制:understand 阶段 draft 一律 _validate_build_draft(kind, prev, prev) 回传——模型输出的 draft 丢弃**;questions/blueprint 按分数互斥整理;next_question 兜底第一题(纯文本降级);BuildCardReq 加两可选字段,端点透传(无 response_model,新键自动到前端)。
+- 压测(_smoke_completeness.py,untracked 惯例,真调 DeepSeek 四用例全过):
+  - U1「我想要一个角色」→ completeness=0、questions 带具体可点选项(林默/瘸腿老猫/夜莺…)、零蓝图、draft 空壳;
+  - U2 已有 draft+用户催「随便写完」→ **不写**:draft 三字段与 prev 逐字一致,分 25 继续问(「你和她是什么关系」);
+  - U3 充足信息+seed → 65 分达标、blueprint 5 条(锚点/基调/带例句的腔调/关系/开场画面)、questions=[];
+  - R4 缺省 phase → 原行为(写出 8 字段),返回不带门控键。
+- 治理:引擎核心改动,单独 commit;合 main 前主理人审(压测输出如上,脚本在工作树可复跑)。
+
+## E1 · 2026-07-12 02:1x ✅ 双栏骨架(左会话右卡,artifact 式)
+
+- 设计(frontend-design skill 校准):调色/字体不动(沐言 token 是既有体系);设计自由度花在会话流排版语言——**稿纸对谈体**:说话人小楷标(你=朱砂/助手=墨灰)+正文直排纸面,零气泡零框;栏间一条墨线分隔;完整度火候线/圈选词/填空题式自由输入将在 E2/E3 落。
+- 实现:.create-studio 双栏(会话 clamp(320,26vw,400) | stage 吃剩余);stage 内产出侧瘦身 300→240,画布优先(1366 实测 355/477/240);命令条(含挂资料/上传)钉左栏底;chatRef 移会话流;**叙述条/手记抽屉/页头手记按钮全部退役**(会话即历史),孤儿状态(journalOpen/narrClosed/lastAi)与样式段清除。
+- 验收(5199 实测):双栏就位、7 条历史以对谈体渲染(无气泡背景)、发送流(拦截式零 token)消息 append+busy 墨点+错误行+自动滚底;画布/产出侧(架/装订/动作 5 钮)照旧;页面不滚;390 手机 .ct 原样零泄漏;console 零报错;build 过。
+
+## E2 · 2026-07-12 02:4x ✅ 门控接线 + 完整度火候线(端到端首验)
+
+- 实现:deskPhase 状态机(显式 phase 优先;老数据有草稿/已聊开=drafting 不回拽;新空台=understand);sendText 按台阶段带 phase/threshold,understand 响应只存 comp/questions/blueprint 不动 draft,拿到蓝图自动切 phase=blueprint;**完整度火候线**(signature:墨→鎏金渐染 2px 细线,60 处朱点=落笔线,一根线不是框),drafting 后退场;understand 画布空态文案=「构思中——…完整度过线、蓝图点头,再落笔」;dev 基建:vite 代理目标支持 AIS_API_TARGET 环境变量(默认 8000 不变,用户 dev server 零影响),5199 preview 指向自起的 8017 新代码后端。
+- 验收(8017 新后端,真调三轮):
+  - 「我想演一个人」→ comp=10,火候线 10%,两题各 4 选项落 desks,draft 零用户内容,画布构思态,收纳灰;
+  - 丰富信息一轮 → comp=40(爬升),仍只问不写;
+  - 补性格/开场+「就这些,够了」→ **comp=85 过线,blueprint 五条**(锚点/基调/关系张力/能力限制/开场方向,内容精准贴用户素材),phase 自动切 blueprint,火候线「过线,可以落笔」;**三轮全程 draft 无一字用户内容——硬门槛端到端铁证**;
+  - 兼容性实证(意外收获):旧后端(8000)+新前端=优雅降级为旧行为不崩;console 零报错;build 2.30s。
+- 备注:E2 首验时误把旧后端(8000)当新码,发现后走 AIS_API_TARGET+8017 路线;8000 是用户进程未动。players 台测试数据(阿澈)保留给 E3/E4 用。
+
+## E3+E4 · 2026-07-12 03:1x ✅ 问题圈选 + 蓝图批准(相关合批)
+
+- E3 实现:问题=稿纸圈选词(虚线下划可点词组,选中转朱砂实线;「其他」=填空线;零卡片零边框);本地作答态(题目换即清);提交合成「问 —— 答」多行用户消息走原管线;「没答全没关系,也可以直接在下面说」逃生口常在。
+- E4 实现:蓝图=鎏金眉题+破折号要点直排纸面;【批准,开始写】=唯一重元素(切 drafting+phaseOverride 防 setState 异步读旧相位+让 AI 按蓝图一次落笔);「再聊聊」回 understand。
+- 验收(8017 真调):
+  - E4:players 台现成蓝图态(阿澈五条)→ 批准 → 载荷不带 phase(override 生效)→ **AI 按蓝图落笔,「阿澈」9 字段上画布**,phase=drafting,火候线退场——构思(10→40→85)→蓝图→批准→落笔完整 Plan 流首次端到端闭环;
+  - E3:stories 台「想写个故事」→ 3 题渲染(选项有画面:旧书店/云上城市/雨镇),圈选「永远下雨的小镇」+填空「守灯塔的聋哑少年」→ 提交合成消息精确(「问 —— 答」两行);
+  - console 零报错;build 过。
+
+## E5 · 2026-07-12 03:3x ✅ 快速通道
+
+- 四入口(粘贴/上传 identify、酒馆卡、模板骨架、改编 fork)显式 phase=drafting+清构思残留(comp/questions/blueprint);世界书纯 opener 模板留在构思阶段(它本来就是"聊出来"路径);收进本台重置=新对象天然回 understand(带 seed 重新构思);老草稿由 deskPhase 兜底。
+- 验收:fork《林默·改》→ phase=drafting、火候线不现、残留清零;其余三通道同一 patch 模式(主链路 D2/D3 已验);build 过。
+
+## E6 · 2026-07-12 ✅ 手机进流 + 全链路回归 + PR(E 系列收官)
+
+- 手机(拍板红线内最小动作):.ct 整体布局零改动,只往 `.ct-chat` 对话流里长三个已有组件——火候线(流顶)、问题圈选、蓝图批准(消息之后、busy 之前),类名/条件与桌面完全同一套;CSS 侧把 E2/E3/E4 组件段从 `@media (min-width:861px)` 解包成通用(python 脚本处理,`.create-blank-link` 文字链一并通用化)。
+- 回归(5199+8017):
+  - 手机 390:stories 台火候线「完整度 20 · 过 60 才落笔」+2 题圈选词进流,composer/布局原样;
+  - 桌面 1366:stories 台会话流火候线+quiz 正常且 `create-comp` 全 DOM 仅 1 份(桌面/手机分支互斥,无重复渲染);characters 台(drafting)火候线/quiz 零渲染、14 字段画布原样——门控组件对 drafting 态零打扰;
+  - console 全程零报错;`npx vite build` 过。
+- 已知边界(如实):① E0 属引擎核心(identify.py build_card 加 understand 分支+服务端 draft 硬回退),**须主理人审+压测后才可合**;② understand 每轮多一次完整 JSON 契约调用,token 成本与 drafting 同量级;③ 完整度是模型自评分,60 阈值前端可调(threshold 参数已留);④ 测试期 8017/test 库落了少量私有卡库行(阿澈/林默·改等)。
+- E 系列(E0-E6)全绿:后端硬门槛(评分之下 AI 不得写)+ Plan 流(问题圈选→蓝图批准→落笔)+ artifact 式双栏 + 快速通道兼容 + 手机进流。stacked PR:#159(C)→#160(D)→#161(E,本次)。
