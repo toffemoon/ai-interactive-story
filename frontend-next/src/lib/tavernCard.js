@@ -3,22 +3,47 @@
 // 只收与本引擎 CharacterData(src/models.py)同名的字段——白名单必须与后端
 // _validate_build_draft 的 model_fields 过滤对齐,否则会出现「导入看着成功,聊一句就丢」的静默失败。
 
-const FIELD_WHITELIST = [
+// 类型与 src/models.py CharacterData 对齐:散文字段=str,规则/标签类=list[str]。
+const STRING_FIELDS = [
   "name", "description", "personality", "scenario", "first_mes", "mes_example",
-  "speech_rules", "tags", "anchor", "tension", "look", "keys",
-  "versions", "known_public", "known_hidden",
+  "anchor", "tension", "look",
 ];
+const LIST_FIELDS = ["speech_rules", "tags", "keys", "versions", "known_public", "known_hidden"];
+const FIELD_WHITELIST = [...STRING_FIELDS, ...LIST_FIELDS];
 
-// 按白名单收字段;酒馆特有键(character_book/alternate_greetings/system_prompt/creator_notes…)
-// 进 dropped 如实展示,不静默吞。
+// 值规整:手工构造的 JSON 可能在 name 塞数字、tags 塞对象——不规整直落 draft 会被
+// 渲染层的 string 假定崩掉且脏数据已持久化(localStorage),刷新都救不回。
+// 类型不符且救不回来的值 → undefined(调用方计入 dropped 如实播报)。
+function normalizeField(k, v) {
+  if (STRING_FIELDS.includes(k)) {
+    if (typeof v === "string") return v;
+    if (typeof v === "number" || typeof v === "boolean") return String(v);
+    return undefined; // 对象/数组塞进散文字段=形状不符,弃
+  }
+  const arr = Array.isArray(v) ? v : typeof v === "string" ? [v] : undefined;
+  if (!arr) return undefined;
+  const out = arr
+    .map((x) => (typeof x === "string" ? x : typeof x === "number" || typeof x === "boolean" ? String(x) : ""))
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return out.length ? out : undefined;
+}
+
+// 按白名单收字段并按后端类型规整;酒馆特有键(character_book/alternate_greetings/
+// system_prompt/creator_notes…)与类型不符救不回的值都进 dropped 如实展示,不静默吞。
 export function pickDraftFields(v2data) {
   const src = v2data && typeof v2data === "object" && !Array.isArray(v2data) ? v2data : {};
   const draft = {};
   const dropped = [];
   for (const [k, v] of Object.entries(src)) {
     if (v == null || v === "") continue;
-    if (FIELD_WHITELIST.includes(k)) draft[k] = v;
-    else dropped.push(k);
+    if (!FIELD_WHITELIST.includes(k)) {
+      dropped.push(k);
+      continue;
+    }
+    const nv = normalizeField(k, v);
+    if (nv === undefined) dropped.push(k);
+    else draft[k] = nv;
   }
   return { draft, dropped };
 }

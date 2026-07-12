@@ -1550,27 +1550,7 @@
   .create-shelf-card:focus-within .create-shelf-acts {
     opacity: 1;
   }
-  .create-shelf-act {
-    padding: 3px 8px;
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    background: var(--panel);
-    color: var(--muted);
-    font-size: 12px;
-    cursor: pointer;
-    transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
-  }
-  .create-shelf-act:hover {
-    color: var(--accent);
-    border-color: var(--accent);
-  }
-  .create-shelf-empty {
-    color: var(--muted);
-    padding: var(--sp-3);
-    border: 1px dashed var(--line);
-    border-radius: var(--r-md);
-    text-align: center;
-  }
+  /* .create-shelf-act / .create-shelf-empty 已解包为通用规则(手机可达的共用弹层在用),见 E3/E4 段后 */
   /* 装订区:淡沉底,像订书线 */
   .create-bind {
     padding: var(--sp-3) var(--sp-4);
@@ -1874,8 +1854,8 @@
 
 /* ————————————————————————————————————————————————————————————
    E3 问题作答(稿纸圈选词)+ E4 蓝图。零卡片零边框:全靠字重/下划线/留白。
+   通用规则:E6 起手机 .ct-chat 也渲染这两组组件,不能锁在桌面媒体块里(修复批次解包)。
    ———————————————————————————————————————————————————————————— */
-@media (min-width: 861px) {
   .create-quiz {
     margin: var(--sp-2) 0 var(--sp-4);
     animation: msgIn 0.3s var(--ease-out) both;
@@ -1955,7 +1935,29 @@
     gap: var(--sp-4);
     margin-top: var(--sp-3);
   }
-}
+
+/* 修复批次:lib/引用/预设弹窗行按钮与空态在手机可达(共用弹层),解包出桌面媒体块(D4 遗留) */
+  .create-shelf-act {
+    padding: 3px 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    background: var(--panel);
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+  }
+  .create-shelf-act:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .create-shelf-empty {
+    color: var(--muted);
+    padding: var(--sp-3);
+    border: 1px dashed var(--line);
+    border-radius: var(--r-md);
+    text-align: center;
+  }
 
 /* E6:手机对话流复用构思组件——文字链通用化(原定义在桌面媒体内) */
 .create-blank-link {

@@ -613,15 +613,16 @@ export default function Create() {
   async function onUpload(ev) {
     const file = ev.target.files && ev.target.files[0];
     ev.target.value = "";
+    // F5 hint 读完即清:取消/未确认都不残留,不污染下一次任意上传
+    const hint = (uploadHintRef.current || "").trim();
+    uploadHintRef.current = "";
     if (!file || busy) return;
+    if (!confirmReplaceDraft()) return; // 上传曾是「替换先确认」范式唯一漏网入口(与粘贴/酒馆/改编对齐)
     const kk = kind;
     setBusy(true);
     patch(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text: "(上传了《" + file.name + "》)" }] }));
     try {
       const text = await uploadFile(file);
-      // F5:导入面板给的解析指示(hint);命令条直传时为空 = 旧行为
-      const hint = (uploadHintRef.current || "").trim();
-      uploadHintRef.current = "";
       const out = await postJSON(IDENTIFY_EP[kk], { text, ...(hint ? { hint } : {}) });
       applyIdentified(out, kk);
       flash("已解析并收入卡库");
@@ -741,9 +742,10 @@ export default function Create() {
   // 「完善角色卡」/ 详情预览里「自动生成」:调现有 build_card,按已填设定补一段角色介绍写进 description。
   // F3:introAsk = 用户对介绍的口味指示(可空);F2:挂台引用一并带上。
   async function genIntro() {
-    if (genBusy) return;
+    if (genBusy || busy) return; // 与 sendText 双向互斥:生成中不许聊,聊着不许生成
     const cur = desks[kind];
     setGenBusy(true);
+    setBusy(true);
     try {
       const ex = (introAsk || "").trim();
       const apiMsgs = [
@@ -760,7 +762,17 @@ export default function Create() {
         ...(refsPayload.length ? { refs: refsPayload } : {}),
       });
       if (r.draft) {
-        patch(kind, (d0) => ({ draft: { ...r.draft, ...pickPics(d0.draft) }, filled: r.filled || Object.keys(r.draft) }));
+        // 回写只合并模型相对快照实际改动的字段(镜像 sendText 的 diff 姿势),
+        // 不整卡覆盖——请求在飞期间的手改/其他更新不再被旧快照冲掉。
+        const snap = cur.draft || {};
+        const changed = Object.keys(r.draft).filter(
+          (k) => JSON.stringify(r.draft[k]) !== JSON.stringify(snap[k])
+        );
+        patch(kind, (d0) => {
+          const upd = {};
+          for (const k of changed) upd[k] = r.draft[k];
+          return { draft: { ...d0.draft, ...upd, ...pickPics(d0.draft) }, filled: changed };
+        });
       } else if (r.reply) {
         patch(kind, (d0) => ({ draft: { ...d0.draft, description: r.reply } }));
       }
@@ -769,6 +781,7 @@ export default function Create() {
       flash("生成失败:" + e.message);
     } finally {
       setGenBusy(false);
+      setBusy(false);
     }
   }
   function removeBuilt(idx) {
@@ -1360,7 +1373,7 @@ export default function Create() {
                   }
                 }}
               />
-              <button className="ct-upload" onClick={() => fileRef.current && fileRef.current.click()} disabled={busy} title="上传文档" aria-label="上传文档">＋</button>
+              <button className="ct-upload" onClick={() => { uploadHintRef.current = ""; fileRef.current && fileRef.current.click(); }} disabled={busy} title="上传文档" aria-label="上传文档">＋</button>
               <input ref={fileRef} type="file" accept=".txt,.md,.docx" hidden onChange={onUpload} />
               <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim()}>发送</Button>
             </div>
@@ -1895,7 +1908,7 @@ export default function Create() {
                     <button className="create-chat-btn" onClick={() => setChatOpen(true)} title="展开完整对话手记">
                       对话 · {desk.messages.length}
                     </button>
-                    <button className="create-upload" onClick={() => fileRef.current && fileRef.current.click()} disabled={busy}>
+                    <button className="create-upload" onClick={() => { uploadHintRef.current = ""; fileRef.current && fileRef.current.click(); }} disabled={busy}>
                       上传文档
                     </button>
                     <input ref={fileRef} type="file" accept=".txt,.md,.docx" hidden onChange={onUpload} />
@@ -2436,6 +2449,7 @@ export default function Create() {
                   rows={7}
                   value={desk.draft.description || ""}
                   onChange={(e) => setDraftDesc(e.target.value)}
+                  disabled={genBusy}
                   placeholder="写角色介绍,或点「自动生成」让 AI 按已填设定写一段。"
                 />
               </div>
