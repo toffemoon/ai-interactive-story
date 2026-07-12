@@ -1550,27 +1550,7 @@
   .create-shelf-card:focus-within .create-shelf-acts {
     opacity: 1;
   }
-  .create-shelf-act {
-    padding: 3px 8px;
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    background: var(--panel);
-    color: var(--muted);
-    font-size: 12px;
-    cursor: pointer;
-    transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
-  }
-  .create-shelf-act:hover {
-    color: var(--accent);
-    border-color: var(--accent);
-  }
-  .create-shelf-empty {
-    color: var(--muted);
-    padding: var(--sp-3);
-    border: 1px dashed var(--line);
-    border-radius: var(--r-md);
-    text-align: center;
-  }
+  /* .create-shelf-act / .create-shelf-empty 已解包为通用规则(手机可达的共用弹层在用),见 E3/E4 段后 */
   /* 装订区:淡沉底,像订书线 */
   .create-bind {
     padding: var(--sp-3) var(--sp-4);
@@ -1874,8 +1854,8 @@
 
 /* ————————————————————————————————————————————————————————————
    E3 问题作答(稿纸圈选词)+ E4 蓝图。零卡片零边框:全靠字重/下划线/留白。
+   通用规则:E6 起手机 .ct-chat 也渲染这两组组件,不能锁在桌面媒体块里(修复批次解包)。
    ———————————————————————————————————————————————————————————— */
-@media (min-width: 861px) {
   .create-quiz {
     margin: var(--sp-2) 0 var(--sp-4);
     animation: msgIn 0.3s var(--ease-out) both;
@@ -1955,7 +1935,29 @@
     gap: var(--sp-4);
     margin-top: var(--sp-3);
   }
-}
+
+/* 修复批次:lib/引用/预设弹窗行按钮与空态在手机可达(共用弹层),解包出桌面媒体块(D4 遗留) */
+  .create-shelf-act {
+    padding: 3px 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    background: var(--panel);
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+  }
+  .create-shelf-act:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .create-shelf-empty {
+    color: var(--muted);
+    padding: var(--sp-3);
+    border: 1px dashed var(--line);
+    border-radius: var(--r-md);
+    text-align: center;
+  }
 
 /* E6:手机对话流复用构思组件——文字链通用化(原定义在桌面媒体内) */
 .create-blank-link {
@@ -2335,4 +2337,218 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .create-drawer { animation: none; }
+}
+
+/* ── G0 Lovart 式全屏画板:boardbar / board / bcard / focus overlay / dock 浮岛 ── */
+@media (min-width: 861px) {
+  /* 全屏化:创作页吃满视口(减顶导航),自己管溢出 */
+  .page.create {
+    max-width: none;
+    padding-left: 0;
+    padding-right: 0;
+    padding-bottom: 0;
+  }
+  .create-boardbar {
+    position: relative;
+    z-index: 20;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 8px 20px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  .create-boardbar-l, .create-boardbar-r {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .create-boardbar-title {
+    font-size: 18px;
+    color: var(--fg);
+    margin-right: 6px;
+  }
+  .create-boardbar-new {
+    background: none;
+    border: 1px dashed color-mix(in srgb, var(--fg) 28%, transparent);
+    border-radius: var(--r-sm);
+    padding: 5px 10px;
+    cursor: pointer;
+    color: var(--muted);
+    font: inherit;
+    font-size: 13px;
+  }
+  .create-boardbar-new:hover { color: var(--accent); border-color: var(--accent); }
+  .create-boardbar-r { position: relative; }
+  .create-boardbar-r .create-ledger-pop { top: calc(100% + 8px); }
+
+  /* 画板:剩余视口全给板;素纸+极淡点阵(挂版感,少框) */
+  .create-studio.is-board {
+    display: block;
+    animation: none;
+  }
+  .create-board {
+    position: relative;
+    height: calc(100dvh - 52px - 46px); /* 顶导航 + boardbar */
+    overflow: auto;
+    background-image: radial-gradient(color-mix(in srgb, var(--fg) 7%, transparent) 1px, transparent 1px);
+    background-size: 26px 26px;
+  }
+  .create-bcard {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 224px;
+    padding: 12px 14px 12px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r-card);
+    box-shadow: var(--shadow-card);
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .create-bcard:active { cursor: grabbing; }
+  .create-bcard.is-on {
+    border-color: var(--accent);
+    box-shadow: 0 6px 22px color-mix(in srgb, var(--accent) 18%, transparent);
+  }
+  .create-bcard-kind {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+  }
+  .create-bcard-live {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: bcardPulse 1.6s ease-in-out infinite;
+  }
+  @keyframes bcardPulse { 0%,100% { opacity: 0.35; } 50% { opacity: 1; } }
+  .create-bcard-name {
+    font-size: 17px;
+    color: var(--fg);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .create-bcard-sub {
+    min-height: 2.6em;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    color: color-mix(in srgb, var(--fg) 55%, transparent);
+  }
+  .create-bcard-acts {
+    display: flex;
+    gap: 8px;
+    margin-top: 2px;
+    opacity: 0;
+    transition: opacity var(--dur-fast) var(--ease-out);
+  }
+  .create-bcard:hover .create-bcard-acts, .create-bcard.is-on .create-bcard-acts { opacity: 1; }
+  .create-bcard-acts button {
+    background: none;
+    border: none;
+    padding: 0 0 1px;
+    cursor: pointer;
+    color: var(--muted);
+    font: inherit;
+    font-size: 12px;
+    border-bottom: 1px dashed color-mix(in srgb, var(--fg) 25%, transparent);
+  }
+  .create-bcard-acts button:hover { color: var(--accent); border-bottom-color: var(--accent); }
+  .create-board-empty {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -60%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    text-align: center;
+  }
+
+  /* 聚焦态:overlay 放大编辑(现有画布 JSX 原样住进来) */
+  .create-focus { position: fixed; inset: 0; z-index: 44; }
+  .create-focus-shade {
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, var(--fg) 16%, transparent);
+  }
+  .create-focus-panel {
+    position: absolute;
+    top: 4vh;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(920px, 94vw);
+    max-height: 84vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r-card);
+    box-shadow: var(--shadow-card);
+    padding: 12px 18px 14px;
+    animation: focusIn 0.24s var(--ease-out) both;
+  }
+  @keyframes focusIn {
+    from { transform: translateX(-50%) translateY(10px) scale(0.985); opacity: 0; }
+    to { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; }
+  }
+  .create-focus-top {
+    flex: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 6px;
+  }
+  .create-focus-acts { display: flex; gap: 8px; }
+  .create-focus-panel .create-canvas {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    border: none;
+    box-shadow: none;
+    padding: 4px 6px 8px;
+  }
+  .create-focus-built {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 4px 6px 8px;
+  }
+
+  /* dock 浮岛:底部中央悬浮(全局唯一助手入口) */
+  .create-studio.is-board .create-dock {
+    position: fixed;
+    left: 50%;
+    bottom: 18px;
+    transform: translateX(-50%);
+    z-index: 46;
+    width: min(720px, 92vw);
+    margin: 0;
+    padding: 8px 12px 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    box-shadow: 0 10px 34px color-mix(in srgb, var(--fg) 16%, transparent);
+  }
+  .create-studio.is-board .create-dock .create-composer {
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    background: transparent;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .create-focus-panel, .create-bcard-live { animation: none; }
+  }
 }

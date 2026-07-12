@@ -6,8 +6,6 @@ import { fileToCompressedDataURL } from "../lib/image";
 import ImageCropField from "../components/ImageCropField";
 import StoryHero from "../components/StoryHero";
 import CharDetailModal from "../components/CharDetailModal";
-import StaggeredText from "../components/staggered-text";
-import { BlurHighlight } from "../components/react-bits/blur-highlight";
 import { parseJsonCard, parsePngCard } from "../lib/tavernCard"; // D2 酒馆卡纯前端解析
 import { TEMPLATES, getTpl } from "./createTemplates"; // D3 创作模板(文案归内容侧,来源 card-templates/)
 import { loadPrompts, addPrompt, removePrompt } from "../lib/promptLib"; // F1 提示词库(localStorage)
@@ -206,6 +204,24 @@ export default function Create() {
   const [ledgerPop, setLedgerPop] = useState(null);
   // F8 画布即主界面:助手退成画布底一条命令条;完整对话历史收进抽屉(chatOpen)。
   const [chatOpen, setChatOpen] = useState(false);
+  // G0 Lovart 式全屏画板:四台物料全部投影成可拖卡片;单击选中(切 ki,选中即聊)、双击聚焦编辑。
+  // sel/focus = { kk, idx },idx=-1 是该台 draft、>=0 是 built[idx];null=无。
+  const [boardSel, setBoardSel] = useState(null);
+  const [boardFocus, setBoardFocus] = useState(null);
+  // G1 卡片坐标(视图层,不进 desks——回滚=删这一个键):{ cardKey: {x, y} }
+  const [boardPos, setBoardPos] = useState(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem("ais_create_board_v1") || "{}");
+      return v && typeof v === "object" ? v : {};
+    } catch {
+      return {};
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("ais_create_board_v1", JSON.stringify(boardPos));
+    } catch (e) {}
+  }, [boardPos]);
   // F3 一键 AI 长出指示行:askOpen = 字段 k0 | null(✦/⟳ 点开,可空回车=默认指令)。
   const [askOpen, setAskOpen] = useState(null);
   const [askText, setAskText] = useState("");
@@ -327,6 +343,98 @@ export default function Create() {
       }
     } else {
       setRefPanel({ tab, kk, items: [], loading: false });
+    }
+  }
+
+  // ── G0 画板:四台物料投影成卡片对象;选中即聊(切 ki),双击聚焦 ──
+  // draft 卡挂板条件:画布有货或聊开了(全新空台不挂,避免四张空白卡糊板)。
+  const boardCards = KINDS.flatMap((t) => {
+    const d = desks[t.k];
+    const out = [];
+    const draftHas =
+      Object.keys(d.draft || {}).length > 0 ||
+      d.messages.length > 1 ||
+      (d.questions || []).length > 0 ||
+      (d.blueprint || []).length > 0;
+    if (draftHas) out.push({ key: "draft:" + t.k, kk: t.k, zh: t.zh, idx: -1, card: d.draft || {}, isDraft: true, kSeq: 0 });
+    d.built.forEach((card, i) =>
+      out.push({ key: "built:" + t.k + ":" + i, kk: t.k, zh: t.zh, idx: i, card, isDraft: false, kSeq: out.length })
+    );
+    return out;
+  });
+  // 无坐标的卡按 kind 分区自动落位(角色左上/世界右上/演出左下/故事右下),拖过即记(G1)。
+  const AUTO_ANCHOR = { characters: [48, 24], worlds: [640, 24], players: [48, 330], stories: [640, 330] };
+  function boardCardPos(bc, seq) {
+    const p = boardPos[bc.key];
+    if (p && typeof p.x === "number") return p;
+    const [ax, ay] = AUTO_ANCHOR[bc.kk] || [48, 24];
+    return { x: ax + (seq % 2) * 250, y: ay + Math.floor(seq / 2) * 168 };
+  }
+  function boardSub(card) {
+    const c = (card && card.data) || card || {};
+    if ((c.entries || []).length) return c.entries.length + " 条条目";
+    return String(c.description || c.premise || c.background || c.personality || "").slice(0, 56);
+  }
+  function selectCard(bc) {
+    setBoardSel({ kk: bc.kk, idx: bc.idx });
+    const i = KINDS.findIndex((t) => t.k === bc.kk);
+    if (i >= 0 && i !== ki) setKi(i);
+  }
+  function focusCard(bc) {
+    selectCard(bc);
+    setBoardFocus({ kk: bc.kk, idx: bc.idx });
+  }
+  // 新建:该台草稿已在板上就选中聚焦它;全新空台=聚焦进构思流。
+  function newCardOf(kk) {
+    const i = KINDS.findIndex((t) => t.k === kk);
+    if (i >= 0) setKi(i);
+    setBoardSel({ kk, idx: -1 });
+    setBoardFocus({ kk, idx: -1 });
+    requestAnimationFrame(() => dockInputRef.current && dockInputRef.current.focus());
+  }
+  // Esc 关聚焦(输入框里按 Esc 不劫持——它们自己 stopPropagation 或先聚焦处理)
+  useEffect(() => {
+    if (!boardFocus) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") setBoardFocus(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [boardFocus]);
+  // 选中的 built 卡对象(dock 提示用)
+  const selBuilt = boardSel && boardSel.idx >= 0 ? (desks[boardSel.kk].built || [])[boardSel.idx] : null;
+
+  // G1 拖放:pointer 拖 + >4px 判拖(否则算单击);拖到 dock 上=挂引用。
+  const dragRef = useRef(null); // {key, startX, startY, baseX, baseY, moved, bc}
+  function onCardPointerDown(e, bc, pos) {
+    if (e.button !== 0) return;
+    dragRef.current = { key: bc.key, startX: e.clientX, startY: e.clientY, baseX: pos.x, baseY: pos.y, moved: false, bc };
+    e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function onCardPointerMove(e) {
+    const d = dragRef.current;
+    if (!d) return;
+    const dx = e.clientX - d.startX, dy = e.clientY - d.startY;
+    if (!d.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+    d.moved = true;
+    setBoardPos((p) => ({ ...p, [d.key]: { x: Math.max(0, d.baseX + dx), y: Math.max(0, d.baseY + dy) } }));
+  }
+  function onCardPointerUp(e, bc) {
+    const d = dragRef.current;
+    dragRef.current = null;
+    if (!d) return;
+    if (!d.moved) {
+      selectCard(bc);
+      return;
+    }
+    // 落点在 dock 浮岛上=挂为引用(卡片回弹原位)
+    const dock = document.querySelector(".create-dock");
+    if (dock) {
+      const r = dock.getBoundingClientRect();
+      if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
+        setBoardPos((p) => ({ ...p, [d.key]: { x: d.baseX, y: d.baseY } }));
+        addRef(refFromCard(bc.kk, bc.card));
+      }
     }
   }
   function quizAnswerOf(qu) {
@@ -505,15 +613,16 @@ export default function Create() {
   async function onUpload(ev) {
     const file = ev.target.files && ev.target.files[0];
     ev.target.value = "";
+    // F5 hint 读完即清:取消/未确认都不残留,不污染下一次任意上传
+    const hint = (uploadHintRef.current || "").trim();
+    uploadHintRef.current = "";
     if (!file || busy) return;
+    if (!confirmReplaceDraft()) return; // 上传曾是「替换先确认」范式唯一漏网入口(与粘贴/酒馆/改编对齐)
     const kk = kind;
     setBusy(true);
     patch(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text: "(上传了《" + file.name + "》)" }] }));
     try {
       const text = await uploadFile(file);
-      // F5:导入面板给的解析指示(hint);命令条直传时为空 = 旧行为
-      const hint = (uploadHintRef.current || "").trim();
-      uploadHintRef.current = "";
       const out = await postJSON(IDENTIFY_EP[kk], { text, ...(hint ? { hint } : {}) });
       applyIdentified(out, kk);
       flash("已解析并收入卡库");
@@ -633,9 +742,10 @@ export default function Create() {
   // 「完善角色卡」/ 详情预览里「自动生成」:调现有 build_card,按已填设定补一段角色介绍写进 description。
   // F3:introAsk = 用户对介绍的口味指示(可空);F2:挂台引用一并带上。
   async function genIntro() {
-    if (genBusy) return;
+    if (genBusy || busy) return; // 与 sendText 双向互斥:生成中不许聊,聊着不许生成
     const cur = desks[kind];
     setGenBusy(true);
+    setBusy(true);
     try {
       const ex = (introAsk || "").trim();
       const apiMsgs = [
@@ -652,7 +762,17 @@ export default function Create() {
         ...(refsPayload.length ? { refs: refsPayload } : {}),
       });
       if (r.draft) {
-        patch(kind, (d0) => ({ draft: { ...r.draft, ...pickPics(d0.draft) }, filled: r.filled || Object.keys(r.draft) }));
+        // 回写只合并模型相对快照实际改动的字段(镜像 sendText 的 diff 姿势),
+        // 不整卡覆盖——请求在飞期间的手改/其他更新不再被旧快照冲掉。
+        const snap = cur.draft || {};
+        const changed = Object.keys(r.draft).filter(
+          (k) => JSON.stringify(r.draft[k]) !== JSON.stringify(snap[k])
+        );
+        patch(kind, (d0) => {
+          const upd = {};
+          for (const k of changed) upd[k] = r.draft[k];
+          return { draft: { ...d0.draft, ...upd, ...pickPics(d0.draft) }, filled: changed };
+        });
       } else if (r.reply) {
         patch(kind, (d0) => ({ draft: { ...d0.draft, description: r.reply } }));
       }
@@ -661,6 +781,7 @@ export default function Create() {
       flash("生成失败:" + e.message);
     } finally {
       setGenBusy(false);
+      setBusy(false);
     }
   }
   function removeBuilt(idx) {
@@ -1252,7 +1373,7 @@ export default function Create() {
                   }
                 }}
               />
-              <button className="ct-upload" onClick={() => fileRef.current && fileRef.current.click()} disabled={busy} title="上传文档" aria-label="上传文档">＋</button>
+              <button className="ct-upload" onClick={() => { uploadHintRef.current = ""; fileRef.current && fileRef.current.click(); }} disabled={busy} title="上传文档" aria-label="上传文档">＋</button>
               <input ref={fileRef} type="file" accept=".txt,.md,.docx" hidden onChange={onUpload} />
               <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim()}>发送</Button>
             </div>
@@ -1268,132 +1389,170 @@ export default function Create() {
            reskin(YOR-211):入场动效(标题错层/副标晕染/tab 错峰)+ 空台引子 + 墨点打字指示 +
            草稿卡 DepthCard 视差。功能契约未动:send/onUpload/收纳/发布全部原样。 */
         <>
-          <div className="create-head">
-            <div>
-              <h1 className="t-display">
-                <StaggeredText text="创作" as="span" segmentBy="chars" className="create-title-st" />
-              </h1>
-              <p className="t-ui create-sub">
-                <BlurHighlight
-                  highlightedBits={["边聊边", "草稿自动保存"]}
-                  highlightColor="color-mix(in srgb, var(--accent) 16%, transparent)"
-                  blurDuration={0.7}
-                  highlightDelay={0.5}
-                  viewportOptions={{ once: true, amount: 0.3 }}
-                >
-                  和 AI 一起,边聊边把一张卡 / 一个故事填出来。草稿自动保存。
-                </BlurHighlight>
-              </p>
+          {/* G0 board-bar:大标题/kind tabs/台账线全部退役成一条薄工具条——全屏画板从这里往下都是板 */}
+          <div className="create-boardbar">
+            <div className="create-boardbar-l">
+              <span className="create-boardbar-title t-kai">创作</span>
+              {KINDS.map((t) => (
+                <button key={t.k} className="create-boardbar-new" onClick={() => newCardOf(t.k)} title={"新建 / 继续" + t.zh}>
+                  + {t.zh}
+                </button>
+              ))}
+            </div>
+            <div className="create-boardbar-r">
+              {(() => {
+                const mf = publishManifest();
+                const total = mf.chars.length + mf.worlds + mf.players.length + (mf.story ? 1 : 0);
+                return (
+                  <button
+                    className={"create-ledger-link" + (ledgerPop === "bind" ? " is-on" : "")}
+                    onClick={() => setLedgerPop((p) => (p === "bind" ? null : "bind"))}
+                  >
+                    装订 {total} 卡{mf.anySecret ? " ⚠" : ""}
+                  </button>
+                );
+              })()}
+              <button className="create-chat-btn" onClick={() => setChatOpen(true)} title="展开完整对话手记">
+                对话 · {desk.messages.length}
+              </button>
+              <Button variant="primary" onClick={openPreview} disabled={!hasChars} title={hasChars ? "预览并发布到探索(公开)" : "至少要一张角色卡"}>发布 · 公开</Button>
+              <button
+                className={"create-ledger-more" + (ledgerPop === "menu" ? " is-on" : "")}
+                onClick={() => setLedgerPop((p) => (p === "menu" ? null : "menu"))}
+                aria-label="更多动作"
+              >
+                ⋯
+              </button>
+              {ledgerPop && <div className="create-ledger-shade" onClick={() => setLedgerPop(null)} />}
+              {ledgerPop === "bind" && (() => {
+                const mf = publishManifest();
+                return (
+                  <div className="create-ledger-pop" role="dialog" aria-label="装订清单">
+                    <div className="create-bind-h t-meta">装订 · 发布时打包(看到的=会发的)</div>
+                    <ul className="create-bind-list t-meta">
+                      <li>
+                        角色卡 ×{mf.chars.length}
+                        {mf.chars.length > 0 && ":" + mf.chars.map((c) => c.name + (c.secret ? " ⚠" : "")).join("、")}
+                      </li>
+                      {mf.worlds > 0 && <li>设定卡 · 世界书 ×{mf.worlds}</li>}
+                      {mf.players.length > 0 && <li>演出卡 ×{mf.players.length}:{mf.players.join("、")}</li>}
+                      {mf.story && (
+                        <li>
+                          故事书:{mf.story}
+                          {mf.storyExtra > 0 && `(另 ${mf.storyExtra} 张不发)`}
+                        </li>
+                      )}
+                      {!mf.chars.length && <li className="create-bind-empty">还没有角色卡——发布至少要一张</li>}
+                    </ul>
+                    {mf.anySecret && <div className="create-bind-warn t-meta">⚠ 带「隐藏真相」的卡会随发布公开,发布前核对</div>}
+                  </div>
+                );
+              })()}
+              {ledgerPop === "menu" && (
+                <div className="create-ledger-pop create-ledger-menu" role="menu">
+                  <button onClick={() => { setLedgerPop(null); openLib(); }}>从卡库补素材</button>
+                  <button disabled={!hasDraft} onClick={() => { setLedgerPop(null); exportCard(desk.draft); }}>导出草稿 JSON</button>
+                  <button onClick={() => { setLedgerPop(null); openPresets(); }}>↺ 从我发布的故事继续改</button>
+                </div>
+              )}
             </div>
           </div>
-          <div className="create-kinds">
-            {KINDS.map((t, i) => {
-              const cnt = desks[t.k].built.length;
-              return (
-                <button
-                  key={t.k}
-                  className={"create-kind" + (i === ki ? " is-on" : "")}
-                  style={{ "--ci": i }}
-                  onClick={() => setKi(i)}
-                >
-                  {t.zh}
-                  {cnt > 0 && <span className="create-kind-badge">{cnt}</span>}
-                </button>
-              );
-            })}
-          </div>
 
-          {/* E1 双栏(artifact 式,方案 E 章):左会话流(对谈体,零气泡框,命令条钉底)|
-              右 artifact 区 = 原 stage(卡画布+产出侧)。key=kind:切卡种整段重挂当转场。
-              叙述条/手记抽屉自此退役——会话流就是历史本身。 */}
-          <div className="create-studio" key={kind}>
-            {/* F8:双栏退场——画布即主界面;会话流收进抽屉,构思组件长在画布纸面上,dock 挪画布底。 */}
-
-            <div className="create-stage">
-            {/* 卡画布:正在长的这张卡铺在中央 */}
-            <div className="create-canvas-col">
-              {/* F7 台账线:一行小字管本台架+装订+收纳/发布(原 240px 产出列收编;少框,hairline 一条) */}
-              <div className="create-ledger">
-                <div className="create-ledger-info t-meta">
-                  <span>本台已建 {desk.built.length}</span>
-                  {desk.built.slice(0, 3).map((card, i) => {
-                    const c = (card && card.data) || card || {};
-                    const nm = c.name || c.title || "未命名";
-                    return (
-                      <button
-                        key={nm + i}
-                        className="create-ledger-chip"
-                        draggable
-                        title="点开查看;拖到左下命令条=挂为引用"
-                        onDragStart={(e) => e.dataTransfer.setData("application/x-ais-ref", JSON.stringify({ kk: kind, card }))}
-                        onClick={() => setBuiltView(true)}
-                      >
-                        {nm}
-                      </button>
-                    );
-                  })}
-                  {desk.built.length > 3 && (
-                    <button className="create-ledger-chip" onClick={() => setBuiltView(true)}>+{desk.built.length - 3}</button>
-                  )}
-                  <span className="create-ledger-sep" aria-hidden="true">·</span>
-                  {(() => {
-                    const mf = publishManifest();
-                    const total = mf.chars.length + mf.worlds + mf.players.length + (mf.story ? 1 : 0);
-                    return (
-                      <button
-                        className={"create-ledger-link" + (ledgerPop === "bind" ? " is-on" : "")}
-                        onClick={() => setLedgerPop((p) => (p === "bind" ? null : "bind"))}
-                      >
-                        装订 {total} 卡{mf.anySecret ? " ⚠" : ""}
-                      </button>
-                    );
-                  })()}
-                </div>
-                <div className="create-ledger-acts">
-                  <Button variant="line" onClick={nextCard} disabled={!hasDraft} title={hasDraft ? "把当前草稿收进台子,再建下一张" : "先聊出一张卡"}>收进本台</Button>
-                  <Button variant="line" onClick={saveCard} disabled={!hasDraft || savingCard} title={hasDraft ? "存进你的卡库(私密)" : "先聊出一张卡"}>{savingCard ? "收入中…" : "收入卡库"}</Button>
-                  <Button variant="primary" onClick={openPreview} disabled={!hasChars} title={hasChars ? "预览并发布到探索(公开)" : "至少要一张角色卡"}>发布 · 公开</Button>
-                  <button
-                    className={"create-ledger-more" + (ledgerPop === "menu" ? " is-on" : "")}
-                    onClick={() => setLedgerPop((p) => (p === "menu" ? null : "menu"))}
-                    aria-label="更多动作"
+          {/* G0 全屏画板:四台物料全部挂板(可拖可选可聚焦);台账线/kind tabs 已退役进 boardbar */}
+          <div className="create-studio is-board">
+            <div
+              className="create-board"
+              onPointerDown={(e) => {
+                if (e.target === e.currentTarget) setBoardSel(null); // 点空白=取消选中
+              }}
+            >
+              {boardCards.map((bc, seq) => {
+                const c = (bc.card && bc.card.data) || bc.card || {};
+                const nm = c.name || c.title || (bc.isDraft ? "未命名草稿" : "未命名");
+                const pos = boardCardPos(bc, bc.kSeq); // 落位偏移按 kind 内序号(全局 seq 会把不同台的卡串到一条线上)
+                const on = boardSel && boardSel.kk === bc.kk && boardSel.idx === bc.idx;
+                return (
+                  <div
+                    key={bc.key}
+                    className={"create-bcard" + (on ? " is-on" : "") + (bc.isDraft ? " is-draft" : "")}
+                    style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
+                    onPointerDown={(e) => { e.stopPropagation(); onCardPointerDown(e, bc, pos); }}
+                    onPointerMove={onCardPointerMove}
+                    onPointerUp={(e) => onCardPointerUp(e, bc)}
+                    onDoubleClick={() => focusCard(bc)}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={bc.zh + "·" + nm}
                   >
-                    ⋯
-                  </button>
-                </div>
-                {ledgerPop && <div className="create-ledger-shade" onClick={() => setLedgerPop(null)} />}
-                {ledgerPop === "bind" && (() => {
-                  const mf = publishManifest();
-                  return (
-                    <div className="create-ledger-pop" role="dialog" aria-label="装订清单">
-                      <div className="create-bind-h t-meta">装订 · 发布时打包(看到的=会发的)</div>
-                      <ul className="create-bind-list t-meta">
-                        <li>
-                          角色卡 ×{mf.chars.length}
-                          {mf.chars.length > 0 && ":" + mf.chars.map((c) => c.name + (c.secret ? " ⚠" : "")).join("、")}
-                        </li>
-                        {mf.worlds > 0 && <li>设定卡 · 世界书 ×{mf.worlds}</li>}
-                        {mf.players.length > 0 && <li>演出卡 ×{mf.players.length}:{mf.players.join("、")}</li>}
-                        {mf.story && (
-                          <li>
-                            故事书:{mf.story}
-                            {mf.storyExtra > 0 && `(另 ${mf.storyExtra} 张不发)`}
-                          </li>
-                        )}
-                        {!mf.chars.length && <li className="create-bind-empty">还没有角色卡——发布至少要一张</li>}
-                      </ul>
-                      {mf.anySecret && <div className="create-bind-warn t-meta">⚠ 带「隐藏真相」的卡会随发布公开,发布前核对</div>}
-                    </div>
-                  );
-                })()}
-                {ledgerPop === "menu" && (
-                  <div className="create-ledger-pop create-ledger-menu" role="menu">
-                    <button onClick={() => { setLedgerPop(null); openLib(); }}>从卡库补素材</button>
-                    <button disabled={!hasDraft} onClick={() => { setLedgerPop(null); exportCard(desk.draft); }}>导出草稿 JSON</button>
-                    <button onClick={() => { setLedgerPop(null); openPresets(); }}>↺ 从我发布的故事继续改</button>
+                    <span className="create-bcard-kind t-meta">
+                      {bc.zh}
+                      {bc.isDraft && <span className="create-bcard-live" title="编辑中" />}
+                    </span>
+                    <span className="create-bcard-name t-kai">{nm}</span>
+                    <span className="create-bcard-sub t-meta">{boardSub(bc.card) || (bc.isDraft ? "构思中……" : "已收进台子")}</span>
+                    {!bc.isDraft && (
+                      <span className="create-bcard-acts">
+                        <button onClick={(e) => { e.stopPropagation(); focusCard(bc); }} onPointerDown={(e) => e.stopPropagation()}>查看</button>
+                        <button onClick={(e) => { e.stopPropagation(); addRef(refFromCard(bc.kk, bc.card)); }} onPointerDown={(e) => e.stopPropagation()}>引用</button>
+                        <button onClick={(e) => { e.stopPropagation(); forkToDraft(bc.card, bc.kk); }} onPointerDown={(e) => e.stopPropagation()}>改编</button>
+                        <button onClick={(e) => { e.stopPropagation(); exportCard(bc.card); }} onPointerDown={(e) => e.stopPropagation()}>导出</button>
+                        <button onClick={(e) => { e.stopPropagation(); const i = KINDS.findIndex((t) => t.k === bc.kk); if (i >= 0) setKi(i); removeBuilt(bc.idx); }} onPointerDown={(e) => e.stopPropagation()}>移除</button>
+                      </span>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })}
+              {boardCards.length === 0 && (
+                <div className="create-board-empty">
+                  <span className="create-card-blank-seal t-kai" aria-hidden="true">板</span>
+                  <span className="t-meta">板上还空着——点上面「+ 角色卡」起一张,或者:</span>
+                  <div className="create-blank-more t-meta">
+                    <button className="create-blank-link" onClick={() => setTplOpen(true)}>从模板起手</button>
+                    ·
+                    <button className="create-blank-link" onClick={() => setImportOpen({ step: "pick", text: "", err: "" })}>导入已有内容</button>
+                    ·
+                    <button className="create-blank-link" onClick={openSeed}>挂参考资料</button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* G0 聚焦态:双击放大编辑——draft=现有画布全套;built=只读字段 */}
+            {boardFocus && (
+              <div className="create-focus">
+                <div className="create-focus-shade" onClick={() => setBoardFocus(null)} />
+                <div className="create-focus-panel">
+                  <div className="create-focus-top">
+                    <button className="create-blank-link" onClick={() => setBoardFocus(null)}>← 回画板</button>
+                    {boardFocus.idx === -1 && (
+                      <span className="create-focus-acts">
+                        <Button variant="line" onClick={nextCard} disabled={!hasDraft}>收进本台</Button>
+                        <Button variant="line" onClick={saveCard} disabled={!hasDraft || savingCard}>{savingCard ? "收入中…" : "收入卡库"}</Button>
+                      </span>
+                    )}
+                  </div>
+                  {boardFocus.idx >= 0 ? (
+                    <div className="create-focus-built">
+                      {(() => {
+                        const card = (desks[boardFocus.kk].built || [])[boardFocus.idx];
+                        if (!card) return <div className="create-shelf-empty t-meta">这张卡不在了(可能已移除)。</div>;
+                        const c = (card && card.data) || card || {};
+                        return (
+                          <>
+                            <div className="create-card-name t-kai">{c.name || c.title || "未命名"}</div>
+                            <div className="create-card-fields">
+                              {cardFields(card).map((f, j) => (
+                                <div className="create-field" key={j}>
+                                  <span className="create-field-k t-meta">{f.k}</span>
+                                  <span className="create-field-v t-ui-sm">{f.v}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  ) : (
               <section className="create-canvas" aria-label="卡画布">
                 <div className="create-card-kind t-meta">{KINDS[ki].zh}{desk.built.length > 0 && ` · 本台已建 ${desk.built.length}`}</div>
                 {editingKey === "__name" ? (
@@ -1661,8 +1820,13 @@ export default function Create() {
                   )}
                 </div>
               </section>
-              {/* F8 助手小部件:画布底一条命令条——落笔期批注行(最新一句,点开抽屉)+输入+动作 */}
-              <div
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* F8→G0 助手小部件:底部中央浮岛命令条——选中即聊;批注行(最新一句,点开抽屉) */}
+            <div
                 className={"create-dock" + (refDragOver ? " is-dropping" : "")}
                 onDragOver={(e) => {
                   if ([...e.dataTransfer.types].includes("application/x-ais-ref")) {
@@ -1684,13 +1848,19 @@ export default function Create() {
                   }
                 }}
               >
-                {phase === "drafting" && (busy || lastAi) && (
+                {boardSel && boardSel.idx === -1 && phase === "drafting" && (busy || lastAi) && (
                   <button className="create-dock-note" onClick={() => setChatOpen(true)} title="展开完整对话">
                     <span className="create-say-who t-kai">助手</span>
                     <span className={"create-dock-note-tx t-ui-sm" + (busy ? " create-msg-typing" : "")}>
                       {busy ? "正在想……" : (lastAi.show || lastAi.text)}
                     </span>
                   </button>
+                )}
+                {boardSel && boardSel.idx >= 0 && (
+                  <div className="create-dock-note" aria-live="polite">
+                    <span className="create-say-who t-kai">这张卡</span>
+                    <span className="create-dock-note-tx t-ui-sm">已收进台子——双击查看,或点卡上「改编」把它变成可聊的草稿。</span>
+                  </div>
                 )}
                 {(deskRefs.length > 0 || refDragOver) && (
                   <div className="create-refs" aria-label="挂在台上的引用">
@@ -1709,8 +1879,14 @@ export default function Create() {
                     ref={dockInputRef}
                     rows={1}
                     value={desk.input}
-                    disabled={busy}
-                    placeholder={KINDS[ki].ph}
+                    disabled={busy || !boardSel || boardSel.idx >= 0}
+                    placeholder={
+                      !boardSel
+                        ? "点一张卡开始聊,或上面「+ 新建」"
+                        : boardSel.idx >= 0
+                        ? "已收进台子的卡不能直接聊——先「改编」成草稿"
+                        : KINDS[ki].ph
+                    }
                     onChange={(e) => {
                       const v = e.target.value;
                       const old = desk.input || "";
@@ -1732,7 +1908,7 @@ export default function Create() {
                     <button className="create-chat-btn" onClick={() => setChatOpen(true)} title="展开完整对话手记">
                       对话 · {desk.messages.length}
                     </button>
-                    <button className="create-upload" onClick={() => fileRef.current && fileRef.current.click()} disabled={busy}>
+                    <button className="create-upload" onClick={() => { uploadHintRef.current = ""; fileRef.current && fileRef.current.click(); }} disabled={busy}>
                       上传文档
                     </button>
                     <input ref={fileRef} type="file" accept=".txt,.md,.docx" hidden onChange={onUpload} />
@@ -1752,16 +1928,12 @@ export default function Create() {
                     >
                       {deskRefs.length ? `@ 引用 · ${deskRefs.length}` : "@ 引用"}
                     </button>
-                    <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim()}>
+                    <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim() || !boardSel || boardSel.idx >= 0}>
                       发送
                     </Button>
                   </div>
                 </div>
               </div>
-            </div>
-
-            {/* F7:产出侧 240px 列退场——本台架/收纳/装订全部收编进画布顶部台账线,画布拿回整幅宽 */}
-          </div>
 
           {/* F8 对话手记抽屉:完整历史按需展开(稿纸对谈体原样) */}
           {chatOpen && (
@@ -2277,6 +2449,7 @@ export default function Create() {
                   rows={7}
                   value={desk.draft.description || ""}
                   onChange={(e) => setDraftDesc(e.target.value)}
+                  disabled={genBusy}
                   placeholder="写角色介绍,或点「自动生成」让 AI 按已填设定写一段。"
                 />
               </div>
