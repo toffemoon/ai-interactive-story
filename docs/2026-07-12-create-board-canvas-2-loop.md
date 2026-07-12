@@ -156,3 +156,16 @@ plan: docs/2026-07-12-create-board-canvas-2-plan.md
   - 手机 390:.ct 就位,note/bsig/board 零泄漏;build 2.02s 过。
 - 如实边界:①「fresh 墨晕摘要」不另做——G3 已有卡面摘要实时变,重复信号徒增噪;②批注笺只挂活动卡(选中的 draft),非全板每卡都挂(避免多笺糊板);③busy 墨点只标当前台(busy 是全局单发)。
 - 测试残留:test 库真调两轮(改编对话);preview localStorage 留三态测试台。
+
+## H-R8 · 2026-07-12 —— H6 空白起草 ✅(commit 1d45732)
+
+- 实现:①双击空白=四卡种落卡菜单(世界锚点+逆缩放;拖拽/平移刚结束 300ms 抑制=误触不落卡;点空白/Esc 收,Esc 分层监听收编 spawnAt);已聊开的台不搬坐标只跳转(newCardOf 语义);②rail 四卡种钮 draggable(`application/x-ais-spawn` MIME),拖到画布按 drop 位置落卡;③文件拖入分流:.json/.png→角色台酒馆本地解析、.txt/.md/.docx→当前台 identify(confirmReplaceDraft 守卫沿用),卡落 drop 位置(screenToWorld 换算);④受理面收紧:仅 spawn MIME/Files 亮接收态(inset 虚线框)与受理,text/引用等其它载荷一律不 preventDefault 不落卡。
+- 验收证据(5199 + 8017 真调):
+  - 双击空白 (700,400) → 菜单四钮 → 选「演出卡」→ d:players 坐标写入换算位、聚焦构思开、菜单收;Esc/点空白可收菜单;
+  - **误触不落卡**:卡拖拽结束后立即双击空白 → 菜单不弹(300ms 抑制);text/plain junk drop → v2 零变化;
+  - rail 拖出:x-ais-spawn drop (900,300) → 坐标精确落位+聚焦构思;dragover 接收态高亮分拍断言 ✓;
+  - **文件 drop 真调闭环**:「修表匠.txt」drop → identify 真调(8017)→《林一》9 字段落 players 台、**坐标=drop 位置换算(326, 82.2)**、卡库入库回执;第二发落有草稿的台 → confirm 弹出(守卫在);
+  - 手机 390:.ct 就位,spawnmenu/board 零泄漏;build 2.02s 过。
+- 排障插曲(记档):第一发文件 drop 后查错了台以为链路没跑——实际 rail spawn 已把当前台切到 players(空台不需 confirm),导入静默成功落在 players;第二发按台守卫弹 confirm 后确认链路无恙。教训:多入口测试序列里"当前台"是移动靶,断言前先读 ki。
+- 如实边界:①导入被 confirm 取消时 drop 坐标已写(该台无卡渲染,视觉无感,自愈于下次落卡);②手机端不做画布起草(拍板③);③.docx 走 /api/upload 解析,依赖 8017 的 test 库唤醒状态(identify 入库)。
+- 测试残留:test 库入库《林一》等私密卡;preview localStorage 留多台测试数据。
