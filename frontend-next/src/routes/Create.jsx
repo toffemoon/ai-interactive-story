@@ -377,6 +377,7 @@ export default function Create() {
   }, [isMobile, kbdBlocked]);
   // H3 工具态:select(默认)| hand(粘性抓手,Space=瞬时抓手不变);ref 镜像给 pointer 手势层用。
   const [tool, setTool] = useState("select");
+  const [railNew, setRailNew] = useState(false); // rail「新建」飞出菜单(四卡种全名,可拖出落卡)
   const toolRef = useRef("select");
   useEffect(() => {
     toolRef.current = tool;
@@ -391,7 +392,8 @@ export default function Create() {
       return;
     }
     if (e.target === e.currentTarget || (worldRef.current && e.target === worldRef.current)) {
-      // 点空白:收落卡菜单 → 退聚焦(拉回视口)→ 取消选中(逐层,同 Esc 口径)
+      // 点空白:收 rail 飞出/落卡菜单 → 退聚焦(拉回视口)→ 取消选中(逐层,同 Esc 口径)
+      if (railNew) setRailNew(false);
       if (spawnAt) setSpawnAt(null);
       else if (boardFocus) exitFocus();
       else setBoardSel(null);
@@ -2050,26 +2052,41 @@ export default function Create() {
                   </div>
                 </div>
               )}
-              {/* H3 工具 rail:选择/抓手 + 四卡种落卡(从 boardbar 搬来);快捷键 V/H/1-4 */}
+              {/* 工具 rail=能力总入口(主理人审核拍板):所有已有功能带字可见——
+                  工具(选择/抓手)/起手(新建/模板/导入)/内容源(资料/引用/素材/拆回)/产出(导出)。
+                  装订/发布/对话留在顶部 boardbar(文件级);快捷键 V/H/1-4/⌘0 不变 */}
               <div className="create-rail" role="toolbar" aria-label="画板工具" aria-orientation="vertical">
-                <button className={tool === "select" ? "is-on" : ""} onClick={() => setTool("select")} title="选择 (V)" aria-label="选择工具">选</button>
-                <button className={tool === "hand" ? "is-on" : ""} onClick={() => setTool("hand")} title="抓手·平移画板 (H,按住 Space 也行)" aria-label="抓手工具">手</button>
+                <button className={tool === "select" ? "is-on" : ""} onClick={() => setTool("select")} title="选择 (V)">选择</button>
+                <button className={tool === "hand" ? "is-on" : ""} onClick={() => setTool("hand")} title="抓手·平移画板 (H,按住 Space 也行)">抓手</button>
                 <span className="create-rail-sep" aria-hidden="true" />
-                {KINDS.map((t, i) => (
-                  <button
-                    key={t.k}
-                    onClick={() => newCardOf(t.k)}
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData("application/x-ais-spawn", t.k); // H6:拖出到画布=按位置落卡
-                      e.dataTransfer.effectAllowed = "copy";
-                    }}
-                    title={"新建 / 继续" + t.zh + " (" + (i + 1) + ")·可拖到画布落卡"}
-                    aria-label={"新建" + t.zh}
-                  >
-                    {t.zh.slice(0, 1)}
-                  </button>
-                ))}
+                <button className={railNew ? "is-on" : ""} onClick={() => setRailNew((v) => !v)} title="新建一张卡 (1-4,或双击画板空白)" aria-expanded={railNew}>新建</button>
+                <button onClick={() => { setRailNew(false); setTplOpen(true); }} title="从模板起手:骨架直落画布">模板</button>
+                <button onClick={() => { setRailNew(false); setImportOpen({ step: "pick", text: "", err: "" }); }} title="导入已有内容:粘贴/上传文档/酒馆卡">导入</button>
+                <span className="create-rail-sep" aria-hidden="true" />
+                <button className={desk.seed ? "is-on" : ""} onClick={() => { setRailNew(false); openSeed(); }} title="挂参考资料:AI 每轮都参考">资料</button>
+                <button className={deskRefs.length ? "is-on" : ""} onClick={() => { setRailNew(false); refPanel ? setRefPanel(null) : openRefPanel("desk"); }} title="引用已有卡/提示词(输入 @ 也能唤起)">引用</button>
+                <button onClick={() => { setRailNew(false); openLib(); }} title="从我的卡库补素材到本台">素材</button>
+                <button onClick={() => { setRailNew(false); openPresets(); }} title="从我发布的故事整组拆回四台">拆回</button>
+                <span className="create-rail-sep" aria-hidden="true" />
+                <button onClick={() => exportCard(desk.draft)} disabled={!hasDraft} title={hasDraft ? "导出当前草稿 JSON" : "画布上还没有草稿"}>导出</button>
+                {railNew && (
+                  <div className="create-rail-fly" role="menu" aria-label="新建卡种">
+                    {KINDS.map((t, i) => (
+                      <button
+                        key={t.k}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("application/x-ais-spawn", t.k); // 拖出到画布=按位置落卡
+                          e.dataTransfer.effectAllowed = "copy";
+                        }}
+                        onClick={() => { setRailNew(false); newCardOf(t.k); }}
+                        title={"点击新建,或拖到画布上落卡 (" + (i + 1) + ")"}
+                      >
+                        + {t.zh}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               {/* H1 缩放控件:± 板中心锚定;点 % 回 100%;适配=装下全部卡 */}
               <div className="create-zoomctl t-meta" aria-label="画板缩放">

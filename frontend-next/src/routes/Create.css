@@ -2443,26 +2443,53 @@
     z-index: 5;
   }
   .create-rail button {
-    width: 30px;
-    height: 30px;
+    min-width: 56px;
+    height: 27px;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 0 10px;
     background: transparent;
     border: none;
     border-radius: var(--r-sm);
     color: var(--muted);
     font-family: var(--font-kai);
-    font-size: 14px;
+    font-size: 12.5px;
+    letter-spacing: 0.06em;
     cursor: pointer;
+    white-space: nowrap;
     transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
   }
   .create-rail button:hover {
     color: var(--fg);
+    background: color-mix(in srgb, var(--fg) 5%, transparent);
   }
   .create-rail button.is-on {
     background: color-mix(in srgb, var(--accent) 12%, transparent);
     color: var(--accent);
+  }
+  .create-rail button:disabled {
+    opacity: 0.38;
+    cursor: default;
+    background: transparent;
+  }
+  .create-rail-fly {
+    position: absolute;
+    left: calc(100% + 8px);
+    top: 62px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 5px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-card);
+    animation: msgIn 0.16s var(--ease-out) both;
+  }
+  .create-rail-fly button {
+    justify-content: flex-start;
+    min-width: 132px;
   }
   .create-rail-sep {
     height: 1px;
