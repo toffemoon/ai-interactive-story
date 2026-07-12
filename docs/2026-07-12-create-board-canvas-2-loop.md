@@ -261,3 +261,10 @@ plan: docs/2026-07-12-create-board-canvas-2-plan.md
 - 修:rail/缩放/空板加 `stopPropagation`(与 ctxbar/spawnmenu 既有口径对齐);另修连带伤——抓手/Space 下卡片不再起拖拽和长按(原来 pan 途中卡的长按机照跑,550ms 满环会误开 AI sidebar)。
 - **顺手记录(瞬时性,未动)**:路由涟漪 `.page-reveal` 扩圈期间(0.24~0.65s)`clip-path` 连带裁 hit-test,刚切进创作页立点 rail 会吞第一下;自愈短暂,若再被反馈可考虑涟漪只裁视觉克隆层。
 - 验收(5199 **真实鼠标**点击,headless 需先中和冻结的涟漪动画):进抓手→点「新建」(飞出菜单开)→点回「选择」全通;抓手下按卡片无描金无误开 AI;console 零报错。教训:**合成 dispatchEvent 绕过 hit-test 与 pointer capture,验证点击类 bug 必须走真实鼠标**(此前合成事件全绿、真点全死)。
+
+## rail 换装 · 2026-07-13(主理人:「line-sidebar 完整复刻」,同在 PR #169)
+
+- 工具 rail 从纸面小岛按钮列换成 **react-bits LineSidebar 完整复刻**(JS+CSS 版 verbatim 移植进 `components/react-bits/line-sidebar.{jsx,css}`,零新依赖):指针接近哪项右移染朱砂+左线标伸长同染、项间短刻度、等宽序号、单 rAF 指数平滑。对上游仅两处加法扩展(items 带 title/disabled、activeIndex 受控),头注有账。
+- 集成:10 条目/路由/快捷键与按钮版一一对应;工具态(选择/抓手)受控高亮;导出无草稿禁用;新建飞出菜单原样保留。色值全走语义 token。**原版 ±48px 隐形命中扩边收窄到 ±12px**——否则 rail 右侧一条画布区的点击被隐形偷走,和审核修复⑧同类病。
+- 取舍记录:资料/引用的「已挂载」is-on 指示在单 activeIndex 模型下暂无对应表达,若要可后补小圆点。
+- 验收(5199):结构/序号/楷体/受控高亮全对;--effect=1 手动灌注→字+线标染 #8f3c32、右移 12px(管线通;rAF 动画本环境冻结,机制 verbatim 上游);抓手/新建/选择路由全通;console 干净重载零新错(仅存两条旧 HMR 窗口期残留,模块时间戳可证)。
