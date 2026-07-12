@@ -169,3 +169,13 @@ plan: docs/2026-07-12-create-board-canvas-2-plan.md
 - 排障插曲(记档):第一发文件 drop 后查错了台以为链路没跑——实际 rail spawn 已把当前台切到 players(空台不需 confirm),导入静默成功落在 players;第二发按台守卫弹 confirm 后确认链路无恙。教训:多入口测试序列里"当前台"是移动靶,断言前先读 ki。
 - 如实边界:①导入被 confirm 取消时 drop 坐标已写(该台无卡渲染,视觉无感,自愈于下次落卡);②手机端不做画布起草(拍板③);③.docx 走 /api/upload 解析,依赖 8017 的 test 库唤醒状态(identify 入库)。
 - 测试残留:test 库入库《林一》等私密卡;preview localStorage 留多台测试数据。
+
+## H-R9 · 2026-07-12 —— H7 回归收尾 ✅ + 交互盘 PR + loop 结束
+
+- **性能账(对 07-11 基线)**:主 JS index=410.22 kB/gzip 138.47(基线 410.29/138.49,持平略降——H 系列全部落在懒加载的 Create chunk);Create chunk=108.07 kB/gzip 36.60(合链后起点 97.39/32.85,**+10.7 kB/+3.75 gzip=H2-H6 六片的账**,无回退红线)。
+- **reduced-motion 清单**:三块覆盖齐——C 系列通用清单(L1243,createRise/msgIn/fieldInk 族)、抽屉(L2339)、H 系列新增(L2767:focuscard/bcard-live/bsig-busy/note/ctxbar;spawnmenu 复用 ctxbar 类天然覆盖);相机 tween 在 JS 侧判 matchMedia 跳切。
+- **冷加载全链路回归(1366,干净种子)**:boardbar/rail/zoomctl/dock/world 全家桶就位;卡坐标(120,100/500,120)与视口(10,5,z1)逐值精确复原;选中 → 落笔态四键工具条 → 双击聚焦 → **dock 真调一发(8017)**:draft 2 键 → 16 键、聚焦面板 14 字段块实时长出、AI 顺势追问 → Esc 逐层退。
+- **手机 390 全量**:.ct 四 tab/composer/草稿条完整;桌面 12 个组件(board/boardbar/rail/zoomctl/world/ctxbar/note/bsig/spawnmenu/focuscard/dock/drawer)**全部零泄漏**。
+- console:每片 build 过+磁盘 babel parse OK+冷加载功能全绿;preview console 缓冲跨重启且无时间戳的工具局限已于 H-R6 记档。
+- **交互盘 PR 已开**(H2-H7,base=create-canvas2-base;#165 合入后 GitHub 自动 retarget 到 main——记得合 #165 时别删分支再 retarget,或先改 base,见「合链插曲」教训)。
+- H 系列 H0-H7 全绿收官:真画布(pan/zoom/工具栏/相机聚焦)× template 块-动作模型(BoardActionTrigger/上下文工具条/信号一等公民/空白起草)全部落地;交互盘等主理人审。loop 按停止条件结束。
