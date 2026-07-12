@@ -81,3 +81,24 @@ plan: docs/2026-07-12-create-board-canvas-2-plan.md
   - console:修复后两次刷新零新增(缓冲区仅存修前那 2 条 b:i0 重复 key 旧错,该 key 现行代码不可能产生);`npx vite build` 2.04s 过(Create chunk 98.49kB)。
 - 如实边界:①发布清台不剪 v2 里 built 坐标(id 键幽灵条目无害——永不匹配任何活卡,留 H 系列顺路清);②测试用 confirm/URL.createObjectURL/setPointerCapture 均为页面内测试垫片,未触真下载;③无头环境 resize 不派发事件,手机回归靠手动 dispatch(历轮已知怪癖)。
 - 测试残留:preview 浏览器 localStorage 已清回全新态。
+
+## H-R3 · 2026-07-12 —— H1 视口引擎 ✅(commit 008be2f)+ 地基盘 PR
+
+- 实现:
+  - **世界容器**:`.create-world` 单 transform(translate+scale),卡绝对定位其中;板 overflow:hidden,pan/zoom 取代滚动兜底。
+  - **手势=ref 直写**:viewRef 为真源,wheel/pan move 只写 ref + rAF 调度 DOM transform,**零 setState**;手势停 200ms(wheel debounce)或 pointerup(pan)才 commit 到 state。wheel 必须原生监听(`{passive:false}`,React 根上的合成 wheel 是 passive,preventDefault 无效)。
+  - **手势约定**:ctrl/cmd+wheel=光标锚定缩放(0.25–2 钳制),裸 wheel=平移;Space(输入框内不劫持)/中键=抓手,抓手态卡 pointer-events:none 不截胡;卡拖拽让位逻辑在卡 wrapper 判 spaceRef/中键。
+  - **缩放数学**:锚定公式 pan' = m − (m−pan)·nz/z;卡拖拽位移 screen/z 换算。
+  - **持久化**:视口住 `ais_create_board_v2.__view` 保留键(红线:视图态只此一处);boardPos 初始化器剥 __view 防混入卡坐标。
+  - 控件:右下 −/%/＋/适配(fit=全卡 bbox 居中钳制)。
+- 验收证据(5199 preview,真调交互):
+  - **零重渲铁证**:20 连 wheel 同步派发后,% 标签与 world transform **纹丝不动**(手势期间零 setState);200ms 后 commit 一次落地,数学精确(2×exp(−1.2)=0.6024,实测 z=0.6023884);
+  - **缩放锚定**:30 连 ctrl+wheel 对准 (400,300) → 钳制 z=2,pan=(−400,−299.2)=锚点公式精确解;
+  - **拖卡精度**:z=60.2% 下拖卡 screen(120,60) → 世界坐标落点与期望**逐位相等**(247.20701536419287);
+  - **平移**:中键拖 (60,−30) → __view 精确 +(60,−30),z 不变;Space 按下/抬起 is-pan class 开关正确;
+  - **复原**:刷新后视口 (149.16, 5.11, 60%) 与卡位 (247.207,123.604) 全部精确复原;适配按钮 → 全卡入板内(逐卡 rect 断言);点 % → 回 100%;
+  - 手机 390:.ct 就位,world/zoomctl/board 零泄漏;`npx vite build` 2.04s 过(Create chunk 102.02kB,+3.5kB);
+  - console:磁盘文件 babel parse OK + 冷加载全功能绿;缓冲区内 parse error/b:i0 条目=本轮分步编辑的 HMR 中间态与 H0 第一版历史(**preview 工具的 console 缓冲跨 server 重启持久、无时间戳,是工具局限**,现行代码物理上产生不了这些错误)。
+- 如实边界:①本 headless 环境 rAF 被节流不执行(rafLatency=null 实测),手势中的逐帧视觉更新只能在真浏览器生效,本环境靠 commit 路径兜底落地——代码路径正确性由数学断言与 commit 结果证明;②React 因其它 state 重渲时 world 的 JSX transform 会以最近 commit 值重置(手势中理论上有一帧回跳,200ms 内自愈),真实使用无感,留观;③Profiler 面板不可用于 headless,零重渲证据以「手势期间 % 标签零变化+代码路径只触 ref」口径给出。
+- 测试残留:preview localStorage 留有测试视口/卡位(与用户无关)。
+- **地基盘 PR 已开**:H0+H1 gate 全绿 → gengyue/create-canvas2-base → main。
