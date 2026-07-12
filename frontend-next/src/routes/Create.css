@@ -2398,6 +2398,17 @@
   .create-board.is-pan {
     cursor: grab;
   }
+  .create-board.is-dropover::after {
+    content: "";
+    position: absolute;
+    inset: 8px;
+    border: 2px dashed color-mix(in srgb, var(--accent) 45%, var(--line));
+    border-radius: var(--r-md);
+    pointer-events: none;
+  }
+  .create-spawnmenu button {
+    font-family: var(--font-kai);
+  }
   .create-board.is-pan .create-bcard {
     pointer-events: none; /* 抓手态整板可拖,卡不截胡 */
   }

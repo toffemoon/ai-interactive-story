@@ -391,8 +391,9 @@ export default function Create() {
       return;
     }
     if (e.target === e.currentTarget || (worldRef.current && e.target === worldRef.current)) {
-      // 点空白:先退聚焦(拉回视口),再取消选中(逐层,同 Esc 口径)
-      if (boardFocus) exitFocus();
+      // 点空白:收落卡菜单 → 退聚焦(拉回视口)→ 取消选中(逐层,同 Esc 口径)
+      if (spawnAt) setSpawnAt(null);
+      else if (boardFocus) exitFocus();
       else setBoardSel(null);
     }
   }
@@ -405,7 +406,76 @@ export default function Create() {
   function onBoardPointerEnd() {
     if (!panRef.current) return;
     panRef.current = null;
+    dragEndAtRef.current = performance.now(); // pan 刚结束的 dblclick 不当「双击空白落卡」
     setView({ ...viewRef.current });
+  }
+  // ── H6 空白起草:双击空白=四卡种落卡菜单;rail 拖出/文件拖入=按位置落 ──
+  const [spawnAt, setSpawnAt] = useState(null); // {x, y} 世界坐标 | null
+  const [boardDragOver, setBoardDragOver] = useState(false);
+  function screenToWorld(clientX, clientY) {
+    const r = boardElRef.current.getBoundingClientRect();
+    const v = viewRef.current;
+    return { x: (clientX - r.left - v.x) / v.z, y: (clientY - r.top - v.y) / v.z };
+  }
+  // 该台还没聊开=把 draft 卡落在指定位置;已有构思/草稿=不搬卡,只跳过去(newCardOf 会选中聚焦)
+  function spawnDraftAt(kk, wpos) {
+    const dd = desks[kk];
+    const has =
+      Object.keys(dd.draft || {}).length > 0 || dd.messages.length > 1 ||
+      (dd.questions || []).length > 0 || (dd.blueprint || []).length > 0;
+    if (!has) {
+      setBoardPos((p) => ({ ...p, ["d:" + kk]: { x: Math.max(0, wpos.x - 112), y: Math.max(0, wpos.y - 20) } }));
+    }
+    setSpawnAt(null);
+    newCardOf(kk);
+  }
+  function onBoardDblClick(e) {
+    if (e.target !== e.currentTarget && e.target !== worldRef.current) return; // 只认空白
+    if (performance.now() - dragEndAtRef.current < 300) return; // 拖拽/平移刚结束=误触,不落卡
+    setSpawnAt(screenToWorld(e.clientX, e.clientY));
+  }
+  const dtHasSpawnOrFiles = (e) => {
+    const t = e.dataTransfer && e.dataTransfer.types;
+    return !!t && ([...t].includes("application/x-ais-spawn") || [...t].includes("Files"));
+  };
+  function onBoardDragOver(e) {
+    if (!dtHasSpawnOrFiles(e)) return; // 其它载荷(如卡引用 MIME)不接,不高亮——误触不落卡
+    e.preventDefault();
+    if (!boardDragOver) setBoardDragOver(true);
+  }
+  function onBoardDrop(e) {
+    const dt = e.dataTransfer;
+    setBoardDragOver(false);
+    if (!dt) return;
+    const wpos = screenToWorld(e.clientX, e.clientY);
+    const spawnKk = dt.getData("application/x-ais-spawn");
+    if (spawnKk && KINDS.some((t) => t.k === spawnKk)) {
+      e.preventDefault();
+      spawnDraftAt(spawnKk, wpos);
+      return;
+    }
+    const file = dt.files && dt.files[0];
+    if (!file) return; // 无合法载荷=不落卡
+    e.preventDefault();
+    // 文件按类型分流:酒馆卡(.json/.png)→ 角色台本地解析;文档(.txt/.md/.docx)→ 当前台 identify。
+    // 卡落在 drop 位置(该台未聊开才搬坐标,口径同 spawnDraftAt);导入被取消时坐标改动无卡可见,无感。
+    const isTavern = /\.(json|png)$/i.test(file.name);
+    const kk = isTavern ? "characters" : kind;
+    const dd = desks[kk];
+    const has =
+      Object.keys(dd.draft || {}).length > 0 || dd.messages.length > 1 ||
+      (dd.questions || []).length > 0 || (dd.blueprint || []).length > 0;
+    if (!has) {
+      setBoardPos((p) => ({ ...p, ["d:" + kk]: { x: Math.max(0, wpos.x - 112), y: Math.max(0, wpos.y - 20) } }));
+    }
+    const fakeEv = { target: { files: [file], value: "" } };
+    if (isTavern) {
+      const i = KINDS.findIndex((t) => t.k === "characters");
+      if (i >= 0) setKi(i);
+      onTavernFile(fakeEv);
+    } else {
+      onUpload(fakeEv);
+    }
   }
   // 缩放控件:± 以板中心为锚;% 点击=回 100%;「适配」=装下全部卡。
   function zoomTo(nz, anchor) {
@@ -663,19 +733,20 @@ export default function Create() {
   const selLive = boardSel && (isDraftId(boardSel) || resolveBuilt(boardSel)) ? boardSel : null;
   // Esc 关聚焦(输入框里按 Esc 不劫持——它们自己 stopPropagation 或先聚焦处理)
   useEffect(() => {
-    if (!boardFocus && !boardSel) return;
+    if (!boardFocus && !boardSel && !spawnAt) return;
     const onKey = (e) => {
       if (e.key !== "Escape") return;
       // H4 逐层退:字段编辑/指示行的 Esc 自己 preventDefault(只关自己)→ 这里不再抢;
       // 然后聚焦 → 选中,一层一层来(修预审「Esc 双关」)。
       if (e.defaultPrevented) return;
-      if (boardFocus) exitFocus();
+      if (spawnAt) setSpawnAt(null);
+      else if (boardFocus) exitFocus();
       else if (boardSel) setBoardSel(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boardFocus, boardSel]);
+  }, [boardFocus, boardSel, spawnAt]);
   // 选中的 built 卡对象(dock 提示用)
   const selBuilt = resolveBuilt(boardSel);
 
@@ -1782,12 +1853,16 @@ export default function Create() {
           {/* G0 全屏画板:四台物料全部挂板(可拖可选可聚焦);台账线/kind tabs 已退役进 boardbar */}
           <div className="create-studio is-board">
             <div
-              className={"create-board" + (tool === "hand" ? " is-pan" : "")}
+              className={"create-board" + (tool === "hand" ? " is-pan" : "") + (boardDragOver ? " is-dropover" : "")}
               ref={boardElRef}
               onPointerDown={onBoardPointerDown}
               onPointerMove={onBoardPointerMove}
               onPointerUp={onBoardPointerEnd}
               onPointerCancel={onBoardPointerEnd}
+              onDoubleClick={onBoardDblClick}
+              onDragOver={onBoardDragOver}
+              onDragLeave={() => setBoardDragOver(false)}
+              onDrop={onBoardDrop}
             >
               {/* H1 世界容器:pan/zoom 只动它一个 transform(手势中 rAF 直写,不过 React) */}
               <div className="create-world" ref={worldRef} style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})` }}>
@@ -1867,6 +1942,23 @@ export default function Create() {
                   </div>
                 );
               })}
+              {/* H6 双击空白:四卡种落卡菜单(世界锚点+逆缩放;点空白/Esc 由 board pointerdown 收) */}
+              {spawnAt && (
+                <div className="create-ctxanchor" style={{ left: spawnAt.x, top: spawnAt.y }}>
+                  <div
+                    className="create-ctxbar create-spawnmenu"
+                    style={{ transform: `scale(${1 / view.z})` }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onDoubleClick={(e) => e.stopPropagation()}
+                    role="menu"
+                    aria-label="在此落一张卡"
+                  >
+                    {KINDS.map((t) => (
+                      <button key={t.k} onClick={() => spawnDraftAt(t.k, spawnAt)}>{t.zh}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {/* H5 批注笺:AI 最新一句锚在活动卡旁(Lovart 姿势),点开完整对话抽屉 */}
               {selLive && !boardFocus && isDraftId(selLive) && (lastAi || busy) && (() => {
                 const bc = boardCards.find((b) => b.id === selLive.id);
@@ -1954,7 +2046,17 @@ export default function Create() {
                 <button className={tool === "hand" ? "is-on" : ""} onClick={() => setTool("hand")} title="抓手·平移画板 (H,按住 Space 也行)" aria-label="抓手工具">手</button>
                 <span className="create-rail-sep" aria-hidden="true" />
                 {KINDS.map((t, i) => (
-                  <button key={t.k} onClick={() => newCardOf(t.k)} title={"新建 / 继续" + t.zh + " (" + (i + 1) + ")"} aria-label={"新建" + t.zh}>
+                  <button
+                    key={t.k}
+                    onClick={() => newCardOf(t.k)}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData("application/x-ais-spawn", t.k); // H6:拖出到画布=按位置落卡
+                      e.dataTransfer.effectAllowed = "copy";
+                    }}
+                    title={"新建 / 继续" + t.zh + " (" + (i + 1) + ")·可拖到画布落卡"}
+                    aria-label={"新建" + t.zh}
+                  >
                     {t.zh.slice(0, 1)}
                   </button>
                 ))}
