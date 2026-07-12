@@ -226,3 +226,14 @@ plan: docs/2026-07-12-create-board-canvas-2-plan.md
 - 修:①居中改 `margin-left: calc(min(920px,94vw)/-2)`(不占 transform),keyframes 只动 translateY——两态互不干扰;②聚焦态不渲染上下文工具条(迷你卡隐后它成板中孤儿);③localStorage 里持久化的旧开场白(「聊着聊着」)就地迁移为现行文案(仅当它是台上唯一消息——不动真实对话史);④dock 退役后 focuscard 底部身位 210→24(面板更高)。
 - 验(种旧开场白+草稿复现):长按进 AI → 面板全屏内(96..898)+回画板可见+与 sidebar 零重叠;关 sidebar → 居中(±8px)920 宽;孤儿工具条零渲染;开场白迁移生效(store+sidebar 双确认)。
 - 教训:**transform 是 CSS 动画与静态定位的共享资源**——凡有 fill 动画的元素,定位不要依赖 transform(margin/inset 更稳)。
+
+## 审核修复⑥ · 2026-07-13(主理人四连反馈,commit c86a542)
+
+- ①**长按反馈换范式**(「线条动画太差,找成熟素材」):描边矩形废弃(根因:大卡周长太长,同样 550ms 描边视觉进度慢半拍、感知差)→ 换「按压点圆形 conic 进度环(40px,mask 镂空环+中心朱砂点,入场回弹)+ 目标模块按压抬起态(卡=阴影/底色/描边提亮;字段=scale1.015)」——iOS/Ripple 长按同族范式,零新依赖;完成=环爆点(scale1.5 fade),取消=淡出落回。
+- ②**聚焦放大感**:按压抬起即予"它在起来"的预期;聚焦面板字号放大已在打磨④。
+- ③**sidebar 可拖动**:header=把手(grab/grabbing 光标),pointer 直写拖移(实测 200px 逐像素精确),松手 commit 至 v2.__ai(boardPos 初始化器同步剥 __ai 防混卡坐标),双击回位(0,0)。
+- ④**输入解耦**(修「sidebar 不能输出文字」):textarea/发送与"板上有选中"彻底解绑(dock 时代残留语义——选中一丢输入即锁死,主理人截图场景坐实)——sidebar 开着即对当前台可说;仅 built 语境禁用并提示改编。
+- ⑤**sidebar UI 打磨**:364 宽/圆角 14/深浮影/header 分区底色/对谈流 13.5px·1.72 行距/composer 3 行输入+顶部分线+工具行左工具右发送。
+- 排障插曲:一轮改完页面白卡(0 卡)——**aiPos 声明在引用它的 persist effect 之后,TDZ ReferenceError 崩整组件**;前移声明即愈。教训:往既有 effect 的 deps 加新 state 时,先确认声明顺序。
+- 验收(5199 真调环境):按压 220ms 采样=环在按压点+conic 填充+卡抬起态;满环 sidebar 开、textarea 3 行可打字;**清选中后输入仍可用**;拖 sidebar (−200,130) 精确、持久化 __ai、双击回位 translate(0,0)。
+- 测试残留:preview localStorage 留测试台与 sidebar 位置。
