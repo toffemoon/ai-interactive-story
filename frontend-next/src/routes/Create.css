@@ -2533,6 +2533,99 @@
     overflow: hidden;
     color: color-mix(in srgb, var(--fg) 55%, transparent);
   }
+  /* H5 信号上卡:一等可点对象——火候线直达圈选,蓝图徽直达批准,busy 墨点,批注笺 */
+  .create-bsig {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    padding: 2px 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+  }
+  .create-bsig-line {
+    flex: 1;
+    height: 2px;
+    border-radius: var(--r-pill);
+    background: color-mix(in srgb, var(--line) 70%, transparent);
+    overflow: hidden;
+  }
+  .create-bsig-line > span {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, var(--fg), var(--accent-3));
+    border-radius: var(--r-pill);
+  }
+  .create-bsig .t-meta { flex: none; }
+  .create-bsig:hover .t-meta { color: var(--accent); }
+  .create-bsig-bp {
+    width: auto;
+    align-self: flex-start;
+    padding: 1px 8px;
+    border: 1px solid color-mix(in srgb, var(--accent-3) 55%, var(--line));
+    border-radius: var(--r-pill);
+    color: var(--accent-3);
+    font-size: 12px;
+    font-family: var(--font-kai);
+  }
+  .create-bsig-bp:hover { border-color: var(--accent-3); }
+  .create-bsig-busy {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    width: 8px;
+    height: 8px;
+    border-radius: var(--r-pill);
+    background: var(--fg);
+    animation: bsigPulse 1.1s ease-in-out infinite;
+  }
+  @keyframes bsigPulse {
+    0%, 100% { opacity: 0.25; transform: scale(0.8); }
+    50% { opacity: 0.9; transform: scale(1.15); }
+  }
+  .create-noteanchor {
+    position: absolute;
+    width: 0;
+    height: 0;
+    z-index: 6;
+    pointer-events: none;
+  }
+  .create-note {
+    position: absolute;
+    left: 10px;
+    top: 0;
+    transform-origin: left top;
+    display: flex;
+    gap: 7px;
+    align-items: baseline;
+    max-width: 230px;
+    padding: 8px 12px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 2px solid var(--accent);
+    border-radius: 0 var(--r-sm) var(--r-sm) 0;
+    box-shadow: var(--shadow-card);
+    cursor: pointer;
+    text-align: left;
+    pointer-events: auto;
+    animation: msgIn 0.2s var(--ease-out) both;
+  }
+  .create-note-who { flex: none; color: var(--accent); font-size: 12px; }
+  .create-note-tx {
+    color: var(--muted);
+    font-family: var(--font-serif);
+    font-size: 12.5px;
+    line-height: 1.55;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .create-note:hover .create-note-tx { color: var(--fg); }
+
   /* H2:hover 即现的 .create-bcard-acts 退役,动作收进选中即见的上下文工具条 */
   .create-ctxanchor {
     position: absolute;
@@ -2660,6 +2753,6 @@
     background: transparent;
   }
   @media (prefers-reduced-motion: reduce) {
-    .create-focuscard, .create-bcard-live { animation: none; }
+    .create-focuscard, .create-bcard-live, .create-bsig-busy, .create-note, .create-ctxbar { animation: none; }
   }
 }

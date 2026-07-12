@@ -1830,9 +1830,66 @@ export default function Create() {
                     </span>
                     <span className="create-bcard-name t-kai">{nm}</span>
                     <span className="create-bcard-sub t-meta">{boardSub(bc.card) || (bc.isDraft ? "构思中……" : "已收进台子")}</span>
+                    {/* H5 信号上卡(template P2:信号=一等可点对象):busy 墨点/火候线→圈选/蓝图徽→批准 */}
+                    {bc.isDraft && (() => {
+                      const dd = desks[bc.kk];
+                      const dPhase = deskPhase(dd);
+                      if (bc.kk === kind && busy) {
+                        return <span className="create-bsig-busy" title="AI 正在写……" aria-label="AI 处理中" />;
+                      }
+                      if (dPhase === "understand" && ((dd.comp || 0) > 0 || (dd.questions || []).length)) {
+                        return (
+                          <button
+                            className="create-bsig"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => { e.stopPropagation(); focusCard(bc); }}
+                            title={"完整度 " + (dd.comp || 0) + " · 点开继续构思"}
+                          >
+                            <span className="create-bsig-line"><span style={{ width: (dd.comp || 0) + "%" }} /></span>
+                            <span className="t-meta">构思中 · {dd.comp || 0}</span>
+                          </button>
+                        );
+                      }
+                      if (dPhase === "blueprint") {
+                        return (
+                          <button
+                            className="create-bsig create-bsig-bp"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => { e.stopPropagation(); focusCard(bc); }}
+                            title="蓝图已出,点开批准落笔"
+                          >
+                            蓝图待批 ✦
+                          </button>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                 );
               })}
+              {/* H5 批注笺:AI 最新一句锚在活动卡旁(Lovart 姿势),点开完整对话抽屉 */}
+              {selLive && !boardFocus && isDraftId(selLive) && (lastAi || busy) && (() => {
+                const bc = boardCards.find((b) => b.id === selLive.id);
+                if (!bc) return null;
+                const pos = boardCardPos(bc, bc.kSeq);
+                return (
+                  <div className="create-noteanchor" style={{ left: pos.x + 234, top: pos.y }}>
+                    <button
+                      className="create-note"
+                      style={{ transform: `scale(${1 / view.z})` }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onDoubleClick={(e) => e.stopPropagation()}
+                      onClick={() => setChatOpen(true)}
+                      title="展开完整对话手记"
+                    >
+                      <span className="create-note-who t-kai" aria-hidden="true">✒</span>
+                      <span className={"create-note-tx" + (busy ? " create-msg-typing" : "")}>
+                        {busy ? "正在想……" : (lastAi.show || lastAi.text)}
+                      </span>
+                    </button>
+                  </div>
+                );
+              })()}
               {/* H2 上下文工具条:选中即见(替换 hover 即现的小钮——误触族的根)。
                   锚点在世界系(随卡 pan/zoom),条本体逆缩放保持视觉恒定;动作按卡态给(块型×动作矩阵)。 */}
               {selLive && (() => {
