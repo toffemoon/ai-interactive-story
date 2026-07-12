@@ -350,8 +350,39 @@ export default function Create() {
       window.removeEventListener("keyup", up);
     };
   }, []);
+  // H3 快捷键:V 选择 / H 抓手 / ⌘·Ctrl+0 适配全部 / 1-4 新建·继续四卡种。
+  // 守卫:输入态与任何弹层/聚焦态下不劫持(Esc 另有专职监听)。
+  const kbdBlocked =
+    !!boardFocus || !!finalize || !!importOpen || seedOpen || !!refPanel || !!libModal ||
+    builtView || previewOpen || !!presetsModal || tplOpen || chatOpen;
+  useEffect(() => {
+    if (isMobile) return;
+    const typing = (t) => t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+    const onKey = (e) => {
+      if (typing(e.target) || kbdBlocked || e.altKey) return;
+      if ((e.metaKey || e.ctrlKey) && e.key === "0") {
+        e.preventDefault();
+        fitAllCards();
+        return;
+      }
+      if (e.metaKey || e.ctrlKey) return;
+      const k = e.key.toLowerCase();
+      if (k === "v") setTool("select");
+      else if (k === "h") setTool("hand");
+      else if (k >= "1" && k <= "4") newCardOf(KINDS[Number(k) - 1].k);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobile, kbdBlocked]);
+  // H3 工具态:select(默认)| hand(粘性抓手,Space=瞬时抓手不变);ref 镜像给 pointer 手势层用。
+  const [tool, setTool] = useState("select");
+  const toolRef = useRef("select");
+  useEffect(() => {
+    toolRef.current = tool;
+  }, [tool]);
   function onBoardPointerDown(e) {
-    if (e.button === 1 || (e.button === 0 && spaceRef.current)) {
+    if (e.button === 1 || (e.button === 0 && (spaceRef.current || toolRef.current === "hand"))) {
       panRef.current = { sx: e.clientX, sy: e.clientY, bx: viewRef.current.x, by: viewRef.current.y };
       e.preventDefault();
       try {
@@ -1644,11 +1675,7 @@ export default function Create() {
           <div className="create-boardbar">
             <div className="create-boardbar-l">
               <span className="create-boardbar-title t-kai">创作</span>
-              {KINDS.map((t) => (
-                <button key={t.k} className="create-boardbar-new" onClick={() => newCardOf(t.k)} title={"新建 / 继续" + t.zh}>
-                  + {t.zh}
-                </button>
-              ))}
+              {/* H3:四个「+ 卡」搬去左侧工具 rail,boardbar 瘦身成文件级 */}
             </div>
             <div className="create-boardbar-r">
               {(() => {
@@ -1712,7 +1739,7 @@ export default function Create() {
           {/* G0 全屏画板:四台物料全部挂板(可拖可选可聚焦);台账线/kind tabs 已退役进 boardbar */}
           <div className="create-studio is-board">
             <div
-              className="create-board"
+              className={"create-board" + (tool === "hand" ? " is-pan" : "")}
               ref={boardElRef}
               onPointerDown={onBoardPointerDown}
               onPointerMove={onBoardPointerMove}
@@ -1742,6 +1769,13 @@ export default function Create() {
                     onPointerCancel={onCardPointerCancel}
                     onLostPointerCapture={onCardPointerCancel}
                     onDoubleClick={() => onCardEnter(bc)}
+                    onKeyDown={(e) => {
+                      // H3 纯键盘流:Tab 到卡,Enter=选中,已选中再 Enter=进入(镜像单击/双击)
+                      if (e.key !== "Enter" || e.target !== e.currentTarget) return;
+                      e.preventDefault();
+                      if (boardSel && boardSel.id === bc.id) onCardEnter(bc);
+                      else selectCard(bc);
+                    }}
                     role="button"
                     tabIndex={0}
                     aria-label={bc.zh + "·" + nm}
@@ -1813,6 +1847,17 @@ export default function Create() {
                   </div>
                 </div>
               )}
+              {/* H3 工具 rail:选择/抓手 + 四卡种落卡(从 boardbar 搬来);快捷键 V/H/1-4 */}
+              <div className="create-rail" role="toolbar" aria-label="画板工具" aria-orientation="vertical">
+                <button className={tool === "select" ? "is-on" : ""} onClick={() => setTool("select")} title="选择 (V)" aria-label="选择工具">选</button>
+                <button className={tool === "hand" ? "is-on" : ""} onClick={() => setTool("hand")} title="抓手·平移画板 (H,按住 Space 也行)" aria-label="抓手工具">手</button>
+                <span className="create-rail-sep" aria-hidden="true" />
+                {KINDS.map((t, i) => (
+                  <button key={t.k} onClick={() => newCardOf(t.k)} title={"新建 / 继续" + t.zh + " (" + (i + 1) + ")"} aria-label={"新建" + t.zh}>
+                    {t.zh.slice(0, 1)}
+                  </button>
+                ))}
+              </div>
               {/* H1 缩放控件:± 板中心锚定;点 % 回 100%;适配=装下全部卡 */}
               <div className="create-zoomctl t-meta" aria-label="画板缩放">
                 <button onClick={() => zoomTo(viewRef.current.z / 1.2)} aria-label="缩小">−</button>

@@ -2409,6 +2409,48 @@
     transform-origin: 0 0;
     will-change: transform;
   }
+  /* H3 工具 rail:左上竖排,纸面小岛;与底部中央 dock、右下 zoomctl 三不相扰 */
+  .create-rail {
+    position: absolute;
+    left: var(--sp-3);
+    top: var(--sp-3);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-card);
+    z-index: 5;
+  }
+  .create-rail button {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: var(--r-sm);
+    color: var(--muted);
+    font-family: var(--font-kai);
+    font-size: 14px;
+    cursor: pointer;
+    transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+  }
+  .create-rail button:hover {
+    color: var(--fg);
+  }
+  .create-rail button.is-on {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--accent);
+  }
+  .create-rail-sep {
+    height: 1px;
+    margin: 3px 4px;
+    background: var(--line);
+  }
   .create-zoomctl {
     position: absolute;
     right: var(--sp-3);
