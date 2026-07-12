@@ -236,7 +236,9 @@ export default function Create() {
       const raw = localStorage.getItem("ais_create_board_v2");
       if (raw) {
         const v = JSON.parse(raw);
-        return v && typeof v === "object" ? v : {};
+        if (!v || typeof v !== "object") return {};
+        const { __view, ...cards } = v; // __view 是视口保留键(H1),不是卡坐标
+        return cards;
       }
       const v1 = JSON.parse(localStorage.getItem("ais_create_board_v1") || "{}") || {};
       const v2 = {};
@@ -255,11 +257,162 @@ export default function Create() {
       return {};
     }
   });
+  // H1 视口(pan/zoom):世界坐标系=卡坐标;屏幕→世界 = (screen - pan) / z。
+  // 手势中 viewRef 为真源、rAF 直写 world 元素 transform(零 React 重渲),手势结束才 commit 到 state;
+  // 持久化与卡坐标同住 ais_create_board_v2 的保留键 __view(红线:视图态只此一处)。
+  const Z_MIN = 0.25, Z_MAX = 2;
+  const clampZ = (z) => Math.min(Z_MAX, Math.max(Z_MIN, z));
+  const [view, setView] = useState(() => {
+    try {
+      const v = (JSON.parse(localStorage.getItem("ais_create_board_v2") || "{}") || {}).__view;
+      if (v && typeof v.x === "number" && typeof v.y === "number" && typeof v.z === "number") {
+        return { x: v.x, y: v.y, z: clampZ(v.z) };
+      }
+    } catch {}
+    return { x: 0, y: 0, z: 1 };
+  });
+  const viewRef = useRef(view);
+  const worldRef = useRef(null);
+  const boardElRef = useRef(null);
+  const viewRafRef = useRef(0);
+  const viewCommitT = useRef(null);
+  const panRef = useRef(null); // {sx, sy, bx, by} 板平移手势
+  const spaceRef = useRef(false); // Space 按住=抓手(输入框内不劫持)
+  function applyViewNow() {
+    const el = worldRef.current;
+    if (!el) return;
+    const v = viewRef.current;
+    el.style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.z})`;
+  }
+  function scheduleViewApply() {
+    if (viewRafRef.current) return;
+    viewRafRef.current = requestAnimationFrame(() => {
+      viewRafRef.current = 0;
+      applyViewNow();
+    });
+  }
+  function commitViewSoon(ms = 200) {
+    clearTimeout(viewCommitT.current);
+    viewCommitT.current = setTimeout(() => setView({ ...viewRef.current }), ms);
+  }
+  useEffect(() => {
+    viewRef.current = view;
+    applyViewNow();
+  }, [view]);
   useEffect(() => {
     try {
-      localStorage.setItem("ais_create_board_v2", JSON.stringify(boardPos));
+      localStorage.setItem("ais_create_board_v2", JSON.stringify({ ...boardPos, __view: view }));
     } catch (e) {}
-  }, [boardPos]);
+  }, [boardPos, view]);
+  // wheel 要 preventDefault,React 合成 wheel 在根上是 passive——必须原生监听。
+  // 约定:ctrl/cmd+wheel(含触控板捏合)=对准光标缩放;裸 wheel=平移。
+  useEffect(() => {
+    const el = boardElRef.current;
+    if (!el) return;
+    const onWheel = (e) => {
+      e.preventDefault();
+      const v = viewRef.current;
+      if (e.ctrlKey || e.metaKey) {
+        const rect = el.getBoundingClientRect();
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        const nz = clampZ(v.z * Math.exp(-e.deltaY * 0.0015));
+        viewRef.current = { x: mx - ((mx - v.x) * nz) / v.z, y: my - ((my - v.y) * nz) / v.z, z: nz };
+      } else {
+        viewRef.current = { ...v, x: v.x - e.deltaX, y: v.y - e.deltaY };
+      }
+      scheduleViewApply();
+      commitViewSoon();
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobile]);
+  // Space=抓手(光标态直改 class,不走 React);输入框/编辑态不劫持。
+  useEffect(() => {
+    const typing = (t) => t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+    const down = (e) => {
+      if (e.code !== "Space" || e.repeat || typing(e.target)) return;
+      spaceRef.current = true;
+      if (boardElRef.current) {
+        boardElRef.current.classList.add("is-pan");
+        e.preventDefault(); // 只在板上生效时挡滚动
+      }
+    };
+    const up = (e) => {
+      if (e.code !== "Space") return;
+      spaceRef.current = false;
+      boardElRef.current && boardElRef.current.classList.remove("is-pan");
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, []);
+  function onBoardPointerDown(e) {
+    if (e.button === 1 || (e.button === 0 && spaceRef.current)) {
+      panRef.current = { sx: e.clientX, sy: e.clientY, bx: viewRef.current.x, by: viewRef.current.y };
+      e.preventDefault();
+      try {
+        e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {}
+      return;
+    }
+    if (e.target === e.currentTarget || (worldRef.current && e.target === worldRef.current)) setBoardSel(null); // 点空白=取消选中
+  }
+  function onBoardPointerMove(e) {
+    const p = panRef.current;
+    if (!p) return;
+    viewRef.current = { ...viewRef.current, x: p.bx + (e.clientX - p.sx), y: p.by + (e.clientY - p.sy) };
+    scheduleViewApply();
+  }
+  function onBoardPointerEnd() {
+    if (!panRef.current) return;
+    panRef.current = null;
+    setView({ ...viewRef.current });
+  }
+  // 缩放控件:± 以板中心为锚;% 点击=回 100%;「适配」=装下全部卡。
+  function zoomTo(nz, anchor) {
+    const el = boardElRef.current;
+    const v = viewRef.current;
+    nz = clampZ(nz);
+    let ax = 0, ay = 0;
+    if (el) {
+      const r = el.getBoundingClientRect();
+      ax = anchor ? anchor.x : r.width / 2;
+      ay = anchor ? anchor.y : r.height / 2;
+    }
+    viewRef.current = { x: ax - ((ax - v.x) * nz) / v.z, y: ay - ((ay - v.y) * nz) / v.z, z: nz };
+    applyViewNow();
+    setView({ ...viewRef.current });
+  }
+  function fitAllCards() {
+    const el = boardElRef.current;
+    if (!el || !boardCards.length) {
+      viewRef.current = { x: 0, y: 0, z: 1 };
+      applyViewNow();
+      setView({ x: 0, y: 0, z: 1 });
+      return;
+    }
+    const CW = 224, CH = 160;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    boardCards.forEach((bc) => {
+      const p = boardCardPos(bc, bc.kSeq);
+      x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y);
+      x1 = Math.max(x1, p.x + CW); y1 = Math.max(y1, p.y + CH);
+    });
+    const r = el.getBoundingClientRect();
+    const pad = 48;
+    const z = clampZ(Math.min((r.width - pad * 2) / (x1 - x0), (r.height - pad * 2) / (y1 - y0), 1));
+    viewRef.current = {
+      x: (r.width - (x1 - x0) * z) / 2 - x0 * z,
+      y: (r.height - (y1 - y0) * z) / 2 - y0 * z,
+      z,
+    };
+    applyViewNow();
+    setView({ ...viewRef.current });
+  }
   // F3 一键 AI 长出指示行:askOpen = 字段 k0 | null(✦/⟳ 点开,可空回车=默认指令)。
   const [askOpen, setAskOpen] = useState(null);
   const [askText, setAskText] = useState("");
@@ -462,8 +615,10 @@ export default function Create() {
   function onCardPointerMove(e) {
     const d = dragRef.current;
     if (!d) return;
-    const dx = e.clientX - d.startX, dy = e.clientY - d.startY;
-    if (!d.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+    // H1:屏幕位移 → 世界位移要除以缩放,否则非 100% 下拖卡落点漂
+    const z = viewRef.current.z || 1;
+    const dx = (e.clientX - d.startX) / z, dy = (e.clientY - d.startY) / z;
+    if (!d.moved && Math.abs(dx) + Math.abs(dy) < 4 / z) return;
     d.moved = true;
     setBoardPos((p) => ({ ...p, [d.key]: { x: Math.max(0, d.baseX + dx), y: Math.max(0, d.baseY + dy) } }));
   }
@@ -1524,10 +1679,14 @@ export default function Create() {
           <div className="create-studio is-board">
             <div
               className="create-board"
-              onPointerDown={(e) => {
-                if (e.target === e.currentTarget) setBoardSel(null); // 点空白=取消选中
-              }}
+              ref={boardElRef}
+              onPointerDown={onBoardPointerDown}
+              onPointerMove={onBoardPointerMove}
+              onPointerUp={onBoardPointerEnd}
+              onPointerCancel={onBoardPointerEnd}
             >
+              {/* H1 世界容器:pan/zoom 只动它一个 transform(手势中 rAF 直写,不过 React) */}
+              <div className="create-world" ref={worldRef} style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.z})` }}>
               {boardCards.map((bc, seq) => {
                 const c = (bc.card && bc.card.data) || bc.card || {};
                 const nm = c.name || c.title || (bc.isDraft ? "未命名草稿" : "未命名");
@@ -1538,7 +1697,11 @@ export default function Create() {
                     key={bc.key}
                     className={"create-bcard" + (on ? " is-on" : "") + (bc.isDraft ? " is-draft" : "")}
                     style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
-                    onPointerDown={(e) => { e.stopPropagation(); onCardPointerDown(e, bc, pos); }}
+                    onPointerDown={(e) => {
+                      if (spaceRef.current || e.button === 1) return; // 抓手/中键=板平移,让事件冒泡到板
+                      e.stopPropagation();
+                      onCardPointerDown(e, bc, pos);
+                    }}
                     onPointerMove={onCardPointerMove}
                     onPointerUp={(e) => onCardPointerUp(e, bc)}
                     onDoubleClick={() => focusCard(bc)}
@@ -1564,6 +1727,7 @@ export default function Create() {
                   </div>
                 );
               })}
+              </div>
               {boardCards.length === 0 && (
                 <div className="create-board-empty">
                   <span className="create-card-blank-seal t-kai" aria-hidden="true">板</span>
@@ -1577,6 +1741,13 @@ export default function Create() {
                   </div>
                 </div>
               )}
+              {/* H1 缩放控件:± 板中心锚定;点 % 回 100%;适配=装下全部卡 */}
+              <div className="create-zoomctl t-meta" aria-label="画板缩放">
+                <button onClick={() => zoomTo(viewRef.current.z / 1.2)} aria-label="缩小">−</button>
+                <button className="create-zoomctl-pct" onClick={() => zoomTo(1)} title="回到 100%">{Math.round(view.z * 100)}%</button>
+                <button onClick={() => zoomTo(viewRef.current.z * 1.2)} aria-label="放大">＋</button>
+                <button onClick={fitAllCards} title="装下全部卡">适配</button>
+              </div>
             </div>
 
             {/* G0 聚焦态:双击放大编辑——draft=现有画布全套;built=只读字段 */}
