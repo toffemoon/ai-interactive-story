@@ -237,3 +237,10 @@ plan: docs/2026-07-12-create-board-canvas-2-plan.md
 - 排障插曲:一轮改完页面白卡(0 卡)——**aiPos 声明在引用它的 persist effect 之后,TDZ ReferenceError 崩整组件**;前移声明即愈。教训:往既有 effect 的 deps 加新 state 时,先确认声明顺序。
 - 验收(5199 真调环境):按压 220ms 采样=环在按压点+conic 填充+卡抬起态;满环 sidebar 开、textarea 3 行可打字;**清选中后输入仍可用**;拖 sidebar (−200,130) 精确、持久化 __ai、双击回位 translate(0,0)。
 - 测试残留:preview localStorage 留测试台与 sidebar 位置。
+
+## 主题变更 · 2026-07-13(主理人拍板「米色 → 全白」,PR #169)
+
+- 范围:tokens raw 层四值白化(paper-bg/panel=#ffffff、sunk=#f4f4f2、line=#e4e4e1),墨/线中性化(#1f1f1e/#6b6b68),阴影与 scrim 去暖褐转中性;**朱砂/鎏金 accent、badge 彩底、stage 暖夜主题一律不动**——语义层结构不变,全站经 token 一次生效。
+- 治本顺手账:Home.css 5 处硬编码米色(#fffdfa/#d8d2c7)收编回 var(--panel)/var(--line);Styleguide 色卡同步新值。
+- 验收:body 计算色 rgb(255,255,255);创作页与首页扫描三个旧米色 hex 计算色零残留;画板层次(沉底/点阵/边界)由 fg color-mix 派生自动适配白底。
+- 备注:tokens 注释原写「raw 色板(不可变)」——本次是主理人显式改主题,注释已同步改口;若后续要双主题切换(米/白),在语义层加 data-theme 变体即可,raw 结构已就绪。
