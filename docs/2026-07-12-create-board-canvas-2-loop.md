@@ -179,3 +179,10 @@ plan: docs/2026-07-12-create-board-canvas-2-plan.md
 - console:每片 build 过+磁盘 babel parse OK+冷加载功能全绿;preview console 缓冲跨重启且无时间戳的工具局限已于 H-R6 记档。
 - **交互盘 PR 已开**(H2-H7,base=create-canvas2-base;#165 合入后 GitHub 自动 retarget 到 main——记得合 #165 时别删分支再 retarget,或先改 base,见「合链插曲」教训)。
 - H 系列 H0-H7 全绿收官:真画布(pan/zoom/工具栏/相机聚焦)× template 块-动作模型(BoardActionTrigger/上下文工具条/信号一等公民/空白起草)全部落地;交互盘等主理人审。loop 按停止条件结束。
+
+## 审核修复 · 2026-07-12(主理人实测反馈「新账号连新建都做不到」,commit c72ef59)
+
+- 复现坐实:全新账号桌面空板——功能链路完好(rail「角」可开构思),但**可发现性归零**:空板文案指向 H3 已搬走的顶部「+ 角色卡」、dock 提示指向不存在的「上面 + 新建」、rail 只有无语义单字。H3 boardbar 瘦身漏改文案+入口藏太深,新用户第一分钟死局。
+- 修:空板中央放回四个实体「+ 卡种」按钮(复用 .create-boardbar-new 样式,点击直达聚焦构思);空板/dock 两处文案改真话(双击空白/左侧工具栏)。
+- 验:清库全新态 → 空板四按钮渲染 → 点「+ 角色卡」→ 聚焦构思开+dock 解锁;build 过。
+- 教训:**切片验收都从"有数据的板"出发,漏了全新用户零态走查**——G 系列的空板引导在 H3 改布局时成了孤儿文案。零态(new user first minute)应进 H7 类回归清单的固定项。
