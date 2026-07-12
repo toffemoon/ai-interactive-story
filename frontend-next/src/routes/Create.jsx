@@ -11,6 +11,7 @@ import { TEMPLATES, getTpl } from "./createTemplates"; // D3 创作模板(文案
 import { loadPrompts, addPrompt, removePrompt } from "../lib/promptLib"; // F1 提示词库(localStorage)
 import { cardToRefText, makeRef } from "../lib/refText"; // F2 卡→引用文本(refs 通道)
 import { useAuth } from "../state/auth";
+import LineSidebar from "../components/react-bits/line-sidebar"; // rail=LineSidebar 完整复刻(2026-07-13 主理人拍板)
 import "./Create.css";
 
 // 角色卡的用户上传图(头像/立绘)单独保住,别被 AI 重建 draft 覆盖掉。
@@ -2225,19 +2226,48 @@ export default function Create() {
                   工具(选择/抓手)/起手(新建/模板/导入)/内容源(资料/引用/素材/拆回)/产出(导出)。
                   装订/发布/对话留在顶部 boardbar(文件级);快捷键 V/H/1-4/⌘0 不变 */}
               <div className="create-rail" role="toolbar" aria-label="画板工具" aria-orientation="vertical" onPointerDown={(e) => e.stopPropagation()}>
-                <button className={tool === "select" ? "is-on" : ""} onClick={() => setTool("select")} title="选择 (V)">选择</button>
-                <button className={tool === "hand" ? "is-on" : ""} onClick={() => setTool("hand")} title="抓手·平移画板 (H,按住 Space 也行)">抓手</button>
-                <span className="create-rail-sep" aria-hidden="true" />
-                <button className={railNew ? "is-on" : ""} onClick={() => setRailNew((v) => !v)} title="新建一张卡 (1-4,或双击画板空白)" aria-expanded={railNew}>新建</button>
-                <button onClick={() => { setRailNew(false); setTplOpen(true); }} title="从模板起手:骨架直落画布">模板</button>
-                <button onClick={() => { setRailNew(false); setImportOpen({ step: "pick", text: "", err: "" }); }} title="导入已有内容:粘贴/上传文档/酒馆卡">导入</button>
-                <span className="create-rail-sep" aria-hidden="true" />
-                <button className={desk.seed ? "is-on" : ""} onClick={() => { setRailNew(false); openSeed(); }} title="挂参考资料:AI 每轮都参考">资料</button>
-                <button className={deskRefs.length ? "is-on" : ""} onClick={() => { setRailNew(false); refPanel ? setRefPanel(null) : openRefPanel("desk"); }} title="引用已有卡/提示词(输入 @ 也能唤起)">引用</button>
-                <button onClick={() => { setRailNew(false); openLib(); }} title="从我的卡库补素材到本台">素材</button>
-                <button onClick={() => { setRailNew(false); openPresets(); }} title="从我发布的故事整组拆回四台">拆回</button>
-                <span className="create-rail-sep" aria-hidden="true" />
-                <button onClick={() => exportCard(desk.draft)} disabled={!hasDraft} title={hasDraft ? "导出当前草稿 JSON" : "画布上还没有草稿"}>导出</button>
+                {/* 主理人 2026-07-13 拍板:rail 换 react-bits LineSidebar 完整复刻(指针接近=右移染朱砂+线标伸长,等宽序号+项间刻度)。
+                    条目/路由/快捷键(V/H/1-4)与原按钮版一一对应;工具态受控(选择/抓手),导出无草稿禁用 */}
+                <LineSidebar
+                  items={[
+                    { label: "选择", title: "选择 (V)" },
+                    { label: "抓手", title: "抓手·平移画板 (H,按住 Space 也行)" },
+                    { label: "新建", title: "新建一张卡 (1-4,或双击画板空白)" },
+                    { label: "模板", title: "从模板起手:骨架直落画布" },
+                    { label: "导入", title: "导入已有内容:粘贴/上传文档/酒馆卡" },
+                    { label: "资料", title: "挂参考资料:AI 每轮都参考" },
+                    { label: "引用", title: "引用已有卡/提示词(输入 @ 也能唤起)" },
+                    { label: "素材", title: "从我的卡库补素材到本台" },
+                    { label: "拆回", title: "从我发布的故事整组拆回四台" },
+                    { label: "导出", title: hasDraft ? "导出当前草稿 JSON" : "画布上还没有草稿", disabled: !hasDraft },
+                  ]}
+                  activeIndex={tool === "hand" ? 1 : 0}
+                  onItemClick={(i) => {
+                    const acts = [
+                      () => setTool("select"),
+                      () => setTool("hand"),
+                      () => setRailNew((v) => !v),
+                      () => { setRailNew(false); setTplOpen(true); },
+                      () => { setRailNew(false); setImportOpen({ step: "pick", text: "", err: "" }); },
+                      () => { setRailNew(false); openSeed(); },
+                      () => { setRailNew(false); refPanel ? setRefPanel(null) : openRefPanel("desk"); },
+                      () => { setRailNew(false); openLib(); },
+                      () => { setRailNew(false); openPresets(); },
+                      () => exportCard(desk.draft),
+                    ];
+                    acts[i]();
+                  }}
+                  accentColor="var(--accent)"
+                  textColor="var(--muted)"
+                  markerColor="color-mix(in srgb, var(--fg) 28%, transparent)"
+                  markerLength={30}
+                  markerGap={10}
+                  maxShift={12}
+                  proximityRadius={90}
+                  itemGap={13}
+                  fontSize={0.92}
+                  smoothing={90}
+                />
                 {railNew && (
                   <div className="create-rail-fly" role="menu" aria-label="新建卡种">
                     {KINDS.map((t, i) => (

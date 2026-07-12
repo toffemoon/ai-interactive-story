@@ -2427,20 +2427,21 @@
     transform-origin: 0 0;
     will-change: transform;
   }
-  /* H3 工具 rail:左上竖排,纸面小岛;与底部中央 dock、右下 zoomctl 三不相扰 */
+  /* H3→LineSidebar 工具 rail(2026-07-13 主理人拍板完整复刻 react-bits/line-sidebar):
+     裸排线标+文字,不再是纸面小岛;条目/路由不变。下方 .create-rail button 样式只服务飞出菜单 */
   .create-rail {
     position: absolute;
-    left: var(--sp-3);
+    left: var(--sp-4);
     top: var(--sp-3);
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 4px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: var(--r-md);
-    box-shadow: var(--shadow-card);
     z-index: 5;
+  }
+  .create-rail .line-sidebar__label {
+    font-family: var(--font-kai);
+    letter-spacing: 0.08em;
+  }
+  /* 原版命中扩边 -48px 太阔:画布上会隐形偷走 rail 右侧一条卡片区的点击(同抓手吞点击一类病),收窄 */
+  .create-rail .line-sidebar__item::before {
+    inset: -5px -12px;
   }
   .create-rail button {
     min-width: 56px;
@@ -2475,8 +2476,8 @@
   }
   .create-rail-fly {
     position: absolute;
-    left: calc(100% + 8px);
-    top: 62px;
+    left: calc(100% + 16px);
+    top: 66px; /* 对齐 LineSidebar 第 3 项(新建) */
     display: flex;
     flex-direction: column;
     gap: 2px;
