@@ -267,6 +267,7 @@ export default function Home({ testMode = false }) {
   const obCropDragRef = useRef(null);
   const obLineTimerRef = useRef(null);
   const obStepRef = useRef(null);
+  const obChatFlowFallbackRef = useRef({ beatId: null, placement: null });
   const obBeat = obStep ? beatById(obStep) : null;
   const obDemo = obBeat && obBeat.demo;
   const introFrame = obIntro >= 0 ? INTRO[obIntro] : null;
@@ -507,6 +508,8 @@ export default function Home({ testMode = false }) {
   // 台词气泡「贴头侧、齐头高」定位:按当前姿势头中心算屏幕坐标,把气泡右缘锚到头左侧一点、纵向中心对齐头高。
   // 立绘各姿势 CSS 尺寸一致,量任一张 img 盒即可(几何稳定)。紧凑/竖版走 CSS 流式布局 → 清空锚点。
   useLayoutEffect(() => {
+    let frame = 0;
+    let cancelled = false;
     const compute = () => {
       if (!stageHeadAnchor || fullscreen || (obActive && obDemo && obDemo.type === "chat")) return setObBubblePos(null);
       if (usesFlowOnboardingBubbleLayout({
@@ -544,25 +547,80 @@ export default function Home({ testMode = false }) {
       if (bubbleHeight && screenBottom > maxScreenBottom) safeHeadCY -= screenBottom - maxScreenBottom;
       setObBubblePos({ left: Math.round(Math.max(rightEdge, viewportSafeEdge)), top: Math.round(safeHeadCY) });
     };
-    compute();
-    window.addEventListener("resize", compute);
-    return () => window.removeEventListener("resize", compute);
-  }, [obActive, stageHeadAnchor, obStep, obIntro, image, obDemo && obDemo.type, fullscreen, displayName]);
+    const schedule = () => {
+      if (cancelled) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(compute);
+    };
+
+    const portrait = document.querySelector(".home-portrait");
+    const activeImg = document.querySelector(".home-portrait-img.is-on") || document.querySelector(".home-portrait img");
+    const bubble = portrait?.querySelector(obActive ? ".home-ob-bubble:not(.home-ob-bubble--chat):not(.home-ob-bubble--home)" : ".home-ob-bubble--home");
+    const dock = document.querySelector(".home-dock");
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
+
+    schedule();
+    window.addEventListener("resize", schedule);
+    activeImg?.addEventListener("load", schedule);
+    portrait?.addEventListener("transitionend", schedule);
+    if (bubble) observer?.observe(bubble);
+    if (dock) observer?.observe(dock);
+    document.fonts?.ready.then(schedule).catch(() => {});
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", schedule);
+      activeImg?.removeEventListener("load", schedule);
+      portrait?.removeEventListener("transitionend", schedule);
+      observer?.disconnect();
+    };
+  }, [
+    obActive,
+    stageHeadAnchor,
+    obStep,
+    obIntro,
+    image,
+    obPortrait.layer,
+    obPortrait.slots[obPortrait.layer],
+    obDemo && obDemo.type,
+    fullscreen,
+    displayName,
+    currentLine,
+    busy,
+    obLine,
+    obThinking,
+  ]);
 
   // chat 拍气泡在 .home-ui 前景层：宣说话时从宣的真实 rect 右侧起排；糖沐说话时回到糖沐头侧。
   // 位置在首轮 layout、视口 resize、立绘位移结束及宣图片加载后重算，始终 clamp 在 UI/viewport 内。
   useLayoutEffect(() => {
     if (!obActive || !obBeat || !obDemo || obDemo.type !== "chat") {
+      obChatFlowFallbackRef.current = { beatId: null, placement: null };
       setObChatBubblePos(null);
       return undefined;
     }
 
+    if (obChatFlowFallbackRef.current.beatId !== obStep) {
+      obChatFlowFallbackRef.current = { beatId: obStep, placement: null };
+      setObChatBubblePos(null);
+    }
+
     let frame = 0;
-    const compute = () => {
+    let retryPending = false;
+    const compute = (retryNormal = false) => {
       const ui = document.querySelector(".home-ui");
-      if (!ui) return;
+      if (!ui) {
+        obChatFlowFallbackRef.current = { beatId: obStep, placement: null };
+        setObChatBubblePos(null);
+        return;
+      }
       const uiRect = ui.getBoundingClientRect();
-      if (!uiRect.width) return;
+      if (!uiRect.width) {
+        obChatFlowFallbackRef.current = { beatId: obStep, placement: null };
+        setObChatBubblePos(null);
+        return;
+      }
 
       const narrow = window.matchMedia("(max-width: 720px), (orientation: portrait)").matches;
       const pad = narrow ? 12 : 24;
@@ -572,10 +630,30 @@ export default function Home({ testMode = false }) {
       const dockTop = dock ? dock.getBoundingClientRect().top - uiRect.top : uiRect.height - pad;
       const chatStage = ui.querySelector(".home-ob-demo--chat");
       const chatStageLayout = resolveChatStageLayout({ viewportHeight: uiRect.height, dockTop, narrow, padding: pad, gap });
-      if (chatStage && chatStageLayout) {
-        chatStage.style.bottom = `${chatStageLayout.bottom}px`;
-        chatStage.style.height = `${chatStageLayout.height}px`;
+      const applyPlacement = (placement) => {
+        if (placement?.flowFallback) {
+          chatStage?.style.removeProperty("bottom");
+          chatStage?.style.removeProperty("height");
+          obChatFlowFallbackRef.current = { beatId: obStep, placement };
+        } else {
+          if (chatStage && chatStageLayout) {
+            chatStage.style.bottom = `${chatStageLayout.bottom}px`;
+            chatStage.style.height = `${chatStageLayout.height}px`;
+          } else {
+            chatStage?.style.removeProperty("bottom");
+            chatStage?.style.removeProperty("height");
+          }
+          obChatFlowFallbackRef.current = { beatId: obStep, placement: null };
+        }
+        setObChatBubblePos(placement || null);
+      };
+
+      const latchedFallback = obChatFlowFallbackRef.current;
+      if (!retryNormal && latchedFallback.beatId === obStep && latchedFallback.placement) {
+        applyPlacement(latchedFallback.placement);
+        return;
       }
+
       const bubble = ui.querySelector(".home-ob-bubble--chat");
       const bubbleRect = bubble && bubble.getBoundingClientRect();
       const bubbleHeight = Math.max(112, (bubbleRect && bubbleRect.height) || 0);
@@ -629,11 +707,17 @@ export default function Home({ testMode = false }) {
       }
 
       if (obBeat.speaker === "宣") {
-        if (!xuanVisible) return;
+        if (!xuanVisible) {
+          applyPlacement(null);
+          return;
+        }
         speakerRect = xuanVisible;
         if (tangmuVisible) avoidRects.push(tangmuVisible);
       } else {
-        if (!tangmuVisible) return;
+        if (!tangmuVisible) {
+          applyPlacement(null);
+          return;
+        }
         speakerRect = tangmuVisible;
         if (xuanVisible) avoidRects.push(xuanVisible);
         preferredSide = "left";
@@ -649,32 +733,46 @@ export default function Home({ testMode = false }) {
         padding: pad,
         gap,
       });
-      if (placement) setObChatBubblePos(placement);
+      applyPlacement(placement);
     };
-    const schedule = () => {
+    const schedule = (retryNormal = false) => {
+      if (retryNormal) {
+        retryPending = true;
+        obChatFlowFallbackRef.current = { beatId: obStep, placement: null };
+        setObChatBubblePos(null);
+      }
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(compute);
+      frame = requestAnimationFrame(() => {
+        if (!retryPending) {
+          compute(false);
+          return;
+        }
+        retryPending = false;
+        frame = requestAnimationFrame(() => compute(true));
+      });
     };
+    const handleResize = () => schedule(true);
+    const scheduleStable = () => schedule(false);
 
     schedule();
-    window.addEventListener("resize", schedule);
+    window.addEventListener("resize", handleResize);
     const portrait = document.querySelector(".home-portrait");
     const chatStage = document.querySelector(".home-ob-demo--chat");
     const xuan = document.querySelector(".home-demo-xuan-img");
     const bubble = document.querySelector(".home-ob-bubble--chat");
     const dock = document.querySelector(".home-dock");
-    const bubbleObserver = typeof ResizeObserver === "function" && bubble ? new ResizeObserver(schedule) : null;
-    portrait?.addEventListener("transitionend", schedule);
-    chatStage?.addEventListener("animationend", schedule);
-    xuan?.addEventListener("load", schedule);
+    const bubbleObserver = typeof ResizeObserver === "function" && bubble ? new ResizeObserver(scheduleStable) : null;
+    portrait?.addEventListener("transitionend", scheduleStable);
+    chatStage?.addEventListener("animationend", scheduleStable);
+    xuan?.addEventListener("load", scheduleStable);
     bubbleObserver?.observe(bubble);
     if (dock) bubbleObserver?.observe(dock);
     return () => {
       cancelAnimationFrame(frame);
-      window.removeEventListener("resize", schedule);
-      portrait?.removeEventListener("transitionend", schedule);
-      chatStage?.removeEventListener("animationend", schedule);
-      xuan?.removeEventListener("load", schedule);
+      window.removeEventListener("resize", handleResize);
+      portrait?.removeEventListener("transitionend", scheduleStable);
+      chatStage?.removeEventListener("animationend", scheduleStable);
+      xuan?.removeEventListener("load", scheduleStable);
       bubbleObserver?.disconnect();
       chatStage?.style.removeProperty("bottom");
       chatStage?.style.removeProperty("height");
@@ -1335,6 +1433,16 @@ export default function Home({ testMode = false }) {
         transform: `translate(calc(-50% + ${Math.round(obCrop.x)}px), calc(-50% + ${Math.round(obCrop.y)}px))`,
       }
     : null;
+  const chatFlowFallback = obChatBubblePos?.flowFallback ? obChatBubblePos : null;
+  const chatFlowStyle = chatFlowFallback
+    ? {
+        "--ob-chat-flow-band-height": `${chatFlowFallback.bubbleBand.height}px`,
+        "--ob-chat-flow-stage-left": `${chatFlowFallback.characterStage.left}px`,
+        "--ob-chat-flow-stage-top": `${chatFlowFallback.characterStage.top}px`,
+        "--ob-chat-flow-stage-width": `${chatFlowFallback.characterStage.width}px`,
+        "--ob-chat-flow-stage-height": `${chatFlowFallback.characterStage.height}px`,
+      }
+    : undefined;
 
   return (
     <div
@@ -1348,8 +1456,10 @@ export default function Home({ testMode = false }) {
         (obBeat && obBeat.centerBubble ? " is-ob-finale" : "") +
         (!obActive ? " is-home-mode" : "") +
         (obChatBubblePos && obChatBubblePos.compact ? " is-ob-chat-compact" : "") +
+        (chatFlowFallback ? " is-ob-chat-flow-fallback" : "") +
         (obDemo ? ` is-ob-demo is-ob-demo-${obDemo.type}` : "")
       }
+      style={chatFlowStyle}
     >
       {/* 背景层 */}
       <div className="home-bg" style={{ backgroundImage: `url("${BG_IMG}")` }} aria-hidden="true" />

@@ -540,6 +540,39 @@
   bottom: auto;
   transform: none;
 }
+.home.is-ob-chat-flow-fallback .home-ob-bubble--chat {
+  max-height: var(--ob-chat-flow-band-height);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.home.is-ob-chat-flow-fallback .home-portrait {
+  left: var(--ob-chat-flow-stage-left);
+  right: auto;
+  top: var(--ob-chat-flow-stage-top);
+  bottom: auto;
+  width: var(--ob-chat-flow-stage-width);
+  height: var(--ob-chat-flow-stage-height);
+  transform: none;
+}
+.home.is-ob-chat-flow-fallback .home-portrait-img {
+  top: 0;
+  left: 72%;
+  height: 100%;
+  max-height: 100%;
+}
+.home.is-ob-chat-flow-fallback .home-ob-demo--chat {
+  left: var(--ob-chat-flow-stage-left);
+  right: auto;
+  top: var(--ob-chat-flow-stage-top);
+  bottom: auto;
+  width: min(44vw, 240px);
+  height: var(--ob-chat-flow-stage-height);
+  transform: none;
+}
+.home.is-ob-chat-flow-fallback .home-ob-demo--chat .home-demo-xuan-img {
+  height: 100%;
+  max-height: 100%;
+}
 .home.is-ob-finale .home-ob-bubble {
   position: fixed;
   left: clamp(56px, 12vw, 180px);

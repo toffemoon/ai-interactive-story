@@ -272,6 +272,18 @@ test("falls back for missing or invalid onboarding emotion tags and still strips
   });
 });
 
+test("never exposes malformed or repeated onboarding emotion protocol fragments", () => {
+  const fallback = { fallbackEmo: "wry" };
+  assert.deepEqual(parseOnboardingEmotionReply("Reply [EMO]", fallback), { text: "Reply", emo: "wry" });
+  assert.deepEqual(parseOnboardingEmotionReply("Reply [EMO:]", fallback), { text: "Reply", emo: "wry" });
+  assert.deepEqual(parseOnboardingEmotionReply("Reply [EMO:spark", fallback), { text: "Reply", emo: "wry" });
+  assert.deepEqual(parseOnboardingEmotionReply("Reply [ eMo : SPARK ]", fallback), { text: "Reply", emo: "spark" });
+  assert.deepEqual(
+    parseOnboardingEmotionReply("One [EMO:angry] two [EMO:SPARK] three [EMO]", fallback),
+    { text: "One two three", emo: "spark" },
+  );
+});
+
 test("does not let an AI acknowledgement replace avatar or completed-card guidance", () => {
   assert.equal(resolveNextBeatAiLine({ nextBeatId: "avatar", aiLine: "这个称呼很特别。" }), null);
   assert.equal(resolveNextBeatAiLine({ nextBeatId: "cardDone", aiLine: "卡办好了。" }), null);
@@ -337,6 +349,45 @@ test("keeps a chat bubble away from the other visible character too", () => {
   assert.ok(rect);
   assert.equal(overlaps(rect, xuanFace), false);
   assert.equal(overlaps(rect, tangmuFace), false);
+});
+
+test("returns an explicit dock-safe flow fallback when compact geometry has no free slot", () => {
+  const placement = resolveChatBubblePlacement({
+    viewport: { width: 390, height: 500 },
+    speakerRect: { left: 8, top: 80, right: 130, bottom: 300 },
+    avoidRects: [{ left: 155, top: 60, right: 380, bottom: 300 }],
+    bubbleSize: { width: 160, height: 112 },
+    dockTop: 320,
+    padding: 12,
+    gap: 8,
+  });
+
+  assert.ok(placement);
+  assert.equal(placement.flowFallback, true);
+  assert.equal(placement.compact, true);
+  assert.deepEqual(placement.bubbleBand, {
+    left: placement.left,
+    top: placement.top,
+    width: placement.width,
+    height: placement.height,
+  });
+  const stage = placement.characterStage;
+  assert.ok(stage);
+  assert.ok(placement.top + placement.height <= stage.top, "bubble band ends before the character stage");
+  assert.ok(stage.top + stage.height <= 312, "character stage stays above the dock-safe boundary");
+  assert.ok(placement.top >= 12 && placement.left >= 12);
+  assert.ok(placement.left + placement.width <= 378);
+
+  const fractionalDockPlacement = resolveChatBubblePlacement({
+    viewport: { width: 390, height: 500 },
+    speakerRect: { left: 8, top: 80, right: 130, bottom: 300 },
+    avoidRects: [{ left: 155, top: 60, right: 380, bottom: 300 }],
+    bubbleSize: { width: 160, height: 112 },
+    dockTop: 320.5,
+    padding: 12,
+    gap: 8,
+  });
+  assert.ok(fractionalDockPlacement.characterStage.top + fractionalDockPlacement.characterStage.height <= 312.5);
 });
 
 test("maps an image alpha silhouette into its contained on-screen box", () => {

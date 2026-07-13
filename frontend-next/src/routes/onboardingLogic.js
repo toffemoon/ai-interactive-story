@@ -448,7 +448,32 @@ export function resolveChatBubblePlacement({
     if (!overlapsObstacle(rect)) return roundPlacement(rect);
   }
 
-  return null;
+  const safeHeight = safeBottom - safeTop;
+  const minimumStageHeight = Math.min(180, Math.max(72, Math.round(safeHeight * 0.5)));
+  const maxBubbleBandHeight = safeHeight - safeGap - minimumStageHeight;
+  if (maxBubbleBandHeight <= 0) return null;
+
+  const bubbleBand = roundPlacement({
+    left: safeLeft,
+    top: safeTop,
+    width: safeRight - safeLeft,
+    height: Math.min(height, maxBubbleBandHeight),
+  });
+  const characterStageTop = Math.round(bubbleBand.top + bubbleBand.height + safeGap);
+  const characterStage = {
+    left: Math.round(safeLeft),
+    top: characterStageTop,
+    width: Math.round(safeRight - safeLeft),
+    height: Math.max(0, Math.floor(safeBottom - characterStageTop)),
+  };
+  if (bubbleBand.height <= 0 || characterStage.height <= 0) return null;
+  return {
+    ...bubbleBand,
+    compact: true,
+    flowFallback: true,
+    bubbleBand,
+    characterStage,
+  };
 }
 
 export function hasRestoredHomeConversation(snapshot) {
@@ -512,12 +537,14 @@ const ONBOARDING_EMOTIONS = new Set(["smile", "curious", "spark", "whisper", "pr
 
 export function parseOnboardingEmotionReply(reply, { fallbackEmo = "smile" } = {}) {
   const source = String(reply || "").trim();
-  const marker = source.match(/\[\s*EMO\s*:\s*([^\]]+)\]/i);
-  const requested = marker ? marker[1].trim().toLowerCase() : "";
+  const requested = Array.from(source.matchAll(/\[\s*EMO\s*:\s*([^\]]*)\]/gi))
+    .map((marker) => marker[1].trim().toLowerCase())
+    .find((candidate) => ONBOARDING_EMOTIONS.has(candidate)) || "";
   const fallback = String(fallbackEmo || "").trim().toLowerCase();
   const emo = ONBOARDING_EMOTIONS.has(requested) ? requested : ONBOARDING_EMOTIONS.has(fallback) ? fallback : "smile";
   const text = source
-    .replace(/\s*\[\s*EMO\s*:\s*[^\]]+\]\s*/gi, " ")
+    .replace(/\s*\[\s*EMO\b[^\]]*\]\s*/gi, " ")
+    .replace(/\s*\[\s*EMO\b[^\]\r\n]*(?=$|\r?\n)/gi, " ")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n[ \t]+/g, "\n")
     .replace(/[ \t]{2,}/g, " ")
