@@ -146,6 +146,21 @@ export const INTRO = [
   { img: "/home/tangmu02.png", line: "哎,生面孔——我是糖沐,沐言书坊的看板娘。头回来的客人,按店主的规矩得先登记一下。", hold: true },
 ];
 
+const STORY_CARD_DEMO = {
+  type: "story",
+  preset: {
+    name: "灵魂摆渡人",
+    official: true,
+    data: {
+      name: "灵魂摆渡人",
+      synopsis: "在雾河与旧镇之间,替没有归处的故事点一盏灯。",
+      author: "沐言书坊",
+      cover: "/onboarding/linghunbaiduren.jpg",
+      tags: ["志怪", "渡魂"],
+    },
+  },
+};
+
 export const BEATS = [
   {
     id: "name",
@@ -215,7 +230,7 @@ export const BEATS = [
     showCard: true,
     // 头像已在前面的「头像拍」问过,这里只办卡:落章 + 寄语 + 递卡 → 导览。
     line: (e) =>
-      `好——${e.name || "客人"},章一盖,这卡就是你的了。背面我给你写了句话,翻过来能瞧见。收好,咱这就去认认门道。`,
+      `好——${e.name || "客人"},章一盖,这卡就是你的了。背面我给你写了句话,翻过来能瞧见。收好,我带你来认识一下这个地方。`,
     // AI 寄语(卡背):糖沐亲手给这一位客人写的一句临别赠言(onboarding 现场生成;失败则用卡组件默认暖句)。
     msg: (e) => {
       const name = safePromptText(e.name, "客人");
@@ -244,24 +259,35 @@ export const BEATS = [
     id: "tryStoryCard",
     emo: "spark",
     tour: "explore",
-    demo: {
-      type: "story",
-      preset: {
-        name: "灵魂摆渡人",
-        official: true,
-        data: {
-          name: "灵魂摆渡人",
-          synopsis: "在雾河与旧镇之间,替没有归处的故事点一盏灯。",
-          author: "沐言书坊",
-          cover: "/onboarding/linghunbaiduren.jpg",
-          tags: ["志怪", "渡魂"],
-        },
-      },
-    },
+    demo: STORY_CARD_DEMO,
     line: () =>
-      "喏,这就是书卡。正面看封面、类型和名字;点一下会翻到背面,能看简介和标签。选中一张卡,就能进到会回应你的故事里。",
+      "喏,这就是书卡。正面看封面、类型和名字;点一下会翻到背面,能看简介和标签。",
     backLine: () => "书卡再看一眼?正面找感觉,点一下翻过去看简介。",
     backEmo: "spark",
+    chips: [{ label: "继续", next: "tryStoryEnter" }],
+  },
+  {
+    id: "tryStoryEnter",
+    emo: "spark",
+    tour: "explore",
+    demo: STORY_CARD_DEMO,
+    line: () => "选中后,你就可以亲身体验故事里的内容。",
+    chips: [{ label: "继续", next: "tryStoryRole" }],
+  },
+  {
+    id: "tryStoryRole",
+    emo: "spark",
+    tour: "explore",
+    demo: STORY_CARD_DEMO,
+    line: () => "你可以在里面扮演你想要的角色。它可以是主角,也可以只是一个 NPC。",
+    chips: [{ label: "继续", next: "tryStoryAgency" }],
+  },
+  {
+    id: "tryStoryAgency",
+    emo: "spark",
+    tour: "explore",
+    demo: STORY_CARD_DEMO,
+    line: () => "但是,你可以亲手去控制整个故事的走向,撰写独属于你自己的故事线和结局。",
     chips: [{ label: "继续看角色", next: "tryCharacterCard" }],
   },
   {

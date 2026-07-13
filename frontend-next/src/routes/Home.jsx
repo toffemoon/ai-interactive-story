@@ -8,7 +8,7 @@ import { resolveMediaUrl } from "../lib/mediaUrl.js";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
 import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, AUTO_CHAT_INTERRUPT_AI, FIRST_BEAT, beatById, buildAutoChatShownContext, consumeTestHomeBypass, loadEcho, markOnboarded, isOnboarded, saveEcho, setTestHomeBypass } from "./onboardingScript";
-import { INITIAL_ONBOARDING_AUTO_CONTROL, analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, hasRestoredHomeConversation, isCurrentOnboardingInteraction, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, resolveAutoAdvancePlan, sanitizeCardMessage, shouldAcceptNameLocally, shouldConfirmBareNameLocally, transitionOnboardingAutoControl } from "./onboardingLogic";
+import { INITIAL_ONBOARDING_AUTO_CONTROL, analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, hasRestoredHomeConversation, isCurrentOnboardingInteraction, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, resolveAutoAdvancePlan, sanitizeCardMessage, shouldAcceptNameLocally, shouldCommitPortraitPreload, shouldConfirmBareNameLocally, transitionOnboardingAutoControl } from "./onboardingLogic";
 import { IdentityCard } from "../components/IdentityCard";
 import StaggeredText from "../components/staggered-text";
 import AnimatedList from "../components/animated-list";
@@ -581,8 +581,13 @@ export default function Home({ testMode = false }) {
       return;
     }
     if (image !== prevImageRef.current) {
-      const commit = () => {
-        if (portraitLoadSeqRef.current !== seq) return;
+      const commit = (eventType) => {
+        if (!shouldCommitPortraitPreload({
+          requestEpoch: seq,
+          currentEpoch: portraitLoadSeqRef.current,
+          eventType,
+          naturalWidth: nextImg.naturalWidth,
+        })) return;
         setObPortrait((p) => {
           if (p.slots[p.layer] === image) return p;
           const next = p.layer === 0 ? 1 : 0;
@@ -593,10 +598,10 @@ export default function Home({ testMode = false }) {
         prevImageRef.current = image;
       };
       const nextImg = new Image();
-      nextImg.onload = commit;
-      nextImg.onerror = commit;
+      nextImg.onload = () => commit("load");
+      nextImg.onerror = () => commit("error");
       nextImg.src = image;
-      if (nextImg.complete) commit();
+      if (nextImg.complete && nextImg.naturalWidth > 0) commit("load");
       return () => {
         nextImg.onload = null;
         nextImg.onerror = null;

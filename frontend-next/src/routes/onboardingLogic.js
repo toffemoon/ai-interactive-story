@@ -263,6 +263,10 @@ export function isCurrentOnboardingInteraction({ requestEpoch, currentEpoch, req
   return requestEpoch === currentEpoch && requestBeatId === currentBeatId;
 }
 
+export function shouldCommitPortraitPreload({ requestEpoch, currentEpoch, eventType, naturalWidth } = {}) {
+  return requestEpoch === currentEpoch && eventType === "load" && Number(naturalWidth) > 0;
+}
+
 export function hasRestoredHomeConversation(snapshot) {
   return Boolean(snapshot && snapshot.card && Array.isArray(snapshot.msgs) && snapshot.msgs.length > 0);
 }

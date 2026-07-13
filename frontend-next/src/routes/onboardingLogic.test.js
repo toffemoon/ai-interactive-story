@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { toCardModel } from "../lib/cardModel.js";
 import { AUTO_CHAT_INTERRUPT_AI, beatById, buildAutoChatShownContext, consumeTestHomeBypass, setTestHomeBypass } from "./onboardingScript.js";
-import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, hasRestoredHomeConversation, INITIAL_ONBOARDING_AUTO_CONTROL, isCurrentOnboardingInteraction, isExactFillChipSubmission, isExplicitNameSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, resolveAutoAdvancePlan, sanitizeCardMessage, shouldAcceptNameLocally, shouldConfirmBareNameLocally, transitionOnboardingAutoControl } from "./onboardingLogic.js";
+import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, hasRestoredHomeConversation, INITIAL_ONBOARDING_AUTO_CONTROL, isCurrentOnboardingInteraction, isExactFillChipSubmission, isExplicitNameSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, resolveAutoAdvancePlan, sanitizeCardMessage, shouldAcceptNameLocally, shouldCommitPortraitPreload, shouldConfirmBareNameLocally, transitionOnboardingAutoControl } from "./onboardingLogic.js";
 
 test("extracts the usable name from a sentence", () => {
   assert.deepEqual(analyzeNameInput("我的名字叫 叶叶"), {
@@ -322,6 +322,21 @@ test("card message prompt forbids action and emotion stage directions", () => {
   assert.match(prompt, /不要.*括号.*动作/);
 });
 
+test("card completion closes with the approved tour transition", () => {
+  assert.equal(
+    beatById("cardDone").line({ name: "何人初见月" }).endsWith("收好,我带你来认识一下这个地方。"),
+    true,
+  );
+});
+
+test("portrait preload commits only the current successful non-empty image", () => {
+  assert.equal(shouldCommitPortraitPreload({ requestEpoch: 2, currentEpoch: 2, eventType: "load", naturalWidth: 640 }), true);
+  assert.equal(shouldCommitPortraitPreload({ requestEpoch: 2, currentEpoch: 3, eventType: "load", naturalWidth: 640 }), false);
+  assert.equal(shouldCommitPortraitPreload({ requestEpoch: 2, currentEpoch: 2, eventType: "error", naturalWidth: 640 }), false);
+  assert.equal(shouldCommitPortraitPreload({ requestEpoch: 2, currentEpoch: 2, eventType: "load", naturalWidth: 0 }), false);
+  assert.equal(shouldCommitPortraitPreload({ requestEpoch: 2, currentEpoch: 2, eventType: "load", naturalWidth: Number.NaN }), false);
+});
+
 test("only the NPC exchange auto-advances", () => {
   assert.equal(beatById("tryChatTalk").autoNext, "tryChatTangmuReply");
   assert.equal(beatById("tryChatTangmuReply").autoNext, "tryChatIntro");
@@ -342,11 +357,19 @@ test("onboarding rehearses story chat and creation without route jumps", () => {
 
   const story = beatById("tryStoryCard");
   assert.equal(story.field, undefined);
-  assert.equal(story.chips[0].next, "tryCharacterCard");
-  assert.match(story.line({}), /点一下/);
-  assert.match(story.line({}), /翻/);
+  const storyBeats = [
+    ["tryStoryCard", "喏,这就是书卡。正面看封面、类型和名字;点一下会翻到背面,能看简介和标签。", "tryStoryEnter"],
+    ["tryStoryEnter", "选中后,你就可以亲身体验故事里的内容。", "tryStoryRole"],
+    ["tryStoryRole", "你可以在里面扮演你想要的角色。它可以是主角,也可以只是一个 NPC。", "tryStoryAgency"],
+    ["tryStoryAgency", "但是,你可以亲手去控制整个故事的走向,撰写独属于你自己的故事线和结局。", "tryCharacterCard"],
+  ];
+  for (const [id, line, next] of storyBeats) {
+    const beat = beatById(id);
+    assert.equal(beat.line({}), line);
+    assert.equal(beat.demo.type, "story");
+    assert.equal(beat.chips[0].next, next);
+  }
 
-  assert.equal(story.demo.type, "story");
   const storyModel = toCardModel("story", story.demo.preset);
   assert.equal(storyModel.title, "灵魂摆渡人");
   assert.equal(storyModel.cover, "/onboarding/linghunbaiduren.jpg");
