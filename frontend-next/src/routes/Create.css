@@ -2493,6 +2493,10 @@
   .create-entry-warn {
     color: var(--accent-bright);
   }
+  .create-field-pairwarn {
+    margin-top: 2px;
+    color: var(--accent-bright);
+  }
   .create-entry-add {
     align-self: flex-start;
     border: 1px dashed var(--line);

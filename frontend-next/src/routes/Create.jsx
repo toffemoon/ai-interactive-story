@@ -2570,6 +2570,11 @@ export default function Create() {
                         ) : (
                           <span className="create-field-v t-ui-sm">{f.hidden ? "(隐藏真相,玩家不可见)" + f.v : f.v}</span>
                         )}
+                        {/* P2c 防上帝视角:已知写了、未知空着=提示配对(引擎把两者一起进 prompt,缺「不知道」悬念全漏) */}
+                        {kind === "players" && f.k0 === "unknown" &&
+                          !!(desk.draft.known_facts || []).length && !(desk.draft.unknown || []).length && (
+                            <div className="create-field-pairwarn t-meta">「开局已知」写了,这里还空着——不写「不知道什么」,玩家容易开局全知,悬念漏光</div>
+                          )}
                         {editingKey !== f.k0 && f.editable && (
                           <span className="create-field-acts">
                             {/* I 系列:✦/⟳/「聊」/指示行退役——AI 统一走「长按这一块」;✎ 手改(非 AI)保留 */}
