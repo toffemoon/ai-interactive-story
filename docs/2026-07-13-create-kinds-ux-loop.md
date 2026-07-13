@@ -43,3 +43,10 @@
 - **验收**(5199,清台测):初始无警示→列表编辑填两条已知→警示出现(#b5402e)→填一条未知→警示消失;build 过。
 - **坑**:无。
 - **下一片**:P3 模板扩容。
+
+## P3 · 模板扩容
+
+- **做了什么**:演出卡「轻装上阵」(name/role/goals/opening 四键,三分钟开局);世界书「奇幻规则·带示例」「现代都市·带示例」(各三条**已填好**的示例条目,keys 示范触发词长相,直接改成自己的);故事书「单幕短局」(前提+引子/变数/摊牌三节拍)+「悬疑长局」(四节拍含 hidden 暗节拍「反转」,premise 只写表面局面)。applyTemplate 浅拷贝→structuredClone(模板骨架带对象数组后,防 draft 编辑摸到模板常量)。文案直白无 AI 味;键名全 ∈ models.py(PlayerCard/WorldEntry/StoryEvent 含 hidden)。
+- **验收**(5199):演出卡选择器现「轻装上阵 4 字段+标准 9 字段」;world-fantasy 应用=三条示例条目上编辑器、keys 齐全零警示;story-mystery 应用=四节拍(反转带 hidden)、四拍触发词空=四条警示如实提示;build 过;console 零报错;台账还原。
+- **坑**:**headless 里 window.confirm 会把 renderer 卡死**(confirmReplaceDraft 弹的替换确认)——navigate force 也解不开,只能关 tab 重开;测试前必须先 stub `window.confirm=()=>true`。已计入环境坑清单。
+- **下一片**:收尾回归(四卡种新建→填写→收进本台→装订清单全链路 + 手机 390 不回归),然后删 loop 汇报。

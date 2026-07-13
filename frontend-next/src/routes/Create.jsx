@@ -1693,7 +1693,8 @@ export default function Create() {
   function applyTemplate(t) {
     if (!confirmReplaceDraft()) return;
     patch(kind, {
-      draft: t.skeleton ? { ...t.skeleton } : {},
+      // P3:模板骨架带对象数组(示例条目/节拍),深拷贝防 draft 编辑摸到模板常量
+      draft: t.skeleton ? structuredClone(t.skeleton) : {},
       filled: [],
       tpl: t.id,
       input: t.opener || "",
