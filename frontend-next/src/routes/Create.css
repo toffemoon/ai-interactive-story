@@ -2534,6 +2534,109 @@
     color: var(--fg);
     border-color: var(--muted);
   }
+  /* R3 模板卡叠:绝对定位堆叠,顶卡可点;is-leaving=退场帧(下坠微转淡出) */
+  .create-tplstack {
+    position: relative;
+    width: min(340px, 100%);
+    height: 208px;
+    margin: 14px auto 4px;
+  }
+  .create-tplcard {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 18px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-card);
+    cursor: pointer;
+    transition: transform 0.38s var(--ease-out), opacity 0.3s var(--ease-out);
+  }
+  .create-tplcard.is-leaving {
+    transform: translateY(56px) rotate(3deg) scale(0.96);
+    opacity: 0;
+  }
+  .create-tplcard-h {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .create-tplcard-nm {
+    font-size: var(--fs-h3);
+    color: var(--fg);
+  }
+  .create-tplcard-hint {
+    color: var(--muted);
+  }
+  .create-tplcard-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: auto;
+  }
+  .create-tplcard-chips span {
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    padding: 2px 8px;
+    color: var(--muted);
+  }
+  .create-tplcard-acts {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 4px;
+  }
+  /* R3 阶段条:构思→落笔→收尾(聚焦卡 kind 行下,门控驱动) */
+  .create-phasesteps {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 8px 0 2px;
+  }
+  .create-phasestep-w {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .create-phasestep {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: inline-grid;
+    place-items: center;
+    font-size: 10px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    background: transparent;
+  }
+  .create-phasestep.is-on {
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .create-phasestep.is-done {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+  }
+  .create-phasestep-t {
+    color: var(--muted);
+  }
+  .create-phasestep-t.is-on {
+    color: var(--accent);
+  }
+  .create-phasestep-line {
+    width: 22px;
+    height: 1px;
+    background: var(--line);
+  }
+  .create-phasestep-line.is-done {
+    background: var(--accent-3);
+  }
   /* P1a 一眼懂:卡种按钮两行(名 + 一句话定位),新建菜单/空板/落卡菜单共用 */
   .create-kind-btn {
     display: flex;

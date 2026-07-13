@@ -71,3 +71,10 @@
 - **验收**(5199,清台测→还原):应用「现代都市」模板 → toast 文案完整、.shiny-text 挂载、computed background-clip:text + 文字填充透明;build 过;console 零报错。CountUp 所在火候线需真聊构思才渲染(P1b 后直接新建走 drafting 不经过它),组件 verbatim+单行集成,留真机实测。
 - **坑**:无新坑。
 - **下一片**:R3 试样件(ClickStack 模板卡叠/Stepper 阶段条)demo 给主理人拍板;R4 动效口径统一待 R3 定型后一并。
+
+## R3 · 试样件落地(主理人 demo 拍板「都完成」,2026-07-14)
+
+- **做了什么**:①**模板卡叠**——「从模板起手」弹窗从按钮列表换成点击翻卡:每套模板一张卡(名+字段数徽章+hint+字段/条目 chips 印在卡面),点卡面或「换一套」=顶卡下坠微转退场 240ms 转叠底,「应用这套」=走原 applyTemplate(替换确认不变);开弹窗/切卡种重置叠序。②**阶段条**——聚焦卡 kind 行下「构思→落笔→收尾」,由真实门控驱动(phase!=drafting=构思;drafting=落笔;comp≥60=收尾),骨架路径直通落笔=构思打勾,如实不装饰。**取舍**:仓库现成 Stepper 是带内容槽+上一步/下一步的向导组件,与被动指示不匹配——按拍板的 demo 视觉手写迷你版(同 AnimatedList 口径)。
+- **验收**(5199,清台测→还原):新建演出卡→阶段条 done/on/off=构思✓落笔●收尾○;模板弹窗卡叠 2 张、顶卡「轻装上阵」chips 身份/目标/开局第一幕、换一套翻到「演出卡·标准」、应用这套=tpl 落库+弹窗关+toast 鎏金名;build 过;console 零报错。
+- **坑**:tplOrder 重置 effect 的 deps 引用 kind——kind 在组件体后段才声明,effect 放前面会 TDZ 白屏(aiPos 旧坑同款),已挪到 applyTemplate 旁并留注释。
+- **收官**:R1-R3 全部完成;R4(动效口径统一)并入本轮已顺手做(新动效全走 --dur/--ease token 与 reduced-motion 守卫)。ParallaxPills 依主理人默认毙。

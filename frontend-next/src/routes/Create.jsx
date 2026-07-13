@@ -224,6 +224,10 @@ export default function Create() {
   const tavernRef = useRef(null); // 酒馆卡文件 input(.json/.png)
   // D3 模板选择器;desks[kind].tpl 只存模板 id(hints 从常量派生,localStorage 零膨胀)。
   const [tplOpen, setTplOpen] = useState(false);
+  // R3 模板卡叠(主理人试样拍板):选择器从按钮列表换点击翻卡;order=当前叠序,leaving=顶卡退场中。
+  // ⚠ 重置 effect 在 applyTemplate 旁(kind 在下方才声明,deps 引用这里会 TDZ——aiPos 旧坑同款)
+  const [tplOrder, setTplOrder] = useState([]);
+  const [tplLeaving, setTplLeaving] = useState(false);
   // D4 「从我发布的故事继续」:presets 列表弹层({items}|null),选一条拆回四台 built。
   const [presetsModal, setPresetsModal] = useState(null);
   // F2 引用体系:desks[kind].refs 可选键(挂台常驻,每轮请求都带,纸签可摘;后端上限 4 条)。
@@ -1710,6 +1714,21 @@ export default function Create() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // R3 模板卡叠:开弹窗/切卡种时重置叠序;换一套=顶卡退场 240ms 后转到叠底
+  useEffect(() => {
+    if (tplOpen) {
+      setTplOrder((TEMPLATES[kind] || []).map((_, i) => i));
+      setTplLeaving(false);
+    }
+  }, [tplOpen, kind]);
+  function cycleTpl() {
+    if ((TEMPLATES[kind] || []).length < 2 || tplLeaving) return;
+    setTplLeaving(true);
+    setTimeout(() => {
+      setTplOrder((o) => [...o.slice(1), o[0]]);
+      setTplLeaving(false);
+    }, 240);
+  }
   // —— D3 模板:铺骨架进 draft(空串字段=✦ 补写目标),opener 只进输入框不代发 ——
   const tplHints = useMemo(() => {
     const t = getTpl(kind, desk.tpl);
@@ -2444,6 +2463,25 @@ export default function Create() {
                   ) : (
               <section className="create-canvas" aria-label="卡画布">
                 <div className="create-card-kind t-meta">{KINDS[ki].zh} · {KINDS[ki].sub}{desk.built.length > 0 && ` · 本台已建 ${desk.built.length}`}</div>
+                {/* R3 阶段条(主理人试样拍板):构思→落笔→收尾,由真实门控驱动(phase/comp/60 分线)。
+                    骨架路径直通落笔=构思打勾,如实;comp 过线才亮收尾(纯聊构思路径才有 comp)。 */}
+                {isDraftId(boardFocus) && (() => {
+                  const stage = phase !== "drafting" ? 0 : (desk.comp || 0) >= COMP_THRESHOLD ? 2 : 1;
+                  const names = ["构思", "落笔", "收尾"];
+                  return (
+                    <div className="create-phasesteps" aria-label={"创作阶段:" + names[stage]}>
+                      {names.map((s, i) => (
+                        <span key={s} className="create-phasestep-w">
+                          <span className={"create-phasestep" + (i < stage ? " is-done" : i === stage ? " is-on" : "")}>
+                            {i < stage ? "✓" : i + 1}
+                          </span>
+                          <span className={"create-phasestep-t t-meta" + (i === stage ? " is-on" : "")}>{s}</span>
+                          {i < 2 && <span className={"create-phasestep-line" + (i < stage ? " is-done" : "")} aria-hidden="true" />}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
                 {editingKey === "__name" ? (
                   <input
                     className="create-card-name create-name-edit t-kai"
@@ -3197,16 +3235,49 @@ export default function Create() {
             <p className="create-seed-note t-meta">
               选一套骨架铺上画布:空字段自带引导,✦ 让 AI 补、✎ 自己写;开场指令会放进输入框,过目再发。
             </p>
-            <div className="create-import-picks">
-              {(TEMPLATES[kind] || []).map((t) => (
-                <button key={t.id} className="create-import-pick" onClick={() => applyTemplate(t)}>
-                  <span className="create-import-pick-t t-ui">
-                    {t.name}
-                    <span className="create-tpl-badge t-meta">{t.skeleton ? `${Object.keys(t.skeleton).length} 字段` : "纯引导"}</span>
-                  </span>
-                  <span className="create-import-pick-d t-meta">{t.hint}</span>
-                </button>
-              ))}
+            {/* R3 模板卡叠(主理人试样拍板):点卡面/「换一套」翻下一套,「应用这套」上画布 */}
+            <div className="create-tplstack" aria-label="模板卡叠">
+              {(TEMPLATES[kind] || []).map((t, i) => {
+                const pos = tplOrder.indexOf(i);
+                if (pos < 0) return null;
+                const leaving = tplLeaving && pos === 0;
+                const sk = t.skeleton || {};
+                const chips = Array.isArray(sk.entries) && sk.entries.length
+                  ? sk.entries.map((en) => en.comment || "条目").slice(0, 4)
+                  : t.skeleton
+                  ? Object.keys(sk).filter((k) => k !== "name" && k !== "title").slice(0, 6).map((k) => LABELS[k] || k)
+                  : ["纯引导起手"];
+                return (
+                  <div
+                    key={t.id}
+                    className={"create-tplcard" + (leaving ? " is-leaving" : "")}
+                    style={{
+                      zIndex: 10 - pos,
+                      transform: leaving ? undefined : `translateY(${-pos * 10}px) scale(${1 - pos * 0.045})`,
+                      opacity: leaving ? undefined : pos > 2 ? 0 : 1 - pos * 0.18,
+                      pointerEvents: pos === 0 && !tplLeaving ? "auto" : "none",
+                    }}
+                    onClick={() => cycleTpl()}
+                  >
+                    <div className="create-tplcard-h">
+                      <span className="create-tplcard-nm t-kai">{t.name}</span>
+                      <span className="create-tpl-badge t-meta">{t.skeleton ? `${Object.keys(sk).length} 字段` : "纯引导"}</span>
+                    </div>
+                    <div className="create-tplcard-hint t-meta">{t.hint}</div>
+                    <div className="create-tplcard-chips t-meta">
+                      {chips.map((c) => (
+                        <span key={c}>{c}</span>
+                      ))}
+                    </div>
+                    <div className="create-tplcard-acts">
+                      <Button variant="primary" onClick={(e) => { e.stopPropagation(); applyTemplate(t); }}>应用这套</Button>
+                      {(TEMPLATES[kind] || []).length > 1 && (
+                        <button className="create-blank-link" onClick={(e) => { e.stopPropagation(); cycleTpl(); }}>换一套</button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
