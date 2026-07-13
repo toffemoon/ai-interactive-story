@@ -60,7 +60,7 @@ function CoverFront({ model, flipped, onToggleFlip, frontRef, eager = false }) {
             alt=""
             loading={eager ? "eager" : "lazy"}
             decoding="async"
-            fetchPriority={eager ? "high" : "auto"}
+            fetchpriority={eager ? "high" : "auto"}
             draggable={false}
             onLoad={() => setImageState("loaded")}
             onError={() => setImageState("error")}
