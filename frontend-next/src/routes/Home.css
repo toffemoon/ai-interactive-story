@@ -785,8 +785,10 @@
   .home.is-cardbeat .home-portrait,
   .home.is-ob-demo-story .home-portrait,
   .home.is-ob-demo-character .home-portrait,
+  .home.is-ob-demo-characterCard .home-portrait,
   .home.is-ob-demo-chat .home-portrait,
-  .home.is-ob-demo-create .home-portrait {
+  .home.is-ob-demo-create .home-portrait,
+  .home.is-ob-demo-createProjection .home-portrait {
     transform: none;
   }
   .home-ob-demo {

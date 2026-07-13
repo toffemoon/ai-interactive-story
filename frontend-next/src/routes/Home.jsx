@@ -494,7 +494,14 @@ export default function Home({ testMode = false }) {
       // 气泡就渲染在 .home-portrait 里,立绘 -8% 滑动时气泡随容器 transform 一起走 → 不用重算、天然不卡(不再靠 transitionend)。
       const headCY = r.top - pr.top + headAnchor.y * r.height;
       const rightEdge = r.left - pr.left + (headAnchor.edge - 0.025) * r.width;
-      setObBubblePos({ left: Math.round(rightEdge), top: Math.round(headCY) });
+      const bubble = portrait.querySelector(".home-ob-bubble:not(.home-ob-bubble--chat)");
+      const bubbleWidth = bubble ? bubble.getBoundingClientRect().width : 0;
+      const demoShift = obDemo && ["story", "character", "characterCard", "create", "createProjection"].includes(obDemo.type) ? 0.1 : 0;
+      const targetShift = obBeat && obBeat.showCard ? 0.08 : demoShift;
+      const targetPortraitLeft = portrait.offsetLeft - portrait.offsetWidth * targetShift;
+      const safePortraitLeft = Math.min(pr.left, targetPortraitLeft);
+      const viewportSafeEdge = bubbleWidth ? bubbleWidth + 12 - safePortraitLeft : rightEdge;
+      setObBubblePos({ left: Math.round(Math.max(rightEdge, viewportSafeEdge)), top: Math.round(headCY) });
     };
     compute();
     window.addEventListener("resize", compute);
