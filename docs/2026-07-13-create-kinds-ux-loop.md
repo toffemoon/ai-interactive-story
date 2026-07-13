@@ -64,3 +64,10 @@
 - **验收**(5199,清台测→还原):空板标题 11 个分段 span;ais:spark 派发后画布 1→1920(监听+扩容通);机制行 blur-highlight-container 挂上、文本无损;.create-entry computed animation=entryIn、第 2 条 delay 45ms;build 过;console 零报错。
 - **坑**:BlurHighlight(motion 驱动)没有 reduced-motion 守卫——幅度小(0.5s 模糊淡入)暂记不改;headless rAF 冻结时 ais:spark 画布扩容后不会自动缩回(releaseCanvas 在 rAF 尾),真浏览器正常。
 - **下一片**:R2 移植 CountUp(完整度数字)+ ShinyText(鎏金扫光,模板应用 toast)。
+
+## R2 · 观感优化第二轮(新移植两件,2026-07-14)
+
+- **做了什么**:移植 react-bits **CountUp**(verbatim,motion spring 数字滚动;`to` 变化从当前值续滚——完整度 40→64 是「涨」不是「换」)接进桌面构思火候线「完整度 <CountUp/>」;移植 **ShinyText**(verbatim,金属扫光,CSS 一行并入组件)只上 toast 转瞬场合——模板应用成功的模板名鎏金扫光(color=var(--accent-3));flash() 传 JSX(渲染处本来就是 {toast},天然支持)。两件都吃已有 motion 依赖,零新增。
+- **验收**(5199,清台测→还原):应用「现代都市」模板 → toast 文案完整、.shiny-text 挂载、computed background-clip:text + 文字填充透明;build 过;console 零报错。CountUp 所在火候线需真聊构思才渲染(P1b 后直接新建走 drafting 不经过它),组件 verbatim+单行集成,留真机实测。
+- **坑**:无新坑。
+- **下一片**:R3 试样件(ClickStack 模板卡叠/Stepper 阶段条)demo 给主理人拍板;R4 动效口径统一待 R3 定型后一并。

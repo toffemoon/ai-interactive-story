@@ -14,6 +14,8 @@ import { useAuth } from "../state/auth";
 import LineSidebar from "../components/react-bits/line-sidebar"; // rail=LineSidebar 完整复刻(2026-07-13 主理人拍板)
 import StaggeredText from "../components/staggered-text"; // R1 观感:空板标题逐字浮现
 import BlurHighlight from "../components/react-bits/blur-highlight"; // R1 观感:机制说明行高亮「触发词」
+import CountUp from "../components/react-bits/count-up"; // R2 观感:完整度数字 spring 滚动
+import ShinyText from "../components/react-bits/shiny-text"; // R2 观感:鎏金扫光(只上 toast 转瞬场合)
 import "./Create.css";
 
 // 角色卡的用户上传图(头像/立绘)单独保住,别被 AI 重建 draft 覆盖掉。
@@ -1725,7 +1727,14 @@ export default function Create() {
       ...(t.skeleton ? { phase: "drafting", comp: 0, questions: [], blueprint: [] } : {}),
     });
     setTplOpen(false);
-    flash(t.skeleton ? `已应用「${t.name}」模板——长按空字段可让 AI 补写` : `「${t.name}」的开场指令已放进输入框`);
+    // R2:模板名鎏金扫光(toast 转瞬场合,不常驻)
+    flash(
+      t.skeleton ? (
+        <>已应用「<ShinyText text={t.name} speed={1.4} color="var(--accent-3)" shineColor="#ffe9c2" />」模板——长按空字段可让 AI 补写</>
+      ) : (
+        <>「<ShinyText text={t.name} speed={1.4} color="var(--accent-3)" shineColor="#ffe9c2" />」的开场指令已放进输入框</>
+      ),
+    );
     requestAnimationFrame(() => dockInputRef.current && dockInputRef.current.focus());
   }
 
@@ -2634,7 +2643,7 @@ export default function Create() {
                         aria-label="这张卡的完整度"
                       >
                         <span className="create-comp-label t-meta">
-                          完整度 {desk.comp || 0}
+                          完整度 <CountUp to={desk.comp || 0} duration={0.7} />
                           <span className="create-comp-hint">{(desk.comp || 0) >= COMP_THRESHOLD ? " · 过线,可以落笔" : ` · 过 ${COMP_THRESHOLD} 才落笔`}</span>
                         </span>
                         <span className="create-comp-line" aria-hidden="true">
