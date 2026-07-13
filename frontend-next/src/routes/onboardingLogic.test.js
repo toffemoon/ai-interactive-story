@@ -340,7 +340,10 @@ test("portrait preload commits only the current successful non-empty image", () 
 test("compact and portrait viewports use the flow onboarding bubble layout", () => {
   assert.equal(usesFlowOnboardingBubbleLayout({ width: 390, height: 844 }), true);
   assert.equal(usesFlowOnboardingBubbleLayout({ width: 450, height: 710 }), true);
-  assert.equal(usesFlowOnboardingBubbleLayout({ width: 856, height: 638 }), true);
+  assert.equal(usesFlowOnboardingBubbleLayout({ width: 856, height: 638 }), false);
+  assert.equal(usesFlowOnboardingBubbleLayout({ width: 856, height: 638, demoType: "story" }), true);
+  assert.equal(usesFlowOnboardingBubbleLayout({ width: 856, height: 638, demoType: "characterCard" }), true);
+  assert.equal(usesFlowOnboardingBubbleLayout({ width: 856, height: 638, demoType: "chat" }), false);
   assert.equal(usesFlowOnboardingBubbleLayout({ width: 1280, height: 720 }), false);
 });
 

@@ -479,7 +479,11 @@ export default function Home({ testMode = false }) {
   useLayoutEffect(() => {
     const compute = () => {
       if (!obActive || !headAnchor) return setObBubblePos(null);
-      if (usesFlowOnboardingBubbleLayout({ width: window.innerWidth, height: window.innerHeight })) return setObBubblePos(null);
+      if (usesFlowOnboardingBubbleLayout({
+        width: window.innerWidth,
+        height: window.innerHeight,
+        demoType: obDemo && obDemo.type,
+      })) return setObBubblePos(null);
       const portrait = document.querySelector(".home-portrait");
       const img = document.querySelector(".home-portrait-img.is-on") || document.querySelector(".home-portrait img");
       if (!portrait || !img) return;
@@ -495,7 +499,7 @@ export default function Home({ testMode = false }) {
     compute();
     window.addEventListener("resize", compute);
     return () => window.removeEventListener("resize", compute);
-  }, [obActive, headAnchor, obStep, obIntro, image]);
+  }, [obActive, headAnchor, obStep, obIntro, image, obDemo && obDemo.type]);
 
   // chat 拍气泡在 .home-ui 前景层：宣说话时从宣的真实 rect 右侧起排；糖沐说话时回到糖沐头侧。
   // 位置在首轮 layout、视口 resize、立绘位移结束及宣图片加载后重算，始终 clamp 在 UI/viewport 内。
