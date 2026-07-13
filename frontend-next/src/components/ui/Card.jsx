@@ -117,7 +117,7 @@ function ActionRow({ actions, onOpen, tabbable = true }) {
   );
 }
 
-function ShelfCard({ model, flipped, onToggleFlip, actions, onOpen, eager }) {
+function ShelfCard({ model, flipped, onToggleFlip, actions, onOpen, eager, backClickFlips = false }) {
   const { kind, title, blurb, tags, note, meta } = model;
   const cardRef = useRef(null);
   const frontRef = useRef(null);
@@ -167,6 +167,22 @@ function ShelfCard({ model, flipped, onToggleFlip, actions, onOpen, eager }) {
     };
     if (pointerRafRef.current === null) pointerRafRef.current = requestAnimationFrame(flushPointer);
   };
+
+  const onBackClick = (event) => {
+    event.stopPropagation();
+    if (!backClickFlips || !flipped) return;
+
+    // Keep actions, links, and future form controls independent from the
+    // optional whole-back flip gesture. Their own handlers may also stop
+    // propagation; this guard prevents accidental double toggles if they do not.
+    const interactiveTarget = event.target.closest?.(
+      "button, a, input, textarea, select, [role='button'], [role='link'], [contenteditable='true']",
+    );
+    if (interactiveTarget) return;
+
+    onToggleFlip?.();
+  };
+
   return (
     <article
       ref={cardRef}
@@ -182,7 +198,13 @@ function ShelfCard({ model, flipped, onToggleFlip, actions, onOpen, eager }) {
     >
       <div className="card-inner">
         <CoverFront model={model} flipped={flipped} onToggleFlip={onToggleFlip} frontRef={frontRef} eager={eager} />
-        <div className="card-face card-back" aria-hidden={!flipped || undefined} onClick={(event) => event.stopPropagation()}>
+        <div
+          className="card-face card-back"
+          aria-hidden={!flipped || undefined}
+          role={backClickFlips ? "group" : undefined}
+          aria-label={backClickFlips ? `《${title}》卡片背面` : undefined}
+          onClick={onBackClick}
+        >
           <button
             ref={backCloseRef}
             type="button"
@@ -254,11 +276,31 @@ function ThumbCard({ model, onOpen, selected }) {
   );
 }
 
-export function Card({ model, variant = "shelf", flipped, onToggleFlip, actions, onOpen, selected, eager = false }) {
+export function Card({
+  model,
+  variant = "shelf",
+  flipped,
+  onToggleFlip,
+  actions,
+  onOpen,
+  selected,
+  eager = false,
+  backClickFlips = false,
+}) {
   if (!model) return null;
   if (variant === "row") return <RowCard model={model} actions={actions} onOpen={onOpen} />;
   if (variant === "thumb") return <ThumbCard model={model} onOpen={onOpen} selected={selected} />;
-  return <ShelfCard model={model} flipped={flipped} onToggleFlip={onToggleFlip} actions={actions} onOpen={onOpen} eager={eager} />;
+  return (
+    <ShelfCard
+      model={model}
+      flipped={flipped}
+      onToggleFlip={onToggleFlip}
+      actions={actions}
+      onOpen={onOpen}
+      eager={eager}
+      backClickFlips={backClickFlips}
+    />
+  );
 }
 
 // CardShelf — 货架容器:auto-fill 190px 列(约 3 列),受控 flip(单张翻 + 点别处收)。

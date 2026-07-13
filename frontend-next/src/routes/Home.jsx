@@ -7,8 +7,8 @@ import { toCardModel } from "../lib/cardModel";
 import { resolveMediaUrl } from "../lib/mediaUrl.js";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
-import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, AUTO_CHAT_INTERRUPT_AI, FIRST_BEAT, beatById, buildAutoChatShownContext, consumeTestHomeBypass, loadEcho, markOnboarded, isOnboarded, saveEcho, setTestHomeBypass } from "./onboardingScript";
-import { INITIAL_ONBOARDING_AUTO_CONTROL, analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, hasRestoredHomeConversation, isCurrentOnboardingInteraction, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, resolveAutoAdvancePlan, sanitizeCardMessage, shouldAcceptNameLocally, shouldCommitPortraitPreload, shouldConfirmBareNameLocally, transitionOnboardingAutoControl, usesFlowOnboardingBubbleLayout } from "./onboardingLogic";
+import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, AUTO_CHAT_INTERRUPT_AI, ONBOARDING_EMOTION_REPLY_INSTRUCTION, FIRST_BEAT, beatById, buildAutoChatShownContext, consumeTestHomeBypass, loadEcho, markOnboarded, isOnboarded, saveEcho, setTestHomeBypass } from "./onboardingScript";
+import { INITIAL_ONBOARDING_AUTO_CONTROL, analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, hasRestoredHomeConversation, isCurrentOnboardingInteraction, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, parseOnboardingEmotionReply, resolveAutoAdvancePlan, resolveChatBubblePlacement, resolveChatStageLayout, resolveNextBeatAiLine, resolveVisibleImageRect, sanitizeCardMessage, shouldAcceptNameLocally, shouldCommitPortraitPreload, shouldConfirmBareNameLocally, transitionOnboardingAutoControl, usesFlowOnboardingBubbleLayout } from "./onboardingLogic";
 import { IdentityCard } from "../components/IdentityCard";
 import StaggeredText from "../components/staggered-text";
 import AnimatedList from "../components/animated-list";
@@ -27,6 +27,20 @@ function todayYmd() {
 }
 const TANGMU_IMG = "/home/tangmu01.png";
 const BG_IMG = "/home/background.png";
+const GENERIC_PORTRAIT_HEAD = { x: 0.5, y: 0.2, edge: 0.26 };
+const TANGMU_ALPHA_BOUNDS = {
+  "tangmu01.png": { left: 236, top: 0, right: 855, bottom: 1493 },
+  "tangmu02.png": { left: 214, top: 23, right: 871, bottom: 1522 },
+  "tangmu03.png": { left: 211, top: 57, right: 868, bottom: 1493 },
+  "tangmu04.png": { left: 265, top: 67, right: 816, bottom: 1474 },
+  "tangmu05.png": { left: 221, top: 0, right: 919, bottom: 1532 },
+  "tangmu06.png": { left: 220, top: 0, right: 798, bottom: 1536 },
+  "tangmu07.png": { left: 124, top: 28, right: 909, bottom: 1513 },
+  "tangmu08.png": { left: 233, top: 43, right: 896, bottom: 1536 },
+  "tangmu09.png": { left: 146, top: 18, right: 1024, bottom: 1536 },
+  "tangmu10.png": { left: 220, top: 9, right: 810, bottom: 1528 },
+};
+const XUAN_ALPHA_BOUNDS = { left: 300, top: 28, right: 701, bottom: 1503 };
 const GREETING_NEW =
   "初次见面。我是糖沐,这家书坊的店员。你写的故事、想见的人,都能在这儿活过来——先挑一本读读,还是先跟我说说话?";
 const GREETING_BACK = "欢迎回来。上次那段还悬着呢——接着往下,还是换一本新的?";
@@ -107,24 +121,39 @@ function DemoCard({ model, className = "" }) {
   const [flipped, setFlipped] = useState(false);
   return (
     <div className={["home-demo-card", className].filter(Boolean).join(" ")}>
-      <Card model={model} variant="shelf" flipped={flipped} onToggleFlip={() => setFlipped((v) => !v)} />
+      <Card model={model} variant="shelf" flipped={flipped} onToggleFlip={() => setFlipped((v) => !v)} backClickFlips />
     </div>
   );
 }
 
-function OnboardingBubble({ beat, line, disabled, onSkip, className = "", style }) {
+function ThinkingIndicator({ speaker }) {
+  const label = `${speaker || "糖沐"}正在思考`;
+  return (
+    <span className="home-thinking" role="status" aria-label={`${label}...`}>
+      <span>{label}</span>
+      <span className="home-thinking-dots" aria-hidden="true">
+        <span className="home-thinking-dot">.</span>
+        <span className="home-thinking-dot">.</span>
+        <span className="home-thinking-dot">.</span>
+      </span>
+    </span>
+  );
+}
+
+function StageSpeechBubble({ speaker = "糖沐", line, busy = false, animateLine = true, onSkip, tools = null, className = "", style }) {
   return (
     <div className={["home-ob-bubble", className].filter(Boolean).join(" ")} style={style}>
       <div className="home-ob-bubble-head">
-        <span className="home-dlg-name t-kai">{beat && beat.speaker ? beat.speaker : "糖沐"}</span>
-        {beat && (
-          <button type="button" className="home-ob-skip" onClick={onSkip} disabled={disabled} title="跳过引导,直接进店">
+        <span className="home-dlg-name t-kai">{speaker}</span>
+        {tools}
+        {onSkip && (
+          <button type="button" className="home-ob-skip" onClick={onSkip} disabled={busy} title="跳过引导,直接进店">
             跳过
           </button>
         )}
       </div>
-      <p className="home-ob-line t-read" aria-live="polite" aria-busy={disabled}>
-        {disabled ? line : <DialogueReveal key={line} text={line} />}
+      <p className="home-ob-line t-read" aria-live="polite" aria-busy={busy}>
+        {busy ? <ThinkingIndicator speaker={speaker} /> : animateLine ? <DialogueReveal key={line} text={line} /> : line}
       </p>
     </div>
   );
@@ -243,7 +272,7 @@ export default function Home({ testMode = false }) {
   const introFrame = obIntro >= 0 ? INTRO[obIntro] : null;
   const obActive = obIntro >= 0 || !!obBeat;
   const obReplySpeaker = (obBeat && obBeat.speaker) || "糖沐";
-  const obThinkingLine = `${obReplySpeaker}正想着怎么接…`;
+  const obThinkingLine = `${obReplySpeaker}正在思考...`;
   const obHasDraft = Boolean(obInput.trim());
   const obReplyBlocked = obThinking || Boolean(obInterruptFailure);
   const obAutoPlan = resolveAutoAdvancePlan({
@@ -278,6 +307,7 @@ export default function Home({ testMode = false }) {
     : "";
   // 当前姿势的「头中心」锚点(入场帧 / 差分 emo);用于把气泡贴到头侧、齐头高。
   const headAnchor = introFrame ? INTRO_HEAD[obIntro] : obEmo ? HEAD[obEmo] : null;
+  const stageHeadAnchor = obActive ? headAnchor : isTangmu ? HEAD.smile : GENERIC_PORTRAIT_HEAD;
 
   const displayName = cardName(card) || (isTangmu ? "糖沐" : "角色");
   const image = introFrame ? introFrame.img : obBeat ? PORTRAIT[obEmo] || TANGMU_IMG : isTangmu ? TANGMU_IMG : cardImageOf(card);
@@ -478,7 +508,7 @@ export default function Home({ testMode = false }) {
   // 立绘各姿势 CSS 尺寸一致,量任一张 img 盒即可(几何稳定)。紧凑/竖版走 CSS 流式布局 → 清空锚点。
   useLayoutEffect(() => {
     const compute = () => {
-      if (!obActive || !headAnchor) return setObBubblePos(null);
+      if (!stageHeadAnchor || fullscreen || (obActive && obDemo && obDemo.type === "chat")) return setObBubblePos(null);
       if (usesFlowOnboardingBubbleLayout({
         width: window.innerWidth,
         height: window.innerHeight,
@@ -492,21 +522,32 @@ export default function Home({ testMode = false }) {
       if (!r.width) return;
       // 坐标相对 .home-portrait(图 rect 减容器 rect):祖先 transform 对图和容器同样偏移、相减抵消,故滑动中途量也稳。
       // 气泡就渲染在 .home-portrait 里,立绘 -8% 滑动时气泡随容器 transform 一起走 → 不用重算、天然不卡(不再靠 transitionend)。
-      const headCY = r.top - pr.top + headAnchor.y * r.height;
-      const rightEdge = r.left - pr.left + (headAnchor.edge - 0.025) * r.width;
-      const bubble = portrait.querySelector(".home-ob-bubble:not(.home-ob-bubble--chat)");
-      const bubbleWidth = bubble ? bubble.getBoundingClientRect().width : 0;
-      const demoShift = obDemo && ["story", "character", "characterCard", "create", "createProjection"].includes(obDemo.type) ? 0.1 : 0;
-      const targetShift = obBeat && obBeat.showCard ? 0.08 : demoShift;
+      const headCY = r.top - pr.top + stageHeadAnchor.y * r.height;
+      const rightEdge = r.left - pr.left + (stageHeadAnchor.edge - 0.025) * r.width;
+      const bubble = portrait.querySelector(obActive ? ".home-ob-bubble:not(.home-ob-bubble--chat):not(.home-ob-bubble--home)" : ".home-ob-bubble--home");
+      const bubbleRect = bubble && bubble.getBoundingClientRect();
+      const bubbleWidth = bubbleRect ? bubbleRect.width : 0;
+      const bubbleHeight = bubbleRect ? bubbleRect.height : 0;
+      const demoShift = obActive && obDemo && ["story", "character", "characterCard", "create", "createProjection"].includes(obDemo.type) ? 0.1 : 0;
+      const targetShift = obActive && obBeat && obBeat.showCard ? 0.08 : demoShift;
       const targetPortraitLeft = portrait.offsetLeft - portrait.offsetWidth * targetShift;
       const safePortraitLeft = Math.min(pr.left, targetPortraitLeft);
       const viewportSafeEdge = bubbleWidth ? bubbleWidth + 12 - safePortraitLeft : rightEdge;
-      setObBubblePos({ left: Math.round(Math.max(rightEdge, viewportSafeEdge)), top: Math.round(headCY) });
+      const dock = document.querySelector(".home-dock");
+      const dockTop = dock ? dock.getBoundingClientRect().top : window.innerHeight - 24;
+      const minScreenTop = 56;
+      const maxScreenBottom = Math.max(minScreenTop + bubbleHeight, dockTop - 16);
+      let safeHeadCY = headCY;
+      const screenTop = pr.top + safeHeadCY - bubbleHeight / 2;
+      const screenBottom = pr.top + safeHeadCY + bubbleHeight / 2;
+      if (bubbleHeight && screenTop < minScreenTop) safeHeadCY += minScreenTop - screenTop;
+      if (bubbleHeight && screenBottom > maxScreenBottom) safeHeadCY -= screenBottom - maxScreenBottom;
+      setObBubblePos({ left: Math.round(Math.max(rightEdge, viewportSafeEdge)), top: Math.round(safeHeadCY) });
     };
     compute();
     window.addEventListener("resize", compute);
     return () => window.removeEventListener("resize", compute);
-  }, [obActive, headAnchor, obStep, obIntro, image, obDemo && obDemo.type]);
+  }, [obActive, stageHeadAnchor, obStep, obIntro, image, obDemo && obDemo.type, fullscreen, displayName]);
 
   // chat 拍气泡在 .home-ui 前景层：宣说话时从宣的真实 rect 右侧起排；糖沐说话时回到糖沐头侧。
   // 位置在首轮 layout、视口 resize、立绘位移结束及宣图片加载后重算，始终 clamp 在 UI/viewport 内。
@@ -519,45 +560,96 @@ export default function Home({ testMode = false }) {
     let frame = 0;
     const compute = () => {
       const ui = document.querySelector(".home-ui");
-      const xuan = ui && ui.querySelector(".home-demo-xuan-img");
-      if (!ui || !xuan) return;
+      if (!ui) return;
       const uiRect = ui.getBoundingClientRect();
-      const xuanRect = xuan.getBoundingClientRect();
-      if (!uiRect.width || !xuanRect.width) return;
+      if (!uiRect.width) return;
 
       const narrow = window.matchMedia("(max-width: 720px), (orientation: portrait)").matches;
       const pad = narrow ? 12 : 24;
       const gap = narrow ? 8 : 16;
-      const preferredWidth = narrow ? clamp(uiRect.width * 0.46, 156, 210) : clamp(uiRect.width * 0.25, 280, 350);
+      let preferredWidth = narrow ? clamp(uiRect.width * 0.4, 144, 196) : clamp(uiRect.width * 0.25, 280, 350);
       const dock = ui.querySelector(".home-dock");
       const dockTop = dock ? dock.getBoundingClientRect().top - uiRect.top : uiRect.height - pad;
-      let left;
-      let top;
-      let width = preferredWidth;
+      const chatStage = ui.querySelector(".home-ob-demo--chat");
+      const chatStageLayout = resolveChatStageLayout({ viewportHeight: uiRect.height, dockTop, narrow, padding: pad, gap });
+      if (chatStage && chatStageLayout) {
+        chatStage.style.bottom = `${chatStageLayout.bottom}px`;
+        chatStage.style.height = `${chatStageLayout.height}px`;
+      }
+      const bubble = ui.querySelector(".home-ob-bubble--chat");
+      const bubbleRect = bubble && bubble.getBoundingClientRect();
+      const bubbleHeight = Math.max(112, (bubbleRect && bubbleRect.height) || 0);
+      let speakerRect = null;
+      const avoidRects = [];
+      let preferredSide = "right";
 
-      if (obBeat.speaker === "宣") {
-        const naturalLeft = xuanRect.right - uiRect.left + gap;
-        const available = uiRect.width - pad - naturalLeft;
-        width = Math.min(preferredWidth, Math.max(144, available));
-        left = clamp(naturalLeft, pad, Math.max(pad, uiRect.width - pad - width));
-        top = xuanRect.top - uiRect.top + Math.min(72, xuanRect.height * 0.12);
-      } else {
-        const tangmu = document.querySelector(".home-portrait-img.is-on") || document.querySelector(".home-portrait img");
-        const tangmuRect = tangmu && tangmu.getBoundingClientRect();
-        if (!tangmuRect || !tangmuRect.width || !headAnchor) return;
-        const headX = tangmuRect.left - uiRect.left + headAnchor.edge * tangmuRect.width;
-        const headY = tangmuRect.top - uiRect.top + headAnchor.y * tangmuRect.height;
-        const maxLeft = Math.max(pad, uiRect.width - pad - width);
-        left = narrow ? clamp(headX + gap, pad, maxLeft) : clamp(headX - gap - width, pad, maxLeft);
-        top = headY - (narrow ? 56 : 76);
+      const tangmu = document.querySelector(".home-portrait-img.is-on") || document.querySelector(".home-portrait img");
+      const tangmuRect = tangmu && tangmu.getBoundingClientRect();
+      const tangmuFile = tangmu && tangmu.currentSrc
+        ? (() => {
+            try {
+              return new URL(tangmu.currentSrc).pathname.split("/").pop();
+            } catch {
+              return "";
+            }
+          })()
+        : "";
+      const tangmuVisible = tangmuRect && tangmuRect.width
+        ? resolveVisibleImageRect({
+            box: {
+              left: tangmuRect.left - uiRect.left,
+              top: tangmuRect.top - uiRect.top,
+              width: tangmuRect.width,
+              height: tangmuRect.height,
+            },
+            naturalSize: { width: tangmu.naturalWidth || 1024, height: tangmu.naturalHeight || 1536 },
+            alphaBounds: TANGMU_ALPHA_BOUNDS[tangmuFile] || { left: 124, top: 0, right: 1024, bottom: 1536 },
+          })
+        : null;
+      const xuan = ui.querySelector(".home-demo-xuan-img");
+      const xuanBox = xuan && xuan.getBoundingClientRect();
+      const xuanVisible = xuanBox && xuanBox.width
+        ? resolveVisibleImageRect({
+            box: {
+              left: xuanBox.left - uiRect.left,
+              top: xuanBox.top - uiRect.top,
+              width: xuanBox.width,
+              height: xuanBox.height,
+            },
+            naturalSize: { width: xuan.naturalWidth || 1024, height: xuan.naturalHeight || 1535 },
+            alphaBounds: XUAN_ALPHA_BOUNDS,
+            alignX: 1,
+            alignY: 1,
+          })
+        : null;
+
+      if (narrow && tangmuVisible) {
+        const safeLeftWidth = tangmuVisible.left - pad - gap;
+        if (safeLeftWidth >= 120) preferredWidth = Math.min(preferredWidth, safeLeftWidth);
       }
 
-      const maxTop = Math.max(pad, Math.min(uiRect.height - 170, dockTop - 154));
-      setObChatBubblePos({
-        left: Math.round(left),
-        top: Math.round(clamp(top, pad, maxTop)),
-        width: Math.round(width),
+      if (obBeat.speaker === "宣") {
+        if (!xuanVisible) return;
+        speakerRect = xuanVisible;
+        if (tangmuVisible) avoidRects.push(tangmuVisible);
+      } else {
+        if (!tangmuVisible) return;
+        speakerRect = tangmuVisible;
+        if (xuanVisible) avoidRects.push(xuanVisible);
+        preferredSide = "left";
+      }
+
+      const placement = resolveChatBubblePlacement({
+        viewport: { width: uiRect.width, height: uiRect.height },
+        speakerRect,
+        avoidRects,
+        bubbleSize: { width: preferredWidth, height: bubbleHeight },
+        dockTop,
+        preferredSide,
+        padding: pad,
+        gap,
       });
+      if (placement) setObChatBubblePos(placement);
     };
     const schedule = () => {
       cancelAnimationFrame(frame);
@@ -569,17 +661,25 @@ export default function Home({ testMode = false }) {
     const portrait = document.querySelector(".home-portrait");
     const chatStage = document.querySelector(".home-ob-demo--chat");
     const xuan = document.querySelector(".home-demo-xuan-img");
+    const bubble = document.querySelector(".home-ob-bubble--chat");
+    const dock = document.querySelector(".home-dock");
+    const bubbleObserver = typeof ResizeObserver === "function" && bubble ? new ResizeObserver(schedule) : null;
     portrait?.addEventListener("transitionend", schedule);
     chatStage?.addEventListener("animationend", schedule);
     xuan?.addEventListener("load", schedule);
+    bubbleObserver?.observe(bubble);
+    if (dock) bubbleObserver?.observe(dock);
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener("resize", schedule);
       portrait?.removeEventListener("transitionend", schedule);
       chatStage?.removeEventListener("animationend", schedule);
       xuan?.removeEventListener("load", schedule);
+      bubbleObserver?.disconnect();
+      chatStage?.style.removeProperty("bottom");
+      chatStage?.style.removeProperty("height");
     };
-  }, [obActive, obStep, obBeat && obBeat.speaker, obDemo && obDemo.type, headAnchor, image]);
+  }, [obActive, obStep, obBeat && obBeat.speaker, obDemo && obDemo.type, headAnchor, image, obLine, obThinking]);
 
   // 立绘双层交叉溶解:image 变 → 把新图放「非当前层」+ 切当前层到它 = 新层淡入、旧层淡出。
   // 换图与切层合成一次 setObPortrait(原子提交),消掉两次 setState 间「新图挂在旧层判定上以 opacity:1 闪现」的中间帧(整图差分重影的根因之一)。
@@ -852,6 +952,10 @@ export default function Home({ testMode = false }) {
       const settled = commitOnboardingAutoEvent({ type: "reply-settled", interactionEpoch: token.requestEpoch });
       if (!settled.applied) return;
       setObThinking(false);
+      const emotionReply = reply
+        ? parseOnboardingEmotionReply(reply, { fallbackEmo: beat.emo || "smile" })
+        : { text: "", emo: beat.emo || "smile" };
+      reply = emotionReply.text || null;
       if (!reply && beat.ai.optional) {
         const echo = { ...obEcho, [beat.field]: fieldValue };
         setObEcho(echo);
@@ -862,13 +966,14 @@ export default function Home({ testMode = false }) {
       const isNameField = beat.field === "name";
       const p = parseFieldIntentReply(reply, { requireTag: isNameField, allowNone: !isNameField });
       if (p.intent === "retry") {
+        if (beat.speaker !== "宣") setObEmoOverride(emotionReply.emo);
         setObAiLine(beat.field === "name" ? "我刚才没听清。你直接报一个想写在卡上的称呼就行。" : "我刚才没听清。最近在看什么,或者说「没有」也行。");
         setObInput("");
         return;
       }
       if (p.intent === "chat") {
         // 闲聊/没正经回答:糖沐接话但不填卡、不推进,停这拍继续等真正的答案。
-        setObEmoOverride(p.meme ? "surprise" : null);
+        if (beat.speaker !== "宣") setObEmoOverride(p.meme ? "surprise" : emotionReply.emo);
         setObAiLine(p.text || (beat.field === "name" ? "这个不像称呼。那,我该怎么叫你?" : "这句我先当闲聊。那,最近都在看点什么?"));
         setObInput("");
         return;
@@ -893,8 +998,10 @@ export default function Home({ testMode = false }) {
       if (beat.field === "name") echo.nameOdd = false;
       setObEcho(echo);
       persistEcho(echo);
-      const nextLine = beat.ai.optional && answerLine && answerLine.length > 72 ? answerLine.slice(0, 72) + "…" : answerLine;
-      obGoNext(beat.next, beat.next === "cardDone" ? null : nextLine);
+      const trimmedAnswerLine = beat.ai.optional && answerLine && answerLine.length > 72 ? answerLine.slice(0, 72) + "…" : answerLine;
+      const nextLine = resolveNextBeatAiLine({ nextBeatId: beat.next, aiLine: trimmedAnswerLine });
+      const nextBeat = beatById(beat.next);
+      obGoNext(beat.next, nextLine, { emo: nextLine && nextBeat && nextBeat.speaker !== "宣" ? emotionReply.emo : null });
     } else {
       const echo = { ...obEcho, [beat.field]: v };
       setObEcho(echo);
@@ -913,6 +1020,7 @@ export default function Home({ testMode = false }) {
       "- ok/okay/yes/好/好的/嗯/可以/继续/下一步/接着/带我看看/show me around,在上下文里通常是选择当前唯一的继续动作。\n" +
       "- 有上传头像动作时,只有玩家明确说上传/传图/照片/avatar/photo 才选上传;说跳过/no avatar/continue/ok 则选继续或跳过头像的动作。\n" +
       "- 不要创造动作,不要导航,不要解释格式。\n" +
+      `${ONBOARDING_EMOTION_REPLY_INSTRUCTION}\n` +
       `当前糖沐台词:${currentLine || ""}\n当前动作:\n${actions}`;
     try {
       const card = { spec: "chara_card_v2", spec_version: "2.0", data: { name: "糖沐", description: AI_PERSONA, scenario } };
@@ -920,9 +1028,10 @@ export default function Home({ testMode = false }) {
         postJSON("/api/chat", { card, session_id: newSessionId(), user: v, world: null }),
         new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000)),
       ]);
-      return parseChipIntentReply(((r && r.reply) || "").trim(), chips);
+      const emotionReply = parseOnboardingEmotionReply(((r && r.reply) || "").trim(), { fallbackEmo: beat.emo || "smile" });
+      return { ...parseChipIntentReply(emotionReply.text, chips), emo: emotionReply.emo };
     } catch (e) {
-      return { chip: null, chat: null };
+      return { chip: null, chat: null, emo: null };
     }
   }
 
@@ -963,9 +1072,11 @@ export default function Home({ testMode = false }) {
     if (reply) {
       const transition = commitOnboardingAutoEvent({ type: "reply-success", interactionEpoch: token.requestEpoch });
       if (!transition.applied) return;
+      const emotionReply = parseOnboardingEmotionReply(reply, { fallbackEmo: beat.emo || "smile" });
       setObThinking(false);
       setObInput("");
-      setObAiLine(reply);
+      setObAiLine(emotionReply.text);
+      if (speaker !== "宣") setObEmoOverride(emotionReply.emo);
       setObInterruptFailure(null);
       return;
     }
@@ -1012,6 +1123,7 @@ export default function Home({ testMode = false }) {
       if (!settled.applied) return;
       setObThinking(false);
       setObAiLine(intent.chat);
+      if (intent.emo) setObEmoOverride(intent.emo);
       return;
     }
     let reply = null;
@@ -1029,7 +1141,11 @@ export default function Home({ testMode = false }) {
     const settled = commitOnboardingAutoEvent({ type: "reply-settled", interactionEpoch: token.requestEpoch });
     if (!settled.applied) return;
     setObThinking(false);
-    if (reply) setObAiLine(reply);
+    if (reply) {
+      const emotionReply = parseOnboardingEmotionReply(reply, { fallbackEmo: obBeat.emo || "smile" });
+      setObAiLine(emotionReply.text);
+      setObEmoOverride(emotionReply.emo);
+    }
     else {
       setObAiLine("我刚才没听清。你可以再说一次,或者点下面的选项继续。");
       setObContinueHint(true);
@@ -1230,6 +1346,8 @@ export default function Home({ testMode = false }) {
         (obBeat && obBeat.speaker === "糖沐" ? " is-ob-speaker-tangmu" : "") +
         (obBeat && obBeat.speaker === "宣" ? " is-ob-speaker-xuan" : "") +
         (obBeat && obBeat.centerBubble ? " is-ob-finale" : "") +
+        (!obActive ? " is-home-mode" : "") +
+        (obChatBubblePos && obChatBubblePos.compact ? " is-ob-chat-compact" : "") +
         (obDemo ? ` is-ob-demo is-ob-demo-${obDemo.type}` : "")
       }
     >
@@ -1258,15 +1376,47 @@ export default function Home({ testMode = false }) {
         )}
         {/* 普通拍气泡跟随糖沐立绘；chat 拍改在 .home-ui 前景层渲染。 */}
         {(obBeat || (introFrame && introFrame.line)) && !(obDemo && obDemo.type === "chat") && (
-          <OnboardingBubble
+          <StageSpeechBubble
             key={obBeat ? "b-" + obBeat.id + (obViaBack ? "-back" : "") : "i-" + obIntro}
-            beat={obBeat}
+            speaker={(obBeat && obBeat.speaker) || "糖沐"}
             line={obLine}
-            disabled={obThinking}
-            onSkip={() => endOnboarding()}
+            busy={obThinking}
+            onSkip={obBeat ? () => endOnboarding() : null}
             style={
               obBubblePos &&
               !(obBeat && obBeat.centerBubble)
+                ? { left: obBubblePos.left, top: obBubblePos.top, right: "auto", bottom: "auto", transform: "translate(-100%, -50%)" }
+                : undefined
+            }
+          />
+        )}
+        {!obActive && !fullscreen && (
+          <StageSpeechBubble
+            key={`home-${displayName}`}
+            speaker={displayName}
+            line={currentLine}
+            busy={busy}
+            animateLine={false}
+            className="home-ob-bubble--home"
+            tools={
+              <div className="home-dlg-tools">
+                <button className="home-tool" onClick={openSwitcher} title="换个人聊" aria-label="换个人聊">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="9" cy="8" r="3" />
+                    <path d="M3.5 19c0-3 2.5-4.5 5.5-4.5" />
+                    <path d="M16 6l3 0 0 3" />
+                    <path d="M19 6l-4 4" />
+                    <circle cx="16.5" cy="16" r="3" />
+                    <path d="M21 19c0-2-1.8-3-4.5-3" />
+                  </svg>
+                </button>
+                <button className="home-tool" onClick={restart} disabled={busy} title="重开(清空这段对话)" aria-label="重开">⟳</button>
+                <button className="home-tool" onClick={() => setLogOpen(true)} disabled={!messages.length} title="查看记录" aria-label="查看记录">≡</button>
+                <button className="home-tool" onClick={() => setFullscreen(true)} title="全屏(只留背景+立绘,方便截图)" aria-label="全屏">⛶</button>
+              </div>
+            }
+            style={
+              obBubblePos
                 ? { left: obBubblePos.left, top: obBubblePos.top, right: "auto", bottom: "auto", transform: "translate(-100%, -50%)" }
                 : undefined
             }
@@ -1337,11 +1487,11 @@ export default function Home({ testMode = false }) {
             />
           )}
           {obBeat && obDemo && obDemo.type === "chat" && (
-            <OnboardingBubble
+            <StageSpeechBubble
               key={"chat-" + obBeat.id + (obViaBack ? "-back" : "")}
-              beat={obBeat}
+              speaker={obBeat.speaker || "糖沐"}
               line={obLine}
-              disabled={obThinking}
+              busy={obThinking}
               onSkip={() => endOnboarding()}
               className={"home-ob-bubble--chat " + (obBeat.speaker === "宣" ? "is-xuan" : "is-tangmu")}
               style={obChatBubblePos ? { left: obChatBubblePos.left, top: obChatBubblePos.top, width: obChatBubblePos.width } : undefined}
@@ -1421,35 +1571,13 @@ export default function Home({ testMode = false }) {
                   )}
                 </div>
 
-                {/* 对话框 */}
-                <div className="home-dialogue">
-                  <div className="home-dlg-head">
-                    <span className="home-dlg-name t-kai">{displayName}</span>
-                    <div className="home-dlg-tools">
-                      <button className="home-tool" onClick={openSwitcher} title="换个人聊" aria-label="换个人聊">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="9" cy="8" r="3" />
-                          <path d="M3.5 19c0-3 2.5-4.5 5.5-4.5" />
-                          <path d="M16 6l3 0 0 3" />
-                          <path d="M19 6l-4 4" />
-                          <circle cx="16.5" cy="16" r="3" />
-                          <path d="M21 19c0-2-1.8-3-4.5-3" />
-                        </svg>
-                      </button>
-                      <button className="home-tool" onClick={restart} disabled={busy} title="重开(清空这段对话)" aria-label="重开">⟳</button>
-                      <button className="home-tool" onClick={() => setLogOpen(true)} disabled={!messages.length} title="查看记录" aria-label="查看记录">≡</button>
-                      <button className="home-tool" onClick={() => setFullscreen(true)} title="全屏(只留背景+立绘,方便截图)" aria-label="全屏">⛶</button>
-                    </div>
-                  </div>
-                  <p className="home-dlg-line t-read" aria-live="polite" aria-busy={busy}>
-                    {busy ? `(${displayName}正在回应…)` : <DialogueReveal key={`${displayName}-${currentLine}`} text={currentLine} />}
-                  </p>
+                <div className="home-ob-tray home-home-tray">
                   <div className="home-composer">
                     <input
                       className="home-input"
                       value={input}
                       disabled={busy || !card}
-                      placeholder={card ? "和 " + displayName + " 说点什么…" : "正在把糖沐请出来…"}
+                      placeholder={busy ? `${displayName}正在思考...` : card ? "和 " + displayName + " 说点什么…" : "正在把糖沐请出来…"}
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !busy) {
@@ -1459,7 +1587,7 @@ export default function Home({ testMode = false }) {
                       }}
                     />
                     <Button variant="primary" onClick={send} disabled={busy || !input.trim() || !card}>
-                      发送
+                      {busy ? "..." : "发送"}
                     </Button>
                   </div>
                 </div>

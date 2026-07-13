@@ -125,6 +125,14 @@
   justify-content: flex-end;
   gap: var(--sp-3);
 }
+.home.is-home-mode .home-dock {
+  gap: 0;
+}
+.home.is-home-mode .home-actions {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 12px);
+}
 /* 主按钮:与菜单唤出钮统一为「白胶囊」样式(YOR-136 反馈:按钮和菜单栏按钮统一) */
 .home-go {
   width: auto;
@@ -319,10 +327,52 @@
 .home-ob-bubble .home-dlg-name {
   color: var(--cinnabar);
 }
+.home-ob-bubble--home {
+  width: min(380px, 36vw);
+  animation-delay: 80ms;
+}
+.home-ob-bubble--home .home-ob-bubble-head {
+  align-items: flex-start;
+}
+.home-ob-bubble--home .home-dlg-tools {
+  margin-left: auto;
+}
 .home-ob-line {
   margin: 0;
   color: #20201d;
   line-height: var(--lh-body);
+}
+.home-thinking {
+  display: inline-flex;
+  align-items: baseline;
+  min-height: 1.5em;
+}
+.home-thinking-dots {
+  display: inline-flex;
+  min-width: 1.15em;
+  margin-left: 0.08em;
+}
+.home-thinking-dot {
+  display: inline-block;
+  animation: homeThinkingDot 1.05s ease-in-out infinite;
+}
+.home-thinking-dot:nth-child(2) {
+  animation-delay: 0.14s;
+}
+.home-thinking-dot:nth-child(3) {
+  animation-delay: 0.28s;
+}
+@keyframes homeThinkingDot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.24;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-0.16em);
+  }
 }
 .home-ob-skip {
   border: none;
@@ -674,21 +724,28 @@
   color: #20201d;
   box-shadow: 0 14px 38px -22px rgba(0, 0, 0, 0.72);
 }
-/* 上一步(回退键):低调文字钮,贴操作盘左上 */
+/* 上一步(回退键):实体按钮,叠在立绘上也必须清楚可点。 */
 .home-ob-back {
   align-self: flex-start;
-  border: none;
-  background: transparent;
-  color: rgba(241, 231, 214, 0.62);
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid rgba(232, 181, 99, 0.62);
+  border-radius: var(--r-pill);
+  background: rgba(28, 22, 16, 0.82);
+  color: #f1e7d6;
   font-family: var(--font-sans);
   font-size: var(--fs-ui-sm);
   letter-spacing: 0.04em;
   cursor: pointer;
-  padding: 2px 4px;
-  transition: color var(--dur-fast) var(--ease-out);
+  box-shadow: 0 9px 24px -14px rgba(0, 0, 0, 0.86);
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
-.home-ob-back:hover {
-  color: #f1e7d6;
+.home-ob-back:hover:not(:disabled) {
+  border-color: #e8b563;
+  background: rgba(48, 35, 23, 0.94);
+}
+.home-ob-back:active:not(:disabled) {
+  transform: translateY(1px);
 }
 .home-ob-tray .home-input {
   background: rgba(255, 255, 255, 0.85);
@@ -755,6 +812,20 @@
 .home-ob-tray .home-input:disabled {
   opacity: 0.7;
   cursor: default;
+}
+.home-home-tray {
+  gap: 0;
+}
+.home-demo-card .card-back {
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-thinking-dot {
+    animation: none;
+    opacity: 0.72;
+    transform: none;
+  }
 }
 
 /* 移动 + 竖版视口:气泡收窄、移到立绘下方靠上。

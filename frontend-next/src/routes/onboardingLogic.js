@@ -273,6 +273,184 @@ export function usesFlowOnboardingBubbleLayout({ width, height, demoType } = {})
   return isNarrowOrPortrait || isCompactCardDemo;
 }
 
+function clampValue(value, min, max) {
+  return Math.min(Math.max(value, min), Math.max(min, max));
+}
+
+function overlapsRect(a, b) {
+  return !(a.left + a.width <= b.left || a.left >= b.right || a.top + a.height <= b.top || a.top >= b.bottom);
+}
+
+function roundPlacement(rect) {
+  return {
+    ...rect,
+    left: Math.round(rect.left),
+    top: Math.round(rect.top),
+    width: Math.round(rect.width),
+    height: Math.round(rect.height),
+  };
+}
+
+export function resolveVisibleImageRect({
+  box,
+  naturalSize,
+  alphaBounds,
+  alignX = 0.5,
+  alignY = 1,
+} = {}) {
+  const boxLeft = Number(box && box.left);
+  const boxTop = Number(box && box.top);
+  const boxWidth = Number(box && box.width);
+  const boxHeight = Number(box && box.height);
+  const naturalWidth = Number(naturalSize && naturalSize.width);
+  const naturalHeight = Number(naturalSize && naturalSize.height);
+  const alphaLeft = Number(alphaBounds && alphaBounds.left);
+  const alphaTop = Number(alphaBounds && alphaBounds.top);
+  const alphaRight = Number(alphaBounds && alphaBounds.right);
+  const alphaBottom = Number(alphaBounds && alphaBounds.bottom);
+  if (![
+    boxLeft,
+    boxTop,
+    boxWidth,
+    boxHeight,
+    naturalWidth,
+    naturalHeight,
+    alphaLeft,
+    alphaTop,
+    alphaRight,
+    alphaBottom,
+  ].every(Number.isFinite)) return null;
+  if (boxWidth <= 0 || boxHeight <= 0 || naturalWidth <= 0 || naturalHeight <= 0) return null;
+
+  const scale = Math.min(boxWidth / naturalWidth, boxHeight / naturalHeight);
+  const contentWidth = naturalWidth * scale;
+  const contentHeight = naturalHeight * scale;
+  const contentLeft = boxLeft + (boxWidth - contentWidth) * clampValue(Number(alignX), 0, 1);
+  const contentTop = boxTop + (boxHeight - contentHeight) * clampValue(Number(alignY), 0, 1);
+  return {
+    left: contentLeft + alphaLeft * scale,
+    top: contentTop + alphaTop * scale,
+    right: contentLeft + alphaRight * scale,
+    bottom: contentTop + alphaBottom * scale,
+  };
+}
+
+export function resolveChatStageLayout({
+  viewportHeight,
+  dockTop,
+  narrow = false,
+  padding = 24,
+  gap = 16,
+} = {}) {
+  const height = Number(viewportHeight);
+  const dockBoundary = Number(dockTop);
+  const safePadding = Math.max(0, Number(padding) || 0);
+  const safeGap = Math.max(0, Number(gap) || 0);
+  if (![height, dockBoundary].every(Number.isFinite) || height <= 0 || dockBoundary <= 0) return null;
+  const availableHeight = Math.max(0, dockBoundary - safeGap - safePadding);
+  return {
+    bottom: Math.round(Math.max(0, height - dockBoundary + safeGap)),
+    height: Math.round(Math.min(narrow ? 320 : 520, availableHeight)),
+  };
+}
+
+export function resolveChatBubblePlacement({
+  viewport,
+  speakerRect,
+  avoidRects = [],
+  bubbleSize,
+  dockTop,
+  preferredSide = "right",
+  padding = 24,
+  gap = 16,
+} = {}) {
+  const viewportWidth = Number(viewport && viewport.width);
+  const viewportHeight = Number(viewport && viewport.height);
+  const speaker = {
+    left: Number(speakerRect && speakerRect.left),
+    top: Number(speakerRect && speakerRect.top),
+    right: Number(speakerRect && speakerRect.right),
+    bottom: Number(speakerRect && speakerRect.bottom),
+  };
+  const requestedWidth = Number(bubbleSize && bubbleSize.width);
+  const requestedHeight = Number(bubbleSize && bubbleSize.height);
+  if (
+    ![viewportWidth, viewportHeight, speaker.left, speaker.top, speaker.right, speaker.bottom, requestedWidth, requestedHeight].every(Number.isFinite) ||
+    viewportWidth <= 0 ||
+    viewportHeight <= 0 ||
+    requestedWidth <= 0 ||
+    requestedHeight <= 0
+  ) return null;
+
+  const extraObstacles = (Array.isArray(avoidRects) ? avoidRects : [])
+    .map((rect) => ({
+      left: Number(rect && rect.left),
+      top: Number(rect && rect.top),
+      right: Number(rect && rect.right),
+      bottom: Number(rect && rect.bottom),
+    }))
+    .filter((rect) => [rect.left, rect.top, rect.right, rect.bottom].every(Number.isFinite));
+  const obstacles = [speaker, ...extraObstacles];
+  const overlapsObstacle = (rect) => obstacles.some((obstacle) => overlapsRect(rect, obstacle));
+
+  const safePadding = Math.max(0, Number(padding) || 0);
+  const safeGap = Math.max(0, Number(gap) || 0);
+  const safeLeft = safePadding;
+  const safeRight = Math.max(safeLeft, viewportWidth - safePadding);
+  const safeTop = safePadding;
+  const dockBoundary = Number.isFinite(Number(dockTop)) ? Number(dockTop) - safeGap : viewportHeight - safePadding;
+  const safeBottom = Math.max(safeTop, Math.min(viewportHeight - safePadding, dockBoundary));
+  const width = Math.min(requestedWidth, safeRight - safeLeft);
+  const height = Math.min(requestedHeight, safeBottom - safeTop);
+  if (width <= 0 || height <= 0) return null;
+
+  const top = clampValue((speaker.top + speaker.bottom - height) / 2, safeTop, safeBottom - height);
+  const sides = preferredSide === "left" ? ["left", "right"] : ["right", "left"];
+  const makeSideRect = (side, candidateWidth, compact) => {
+    const left = side === "left" ? speaker.left - safeGap - candidateWidth : speaker.right + safeGap;
+    const rect = { left, top, width: candidateWidth, height, compact };
+    if (left < safeLeft || left + candidateWidth > safeRight || overlapsObstacle(rect)) return null;
+    return rect;
+  };
+
+  for (const side of sides) {
+    const rect = makeSideRect(side, width, false);
+    if (rect) return roundPlacement(rect);
+  }
+
+  const sideSpace = {
+    left: Math.max(0, speaker.left - safeGap - safeLeft),
+    right: Math.max(0, safeRight - speaker.right - safeGap),
+  };
+  const compactSide = [...sides].sort((a, b) => sideSpace[b] - sideSpace[a])[0];
+  const compactWidth = Math.min(width, sideSpace[compactSide]);
+  if (compactWidth > 0) {
+    const rect = makeSideRect(compactSide, compactWidth, true);
+    if (rect) return roundPlacement(rect);
+  }
+
+  const centeredLeft = clampValue((speaker.left + speaker.right - width) / 2, safeLeft, safeRight - width);
+  for (const candidateTop of [speaker.top - safeGap - height, speaker.bottom + safeGap]) {
+    const rect = { left: centeredLeft, top: candidateTop, width, height, compact: true };
+    if (candidateTop >= safeTop && candidateTop + height <= safeBottom && !overlapsObstacle(rect)) {
+      return roundPlacement(rect);
+    }
+  }
+
+  const cornerCandidates = [
+    { left: safeLeft, top: safeTop },
+    { left: safeRight - width, top: safeTop },
+    { left: safeLeft, top: safeBottom - height },
+    { left: safeRight - width, top: safeBottom - height },
+  ];
+  for (const candidate of cornerCandidates) {
+    const rect = { ...candidate, width, height, compact: true };
+    if (!overlapsObstacle(rect)) return roundPlacement(rect);
+  }
+
+  return null;
+}
+
 export function hasRestoredHomeConversation(snapshot) {
   return Boolean(snapshot && snapshot.card && Array.isArray(snapshot.msgs) && snapshot.msgs.length > 0);
 }
@@ -328,6 +506,28 @@ export function parseFieldIntentReply(raw, { requireTag = false, allowNone = tru
   }
   const intent = tag === "CHAT" ? "chat" : tag === "NONE" ? "none" : "answer";
   return { intent, text: text.slice(m[0].length).trim() || null };
+}
+
+const ONBOARDING_EMOTIONS = new Set(["smile", "curious", "spark", "whisper", "proud", "offer", "bow", "surprise", "wave", "wry"]);
+
+export function parseOnboardingEmotionReply(reply, { fallbackEmo = "smile" } = {}) {
+  const source = String(reply || "").trim();
+  const marker = source.match(/\[\s*EMO\s*:\s*([^\]]+)\]/i);
+  const requested = marker ? marker[1].trim().toLowerCase() : "";
+  const fallback = String(fallbackEmo || "").trim().toLowerCase();
+  const emo = ONBOARDING_EMOTIONS.has(requested) ? requested : ONBOARDING_EMOTIONS.has(fallback) ? fallback : "smile";
+  const text = source
+    .replace(/\s*\[\s*EMO\s*:\s*[^\]]+\]\s*/gi, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+  return { text, emo };
+}
+
+export function resolveNextBeatAiLine({ nextBeatId, aiLine } = {}) {
+  if (nextBeatId === "avatar" || nextBeatId === "cardDone") return null;
+  return String(aiLine || "").trim() || null;
 }
 
 export function extractNameFromAiFieldText(raw) {

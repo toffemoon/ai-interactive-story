@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { toCardModel } from "../lib/cardModel.js";
-import { AUTO_CHAT_INTERRUPT_AI, beatById, buildAutoChatShownContext, consumeTestHomeBypass, setTestHomeBypass } from "./onboardingScript.js";
-import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, hasRestoredHomeConversation, INITIAL_ONBOARDING_AUTO_CONTROL, isCurrentOnboardingInteraction, isExactFillChipSubmission, isExplicitNameSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, resolveAutoAdvancePlan, sanitizeCardMessage, shouldAcceptNameLocally, shouldCommitPortraitPreload, shouldConfirmBareNameLocally, transitionOnboardingAutoControl, usesFlowOnboardingBubbleLayout } from "./onboardingLogic.js";
+import { AUTO_CHAT_INTERRUPT_AI, beatById, buildAutoChatShownContext, CHAT_SCENARIO, consumeTestHomeBypass, setTestHomeBypass } from "./onboardingScript.js";
+import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, hasRestoredHomeConversation, INITIAL_ONBOARDING_AUTO_CONTROL, isCurrentOnboardingInteraction, isExactFillChipSubmission, isExplicitNameSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, parseOnboardingEmotionReply, resolveAutoAdvancePlan, resolveChatBubblePlacement, resolveChatStageLayout, resolveNextBeatAiLine, resolveVisibleImageRect, sanitizeCardMessage, shouldAcceptNameLocally, shouldCommitPortraitPreload, shouldConfirmBareNameLocally, transitionOnboardingAutoControl, usesFlowOnboardingBubbleLayout } from "./onboardingLogic.js";
 
 test("extracts the usable name from a sentence", () => {
   assert.deepEqual(analyzeNameInput("我的名字叫 叶叶"), {
@@ -251,6 +251,117 @@ test("parses field AI failures as retry instead of fabricated answers", () => {
   assert.deepEqual(parseFieldIntentReply("写好了。"), { intent: "answer", text: "写好了。" });
 });
 
+test("extracts a whitelisted onboarding emotion without changing the reply protocol", () => {
+  const parsed = parseOnboardingEmotionReply("[OK] 称呼=月客\n记下了。 [EMO:offer]", { fallbackEmo: "smile" });
+  assert.deepEqual(parsed, { text: "[OK] 称呼=月客\n记下了。", emo: "offer" });
+  assert.deepEqual(parseFieldIntentReply(parsed.text), { intent: "answer", text: "称呼=月客\n记下了。" });
+});
+
+test("falls back for missing or invalid onboarding emotion tags and still strips them", () => {
+  assert.deepEqual(parseOnboardingEmotionReply("先回答你。", { fallbackEmo: "curious" }), {
+    text: "先回答你。",
+    emo: "curious",
+  });
+  assert.deepEqual(parseOnboardingEmotionReply("先回答你。 [EMO:angry]", { fallbackEmo: "wry" }), {
+    text: "先回答你。",
+    emo: "wry",
+  });
+  assert.deepEqual(parseOnboardingEmotionReply("[EMO:spark]", { fallbackEmo: "unknown" }), {
+    text: "",
+    emo: "spark",
+  });
+});
+
+test("does not let an AI acknowledgement replace avatar or completed-card guidance", () => {
+  assert.equal(resolveNextBeatAiLine({ nextBeatId: "avatar", aiLine: "这个称呼很特别。" }), null);
+  assert.equal(resolveNextBeatAiLine({ nextBeatId: "cardDone", aiLine: "卡办好了。" }), null);
+  assert.equal(resolveNextBeatAiLine({ nextBeatId: "tryCreateResult", aiLine: "  这个念头可以继续写。  " }), "这个念头可以继续写。");
+  assert.equal(resolveNextBeatAiLine({ nextBeatId: "taste", aiLine: "  " }), null);
+});
+
+test("places a chat bubble on the requested free side without crossing the dock", () => {
+  const speakerRect = { left: 80, top: 72, right: 230, bottom: 238 };
+  const rect = resolveChatBubblePlacement({
+    viewport: { width: 800, height: 620 },
+    speakerRect,
+    bubbleSize: { width: 280, height: 150 },
+    dockTop: 540,
+    preferredSide: "left",
+    padding: 24,
+    gap: 16,
+  });
+  assert.equal(rect.compact, false);
+  assert.ok(rect.left >= speakerRect.right + 16, "falls back to the free right side");
+  assert.ok(rect.top >= 24);
+  assert.ok(rect.left + rect.width <= 776);
+  assert.ok(rect.top + rect.height <= 524);
+});
+
+test("computes Tangmu placement from her own protected rect and compacts when both full-width sides fail", () => {
+  const speakerRect = { left: 150, top: 70, right: 300, bottom: 240 };
+  const rect = resolveChatBubblePlacement({
+    viewport: { width: 450, height: 710 },
+    speakerRect,
+    bubbleSize: { width: 210, height: 145 },
+    dockTop: 590,
+    preferredSide: "left",
+    padding: 12,
+    gap: 8,
+  });
+  const overlapsSpeaker = !(
+    rect.left + rect.width <= speakerRect.left ||
+    rect.left >= speakerRect.right ||
+    rect.top + rect.height <= speakerRect.top ||
+    rect.top >= speakerRect.bottom
+  );
+  assert.equal(rect.compact, true);
+  assert.equal(overlapsSpeaker, false);
+  assert.ok(rect.left >= 12 && rect.left + rect.width <= 438);
+  assert.ok(rect.top >= 12 && rect.top + rect.height <= 582);
+});
+
+test("keeps a chat bubble away from the other visible character too", () => {
+  const xuanFace = { left: 12, top: 140, right: 180, bottom: 270 };
+  const tangmuFace = { left: 190, top: 86, right: 430, bottom: 290 };
+  const rect = resolveChatBubblePlacement({
+    viewport: { width: 652, height: 663 },
+    speakerRect: xuanFace,
+    avoidRects: [tangmuFace],
+    bubbleSize: { width: 210, height: 126 },
+    dockTop: 570,
+    preferredSide: "right",
+    padding: 12,
+    gap: 8,
+  });
+  const overlaps = (a, b) => !(a.left + a.width <= b.left || a.left >= b.right || a.top + a.height <= b.top || a.top >= b.bottom);
+  assert.ok(rect);
+  assert.equal(overlaps(rect, xuanFace), false);
+  assert.equal(overlaps(rect, tangmuFace), false);
+});
+
+test("maps an image alpha silhouette into its contained on-screen box", () => {
+  const rect = resolveVisibleImageRect({
+    box: { left: 100, top: 50, width: 400, height: 600 },
+    naturalSize: { width: 1024, height: 1536 },
+    alphaBounds: { left: 236, top: 0, right: 855, bottom: 1493 },
+  });
+  assert.ok(rect);
+  assert.ok(Math.abs(rect.left - 192.1875) < 0.001);
+  assert.ok(Math.abs(rect.right - 433.984375) < 0.001);
+  assert.ok(Math.abs(rect.top - 50) < 0.001);
+  assert.ok(Math.abs(rect.bottom - 633.203125) < 0.001);
+});
+
+test("ends the narrow chat character stage above the live composer", () => {
+  assert.deepEqual(resolveChatStageLayout({
+    viewportHeight: 663,
+    dockTop: 482.8,
+    narrow: true,
+    padding: 12,
+    gap: 8,
+  }), { bottom: 188, height: 320 });
+});
+
 test("keeps an AI-recognized meme in chat mode and exposes its portrait cue", () => {
   assert.deepEqual(parseFieldIntentReply("[MEME] 符号看象限。"), {
     intent: "chat",
@@ -265,6 +376,23 @@ test("name intent prompt defaults plausible nicknames to names and only catches 
   assert.match(scenario, /明确知道.*接梗.*\[MEME\]/);
   assert.match(scenario, /玩家只说 kskbl 时必须回复 \[MEME\] zdjd/);
   assert.match(scenario, /玩家只说「宫廷玉液酒」时必须回复 \[MEME\] 一百八一杯/);
+});
+
+test("onboarding LLM prompts request one whitelisted emotion tag in the same reply", () => {
+  const prompts = [
+    CHAT_SCENARIO,
+    AUTO_CHAT_INTERRUPT_AI.宣.scenario({ name: "雨飞", shownContext: "宣：你好。" }),
+    AUTO_CHAT_INTERRUPT_AI.糖沐.scenario({ name: "雨飞", shownContext: "糖沐：别紧张。" }),
+    beatById("name").ai.scenario({}),
+    beatById("taste").ai.scenario({ name: "雨飞" }),
+    beatById("tryChatGreet").ai.scenario({}),
+    beatById("tryCreate").ai.scenario({}),
+  ];
+  for (const prompt of prompts) {
+    assert.match(prompt, /\[EMO:<key>\]/);
+    assert.match(prompt, /smile\/curious\/spark\/whisper\/proud\/offer\/bow\/surprise\/wave\/wry/);
+  }
+  assert.match(beatById("name").ai.scenario({}), /\[OK\].*\[MEME\].*\[CHAT\]/s);
 });
 
 test("extracts a name value from AI field replies", () => {
@@ -352,7 +480,15 @@ test("only the NPC exchange auto-advances", () => {
   assert.equal(beatById("tryChatTangmuReply").autoNext, "tryChatIntro");
   assert.equal(beatById("tryChatIntro").autoNext, "tryChatGreet");
   assert.equal(beatById("tryChatGreet").autoNext, undefined);
-  assert.equal(beatById("tryChatLeave").autoNext, "tryCreate");
+  assert.equal(beatById("tryChatLeave").autoNext, undefined);
+  assert.equal(beatById("tryChatLeave").autoMs, undefined);
+});
+
+test("story explanation beats use poses that match their distinct meanings", () => {
+  assert.deepEqual(
+    ["tryStoryCard", "tryStoryEnter", "tryStoryRole", "tryStoryAgency"].map((id) => beatById(id).emo),
+    ["offer", "curious", "whisper", "proud"],
+  );
 });
 
 test("onboarding rehearses story chat and creation without route jumps", () => {

@@ -114,6 +114,9 @@ export const FIRST_BEAT = "name";
 export const AI_PERSONA =
   "你是糖沐,沐言书坊的店员、看板娘。温和爱书,店员口吻,话里带点暖意,简短自然(最多两三句)。始终留在角色里,用第一人称,不解释、不说「作为AI」。";
 
+export const ONBOARDING_EMOTION_REPLY_INSTRUCTION =
+  "保留上面要求的正文格式,并在正文末尾另加一个动作标记 [EMO:<key>]。key 只能是 smile/curious/spark/whisper/proud/offer/bow/surprise/wave/wry;按这次台词的语义选择,不要解释标记。";
+
 const XUAN_INTERRUPT_PERSONA =
   "你是宣，沐言书坊补书间的补书人。话少、句短、克制，正在 onboarding 中被糖沐临时从书里请出来。";
 
@@ -121,20 +124,21 @@ export const AUTO_CHAT_INTERRUPT_AI = {
   宣: {
     description: XUAN_INTERRUPT_PERSONA,
     scenario: ({ name, shownContext }) =>
-      `你正在和${safePromptText(name, "新客")}对话。以下是已经显示的上下文：${shownContext}。只回应已经显示的内容和玩家此刻的插话，不得假装后续台词已经说过。用宣的口吻接住一句，最多两句，最后自然表示自己要回补书间。`,
+      `你正在和${safePromptText(name, "新客")}对话。以下是已经显示的上下文：${shownContext}。只回应已经显示的内容和玩家此刻的插话，不得假装后续台词已经说过。用宣的口吻接住一句，最多两句，最后自然表示自己要回补书间。\n${ONBOARDING_EMOTION_REPLY_INSTRUCTION}`,
     failureLine: "宣刚才没接上。你可以再试一次，或者继续看创作。",
   },
   糖沐: {
     description: AI_PERSONA,
     scenario: ({ name, shownContext }) =>
-      `你正在带${safePromptText(name, "新客")}体验角色聊天。以下是已经显示的上下文：${shownContext}。只回应已经显示的内容和玩家此刻的插话，不得假装后续台词已经说过。用糖沐的口吻接住一句，最多两句，并自然收束角色聊天、转向创作体验。`,
+      `你正在带${safePromptText(name, "新客")}体验角色聊天。以下是已经显示的上下文：${shownContext}。只回应已经显示的内容和玩家此刻的插话，不得假装后续台词已经说过。用糖沐的口吻接住一句，最多两句，并自然收束角色聊天、转向创作体验。\n${ONBOARDING_EMOTION_REPLY_INSTRUCTION}`,
     failureLine: "糖沐刚才没接上。你可以再试一次，或者继续看创作。",
   },
 };
 
 // 导览期玩家插话时,糖沐的回应场景(闲聊,不推进导览)。
 export const CHAT_SCENARIO =
-  "玩家在你带他熟悉书坊时插了句话、或问了个问题。就着他的话、用店员口吻温和答一两句(最多两三句),答完自然回到接着带他逛的语气。别报菜名、别长篇。";
+  "玩家在你带他熟悉书坊时插了句话、或问了个问题。就着他的话、用店员口吻温和答一两句(最多两三句),答完自然回到接着带他逛的语气。别报菜名、别长篇。\n" +
+  ONBOARDING_EMOTION_REPLY_INSTRUCTION;
 
 // 入场演出:进 onboarding 先播这段(背身 → 回头),播完转身正面(tangmu02 好奇)进登记拍。
 // 每帧 { img, line, dur(ms) };line 空则不显气泡(纯立绘演出)。
@@ -180,7 +184,8 @@ export const BEATS = [
         "1. [OK] 称呼=你抽出的称呼\n一句自然确认 —— 玩家明确在给自己起名/报称呼。单独输入的简短人名、昵称、网名或可作昵称的短称呼,默认也视为在报称呼并选 [OK],不要因为陌生就当成暗号;例如「月客」应记为称呼。只要玩家明确说「我就用 X 作为我的名字」「X 作为我的名字」「我就叫 X」等,即使 X 本身也是网络梗,也必须选 [OK],按名字记录。\n" +
         "2. [MEME]一句很短的糖沐接梗台词 —— 玩家只是裸说网络热梗、流行语、接头暗号或缩写,没有明确表示要把它当名字。只有你明确知道对应的梗、能自然给出接梗回应时才选 [MEME];仅仅觉得陌生或像缩写不算。自然接住梗,别解释梗,别把它写成称呼,也别在同一句里生硬追问名字。已知示例必须严格照做:玩家只说 kskbl 时必须回复 [MEME] zdjd;玩家只说「宫廷玉液酒」时必须回复 [MEME] 一百八一杯。示例不是固定词表,其他能认出的梗也照样接。\n" +
         "3. [CHAT]一句很短的糖沐回复 —— 明确的反问、普通闲聊、岔开或无法当称呼的乱码。陌生但仍可作短称呼的输入不要选 [CHAT],应按第 1 类处理。\n" +
-        "标记必须放在最前面;只输出标记和糖沐台词,不要解释分类。",
+        "标记必须放在最前面;只输出标记和糖沐台词,不要解释分类。\n" +
+        ONBOARDING_EMOTION_REPLY_INSTRUCTION,
     },
     chips: [{ label: "随便起一个", fill: "夜游客" }],
   },
@@ -217,7 +222,8 @@ export const BEATS = [
         "· 说了某本书/某部剧/某类内容(哪怕简短):回复以 [OK] 开头。第一行单独输出「[OK] 口味=高置信度规范值」;规范值只纠正明显且高置信度的书名/剧名错别字,不确定时必须保留玩家原文。第二行起再自然接住、轻评一句、提补到卡上、卡这便办好,收尾说带他认认书坊。\n" +
         "· 明说没有 / 最近没看 / 想不起来 / 不想说:回复以 [NONE] 开头(这也算正经回答,别追问),随后温和接住(如「那正好,来日方长」)、说这行先空着、卡照办,收尾带他认书坊。\n" +
         "· 在反问你、闲聊、岔开、或空/乱码/明显在捣乱:回复以 [CHAT] 开头,随后就着他的话聊一两句、别把这句当口味,末了把话头引回「那,最近都在看点什么」。\n" +
-        "标记放在最前面;[OK] 按上述两行格式输出元数据和台词,[NONE]/[CHAT] 后只跟台词本身。",
+        "标记放在最前面;[OK] 按上述两行格式输出元数据和台词,[NONE]/[CHAT] 后只跟台词本身。\n" +
+        ONBOARDING_EMOTION_REPLY_INSTRUCTION,
     },
     chips: [{ label: "还没看什么", set: { taste: "" }, next: "cardDone" }],
   },
@@ -257,7 +263,7 @@ export const BEATS = [
   },
   {
     id: "tryStoryCard",
-    emo: "spark",
+    emo: "offer",
     tour: "explore",
     demo: STORY_CARD_DEMO,
     line: () =>
@@ -268,7 +274,7 @@ export const BEATS = [
   },
   {
     id: "tryStoryEnter",
-    emo: "spark",
+    emo: "curious",
     tour: "explore",
     demo: STORY_CARD_DEMO,
     line: () => "选中后,你就可以亲身体验故事里的内容。",
@@ -276,7 +282,7 @@ export const BEATS = [
   },
   {
     id: "tryStoryRole",
-    emo: "spark",
+    emo: "whisper",
     tour: "explore",
     demo: STORY_CARD_DEMO,
     line: () => "你可以在里面扮演你想要的角色。它可以是主角,也可以只是一个 NPC。",
@@ -284,7 +290,7 @@ export const BEATS = [
   },
   {
     id: "tryStoryAgency",
-    emo: "spark",
+    emo: "proud",
     tour: "explore",
     demo: STORY_CARD_DEMO,
     line: () => "但是,你可以亲手去控制整个故事的走向,撰写独属于你自己的故事线和结局。",
@@ -408,15 +414,14 @@ export const BEATS = [
         "· 如果玩家在问候、提问、闲聊或表达想法,回复以 [OK] 开头,用宣的口吻短短回应一句,然后自然说「我还有事,先回去了」。\n" +
         "· 如果玩家没有说具体内容或只说随便,回复以 [NONE] 开头,短短说没关系,然后说「我还有事,先回去了」。\n" +
         "· 如果玩家攻击、试探边界或乱码,回复以 [CHAT] 开头,淡淡带过,然后说「我还有事,先回去了」。\n" +
-        "台词控制在 42 字以内。只输出标记加台词。",
+        "台词控制在 42 字以内。只输出标记加台词。\n" +
+        ONBOARDING_EMOTION_REPLY_INSTRUCTION,
     },
     chips: [{ label: "问她一句", fill: "你平时都在补什么书?" }],
   },
   {
     id: "tryChatLeave",
     interruptible: true,
-    autoNext: "tryCreate",
-    autoMs: 3200,
     speaker: "宣",
     emo: "smile",
     tour: "chat",
@@ -456,7 +461,8 @@ export const BEATS = [
         "· 如果玩家说没有、想不出、随便,回复以 [NONE] 开头,温和接住,说先拿一个种子示范。\n" +
         "· 如果玩家闲聊、反问、搞怪或试探边界,回复以 [CHAT] 开头,短短接话,再请他给一个很短的设想。\n" +
         "台词控制在 55 字以内。\n" +
-        "只输出标记加糖沐台词,不要解释格式。",
+        "只输出标记加糖沐台词,不要解释格式。\n" +
+        ONBOARDING_EMOTION_REPLY_INSTRUCTION,
     },
     chips: [{ label: "半夜给自己写信的人", fill: "半夜给自己写信的人" }],
   },
