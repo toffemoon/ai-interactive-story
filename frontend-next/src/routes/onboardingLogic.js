@@ -267,6 +267,10 @@ export function shouldCommitPortraitPreload({ requestEpoch, currentEpoch, eventT
   return requestEpoch === currentEpoch && eventType === "load" && Number(naturalWidth) > 0;
 }
 
+export function usesFlowOnboardingBubbleLayout({ width, height } = {}) {
+  return width <= 720 || height > width || (width <= 1100 && height <= 700);
+}
+
 export function hasRestoredHomeConversation(snapshot) {
   return Boolean(snapshot && snapshot.card && Array.isArray(snapshot.msgs) && snapshot.msgs.length > 0);
 }

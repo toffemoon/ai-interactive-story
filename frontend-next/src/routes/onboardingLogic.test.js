@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { toCardModel } from "../lib/cardModel.js";
 import { AUTO_CHAT_INTERRUPT_AI, beatById, buildAutoChatShownContext, consumeTestHomeBypass, setTestHomeBypass } from "./onboardingScript.js";
-import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, hasRestoredHomeConversation, INITIAL_ONBOARDING_AUTO_CONTROL, isCurrentOnboardingInteraction, isExactFillChipSubmission, isExplicitNameSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, resolveAutoAdvancePlan, sanitizeCardMessage, shouldAcceptNameLocally, shouldCommitPortraitPreload, shouldConfirmBareNameLocally, transitionOnboardingAutoControl } from "./onboardingLogic.js";
+import { analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, hasRestoredHomeConversation, INITIAL_ONBOARDING_AUTO_CONTROL, isCurrentOnboardingInteraction, isExactFillChipSubmission, isExplicitNameSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, resolveAutoAdvancePlan, sanitizeCardMessage, shouldAcceptNameLocally, shouldCommitPortraitPreload, shouldConfirmBareNameLocally, transitionOnboardingAutoControl, usesFlowOnboardingBubbleLayout } from "./onboardingLogic.js";
 
 test("extracts the usable name from a sentence", () => {
   assert.deepEqual(analyzeNameInput("我的名字叫 叶叶"), {
@@ -335,6 +335,13 @@ test("portrait preload commits only the current successful non-empty image", () 
   assert.equal(shouldCommitPortraitPreload({ requestEpoch: 2, currentEpoch: 2, eventType: "error", naturalWidth: 640 }), false);
   assert.equal(shouldCommitPortraitPreload({ requestEpoch: 2, currentEpoch: 2, eventType: "load", naturalWidth: 0 }), false);
   assert.equal(shouldCommitPortraitPreload({ requestEpoch: 2, currentEpoch: 2, eventType: "load", naturalWidth: Number.NaN }), false);
+});
+
+test("compact and portrait viewports use the flow onboarding bubble layout", () => {
+  assert.equal(usesFlowOnboardingBubbleLayout({ width: 390, height: 844 }), true);
+  assert.equal(usesFlowOnboardingBubbleLayout({ width: 450, height: 710 }), true);
+  assert.equal(usesFlowOnboardingBubbleLayout({ width: 856, height: 638 }), true);
+  assert.equal(usesFlowOnboardingBubbleLayout({ width: 1280, height: 720 }), false);
 });
 
 test("only the NPC exchange auto-advances", () => {

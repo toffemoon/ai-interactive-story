@@ -8,7 +8,7 @@ import { resolveMediaUrl } from "../lib/mediaUrl.js";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
 import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, AUTO_CHAT_INTERRUPT_AI, FIRST_BEAT, beatById, buildAutoChatShownContext, consumeTestHomeBypass, loadEcho, markOnboarded, isOnboarded, saveEcho, setTestHomeBypass } from "./onboardingScript";
-import { INITIAL_ONBOARDING_AUTO_CONTROL, analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, hasRestoredHomeConversation, isCurrentOnboardingInteraction, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, resolveAutoAdvancePlan, sanitizeCardMessage, shouldAcceptNameLocally, shouldCommitPortraitPreload, shouldConfirmBareNameLocally, transitionOnboardingAutoControl } from "./onboardingLogic";
+import { INITIAL_ONBOARDING_AUTO_CONTROL, analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, hasRestoredHomeConversation, isCurrentOnboardingInteraction, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, resolveAutoAdvancePlan, sanitizeCardMessage, shouldAcceptNameLocally, shouldCommitPortraitPreload, shouldConfirmBareNameLocally, transitionOnboardingAutoControl, usesFlowOnboardingBubbleLayout } from "./onboardingLogic";
 import { IdentityCard } from "../components/IdentityCard";
 import StaggeredText from "../components/staggered-text";
 import AnimatedList from "../components/animated-list";
@@ -475,11 +475,11 @@ export default function Home({ testMode = false }) {
   }, [obStep, obAiLine, obThinking, obInput]);
 
   // 台词气泡「贴头侧、齐头高」定位:按当前姿势头中心算屏幕坐标,把气泡右缘锚到头左侧一点、纵向中心对齐头高。
-  // 立绘各姿势 CSS 尺寸一致,量任一张 img 盒即可(几何稳定)。窄屏/竖版走 CSS 底部布局 → 清空锚点。
+  // 立绘各姿势 CSS 尺寸一致,量任一张 img 盒即可(几何稳定)。紧凑/竖版走 CSS 流式布局 → 清空锚点。
   useLayoutEffect(() => {
     const compute = () => {
       if (!obActive || !headAnchor) return setObBubblePos(null);
-      if (window.matchMedia("(max-width: 720px), (orientation: portrait)").matches) return setObBubblePos(null);
+      if (usesFlowOnboardingBubbleLayout({ width: window.innerWidth, height: window.innerHeight })) return setObBubblePos(null);
       const portrait = document.querySelector(".home-portrait");
       const img = document.querySelector(".home-portrait-img.is-on") || document.querySelector(".home-portrait img");
       if (!portrait || !img) return;
