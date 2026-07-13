@@ -1,3 +1,5 @@
+import { resolveMediaUrl } from "./mediaUrl.js";
+
 // ── 卡片归一化(toCardModel)────────────────────────────────────────────────
 // 角色卡 / 故事书 / 世界书 / 玩家卡 / 库卡 视觉同一套(YOR-67 / YOR-38)。
 // 每个端点一个薄适配器 → 统一 CardModel,展示型 <Card> 只认 model。禁 kind 大开关:
@@ -26,7 +28,7 @@ function fromStory(p) {
     id: d.name || p.name || "story",
     kind: "story",
     title: d.name || p.name || "未命名故事",
-    cover: d.cover || "",
+    cover: resolveMediaUrl(d.cover || ""),
     blurb: clip(d.synopsis || (d.story && d.story.premise) || "一个等你走进的故事。"),
     badge: BADGE.story,
     tags: (d.tags || []).slice(0, 3),
@@ -57,7 +59,7 @@ function fromCharacter(it) {
     id: cd.name || (it && it.name) || "character",
     kind: "character",
     title: cd.name || (it && it.name) || "角色",
-    cover: cd.image || cd.avatar || "",
+    cover: resolveMediaUrl(cd.image || cd.avatar || ""),
     blurb: clip(cd.look || cd.description || "一张待你揭晓的角色卡。"),
     badge: BADGE.character,
     tags: (cd.tags || []).slice(0, 3),
@@ -79,7 +81,7 @@ function fromWorld(it) {
     id: d.name || (it && it.name) || "world",
     kind: "world",
     title: d.name || (it && it.name) || "设定卡",
-    cover: d.cover || d.image || "",
+    cover: resolveMediaUrl(d.cover || d.image || ""),
     blurb: clip(d.synopsis || (n ? `一份可挂进任何故事的世界设定,共 ${n} 条条目。` : "一份世界设定。")),
     badge: BADGE.world,
     tags: (d.tags || []).slice(0, 3),
@@ -96,7 +98,7 @@ function fromPlayer(it) {
     id: d.name || (it && it.name) || "player",
     kind: "player",
     title: d.name || (it && it.name) || "演出卡",
-    cover: d.image || "",
+    cover: resolveMediaUrl(d.image || ""),
     blurb: clip(d.role || (d.goals || []).join(" / ") || "一张可扮演的演出卡。"),
     badge: BADGE.player,
     tags: (d.tags || []).slice(0, 3),
