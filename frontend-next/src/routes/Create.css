@@ -2416,6 +2416,28 @@
   .create-spawnmenu button {
     font-family: var(--font-kai);
   }
+  /* P1a 一眼懂:卡种按钮两行(名 + 一句话定位),新建菜单/空板/落卡菜单共用 */
+  .create-kind-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    height: auto;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    text-align: left;
+  }
+  .create-kind-sub {
+    display: block;
+    font-family: var(--font-sans);
+    font-size: var(--fs-meta);
+    letter-spacing: 0.02em;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .create-kind-btn:hover .create-kind-sub {
+    color: color-mix(in srgb, var(--fg) 72%, transparent);
+  }
   .create-board.is-pan .create-bcard {
     pointer-events: none; /* 平移手势中整板可拖,卡不截胡 */
   }

@@ -51,10 +51,11 @@ function useIsMobile(maxWidth = 860) {
 const KINDS = [
   // ph 是输入框 placeholder,手机端短一句即可(C3:原来一长串字段名在窄屏会被截断)。
   // opening 是空台子的助手开场白,和 ph 同一套按类分句的范式(YOR-174)。
-  { zh: "角色卡", k: "characters", ph: "描述这个角色:身份、性格、背景", opening: "描述你要创建的角色:身份、性格、背景。信息足够后会生成完整角色卡。" },
-  { zh: "演出卡", k: "players", ph: "描述你要扮演的主角", opening: "描述你要扮演的主角:身份、来历、这一局的目标。" },
-  { zh: "设定卡 · 世界书", k: "worlds", ph: "描述这个世界的规则与设定", opening: "描述这个世界:核心规则、关键地点、势力。" },
-  { zh: "故事书", k: "stories", ph: "描述这个故事的前提与冲突", opening: "描述这个故事:前提、核心冲突、大致走向。" },
+  // sub 是卡种一句话定位(P1a 一眼懂层):新建菜单/空板/落卡菜单/聚焦卡头四处消费,只此一处定义。
+  { zh: "角色卡", k: "characters", sub: "AI 扮演的人物", ph: "描述这个角色:身份、性格、背景", opening: "描述你要创建的角色:身份、性格、背景。信息足够后会生成完整角色卡。" },
+  { zh: "演出卡", k: "players", sub: "你扮演的主角", ph: "描述你要扮演的主角", opening: "描述你要扮演的主角:身份、来历、这一局的目标。" },
+  { zh: "设定卡 · 世界书", k: "worlds", sub: "世界的规则手册,聊到触发词才出场", ph: "描述这个世界的规则与设定", opening: "描述这个世界:核心规则、关键地点、势力。" },
+  { zh: "故事书", k: "stories", sub: "这一局的剧本:开场、节拍、结局", ph: "描述这个故事的前提与冲突", opening: "描述这个故事:前提、核心冲突、大致走向。" },
 ];
 const OPENINGS = Object.fromEntries(KINDS.map((t) => [t.k, t.opening]));
 // 空台引子(桌面 reskin):点一下把句子放进输入框(不代发,用户过目再发),降低冷启动门槛。
@@ -2155,7 +2156,10 @@ export default function Create() {
                     aria-label="在此落一张卡"
                   >
                     {KINDS.map((t) => (
-                      <button key={t.k} onClick={() => spawnDraftAt(t.k, spawnAt)}>{t.zh}</button>
+                      <button key={t.k} className="create-kind-btn" onClick={() => spawnDraftAt(t.k, spawnAt)}>
+                        <span className="create-kind-nm">{t.zh}</span>
+                        <span className="create-kind-sub">{t.sub}</span>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -2215,8 +2219,9 @@ export default function Create() {
                       空板文案曾指向已不存在的顶部按钮,新用户寸步难行 */}
                   <div className="create-empty-news">
                     {KINDS.map((t) => (
-                      <button key={t.k} className="create-boardbar-new" onClick={() => newCardOf(t.k)}>
-                        + {t.zh}
+                      <button key={t.k} className="create-boardbar-new create-kind-btn" onClick={() => newCardOf(t.k)}>
+                        <span className="create-kind-nm">+ {t.zh}</span>
+                        <span className="create-kind-sub">{t.sub}</span>
                       </button>
                     ))}
                   </div>
@@ -2284,8 +2289,10 @@ export default function Create() {
                         }}
                         onClick={() => { setRailNew(false); newCardOf(t.k); }}
                         title={"点击新建,或拖到画布上落卡 (" + (i + 1) + ")"}
+                        className="create-kind-btn"
                       >
-                        + {t.zh}
+                        <span className="create-kind-nm">+ {t.zh}</span>
+                        <span className="create-kind-sub">{t.sub}</span>
                       </button>
                     ))}
                   </div>
@@ -2345,7 +2352,7 @@ export default function Create() {
                     </div>
                   ) : (
               <section className="create-canvas" aria-label="卡画布">
-                <div className="create-card-kind t-meta">{KINDS[ki].zh}{desk.built.length > 0 && ` · 本台已建 ${desk.built.length}`}</div>
+                <div className="create-card-kind t-meta">{KINDS[ki].zh} · {KINDS[ki].sub}{desk.built.length > 0 && ` · 本台已建 ${desk.built.length}`}</div>
                 {editingKey === "__name" ? (
                   <input
                     className="create-card-name create-name-edit t-kai"
