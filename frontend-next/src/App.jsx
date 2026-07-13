@@ -16,7 +16,6 @@ const Forum = lazy(() => import("./routes/Forum"));
 const Story = lazy(() => import("./routes/Story"));
 const Home = lazy(() => import("./routes/Home"));
 const Styleguide = lazy(() => import("./routes/Styleguide"));
-const NavTest = lazy(() => import("./routes/NavTest"));
 
 function RouteFallback() {
   return <div className="route-loading" role="status" aria-label="正在加载页面" />;
@@ -98,7 +97,6 @@ export default function App() {
             <Route path="/" element={<Navigate to={home} replace />} />
             <Route path="/login" element={<Login />} />
             <Route path="/styleguide" element={<Styleguide />} />
-            <Route path="/test" element={<NavTest />} />
 
             {/* 登录后 app 壳(桌面 Rail / 移动 tab) */}
             <Route
@@ -109,7 +107,7 @@ export default function App() {
               }
             >
               <Route path="/home" element={<Home />} />
-              <Route path="/test/onboarding" element={<Home testMode />} />
+              <Route path="/test" element={<Home testMode />} />
               <Route path="/explore" element={<Explore />} />
               <Route path="/story/:name" element={<StoryDetail />} />
               <Route path="/chat" element={<Chat />} />

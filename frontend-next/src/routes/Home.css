@@ -109,6 +109,7 @@
 /* 底部交互坞:主按钮行 + 对话框,垂直成一组贴底居中(按钮不再左上悬空) */
 .home-dock {
   position: absolute;
+  z-index: 6;
   left: 50%;
   transform: translateX(-50%);
   bottom: clamp(16px, 4vh, 40px);
@@ -285,19 +286,19 @@
 }
 
 /* —— 新手引导(onboarding):头侧台词气泡 + 底部操作盘 —— */
-/* 台词气泡:贴立绘头部一侧,深色半透明沉浸(暖褐黑 + 琥珀金边 + 浅字,呼应木质书店暖夜;白色版可回退) */
+/* 台词气泡:暖纸悬在立绘头侧；chat 拍会把同一组件提到 .home-ui 前景层。 */
 .home-ob-bubble {
   position: absolute;
   z-index: 4;
   top: clamp(36px, 8vh, 96px);
   left: clamp(20px, 4vw, 56px);
   width: min(320px, 38vw);
-  background: rgba(28, 22, 16, 0.82);
-  border: 1px solid rgba(199, 154, 78, 0.5);
+  background: rgba(250, 247, 241, 0.8);
+  border: 1px solid rgba(34, 26, 18, 0.14);
   border-radius: var(--r-lg);
   padding: var(--sp-3) var(--sp-4);
   box-shadow: 0 14px 40px -14px rgba(0, 0, 0, 0.7);
-  color: #f1e7d6;
+  color: #20201d;
   /* 380ms 延迟:每拍气泡 key 重挂后先按住不显,让立绘先换姿势(先动作、后气泡),错开更自然 */
   pointer-events: auto; /* 气泡现渲染在 .home-portrait(pointer-events:none)内,需恢复可点,否则"跳过"按钮失效 */
   animation: obBubbleIn 320ms var(--ease-out) 380ms both;
@@ -316,23 +317,23 @@
   margin-bottom: 4px;
 }
 .home-ob-bubble .home-dlg-name {
-  color: #e8b563;
+  color: var(--cinnabar);
 }
 .home-ob-line {
   margin: 0;
-  color: #f1e7d6;
+  color: #20201d;
   line-height: var(--lh-body);
 }
 .home-ob-skip {
   border: none;
   background: transparent;
-  color: rgba(241, 231, 214, 0.6);
+  color: rgba(32, 32, 29, 0.5);
   font-size: var(--fs-ui-sm);
   cursor: pointer;
   padding: 2px 6px;
 }
 .home-ob-skip:hover {
-  color: #f1e7d6;
+  color: #20201d;
 }
 
 /* —— 身份卡收尾拍:糖沐左移让位,卡放右侧,从下方递上来入场 —— */
@@ -354,6 +355,283 @@
    气泡贴头定位靠 transitionend 在滑完重算 +「先动作后气泡」延迟出现,避开过渡中途位。 */
 .home.is-cardbeat .home-portrait {
   transform: translateX(-8%);
+}
+.home.is-ob-demo-story .home-portrait,
+.home.is-ob-demo-character .home-portrait,
+.home.is-ob-demo-characterCard .home-portrait,
+.home.is-ob-demo-create .home-portrait,
+.home.is-ob-demo-createProjection .home-portrait {
+  transform: translateX(-10%);
+}
+.home.is-ob-demo-chat .home-portrait {
+  transform: translateX(-26%);
+}
+.home.is-ob-demo-chat .home-portrait-img {
+  height: 104%;
+}
+.home.is-ob-finale .home-portrait {
+  transform: none;
+}
+.home-ob-demo {
+  position: absolute;
+  z-index: 5;
+  right: clamp(22px, 7vw, 108px);
+  top: 50%;
+  width: min(360px, 32vw);
+  transform: translateY(-50%);
+  pointer-events: auto;
+  animation: obDemoIn 460ms var(--ease-out) both;
+}
+@keyframes obDemoIn {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-50% + 18px)) scale(0.97);
+  }
+}
+.home-demo-badge,
+.home-demo-meta {
+  color: var(--cinnabar);
+  letter-spacing: 0.12em;
+}
+.home-ob-demo--character,
+.home-ob-demo--create {
+  border: 1px solid rgba(92, 58, 32, 0.22);
+  border-radius: 8px;
+  background: rgba(250, 244, 234, 0.94);
+  box-shadow: 0 20px 44px -22px rgba(0, 0, 0, 0.66), 0 0 0 1px rgba(255, 255, 255, 0.38) inset;
+  color: #2c241c;
+}
+.home-ob-demo--story {
+  right: clamp(132px, 19vw, 300px);
+  width: 210px;
+  pointer-events: auto;
+}
+.home-ob-demo--character-card {
+  right: clamp(132px, 19vw, 300px);
+  width: 210px;
+}
+.home-demo-card {
+  width: 210px;
+}
+.home-demo-card .card--shelf {
+  width: 210px;
+  height: 316px;
+  cursor: pointer;
+  box-shadow: 0 24px 54px -26px rgba(0, 0, 0, 0.72);
+}
+.home-demo-card .card-back {
+  cursor: pointer;
+}
+.home-demo-character-copy,
+.home-demo-create-copy {
+  min-width: 0;
+}
+.home-demo-character-copy h3,
+.home-demo-create-copy h3 {
+  margin: 4px 0 8px;
+  color: #261c15;
+  font-size: clamp(22px, 2vw, 30px);
+  line-height: 1.12;
+  letter-spacing: 0;
+}
+.home-demo-character-copy p,
+.home-demo-create-copy p,
+.home-demo-xuan-bubble p {
+  margin: 0;
+  line-height: 1.6;
+}
+.home-demo-echo {
+  margin-top: 10px !important;
+  padding-top: 10px;
+  border-top: 1px solid rgba(92, 58, 32, 0.16);
+  color: #6b4831;
+}
+.home-ob-demo--character {
+  display: grid;
+  grid-template-columns: 116px 1fr;
+  align-items: end;
+  gap: 14px;
+  padding: 12px 14px 0 8px;
+  min-height: 214px;
+  overflow: hidden;
+}
+.home-demo-character-img {
+  width: 138px;
+  height: 230px;
+  object-fit: contain;
+  object-position: bottom center;
+  align-self: end;
+  justify-self: center;
+  filter: drop-shadow(0 14px 22px rgba(48, 32, 20, 0.24));
+}
+.home-ob-demo--chat {
+  right: clamp(150px, 22vw, 340px);
+  top: auto;
+  bottom: -27px;
+  width: min(430px, 32vw);
+  height: min(695px, 91vh);
+  transform: none;
+  pointer-events: none;
+}
+.home-ob-demo--chat .home-demo-xuan-img {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: bottom right;
+  filter: drop-shadow(0 18px 32px rgba(0, 0, 0, 0.42));
+}
+.home-ob-bubble--chat {
+  position: absolute;
+  z-index: 7;
+  right: auto;
+  bottom: auto;
+  transform: none;
+}
+.home.is-ob-finale .home-ob-bubble {
+  position: fixed;
+  left: clamp(56px, 12vw, 180px);
+  top: clamp(92px, 15vh, 140px);
+  width: min(430px, 34vw);
+  transform: none;
+  text-align: left;
+}
+.home-demo-xuan-bubble {
+  position: absolute;
+  left: -54px;
+  top: 56px;
+  width: min(230px, 22vw);
+  padding: 13px 15px;
+  border: 1px solid rgba(232, 181, 99, 0.34);
+  border-radius: 8px;
+  background: rgba(18, 14, 10, 0.78);
+  color: #f1e7d6;
+  box-shadow: 0 16px 34px -22px rgba(0, 0, 0, 0.8);
+}
+.home-demo-xuan-name {
+  display: block;
+  margin-bottom: 4px;
+  color: #e8b563;
+  font-size: 22px;
+}
+.home-ob-demo--create {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  gap: 14px;
+  padding: 18px;
+}
+.home-ob-demo--create-projection {
+  right: clamp(48px, 8vw, 132px);
+  width: min(440px, 38vw);
+  padding: clamp(20px, 2.4vw, 30px);
+  overflow: hidden;
+  background: rgba(250, 247, 241, 0.8);
+  border: 1px solid rgba(34, 26, 18, 0.14);
+  border-radius: var(--r-lg);
+  color: #20201d;
+  box-shadow: 0 24px 64px -28px rgba(0, 0, 0, 0.72);
+}
+.home-create-projection-head {
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid rgba(34, 26, 18, 0.14);
+}
+.home-create-projection-kicker,
+.home-create-projection-label {
+  color: var(--cinnabar);
+  letter-spacing: 0.12em;
+}
+.home-create-projection-title {
+  margin: 5px 0 0;
+  color: #20201d;
+  font-size: clamp(27px, 2.5vw, 38px);
+  font-weight: 500;
+  line-height: 1.12;
+}
+.home-create-projection-form,
+.home-create-projection-result {
+  display: grid;
+  gap: var(--sp-4);
+  padding-top: var(--sp-5);
+}
+.home-create-projection-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-2);
+  padding: 8px;
+  background: rgba(250, 247, 241, 0.8);
+  border: 1px solid rgba(34, 26, 18, 0.14);
+  border-radius: var(--r-md);
+  color: #20201d;
+}
+.home-create-projection-composer input {
+  min-width: 0;
+  height: 46px;
+  padding: 0 13px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid #d8d2c7;
+  border-radius: calc(var(--r-md) - 3px);
+  color: #20201d;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  outline: none;
+}
+.home-create-projection-composer input::placeholder {
+  color: #91897e;
+}
+.home-create-projection-composer input:focus {
+  border-color: var(--cinnabar);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cinnabar) 14%, transparent);
+}
+.home-create-projection-composer button {
+  min-width: 72px;
+  border: 1px solid var(--cinnabar);
+  border-radius: calc(var(--r-md) - 3px);
+  background: var(--cinnabar);
+  color: #fffaf1;
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui);
+  cursor: pointer;
+}
+.home-create-projection-composer button:disabled {
+  opacity: 0.48;
+  cursor: default;
+}
+.home-create-projection-note {
+  margin: -4px 0 0;
+  color: rgba(32, 32, 29, 0.58);
+}
+.home-create-projection-block {
+  min-width: 0;
+}
+.home-create-projection-seed {
+  margin: 7px 0 0;
+  color: #20201d;
+  font-family: var(--font-kai);
+  font-size: clamp(22px, 2.1vw, 31px);
+  line-height: 1.35;
+}
+.home-create-projection-copy {
+  margin: 7px 0 0;
+  color: #20201d;
+}
+.home-create-projection-thread {
+  width: 44px;
+  height: 1px;
+  background: var(--cinnabar);
+  opacity: 0.52;
+}
+.home-demo-create-mark {
+  width: 70px;
+  height: 70px;
+  display: grid;
+  place-items: center;
+  border: 2px solid rgba(177, 61, 45, 0.42);
+  border-radius: 50%;
+  color: var(--cinnabar);
+  font-size: 38px;
+  background: radial-gradient(circle at 50% 45%, rgba(255, 253, 247, 0.95), rgba(239, 226, 203, 0.78));
 }
 /* 上传头像:虚线框(dropzone 感)文字钮 */
 .home-ob-upload {
@@ -377,6 +655,9 @@
   .home-ob-card {
     animation: none;
   }
+  .home-ob-demo {
+    animation: none;
+  }
 }
 
 /* 底部操作盘:纯输入框 + 选项 chip(无台词) */
@@ -384,6 +665,14 @@
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
+}
+.home-ob-tray > .home-composer {
+  padding: 8px;
+  background: rgba(250, 247, 241, 0.8);
+  border: 1px solid rgba(34, 26, 18, 0.14);
+  border-radius: var(--r-lg);
+  color: #20201d;
+  box-shadow: 0 14px 38px -22px rgba(0, 0, 0, 0.72);
 }
 /* 上一步(回退键):低调文字钮,贴操作盘左上 */
 .home-ob-back {
@@ -402,12 +691,13 @@
   color: #f1e7d6;
 }
 .home-ob-tray .home-input {
-  background: rgba(20, 16, 12, 0.7);
-  border-color: rgba(199, 154, 78, 0.4);
-  color: #f1e7d6;
+  background: rgba(255, 255, 255, 0.85);
+  border-color: #d8d2c7;
+  color: #20201d;
+  box-shadow: none;
 }
 .home-ob-tray .home-input::placeholder {
-  color: rgba(241, 231, 214, 0.42);
+  color: #91897e;
 }
 .home-ob-chips {
   display: flex;
@@ -430,6 +720,32 @@
   border-color: var(--cinnabar);
   color: #fff;
 }
+.home-ob-chip.is-hinted {
+  animation: obChipHint 1.8s ease-in-out infinite;
+}
+.home-ob-nexthint {
+  align-self: center;
+  color: rgba(241, 231, 214, 0.42);
+  letter-spacing: 0.08em;
+  padding: 8px 2px;
+  animation: obNextHintIn 480ms var(--ease-out) both;
+}
+@keyframes obChipHint {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(232, 181, 99, 0);
+    border-color: rgba(199, 154, 78, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(232, 181, 99, 0.11);
+    border-color: rgba(232, 181, 99, 0.9);
+  }
+}
+@keyframes obNextHintIn {
+  from {
+    opacity: 0;
+  }
+}
 /* 思考态:选项 / 上一步 / 输入框 禁用 */
 .home-ob-chip:disabled,
 .home-ob-back:disabled {
@@ -445,7 +761,7 @@
    头侧只在宽横版留得住;竖版(orientation: portrait)立绘按高度放大会横向铺满,
    721–900 的竖版平板会把左上气泡压到人物身上(实测 820×1180 重叠~130px),故一并下沉。 */
 @media (max-width: 720px), (orientation: portrait) {
-  .home-ob-bubble {
+  .home-ob-bubble:not(.home-ob-bubble--chat) {
     left: 12px;
     right: 12px;
     width: auto;
@@ -466,8 +782,102 @@
     animation: none;
   }
   /* 竖屏卡已横向居中,立绘无需左移让位 */
-  .home.is-cardbeat .home-portrait {
+  .home.is-cardbeat .home-portrait,
+  .home.is-ob-demo-story .home-portrait,
+  .home.is-ob-demo-character .home-portrait,
+  .home.is-ob-demo-chat .home-portrait,
+  .home.is-ob-demo-create .home-portrait {
     transform: none;
+  }
+  .home-ob-demo {
+    left: 14px;
+    right: 14px;
+    top: 56px;
+    width: auto;
+    transform: none;
+  }
+  .home-ob-demo--story {
+    left: auto;
+    right: 20px;
+    top: 72px;
+    width: 132px;
+  }
+  .home-demo-story-card {
+    width: 132px;
+  }
+  .home-demo-story-card .card--shelf {
+    width: 132px;
+    height: 199px;
+  }
+  .home-demo-character-copy h3,
+  .home-demo-create-copy h3 {
+    font-size: 22px;
+    margin-bottom: 5px;
+  }
+  .home-demo-character-copy p,
+  .home-demo-create-copy p,
+  .home-demo-xuan-bubble p {
+    font-size: 14px;
+    line-height: 1.48;
+  }
+  .home-ob-demo--character {
+    grid-template-columns: 88px 1fr;
+    min-height: 158px;
+    padding: 9px 12px 0 6px;
+  }
+  .home-demo-character-img {
+    width: 108px;
+    height: 178px;
+  }
+  .home-ob-demo--chat {
+    left: 8px;
+    right: auto;
+    top: auto;
+    bottom: -27px;
+    width: min(240px, 42vw);
+    height: min(695px, 91vh);
+  }
+  .home-ob-demo--chat .home-demo-xuan-img {
+    height: 100%;
+    width: 100%;
+  }
+  .home-demo-xuan-bubble {
+    left: -74px;
+    top: 30px;
+    width: min(190px, 55vw);
+    padding: 10px 12px;
+  }
+  .home-demo-xuan-name {
+    font-size: 20px;
+  }
+  .home-ob-demo--create {
+    top: 72px;
+    grid-template-columns: 58px 1fr;
+    gap: 10px;
+    padding: 14px;
+  }
+  .home-ob-demo--create-projection {
+    left: 12px;
+    right: 12px;
+    top: 56px;
+    width: auto;
+    padding: 18px;
+  }
+  .home-create-projection-title {
+    font-size: 28px;
+  }
+  .home-create-projection-form,
+  .home-create-projection-result {
+    gap: 12px;
+    padding-top: 16px;
+  }
+  .home-create-projection-composer {
+    grid-template-columns: minmax(0, 1fr) 72px;
+  }
+  .home-demo-create-mark {
+    width: 54px;
+    height: 54px;
+    font-size: 30px;
   }
 }
 @keyframes obBubbleInM {
@@ -567,6 +977,118 @@
 .ais-home-fullscreen .shell--semi-nav,
 .ais-onboarding .shell--semi-nav {
   padding-left: 0;
+}
+
+/* onboarding 接管首屏时把 Home 锁在视口上。
+   否则快速点击 3D 书卡翻面时,Chromium 偶发把子层按缩短后的可视区重排,
+   背景/演示卡/底部操作栏会一起上跳并露出底部空白。 */
+.ais-onboarding .home {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  min-height: 100dvh;
+}
+
+.ais-onboarding .home-bg,
+.ais-onboarding .home-bg-scrim,
+.ais-onboarding .home-portrait,
+.ais-onboarding .home-ui {
+  position: fixed;
+}
+
+.ais-onboarding .home-bg,
+.ais-onboarding .home-bg-scrim,
+.ais-onboarding .home-ui {
+  inset: 0;
+}
+
+/* onboarding 头像裁剪:本地压成 256 方图,避免超大图片直接塞卡。 */
+.home-crop-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: var(--sp-5);
+  background: rgba(10, 7, 5, 0.72);
+}
+.home-crop-card {
+  position: relative;
+  width: min(420px, 92vw);
+  border: 1px solid rgba(199, 154, 78, 0.42);
+  border-radius: var(--r-lg);
+  background: #f6eddb;
+  color: #2a231a;
+  box-shadow: 0 30px 90px -22px rgba(0, 0, 0, 0.72);
+  padding: var(--sp-5);
+}
+.home-crop-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+.home-crop-head .t-h2 {
+  color: #2a231a;
+}
+.home-crop-stage {
+  position: relative;
+  width: 280px;
+  height: 280px;
+  max-width: 100%;
+  margin: 0 auto var(--sp-4);
+  overflow: hidden;
+  border-radius: var(--r-md);
+  background: #271f17;
+  touch-action: none;
+  cursor: grab;
+  box-shadow: inset 0 0 0 1px rgba(143, 60, 50, 0.26), 0 16px 42px -24px rgba(0, 0, 0, 0.72);
+}
+.home-crop-stage:active {
+  cursor: grabbing;
+}
+.home-crop-stage img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  max-width: none;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+}
+.home-crop-mask {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 2px rgba(248, 241, 227, 0.92), inset 0 0 0 999px rgba(20, 14, 9, 0.1);
+}
+.home-crop-mask::before,
+.home-crop-mask::after {
+  content: "";
+  position: absolute;
+  inset: 33.333% 0 auto;
+  border-top: 1px solid rgba(248, 241, 227, 0.36);
+}
+.home-crop-mask::after {
+  inset: 66.666% 0 auto;
+}
+.home-crop-zoom {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  color: #6a5730;
+}
+.home-crop-zoom input {
+  flex: 1;
+  accent-color: var(--cinnabar);
+}
+.home-crop-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+
 }
 
 /* —— modal(换角色 / 存档 / 记录)—— */
@@ -748,6 +1270,9 @@
   }
   .home-dialogue {
     padding: var(--sp-3) var(--sp-4);
+  }
+  .home-input {
+    font-size: 16px;
   }
   .home-dlg-name {
     font-size: var(--fs-h3);
