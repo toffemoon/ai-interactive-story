@@ -57,3 +57,10 @@
 - **验收**(5199,清台跑→还原):**四卡种各自走通 新建(种骨架)→改名→收进本台**(角色卡含「完善角色卡」弹窗确认),四台 built 各 1、板上 4 卡;**装订清单**「装订 4 卡」,四类齐列(角色卡×1:测试角色卡 | 世界书×1 | 演出卡×1 | 故事书:测试故事书);**手机 390**:.ct 页正常渲染、四 tab 带 built 计数徽章、切 tab 正常、草稿条正确、无横向溢出(手机 .ct 零改动红线守住——种骨架经 newCardOf 只在桌面画板路径触发)。console 全程零报错;台账还原。
 - **坑**:无新坑。
 - **收官**:P0/P1a/P1b/P2a/P2b/P2c/P3/回归 全部完成,PR #170(stacked on #169)待主理人审;演出卡改名与 P4(结局条件/节拍前置接引擎、摆设字段转正)留主理人拍板。loop 删除。
+
+## R1 · 观感优化第一轮(复用已移植 react-bits 件,2026-07-14)
+
+- **做了什么**:①ClickSpark 加 `ais:spark` 定向爆发入口(逐火花 color/radius/size,色值字面量——canvas 解析不了 CSS var),收进本台/收入卡库/发布成功三处 `burstDone()` 朱砂+鎏金完成拍(发布=大爆发),与长按溅墨同语言收口;②空板标题 StaggeredText 逐字浮现(respectReducedMotion);③条目/节拍机制说明行换 BlurHighlight(「触发词」朱砂淡底高亮);④条目/节拍 + 模板/导入选择器列表 entryIn 阶梯入场(reduced-motion 全守)。**取舍**:AnimatedList 是带滑动删除/自动追加的 feed 组件,语义和编辑面/选择器冲突——列表入场用同气质 CSS stagger 实现,组件不硬套。
+- **验收**(5199,清台测→还原):空板标题 11 个分段 span;ais:spark 派发后画布 1→1920(监听+扩容通);机制行 blur-highlight-container 挂上、文本无损;.create-entry computed animation=entryIn、第 2 条 delay 45ms;build 过;console 零报错。
+- **坑**:BlurHighlight(motion 驱动)没有 reduced-motion 守卫——幅度小(0.5s 模糊淡入)暂记不改;headless rAF 冻结时 ais:spark 画布扩容后不会自动缩回(releaseCanvas 在 rAF 尾),真浏览器正常。
+- **下一片**:R2 移植 CountUp(完整度数字)+ ShinyText(鎏金扫光,模板应用 toast)。

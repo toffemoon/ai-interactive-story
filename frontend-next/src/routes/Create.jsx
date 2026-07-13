@@ -12,6 +12,8 @@ import { loadPrompts, addPrompt, removePrompt } from "../lib/promptLib"; // F1 �
 import { cardToRefText, makeRef } from "../lib/refText"; // F2 卡→引用文本(refs 通道)
 import { useAuth } from "../state/auth";
 import LineSidebar from "../components/react-bits/line-sidebar"; // rail=LineSidebar 完整复刻(2026-07-13 主理人拍板)
+import StaggeredText from "../components/staggered-text"; // R1 观感:空板标题逐字浮现
+import BlurHighlight from "../components/react-bits/blur-highlight"; // R1 观感:机制说明行高亮「触发词」
 import "./Create.css";
 
 // 角色卡的用户上传图(头像/立绘)单独保住,别被 AI 重建 draft 覆盖掉。
@@ -1317,6 +1319,25 @@ export default function Create() {
     }));
     setCardExpanded(false);
     flash("已收进本台(" + nm + ")");
+    burstDone();
+  }
+  // R1 完成拍:收进本台/收入卡库/发布成功=朱砂+鎏金定向爆发(走全局 ClickSpark 画布的 ais:spark 入口)。
+  // 与长按溅墨同一语言;色值传字面量(canvas 解析不了 CSS var)。
+  function burstDone(big = false) {
+    const el = document.querySelector(".create-focus-acts") || document.querySelector(".create-boardbar-r");
+    const r = el && el.getBoundingClientRect();
+    window.dispatchEvent(
+      new CustomEvent("ais:spark", {
+        detail: {
+          x: r ? r.left + r.width / 2 : window.innerWidth / 2,
+          y: r ? r.top + r.height / 2 : window.innerHeight / 3,
+          count: big ? 18 : 13,
+          colors: ["#b5402e", "#b8873f"],
+          radius: big ? 40 : 26,
+          size: big ? 15 : 12,
+        },
+      }),
+    );
   }
 
   function nextCard() {
@@ -1420,6 +1441,7 @@ export default function Create() {
     try {
       await postJSON("/api/library/save", { kind, data: kind === "characters" ? { data: d } : d });
       flash("已收入卡库 · 私密");
+      burstDone();
     } catch (e) {
       flash("入库失败:" + e.message);
     } finally {
@@ -1624,6 +1646,7 @@ export default function Create() {
       // 直接写盘让清台不依赖组件仍挂载(缩小写入,不触发配额失败)。
       try { localStorage.setItem(STORE_KEY, JSON.stringify(cleared)); } catch (e) {}
       setDesks(cleared);
+      burstDone(true);
       setPub({ name: "", synopsis: "", cover: "", authorNote: "" });
       setPreviewOpen(false);
       setPreviewChar(null);
@@ -2271,7 +2294,9 @@ export default function Create() {
               {boardCards.length === 0 && (
                 <div className="create-board-empty" onPointerDown={(e) => e.stopPropagation()}>
                   <span className="create-card-blank-seal t-kai" aria-hidden="true">板</span>
-                  <span className="t-meta">板上还空着——起一张:</span>
+                  <span className="t-meta">
+                    <StaggeredText text="板上还空着——起一张:" as="span" segmentBy="chars" delay={16} duration={0.3} direction="bottom" blur={false} respectReducedMotion />
+                  </span>
                   {/* 修复(主理人审核反馈):新建入口就放在眼前——H3 把「+卡」搬去左 rail 后,
                       空板文案曾指向已不存在的顶部按钮,新用户寸步难行 */}
                   <div className="create-empty-news">
@@ -2446,7 +2471,9 @@ export default function Create() {
                             <span className="create-field-k t-meta">
                               {f.k}
                               <span className="create-entry-note">
-                                {f.k0 === "entries" ? "玩家聊到触发词,这条才注入给 AI" : "玩家聊到触发词,这个节拍被推进"}
+                                <BlurHighlight highlightedBits={["触发词"]} highlightColor="color-mix(in srgb, var(--accent) 16%, transparent)" blurAmount={5}>
+                                  {f.k0 === "entries" ? "玩家聊到触发词,这条才注入给 AI" : "玩家聊到触发词,这个节拍被推进"}
+                                </BlurHighlight>
                               </span>
                             </span>
                             <div className="create-entries">

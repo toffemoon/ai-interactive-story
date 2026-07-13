@@ -2441,6 +2441,28 @@
     gap: 6px;
     background: color-mix(in srgb, var(--fg) 1.5%, transparent);
   }
+  /* R1 观感:条目/节拍入场阶梯浮现(同 createRise 气质);选择器列表同款 */
+  @media (prefers-reduced-motion: no-preference) {
+    .create-entry {
+      animation: entryIn 0.32s var(--ease-out) both;
+    }
+    .create-entries .create-entry:nth-child(2) { animation-delay: 45ms; }
+    .create-entries .create-entry:nth-child(3) { animation-delay: 90ms; }
+    .create-entries .create-entry:nth-child(4) { animation-delay: 135ms; }
+    .create-entries .create-entry:nth-child(n + 5) { animation-delay: 180ms; }
+    .create-import-picks > .create-import-pick {
+      animation: entryIn 0.3s var(--ease-out) both;
+    }
+    .create-import-picks > .create-import-pick:nth-child(2) { animation-delay: 40ms; }
+    .create-import-picks > .create-import-pick:nth-child(3) { animation-delay: 80ms; }
+    .create-import-picks > .create-import-pick:nth-child(n + 4) { animation-delay: 120ms; }
+  }
+  @keyframes entryIn {
+    from {
+      opacity: 0;
+      translate: 0 8px;
+    }
+  }
   .create-entry-row {
     display: flex;
     align-items: center;

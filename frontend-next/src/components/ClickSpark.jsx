@@ -86,13 +86,13 @@ export default function ClickSpark({
       const elapsed = now - s.startTime;
       if (elapsed >= duration) return false;
       const eased = easeFunc(elapsed / duration);
-      const distance = eased * sparkRadius * extraScale;
-      const lineLength = sparkSize * (1 - eased);
+      const distance = eased * (s.radius || sparkRadius) * extraScale;
+      const lineLength = (s.size || sparkSize) * (1 - eased);
       const x1 = s.x + distance * Math.cos(s.angle);
       const y1 = s.y + distance * Math.sin(s.angle);
       const x2 = s.x + (distance + lineLength) * Math.cos(s.angle);
       const y2 = s.y + (distance + lineLength) * Math.sin(s.angle);
-      ctx.strokeStyle = sparkColor;
+      ctx.strokeStyle = s.color || sparkColor;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(x1, y1);
@@ -139,6 +139,33 @@ export default function ClickSpark({
     window.addEventListener("click", onClick);
     return () => window.removeEventListener("click", onClick);
   }, [sparkCount, duration, draw, sizeCanvas]);
+
+  // 定向爆发入口(创作画布完成拍等):window 派发 ais:spark,detail={x,y,count,colors[],radius,size}。
+  // colors 必须是字面色值(canvas strokeStyle 解析不了 CSS var);逐火花轮换上色。
+  useEffect(() => {
+    const onBurst = (e) => {
+      if (reducedMotionRef.current || duration <= 0) return;
+      const d = e.detail || {};
+      const count = d.count || 12;
+      const colors = Array.isArray(d.colors) && d.colors.length ? d.colors : [sparkColor];
+      sizeCanvas();
+      const now = performance.now();
+      for (let i = 0; i < count; i++) {
+        sparksRef.current.push({
+          x: d.x != null ? d.x : window.innerWidth / 2,
+          y: d.y != null ? d.y : window.innerHeight / 2,
+          angle: (2 * Math.PI * i) / count,
+          startTime: now,
+          color: colors[i % colors.length],
+          radius: d.radius,
+          size: d.size,
+        });
+      }
+      if (rafRef.current === null) rafRef.current = requestAnimationFrame(draw);
+    };
+    window.addEventListener("ais:spark", onBurst);
+    return () => window.removeEventListener("ais:spark", onBurst);
+  }, [duration, draw, sizeCanvas, sparkColor]);
 
   return (
     <canvas
