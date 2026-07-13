@@ -7,7 +7,7 @@ import ImageCropField from "../components/ImageCropField";
 import StoryHero from "../components/StoryHero";
 import CharDetailModal from "../components/CharDetailModal";
 import { parseJsonCard, parsePngCard } from "../lib/tavernCard"; // D2 酒馆卡纯前端解析
-import { TEMPLATES, getTpl } from "./createTemplates"; // D3 创作模板(文案归内容侧,来源 card-templates/)
+import { TEMPLATES, getTpl, STARTER_IDS } from "./createTemplates"; // D3 创作模板(文案归内容侧,来源 card-templates/)
 import { loadPrompts, addPrompt, removePrompt } from "../lib/promptLib"; // F1 提示词库(localStorage)
 import { cardToRefText, makeRef } from "../lib/refText"; // F2 卡→引用文本(refs 通道)
 import { useAuth } from "../state/auth";
@@ -77,7 +77,9 @@ const LABELS = {
   persona: "人设", goals: "目标", secret: "隐藏真相", background: "背景", voice: "口癖",
   premise: "前提", title: "标题", entries: "条目", role: "身份", tags: "标签",
   content: "内容", comment: "条目", keys: "关键词", source: "来源",
-  timeline: "时间线", events: "事件节点", main: "主线", anchor: "锚点", tension: "矛盾",
+  timeline: "时间线", events: "事件节点", main: "主线", main_plot: "主线", anchor: "锚点", tension: "矛盾",
+  // P1b 演出卡起手骨架的键(src/models.py PlayerCard),别裸奔英文
+  opening: "开局第一幕", abilities: "能做什么", constraints: "做不到什么", known_facts: "开局已知", unknown: "开局未知",
   // C5 补:引擎新骨架带的键,别再裸奔英文
   known_public: "公开设定", known_hidden: "隐藏设定", versions: "多版本", relationships: "关系",
 };
@@ -887,6 +889,18 @@ export default function Create() {
   }
   // 新建:该台草稿已在板上就选中聚焦它;全新空台=聚焦进构思流。
   function newCardOf(kk) {
+    // P1b 新建即骨架:全新空台直接新建也预铺起手骨架(与模板同一条路,静默——不 flash 不占输入框)。
+    // 只在真空台种(有草稿/聊开过=不动);skeleton 直通 drafting(E5 口径:已有结构不回构思门控)。
+    const dd = desks[kk];
+    const isBlank =
+      Object.keys(dd.draft || {}).length === 0 && dd.messages.length <= 1 &&
+      !(dd.questions || []).length && !(dd.blueprint || []).length;
+    if (isBlank) {
+      const st = getTpl(kk, STARTER_IDS[kk]);
+      if (st && st.skeleton) {
+        patch(kk, { draft: structuredClone(st.skeleton), filled: [], tpl: st.id, phase: "drafting", comp: 0, questions: [], blueprint: [] });
+      }
+    }
     const i = KINDS.findIndex((t) => t.k === kk);
     if (i >= 0) setKi(i);
     setBoardSel({ kk, id: "d:" + kk });

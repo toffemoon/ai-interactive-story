@@ -83,6 +83,26 @@ export const TEMPLATES = {
   ],
   worlds: [
     {
+      // P1b 新建即骨架:三条起手条目对齐完整度维度(一句话定义/铁则/核心地点)与「≥3 条」收尾标准。
+      // WorldEntry 键名 ∈ src/models.py:comment(标题)/keys(触发词)/content(内容)。
+      id: "world-starter",
+      name: "标准起手 · 三条目",
+      hint: "一句话定义 / 一条铁则 / 一个核心地点,从三条长起",
+      skeleton: {
+        name: "",
+        entries: [
+          { comment: "这个世界的一句话定义", keys: [], content: "" },
+          { comment: "一条世界铁则", keys: [], content: "" },
+          { comment: "一个核心地点", keys: [], content: "" },
+        ],
+      },
+      hints: {
+        name: "世界名",
+        entries: "每条=标题+触发词(keys)+内容;玩家聊到触发词,这条才注入给 AI——没有触发词的条目永远不会出场",
+      },
+      opener: "把三条起手条目填实:一句话世界定义、一条铁则、一个核心地点;每条配上 keys(触发词)。",
+    },
+    {
       // 来源:card-templates/世界书 模板.md(条目式:关键词触发注入;draft=entries 数组,骨架预填无意义 → 纯 opener)
       id: "world-std",
       name: "世界书 · 条目式",
@@ -93,6 +113,20 @@ export const TEMPLATES = {
     },
   ],
   stories: [
+    {
+      // P1b 新建即骨架:引擎真消费的四块(title/premise 常驻 prompt,main_plot/timeline 进故事书总览)。
+      id: "story-starter",
+      name: "标准起手",
+      hint: "标题 / 前提 / 主线阶段 / 时间线,引擎按它推进",
+      skeleton: { title: "", premise: "", main_plot: [], timeline: [] },
+      hints: {
+        title: "剧本名 + 一句话类型定调(轻悬疑 / 商业谈判 / 史诗悲剧…)",
+        premise: "开场局面:谁在哪、出了什么事、玩家为何介入",
+        main_plot: "主线阶段:一条=一个阶段,2-4 条",
+        timeline: "时间线节点:先后发生什么,一条一件事",
+      },
+      opener: "按标准骨架:先定题目和前提,再铺 2-4 条主线阶段。",
+    },
     {
       // 来源:card-templates/故事书 模板.md(剧情层:前提/核心冲突/悬疑按层揭示,绝不开局交底)
       id: "story-std",
@@ -112,3 +146,12 @@ export function getTpl(kind, id) {
   if (!id) return null;
   return (TEMPLATES[kind] || []).find((t) => t.id === id) || null;
 }
+
+// P1b 新建即骨架:直接新建(不走模板选择器)时按 kind 静默铺的起手骨架 id。
+// 角色卡/演出卡复用既有标准套;世界书/故事书用上面的 starter。
+export const STARTER_IDS = {
+  characters: "npc-main",
+  players: "player-std",
+  worlds: "world-starter",
+  stories: "story-starter",
+};
