@@ -2416,6 +2416,98 @@
   .create-spawnmenu button {
     font-family: var(--font-kai);
   }
+  /* P2b 结构条目编辑:世界书条目/故事书节拍——每条=标题行(+公/密+删)+触发词+内容;
+     keys 空=朱砂警示;长按条目空白=AI 只改这条 */
+  .create-field-entries {
+    display: block;
+  }
+  .create-entry-note {
+    margin-left: 8px;
+    color: color-mix(in srgb, var(--muted) 80%, transparent);
+    letter-spacing: 0.02em;
+  }
+  .create-entries {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .create-entry {
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: color-mix(in srgb, var(--fg) 1.5%, transparent);
+  }
+  .create-entry-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .create-entry input,
+  .create-entry textarea {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r-xs);
+    padding: 5px 8px;
+    font-family: var(--font-sans);
+    font-size: var(--fs-ui-sm);
+    color: var(--fg);
+    outline: none;
+    resize: vertical;
+  }
+  .create-entry input:focus,
+  .create-entry textarea:focus {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  }
+  .create-entry-title {
+    flex: 1;
+    font-family: var(--font-kai);
+  }
+  .create-entry-vis,
+  .create-entry-del {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    display: inline-grid;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: var(--r-xs);
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .create-entry-vis.is-hidden {
+    background: color-mix(in srgb, var(--accent-3) 16%, transparent);
+    color: var(--accent-3);
+    border-color: color-mix(in srgb, var(--accent-3) 45%, var(--line));
+  }
+  .create-entry-del:hover {
+    color: var(--accent-bright);
+    border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+  }
+  .create-entry-warn {
+    color: var(--accent-bright);
+  }
+  .create-entry-add {
+    align-self: flex-start;
+    border: 1px dashed var(--line);
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--font-kai);
+    font-size: var(--fs-ui-sm);
+    padding: 6px 14px;
+    cursor: pointer;
+  }
+  .create-entry-add:hover {
+    color: var(--fg);
+    border-color: var(--muted);
+  }
   /* P1a 一眼懂:卡种按钮两行(名 + 一句话定位),新建菜单/空板/落卡菜单共用 */
   .create-kind-btn {
     display: flex;

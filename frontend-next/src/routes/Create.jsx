@@ -77,7 +77,7 @@ const LABELS = {
   persona: "人设", goals: "目标", secret: "隐藏真相", background: "背景", voice: "口癖",
   premise: "前提", title: "标题", entries: "条目", role: "身份", tags: "标签",
   content: "内容", comment: "条目", keys: "关键词", source: "来源",
-  timeline: "时间线", events: "事件节点", main: "主线", main_plot: "主线", anchor: "锚点", tension: "矛盾",
+  timeline: "时间线", events: "节拍(触发事件)", main: "主线", main_plot: "主线", anchor: "锚点", tension: "矛盾",
   // P1b 演出卡起手骨架的键(src/models.py PlayerCard),别裸奔英文
   opening: "开局第一幕", abilities: "能做什么", constraints: "做不到什么", known_facts: "开局已知", unknown: "开局未知",
   // C5 补:引擎新骨架带的键,别再裸奔英文
@@ -1758,6 +1758,40 @@ export default function Create() {
   function cancelFieldEdit() {
     setEditingKey(null);
   }
+  // ── P2b 结构条目编辑:世界书 entries / 故事书 events(节拍)的增删改 ──
+  // 键名 ∈ src/models.py(WorldEntry: comment/keys/content/visibility;StoryEvent: event_id/title/trigger_keywords/summary)。
+  // 标题/内容=受控直写;触发词=uncontrolled+onBlur 提交(受控+实时 split 会吃掉刚敲的分隔符)。
+  const ENTRY_SPECS = {
+    entries: { zh: "条目", titleKey: "comment", keysKey: "keys", bodyKey: "content", canHide: true },
+    events: { zh: "节拍", titleKey: "title", keysKey: "trigger_keywords", bodyKey: "summary", canHide: false },
+  };
+  function blankEntryOf(fieldKey) {
+    return fieldKey === "events"
+      ? { event_id: "ev" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), title: "", trigger_keywords: [], summary: "" }
+      : { comment: "", keys: [], content: "" };
+  }
+  function patchEntryAt(fieldKey, idx, up) {
+    patch(kind, (d0) => {
+      const arr = [...(((d0.draft || {})[fieldKey]) || [])];
+      arr[idx] = { ...arr[idx], ...up };
+      return { draft: { ...d0.draft, [fieldKey]: arr } };
+    });
+  }
+  function addEntryAt(fieldKey) {
+    patch(kind, (d0) => ({ draft: { ...d0.draft, [fieldKey]: [...(((d0.draft || {})[fieldKey]) || []), blankEntryOf(fieldKey)] } }));
+  }
+  function delEntryAt(fieldKey, idx) {
+    const spec = ENTRY_SPECS[fieldKey];
+    const cur = (desk.draft[fieldKey] || [])[idx] || {};
+    const has = (cur[spec.bodyKey] || "").trim() || (cur[spec.titleKey] || "").trim();
+    if (has && !window.confirm(`删掉${spec.zh}「${cur[spec.titleKey] || "未命名"}」?`)) return;
+    patch(kind, (d0) => {
+      const arr = [...(((d0.draft || {})[fieldKey]) || [])];
+      arr.splice(idx, 1);
+      return { draft: { ...d0.draft, [fieldKey]: arr } };
+    });
+  }
+  const splitKeys = (s) => s.split(/[、,，;；\s]+/).map((x) => x.trim()).filter(Boolean);
   // 复杂字段(对象/数组)不就地改:预填一句定向指令、光标带到命令条,聊着改。
   function chatAboutField(f) {
     patch(kind, { input: `把「${f.k}」这部分改一下:` });
@@ -2400,7 +2434,97 @@ export default function Create() {
                 )}
                 <div className="create-card-fields">
                   {fields.length ? (
-                    fields.map((f, fi) => (
+                    fields.map((f, fi) => {
+                      // P2b:世界书条目/故事书节拍=结构编辑块(标题/触发词/内容,世界书另有公开↔隐藏);
+                      // 长按条目空白处=AI 只改这条(伪字段进 aiCtx 定向指令管线);输入控件自己 stopPropagation。
+                      const spec = ENTRY_SPECS[f.k0];
+                      if (spec && Array.isArray(desk.draft[f.k0])) {
+                        const arr = desk.draft[f.k0] || [];
+                        return (
+                          <div className="create-field create-field-entries" style={{ "--ci": Math.min(fi, 8) }} key={f.k0}>
+                            <span className="create-field-k t-meta">
+                              {f.k}
+                              <span className="create-entry-note">
+                                {f.k0 === "entries" ? "玩家聊到触发词,这条才注入给 AI" : "玩家聊到触发词,这个节拍被推进"}
+                              </span>
+                            </span>
+                            <div className="create-entries">
+                              {arr.map((en, i) => {
+                                const keysArr = en[spec.keysKey] || [];
+                                const title = en[spec.titleKey] || "";
+                                return (
+                                  <div
+                                    className="create-entry"
+                                    key={f.k0 + "#" + i}
+                                    onPointerDown={(e) => {
+                                      if (e.button !== 0 || e.target.closest("input,textarea,button")) return;
+                                      lpStart(e.currentTarget, e, () =>
+                                        openAiForField({ k: `${spec.zh}·${title || "未命名"}`, k0: f.k0, empty: !(en[spec.bodyKey] || "").trim() })
+                                      );
+                                    }}
+                                    onPointerUp={lpCancel}
+                                    onPointerLeave={lpCancel}
+                                    onPointerCancel={lpCancel}
+                                  >
+                                    <div className="create-entry-row">
+                                      <input
+                                        className="create-entry-title"
+                                        value={title}
+                                        placeholder={spec.zh + "标题"}
+                                        aria-label={spec.zh + "标题"}
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                        onChange={(e) => patchEntryAt(f.k0, i, { [spec.titleKey]: e.target.value })}
+                                      />
+                                      {spec.canHide && (
+                                        <button
+                                          className={"create-entry-vis" + (en.visibility === "hidden" ? " is-hidden" : "")}
+                                          title={en.visibility === "hidden" ? "隐藏条目:不注入、玩家不可见的暗设定——点改公开" : "公开条目——点改隐藏(暗设定)"}
+                                          onPointerDown={(e) => e.stopPropagation()}
+                                          onClick={() => patchEntryAt(f.k0, i, { visibility: en.visibility === "hidden" ? "public" : "hidden" })}
+                                        >
+                                          {en.visibility === "hidden" ? "密" : "公"}
+                                        </button>
+                                      )}
+                                      <button
+                                        className="create-entry-del"
+                                        title={"删掉这" + (f.k0 === "entries" ? "条" : "个节拍")}
+                                        aria-label={"删掉" + spec.zh}
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                        onClick={() => delEntryAt(f.k0, i)}
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                    <input
+                                      className="create-entry-keys"
+                                      key={"keys" + i + ":" + keysArr.join("、")}
+                                      defaultValue={keysArr.join("、")}
+                                      placeholder="触发词:顿号或逗号分隔"
+                                      aria-label="触发词"
+                                      onPointerDown={(e) => e.stopPropagation()}
+                                      onBlur={(e) => patchEntryAt(f.k0, i, { [spec.keysKey]: splitKeys(e.target.value) })}
+                                    />
+                                    {!keysArr.length && <div className="create-entry-warn t-meta">没有触发词,永远不会出场</div>}
+                                    <textarea
+                                      className="create-entry-body"
+                                      rows={2}
+                                      value={en[spec.bodyKey] || ""}
+                                      placeholder={f.k0 === "entries" ? "这条设定的内容" : "这个节拍发生什么"}
+                                      aria-label={spec.zh + "内容"}
+                                      onPointerDown={(e) => e.stopPropagation()}
+                                      onChange={(e) => patchEntryAt(f.k0, i, { [spec.bodyKey]: e.target.value })}
+                                    />
+                                  </div>
+                                );
+                              })}
+                              <button className="create-entry-add" onClick={() => addEntryAt(f.k0)}>
+                                + 加一{f.k0 === "entries" ? "条" : "个节拍"}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return (
                       <div
                         className={
                           "create-field" +
@@ -2462,7 +2586,8 @@ export default function Create() {
                           </span>
                         )}
                       </div>
-                    ))
+                      );
+                    })
                   ) : phase !== "drafting" &&
                     (desk.messages.length > 1 || (desk.questions || []).length > 0 || (desk.blueprint || []).length > 0) ? (
                     /* F8 构思纸面:聊开(或已有构思产物)之后,火候线/助手追问/圈选词/蓝图直接长在画布上 */

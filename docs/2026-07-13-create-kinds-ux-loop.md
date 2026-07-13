@@ -29,3 +29,10 @@
 - **验收**(5199,清台测→还原):演出卡「目标」空态 hint 带「(✦ 补写 / ✎ 手写)」;✎ 编辑三行(含一空行)提交 → draft.goals=三元素数组、卡面顿号重排;build 过;console 零报错。
 - **坑**:synthetic FocusEvent("blur") 不触发 React onBlur(React 监听 focusout)——测试提交要走 Ctrl+Enter keydown 路径;真浏览器 blur 正常(与既有字符串字段同一 onBlur 机制,线上已验)。
 - **下一片**:P2b 结构条目编辑(世界书 entries/故事书 events;keys 空警示;长按条目=AI 只改这条)。
+
+## P2b · 结构条目编辑(世界书条目 / 故事书节拍)
+
+- **做了什么**:聚焦卡上 entries/events 从只读文本换成结构编辑块——每条=标题行(世界书另有公↔密开关=visibility public/hidden,朱金「密」态)+触发词输入+内容 textarea+删除(有内容先 confirm);「+ 加一条/加一个节拍」;新节拍自带 event_id(引擎 triggered_events 按它结算)。**keys 为空的条目就地朱砂警示「没有触发词,永远不会出场」**(引擎机制的第一可见化)。长按条目空白=AI 只改这条(伪字段 {k:"条目·标题", k0:"entries"} 进 aiCtx 定向指令管线,输入控件 stopPropagation 不误触)。字段头带机制说明(「玩家聊到触发词,这条才注入给 AI」)。story-starter 骨架补 events:[];LABELS.events→「节拍(触发事件)」。触发词输入=uncontrolled+onBlur(受控实时 split 会吃掉刚敲的分隔符),标题/内容受控直写。
+- **验收**(5199,清台测→还原):世界书三条起手条目渲染齐(标题/警示×3/公密钮/加一条/机制说明);keys 混合分隔符「灵气、沿海小城,雾」提交=3 词数组、警示 3→2;公→密 visibility=hidden;加/删条目 3→4→3;内容受控写入;长按条目描金 trace→550ms 开 AI sidebar;故事书节拍块渲染、新节拍四键含 event_id、无公密钮(节拍无 visibility);build 过;console 零报错;台账还原。
+- **坑**:trace 在触发后还挂 460ms(is-done 封印帧)——验收断言别在 1010ms 前查移除;synthetic 焦点提交用 FocusEvent("focusout")(React 不听 blur)。
+- **下一片**:P2c 演出卡 known_facts/unknown 配对提示(防上帝视角)——小片;然后 P3 模板扩容。
