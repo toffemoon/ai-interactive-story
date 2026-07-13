@@ -1641,16 +1641,19 @@ export default function Create() {
   const hasChars = deskCards("characters").length > 0;
   const fields = useMemo(() => {
     const d = desk.draft || {};
+    // P2a:字符串数组(goals/abilities/constraints/timeline/main_plot/speech_rules…)升级就地列表编辑
+    // (✎ 打开=一行一条);对象数组(世界书 entries、故事 events)仍走「聊」,P2b 接结构编辑。
+    const isStrList = (v) => Array.isArray(v) && v.every((x) => typeof x === "string");
     return Object.keys(d)
       .filter((k) => !NON_FIELD_KEYS.includes(k))
       .map((k) => ({
         k0: k, // 原始 key(就地手改/定向指令回写用)
         k: LABELS[k] || k,
         v: fmtVal(d[k]),
-        // 纯文本字段可就地手改;对象/数组(世界书 entries、故事 timeline、tags…)v1 只读走「聊着改」
-        editable: typeof d[k] === "string",
+        editable: typeof d[k] === "string" || isStrList(d[k]),
+        list: isStrList(d[k]),
         // AI 骨架常带空串字段:收编成 ✦ 补写目标,不再是意义不明的空行
-        empty: typeof d[k] === "string" && !d[k].trim(),
+        empty: (typeof d[k] === "string" && !d[k].trim()) || (isStrList(d[k]) && !d[k].length),
         fresh: (desk.filled || []).includes(k),
         hidden: /secret|隐藏|真相/i.test(k),
       }));
@@ -1728,7 +1731,7 @@ export default function Create() {
   function startFieldEdit(f) {
     if (!f.editable) return;
     setEditingKey(f.k0);
-    setEditVal(desk.draft[f.k0] || "");
+    setEditVal(f.list ? (desk.draft[f.k0] || []).join("\n") : desk.draft[f.k0] || "");
   }
   function commitFieldEdit() {
     if (editingKey === null) return;
@@ -1745,7 +1748,12 @@ export default function Create() {
       });
       return;
     }
-    patch(kind, (d0) => ({ draft: { ...d0.draft, [key]: val } }));
+    patch(kind, (d0) => {
+      const cur = (d0.draft || {})[key];
+      // P2a 列表字段:一行一条回写数组(空行丢弃);按 draft 现值判型,与 startFieldEdit 的 join 对偶
+      const v2 = Array.isArray(cur) ? val.split("\n").map((s) => s.trim()).filter(Boolean) : val;
+      return { draft: { ...d0.draft, [key]: v2 } };
+    });
   }
   function cancelFieldEdit() {
     setEditingKey(null);
@@ -2419,11 +2427,12 @@ export default function Create() {
                           <textarea
                             className="create-field-edit t-ui-sm"
                             autoFocus
-                            rows={Math.min(8, Math.max(2, Math.ceil((editVal.length + 1) / 26)))}
+                            rows={Math.min(8, Math.max(2, f.list ? editVal.split("\n").length + 1 : Math.ceil((editVal.length + 1) / 26)))}
                             value={editVal}
                             onChange={(e) => setEditVal(e.target.value)}
                             onKeyDown={(e) => editKeys(e)}
                             onBlur={commitFieldEdit}
+                            placeholder={f.list ? "一行一条,空行不算" : undefined}
                             aria-label={"编辑" + f.k}
                           />
                         ) : f.empty || !f.v.trim() ? (

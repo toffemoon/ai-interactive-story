@@ -22,3 +22,10 @@
 - **验收**(5199,清台测种→还原备份):四卡种直接新建各自 tpl/phase/draft 键全对(世界书三条目 comment 正确、演出卡 9 键、故事书 4 键、角色卡 npc-main 13 键);聚焦卡空字段带灰字 hint(前提=「开场局面:谁在哪…(✦ 补写 / ✎ 手写)」,数组字段=「点『聊』到命令条补」);build 过;console 零报错;localStorage 台账测后原样还原。
 - **坑**:①headless 里 matchMedia change 不派发——新 tab 挂载瞬间窄视口把 useIsMobile 钉在 true,resize 后必须切路由重挂才吃新值(纯环境坑,真浏览器 mq listener 正常);②starter skeleton 含对象数组(entries),种台用 structuredClone 防模板常量被 draft 改写污染。
 - **下一片**:P2a 通用列表编辑组件(字符串列表:goals/abilities/constraints/timeline/main_plot 行内增删改)。
+
+## P2a · 通用列表编辑(字符串数组)
+
+- **做了什么**:字符串数组字段(goals/abilities/constraints/timeline/main_plot/speech_rules/known_facts/unknown…全部按型自动命中)从「只读走聊」升级为就地手改——完整复用 editingKey/commitFieldEdit 惯用机制:✎ 打开=一行一条 textarea(placeholder「一行一条,空行不算」,行数自适应),提交按 draft 现值判型回写数组(trim+空行丢弃);空数组字段收编进 ✦ 补写目标(hint 灰字照常)。对象数组(entries/events)不动,留给 P2b 结构编辑。
+- **验收**(5199,清台测→还原):演出卡「目标」空态 hint 带「(✦ 补写 / ✎ 手写)」;✎ 编辑三行(含一空行)提交 → draft.goals=三元素数组、卡面顿号重排;build 过;console 零报错。
+- **坑**:synthetic FocusEvent("blur") 不触发 React onBlur(React 监听 focusout)——测试提交要走 Ctrl+Enter keydown 路径;真浏览器 blur 正常(与既有字符串字段同一 onBlur 机制,线上已验)。
+- **下一片**:P2b 结构条目编辑(世界书 entries/故事书 events;keys 空警示;长按条目=AI 只改这条)。
