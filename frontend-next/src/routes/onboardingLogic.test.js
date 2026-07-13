@@ -282,6 +282,10 @@ test("never exposes malformed or repeated onboarding emotion protocol fragments"
     parseOnboardingEmotionReply("One [EMO:angry] two [EMO:SPARK] three [EMO]", fallback),
     { text: "One two three", emo: "spark" },
   );
+  assert.deepEqual(
+    parseOnboardingEmotionReply("Reply [EMO:spark\nkeep [note] text", fallback),
+    { text: "Reply\nkeep [note] text", emo: "wry" },
+  );
 });
 
 test("does not let an AI acknowledgement replace avatar or completed-card guidance", () => {

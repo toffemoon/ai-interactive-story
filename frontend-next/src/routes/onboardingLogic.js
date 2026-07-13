@@ -537,13 +537,13 @@ const ONBOARDING_EMOTIONS = new Set(["smile", "curious", "spark", "whisper", "pr
 
 export function parseOnboardingEmotionReply(reply, { fallbackEmo = "smile" } = {}) {
   const source = String(reply || "").trim();
-  const requested = Array.from(source.matchAll(/\[\s*EMO\s*:\s*([^\]]*)\]/gi))
+  const requested = Array.from(source.matchAll(/\[\s*EMO\s*:\s*([^\]\r\n]*)\]/gi))
     .map((marker) => marker[1].trim().toLowerCase())
     .find((candidate) => ONBOARDING_EMOTIONS.has(candidate)) || "";
   const fallback = String(fallbackEmo || "").trim().toLowerCase();
   const emo = ONBOARDING_EMOTIONS.has(requested) ? requested : ONBOARDING_EMOTIONS.has(fallback) ? fallback : "smile";
   const text = source
-    .replace(/\s*\[\s*EMO\b[^\]]*\]\s*/gi, " ")
+    .replace(/\s*\[\s*EMO\b[^\]\r\n]*\]\s*/gi, " ")
     .replace(/\s*\[\s*EMO\b[^\]\r\n]*(?=$|\r?\n)/gi, " ")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n[ \t]+/g, "\n")
