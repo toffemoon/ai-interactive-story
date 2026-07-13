@@ -2403,7 +2403,7 @@
     touch-action: none;
   }
   .create-board.is-pan {
-    cursor: grab;
+    cursor: grab; /* 右/中键拖或 Space 按住(平移手势中;抓手工具已退役) */
   }
   .create-board.is-dropover::after {
     content: "";
@@ -2417,7 +2417,7 @@
     font-family: var(--font-kai);
   }
   .create-board.is-pan .create-bcard {
-    pointer-events: none; /* 抓手态整板可拖,卡不截胡 */
+    pointer-events: none; /* 平移手势中整板可拖,卡不截胡 */
   }
   /* H1 世界容器:pan/zoom 只动它;零尺寸锚在左上,卡绝对定位其中 */
   .create-world {
@@ -2477,7 +2477,7 @@
   .create-rail-fly {
     position: absolute;
     left: calc(100% + 16px);
-    top: 66px; /* 对齐 LineSidebar 第 3 项(新建) */
+    top: 12px; /* 对齐 LineSidebar 第 1 项(新建) */
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -2496,6 +2496,44 @@
     height: 1px;
     margin: 3px 4px;
     background: var(--line);
+  }
+  /* 进页操作提示:底部居中胶囊,9s 自动收;定位不走 transform 以外的动画(fill 教训) */
+  .create-ctrlhint {
+    position: absolute;
+    left: 50%;
+    bottom: var(--sp-4);
+    transform: translateX(-50%);
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 9px 8px 16px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r-pill);
+    box-shadow: var(--shadow-card);
+    white-space: nowrap;
+    animation: ctrlHintIn 0.32s var(--ease-out);
+  }
+  @keyframes ctrlHintIn {
+    from {
+      opacity: 0;
+    }
+  }
+  .create-ctrlhint button {
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: transparent;
+    border-radius: 50%;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .create-ctrlhint button:hover {
+    color: var(--fg);
+    background: color-mix(in srgb, var(--fg) 6%, transparent);
   }
   .create-zoomctl {
     position: absolute;

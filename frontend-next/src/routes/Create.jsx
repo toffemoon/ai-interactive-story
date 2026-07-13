@@ -364,7 +364,7 @@ export default function Create() {
       window.removeEventListener("keyup", up);
     };
   }, []);
-  // H3 快捷键:V 选择 / H 抓手 / ⌘·Ctrl+0 适配全部 / 1-4 新建·继续四卡种。
+  // H3 快捷键:⌘·Ctrl+0 适配全部 / 1-4 新建·继续四卡种(V/H 随选择/抓手工具退役,2026-07-13)。
   // 守卫:输入态与任何弹层/聚焦态下不劫持(Esc 另有专职监听)。
   const kbdBlocked =
     !!boardFocus || !!finalize || !!importOpen || seedOpen || !!refPanel || !!libModal ||
@@ -381,17 +381,19 @@ export default function Create() {
       }
       if (e.metaKey || e.ctrlKey) return;
       const k = e.key.toLowerCase();
-      if (k === "v") setTool("select");
-      else if (k === "h") setTool("hand");
-      else if (k >= "1" && k <= "4") newCardOf(KINDS[Number(k) - 1].k);
+      if (k >= "1" && k <= "4") newCardOf(KINDS[Number(k) - 1].k);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMobile, kbdBlocked]);
-  // H3 工具态:select(默认)| hand(粘性抓手,Space=瞬时抓手不变);ref 镜像给 pointer 手势层用。
-  const [tool, setTool] = useState("select");
+  // 2026-07-13 主理人拍板:选择/抓手工具退役——左键=选择,右键(或中键/Space+左键)拖=平移画布。
   const [railNew, setRailNew] = useState(false); // rail「新建」飞出菜单(四卡种全名,可拖出落卡)
+  const [ctrlHint, setCtrlHint] = useState(true); // 每次进创作页都提示一次操作方式(主理人拍板)
+  useEffect(() => {
+    const t = setTimeout(() => setCtrlHint(false), 9000);
+    return () => clearTimeout(t);
+  }, []);
   // ── I 系列(主理人审核拍板):AI 统一入口=长按——按住任何 AI 可作用的对象,
   //    朱砂环沿模块四周描边生长(550ms),满环即开 AI 对话 sidebar;要改的对象同时进聚焦。
   //    旧入口(✦/⟳ 指示行/批注笺/对话抽屉/dock 批注行)全部退役,对话住右侧 sidebar。 ──
@@ -544,14 +546,14 @@ export default function Create() {
     if (!text) return;
     send();
   }
-  const toolRef = useRef("select");
-  useEffect(() => {
-    toolRef.current = tool;
-  }, [tool]);
   function onBoardPointerDown(e) {
-    if (e.button === 1 || (e.button === 0 && (spaceRef.current || toolRef.current === "hand"))) {
+    // 平移=右键/中键拖,或 Space+左键拖(左键留给选择/拖卡)
+    if (e.button === 1 || e.button === 2 || (e.button === 0 && spaceRef.current)) {
+      const t = e.target;
+      if (e.button === 2 && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return; // 输入区右键留给系统粘贴菜单
       panRef.current = { sx: e.clientX, sy: e.clientY, bx: viewRef.current.x, by: viewRef.current.y };
       e.preventDefault();
+      boardElRef.current && boardElRef.current.classList.add("is-pan"); // 手势中抓手光标+卡不截胡
       try {
         e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId);
       } catch {}
@@ -574,6 +576,7 @@ export default function Create() {
   function onBoardPointerEnd() {
     if (!panRef.current) return;
     panRef.current = null;
+    if (!spaceRef.current && boardElRef.current) boardElRef.current.classList.remove("is-pan"); // Space 仍按着=光标态留给 keyup 收
     dragEndAtRef.current = performance.now(); // pan 刚结束的 dblclick 不当「双击空白落卡」
     setView({ ...viewRef.current });
   }
@@ -926,7 +929,7 @@ export default function Create() {
   const dragEndAtRef = useRef(0); // 拖后抑制原生 click/dblclick(浏览器拖完仍会派发)
   function onCardPointerDown(e, bc, pos) {
     if (e.button !== 0) return;
-    if (spaceRef.current || toolRef.current === "hand") return; // 抓手/Space=让 board pan 接管,不起卡拖也不起长按(否则 pan 中途满环误开 AI)
+    if (spaceRef.current) return; // Space=板平移接管,不起卡拖也不起长按(否则 pan 中途满环误开 AI)
     dragRef.current = { key: bc.key, startX: e.clientX, startY: e.clientY, baseX: pos.x, baseY: pos.y, moved: false, bc };
     e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId);
     lpStart(e.currentTarget, e, () => {
@@ -2046,8 +2049,13 @@ export default function Create() {
           {/* G0 全屏画板:四台物料全部挂板(可拖可选可聚焦);台账线/kind tabs 已退役进 boardbar */}
           <div className="create-studio is-board">
             <div
-              className={"create-board" + (tool === "hand" ? " is-pan" : "") + (boardDragOver ? " is-dropover" : "")}
+              className={"create-board" + (boardDragOver ? " is-dropover" : "")}
               ref={boardElRef}
+              onContextMenu={(e) => {
+                const t = e.target;
+                if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return; // 输入区保系统菜单
+                e.preventDefault(); // 右键=平移,画布上不弹浏览器菜单(含右拖松手后的那发)
+              }}
               onPointerDown={onBoardPointerDown}
               onPointerMove={onBoardPointerMove}
               onPointerUp={onBoardPointerEnd}
@@ -2072,7 +2080,7 @@ export default function Create() {
                     style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
                     data-bckey={bc.key}
                     onPointerDown={(e) => {
-                      if (spaceRef.current || e.button === 1) return; // 抓手/中键=板平移,让事件冒泡到板
+                      if (spaceRef.current || e.button === 1 || e.button === 2) return; // 右/中键或 Space=板平移,让事件冒泡到板
                       e.stopPropagation();
                       onCardPointerDown(e, bc, pos);
                     }}
@@ -2227,11 +2235,9 @@ export default function Create() {
                   装订/发布/对话留在顶部 boardbar(文件级);快捷键 V/H/1-4/⌘0 不变 */}
               <div className="create-rail" role="toolbar" aria-label="画板工具" aria-orientation="vertical" onPointerDown={(e) => e.stopPropagation()}>
                 {/* 主理人 2026-07-13 拍板:rail 换 react-bits LineSidebar 完整复刻(指针接近=右移染朱砂+线标伸长,等宽序号+项间刻度)。
-                    条目/路由/快捷键(V/H/1-4)与原按钮版一一对应;工具态受控(选择/抓手),导出无草稿禁用 */}
+                    选择/抓手已退役(左键=选择,右键拖=平移);activeIndex=null 让点按不留常亮(全是瞬时动作),导出无草稿禁用 */}
                 <LineSidebar
                   items={[
-                    { label: "选择", title: "选择 (V)" },
-                    { label: "抓手", title: "抓手·平移画板 (H,按住 Space 也行)" },
                     { label: "新建", title: "新建一张卡 (1-4,或双击画板空白)" },
                     { label: "模板", title: "从模板起手:骨架直落画布" },
                     { label: "导入", title: "导入已有内容:粘贴/上传文档/酒馆卡" },
@@ -2241,11 +2247,9 @@ export default function Create() {
                     { label: "拆回", title: "从我发布的故事整组拆回四台" },
                     { label: "导出", title: hasDraft ? "导出当前草稿 JSON" : "画布上还没有草稿", disabled: !hasDraft },
                   ]}
-                  activeIndex={tool === "hand" ? 1 : 0}
+                  activeIndex={null}
                   onItemClick={(i) => {
                     const acts = [
-                      () => setTool("select"),
-                      () => setTool("hand"),
                       () => setRailNew((v) => !v),
                       () => { setRailNew(false); setTplOpen(true); },
                       () => { setRailNew(false); setImportOpen({ step: "pick", text: "", err: "" }); },
@@ -2287,6 +2291,13 @@ export default function Create() {
                   </div>
                 )}
               </div>
+              {/* 每次进页的操作提示(主理人拍板):左键/右键分工 9s 自动收,× 手动收 */}
+              {ctrlHint && (
+                <div className="create-ctrlhint t-meta" role="note" onPointerDown={(e) => e.stopPropagation()}>
+                  <span>左键:选卡/拖卡 · 右键拖动:平移画布 · Ctrl+滚轮:缩放 · 双击空白:落新卡</span>
+                  <button aria-label="收起提示" onClick={() => setCtrlHint(false)}>×</button>
+                </div>
+              )}
               {/* H1 缩放控件:± 板中心锚定;点 % 回 100%;适配=装下全部卡 */}
               <div className="create-zoomctl t-meta" aria-label="画板缩放" onPointerDown={(e) => e.stopPropagation()}>
                 <button onClick={() => zoomTo(viewRef.current.z / 1.2)} aria-label="缩小">−</button>
