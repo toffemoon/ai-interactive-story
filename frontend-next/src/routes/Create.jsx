@@ -7,11 +7,15 @@ import ImageCropField from "../components/ImageCropField";
 import StoryHero from "../components/StoryHero";
 import CharDetailModal from "../components/CharDetailModal";
 import { parseJsonCard, parsePngCard } from "../lib/tavernCard"; // D2 酒馆卡纯前端解析
-import { TEMPLATES, getTpl } from "./createTemplates"; // D3 创作模板(文案归内容侧,来源 card-templates/)
+import { TEMPLATES, getTpl, STARTER_IDS } from "./createTemplates"; // D3 创作模板(文案归内容侧,来源 card-templates/)
 import { loadPrompts, addPrompt, removePrompt } from "../lib/promptLib"; // F1 提示词库(localStorage)
 import { cardToRefText, makeRef } from "../lib/refText"; // F2 卡→引用文本(refs 通道)
 import { useAuth } from "../state/auth";
 import LineSidebar from "../components/react-bits/line-sidebar"; // rail=LineSidebar 完整复刻(2026-07-13 主理人拍板)
+import StaggeredText from "../components/staggered-text"; // R1 观感:空板标题逐字浮现
+import BlurHighlight from "../components/react-bits/blur-highlight"; // R1 观感:机制说明行高亮「触发词」
+import CountUp from "../components/react-bits/count-up"; // R2 观感:完整度数字 spring 滚动
+import ShinyText from "../components/react-bits/shiny-text"; // R2 观感:鎏金扫光(只上 toast 转瞬场合)
 import "./Create.css";
 
 // 角色卡的用户上传图(头像/立绘)单独保住,别被 AI 重建 draft 覆盖掉。
@@ -51,10 +55,11 @@ function useIsMobile(maxWidth = 860) {
 const KINDS = [
   // ph 是输入框 placeholder,手机端短一句即可(C3:原来一长串字段名在窄屏会被截断)。
   // opening 是空台子的助手开场白,和 ph 同一套按类分句的范式(YOR-174)。
-  { zh: "角色卡", k: "characters", ph: "描述这个角色:身份、性格、背景", opening: "描述你要创建的角色:身份、性格、背景。信息足够后会生成完整角色卡。" },
-  { zh: "演出卡", k: "players", ph: "描述你要扮演的主角", opening: "描述你要扮演的主角:身份、来历、这一局的目标。" },
-  { zh: "设定卡 · 世界书", k: "worlds", ph: "描述这个世界的规则与设定", opening: "描述这个世界:核心规则、关键地点、势力。" },
-  { zh: "故事书", k: "stories", ph: "描述这个故事的前提与冲突", opening: "描述这个故事:前提、核心冲突、大致走向。" },
+  // sub 是卡种一句话定位(P1a 一眼懂层):新建菜单/空板/落卡菜单/聚焦卡头四处消费,只此一处定义。
+  { zh: "角色卡", k: "characters", sub: "AI 扮演的人物", ph: "描述这个角色:身份、性格、背景", opening: "描述你要创建的角色:身份、性格、背景。信息足够后会生成完整角色卡。" },
+  { zh: "演出卡", k: "players", sub: "你扮演的主角", ph: "描述你要扮演的主角", opening: "描述你要扮演的主角:身份、来历、这一局的目标。" },
+  { zh: "设定卡 · 世界书", k: "worlds", sub: "世界的规则手册,聊到触发词才出场", ph: "描述这个世界的规则与设定", opening: "描述这个世界:核心规则、关键地点、势力。" },
+  { zh: "故事书", k: "stories", sub: "这一局的剧本:开场、节拍、结局", ph: "描述这个故事的前提与冲突", opening: "描述这个故事:前提、核心冲突、大致走向。" },
 ];
 const OPENINGS = Object.fromEntries(KINDS.map((t) => [t.k, t.opening]));
 // 空台引子(桌面 reskin):点一下把句子放进输入框(不代发,用户过目再发),降低冷启动门槛。
@@ -76,7 +81,9 @@ const LABELS = {
   persona: "人设", goals: "目标", secret: "隐藏真相", background: "背景", voice: "口癖",
   premise: "前提", title: "标题", entries: "条目", role: "身份", tags: "标签",
   content: "内容", comment: "条目", keys: "关键词", source: "来源",
-  timeline: "时间线", events: "事件节点", main: "主线", anchor: "锚点", tension: "矛盾",
+  timeline: "时间线", events: "节拍(触发事件)", main: "主线", main_plot: "主线", anchor: "锚点", tension: "矛盾",
+  // P1b 演出卡起手骨架的键(src/models.py PlayerCard),别裸奔英文
+  opening: "开局第一幕", abilities: "能做什么", constraints: "做不到什么", known_facts: "开局已知", unknown: "开局未知",
   // C5 补:引擎新骨架带的键,别再裸奔英文
   known_public: "公开设定", known_hidden: "隐藏设定", versions: "多版本", relationships: "关系",
 };
@@ -217,6 +224,10 @@ export default function Create() {
   const tavernRef = useRef(null); // 酒馆卡文件 input(.json/.png)
   // D3 模板选择器;desks[kind].tpl 只存模板 id(hints 从常量派生,localStorage 零膨胀)。
   const [tplOpen, setTplOpen] = useState(false);
+  // R3 模板卡叠(主理人试样拍板):选择器从按钮列表换点击翻卡;order=当前叠序,leaving=顶卡退场中。
+  // ⚠ 重置 effect 在 applyTemplate 旁(kind 在下方才声明,deps 引用这里会 TDZ——aiPos 旧坑同款)
+  const [tplOrder, setTplOrder] = useState([]);
+  const [tplLeaving, setTplLeaving] = useState(false);
   // D4 「从我发布的故事继续」:presets 列表弹层({items}|null),选一条拆回四台 built。
   const [presetsModal, setPresetsModal] = useState(null);
   // F2 引用体系:desks[kind].refs 可选键(挂台常驻,每轮请求都带,纸签可摘;后端上限 4 条)。
@@ -886,6 +897,18 @@ export default function Create() {
   }
   // 新建:该台草稿已在板上就选中聚焦它;全新空台=聚焦进构思流。
   function newCardOf(kk) {
+    // P1b 新建即骨架:全新空台直接新建也预铺起手骨架(与模板同一条路,静默——不 flash 不占输入框)。
+    // 只在真空台种(有草稿/聊开过=不动);skeleton 直通 drafting(E5 口径:已有结构不回构思门控)。
+    const dd = desks[kk];
+    const isBlank =
+      Object.keys(dd.draft || {}).length === 0 && dd.messages.length <= 1 &&
+      !(dd.questions || []).length && !(dd.blueprint || []).length;
+    if (isBlank) {
+      const st = getTpl(kk, STARTER_IDS[kk]);
+      if (st && st.skeleton) {
+        patch(kk, { draft: structuredClone(st.skeleton), filled: [], tpl: st.id, phase: "drafting", comp: 0, questions: [], blueprint: [] });
+      }
+    }
     const i = KINDS.findIndex((t) => t.k === kk);
     if (i >= 0) setKi(i);
     setBoardSel({ kk, id: "d:" + kk });
@@ -1302,6 +1325,25 @@ export default function Create() {
     }));
     setCardExpanded(false);
     flash("已收进本台(" + nm + ")");
+    burstDone();
+  }
+  // R1 完成拍:收进本台/收入卡库/发布成功=朱砂+鎏金定向爆发(走全局 ClickSpark 画布的 ais:spark 入口)。
+  // 与长按溅墨同一语言;色值传字面量(canvas 解析不了 CSS var)。
+  function burstDone(big = false) {
+    const el = document.querySelector(".create-focus-acts") || document.querySelector(".create-boardbar-r");
+    const r = el && el.getBoundingClientRect();
+    window.dispatchEvent(
+      new CustomEvent("ais:spark", {
+        detail: {
+          x: r ? r.left + r.width / 2 : window.innerWidth / 2,
+          y: r ? r.top + r.height / 2 : window.innerHeight / 3,
+          count: big ? 18 : 13,
+          colors: ["#b5402e", "#b8873f"],
+          radius: big ? 40 : 26,
+          size: big ? 15 : 12,
+        },
+      }),
+    );
   }
 
   function nextCard() {
@@ -1405,6 +1447,7 @@ export default function Create() {
     try {
       await postJSON("/api/library/save", { kind, data: kind === "characters" ? { data: d } : d });
       flash("已收入卡库 · 私密");
+      burstDone();
     } catch (e) {
       flash("入库失败:" + e.message);
     } finally {
@@ -1609,6 +1652,7 @@ export default function Create() {
       // 直接写盘让清台不依赖组件仍挂载(缩小写入,不触发配额失败)。
       try { localStorage.setItem(STORE_KEY, JSON.stringify(cleared)); } catch (e) {}
       setDesks(cleared);
+      burstDone(true);
       setPub({ name: "", synopsis: "", cover: "", authorNote: "" });
       setPreviewOpen(false);
       setPreviewChar(null);
@@ -1626,16 +1670,19 @@ export default function Create() {
   const hasChars = deskCards("characters").length > 0;
   const fields = useMemo(() => {
     const d = desk.draft || {};
+    // P2a:字符串数组(goals/abilities/constraints/timeline/main_plot/speech_rules…)升级就地列表编辑
+    // (✎ 打开=一行一条);对象数组(世界书 entries、故事 events)仍走「聊」,P2b 接结构编辑。
+    const isStrList = (v) => Array.isArray(v) && v.every((x) => typeof x === "string");
     return Object.keys(d)
       .filter((k) => !NON_FIELD_KEYS.includes(k))
       .map((k) => ({
         k0: k, // 原始 key(就地手改/定向指令回写用)
         k: LABELS[k] || k,
         v: fmtVal(d[k]),
-        // 纯文本字段可就地手改;对象/数组(世界书 entries、故事 timeline、tags…)v1 只读走「聊着改」
-        editable: typeof d[k] === "string",
+        editable: typeof d[k] === "string" || isStrList(d[k]),
+        list: isStrList(d[k]),
         // AI 骨架常带空串字段:收编成 ✦ 补写目标,不再是意义不明的空行
-        empty: typeof d[k] === "string" && !d[k].trim(),
+        empty: (typeof d[k] === "string" && !d[k].trim()) || (isStrList(d[k]) && !d[k].length),
         fresh: (desk.filled || []).includes(k),
         hidden: /secret|隐藏|真相/i.test(k),
       }));
@@ -1667,6 +1714,21 @@ export default function Create() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // R3 模板卡叠:开弹窗/切卡种时重置叠序;换一套=顶卡退场 240ms 后转到叠底
+  useEffect(() => {
+    if (tplOpen) {
+      setTplOrder((TEMPLATES[kind] || []).map((_, i) => i));
+      setTplLeaving(false);
+    }
+  }, [tplOpen, kind]);
+  function cycleTpl() {
+    if ((TEMPLATES[kind] || []).length < 2 || tplLeaving) return;
+    setTplLeaving(true);
+    setTimeout(() => {
+      setTplOrder((o) => [...o.slice(1), o[0]]);
+      setTplLeaving(false);
+    }, 240);
+  }
   // —— D3 模板:铺骨架进 draft(空串字段=✦ 补写目标),opener 只进输入框不代发 ——
   const tplHints = useMemo(() => {
     const t = getTpl(kind, desk.tpl);
@@ -1675,7 +1737,8 @@ export default function Create() {
   function applyTemplate(t) {
     if (!confirmReplaceDraft()) return;
     patch(kind, {
-      draft: t.skeleton ? { ...t.skeleton } : {},
+      // P3:模板骨架带对象数组(示例条目/节拍),深拷贝防 draft 编辑摸到模板常量
+      draft: t.skeleton ? structuredClone(t.skeleton) : {},
       filled: [],
       tpl: t.id,
       input: t.opener || "",
@@ -1683,7 +1746,14 @@ export default function Create() {
       ...(t.skeleton ? { phase: "drafting", comp: 0, questions: [], blueprint: [] } : {}),
     });
     setTplOpen(false);
-    flash(t.skeleton ? `已应用「${t.name}」模板——长按空字段可让 AI 补写` : `「${t.name}」的开场指令已放进输入框`);
+    // R2:模板名鎏金扫光(toast 转瞬场合,不常驻)
+    flash(
+      t.skeleton ? (
+        <>已应用「<ShinyText text={t.name} speed={1.4} color="var(--accent-3)" shineColor="#ffe9c2" />」模板——长按空字段可让 AI 补写</>
+      ) : (
+        <>「<ShinyText text={t.name} speed={1.4} color="var(--accent-3)" shineColor="#ffe9c2" />」的开场指令已放进输入框</>
+      ),
+    );
     requestAnimationFrame(() => dockInputRef.current && dockInputRef.current.focus());
   }
 
@@ -1713,7 +1783,7 @@ export default function Create() {
   function startFieldEdit(f) {
     if (!f.editable) return;
     setEditingKey(f.k0);
-    setEditVal(desk.draft[f.k0] || "");
+    setEditVal(f.list ? (desk.draft[f.k0] || []).join("\n") : desk.draft[f.k0] || "");
   }
   function commitFieldEdit() {
     if (editingKey === null) return;
@@ -1730,11 +1800,50 @@ export default function Create() {
       });
       return;
     }
-    patch(kind, (d0) => ({ draft: { ...d0.draft, [key]: val } }));
+    patch(kind, (d0) => {
+      const cur = (d0.draft || {})[key];
+      // P2a 列表字段:一行一条回写数组(空行丢弃);按 draft 现值判型,与 startFieldEdit 的 join 对偶
+      const v2 = Array.isArray(cur) ? val.split("\n").map((s) => s.trim()).filter(Boolean) : val;
+      return { draft: { ...d0.draft, [key]: v2 } };
+    });
   }
   function cancelFieldEdit() {
     setEditingKey(null);
   }
+  // ── P2b 结构条目编辑:世界书 entries / 故事书 events(节拍)的增删改 ──
+  // 键名 ∈ src/models.py(WorldEntry: comment/keys/content/visibility;StoryEvent: event_id/title/trigger_keywords/summary)。
+  // 标题/内容=受控直写;触发词=uncontrolled+onBlur 提交(受控+实时 split 会吃掉刚敲的分隔符)。
+  const ENTRY_SPECS = {
+    entries: { zh: "条目", titleKey: "comment", keysKey: "keys", bodyKey: "content", canHide: true },
+    events: { zh: "节拍", titleKey: "title", keysKey: "trigger_keywords", bodyKey: "summary", canHide: false },
+  };
+  function blankEntryOf(fieldKey) {
+    return fieldKey === "events"
+      ? { event_id: "ev" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), title: "", trigger_keywords: [], summary: "" }
+      : { comment: "", keys: [], content: "" };
+  }
+  function patchEntryAt(fieldKey, idx, up) {
+    patch(kind, (d0) => {
+      const arr = [...(((d0.draft || {})[fieldKey]) || [])];
+      arr[idx] = { ...arr[idx], ...up };
+      return { draft: { ...d0.draft, [fieldKey]: arr } };
+    });
+  }
+  function addEntryAt(fieldKey) {
+    patch(kind, (d0) => ({ draft: { ...d0.draft, [fieldKey]: [...(((d0.draft || {})[fieldKey]) || []), blankEntryOf(fieldKey)] } }));
+  }
+  function delEntryAt(fieldKey, idx) {
+    const spec = ENTRY_SPECS[fieldKey];
+    const cur = (desk.draft[fieldKey] || [])[idx] || {};
+    const has = (cur[spec.bodyKey] || "").trim() || (cur[spec.titleKey] || "").trim();
+    if (has && !window.confirm(`删掉${spec.zh}「${cur[spec.titleKey] || "未命名"}」?`)) return;
+    patch(kind, (d0) => {
+      const arr = [...(((d0.draft || {})[fieldKey]) || [])];
+      arr.splice(idx, 1);
+      return { draft: { ...d0.draft, [fieldKey]: arr } };
+    });
+  }
+  const splitKeys = (s) => s.split(/[、,，;；\s]+/).map((x) => x.trim()).filter(Boolean);
   // 复杂字段(对象/数组)不就地改:预填一句定向指令、光标带到命令条,聊着改。
   function chatAboutField(f) {
     patch(kind, { input: `把「${f.k}」这部分改一下:` });
@@ -2155,7 +2264,10 @@ export default function Create() {
                     aria-label="在此落一张卡"
                   >
                     {KINDS.map((t) => (
-                      <button key={t.k} onClick={() => spawnDraftAt(t.k, spawnAt)}>{t.zh}</button>
+                      <button key={t.k} className="create-kind-btn" onClick={() => spawnDraftAt(t.k, spawnAt)}>
+                        <span className="create-kind-nm">{t.zh}</span>
+                        <span className="create-kind-sub">{t.sub}</span>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -2210,13 +2322,16 @@ export default function Create() {
               {boardCards.length === 0 && (
                 <div className="create-board-empty" onPointerDown={(e) => e.stopPropagation()}>
                   <span className="create-card-blank-seal t-kai" aria-hidden="true">板</span>
-                  <span className="t-meta">板上还空着——起一张:</span>
+                  <span className="t-meta">
+                    <StaggeredText text="板上还空着——起一张:" as="span" segmentBy="chars" delay={16} duration={0.3} direction="bottom" blur={false} respectReducedMotion />
+                  </span>
                   {/* 修复(主理人审核反馈):新建入口就放在眼前——H3 把「+卡」搬去左 rail 后,
                       空板文案曾指向已不存在的顶部按钮,新用户寸步难行 */}
                   <div className="create-empty-news">
                     {KINDS.map((t) => (
-                      <button key={t.k} className="create-boardbar-new" onClick={() => newCardOf(t.k)}>
-                        + {t.zh}
+                      <button key={t.k} className="create-boardbar-new create-kind-btn" onClick={() => newCardOf(t.k)}>
+                        <span className="create-kind-nm">+ {t.zh}</span>
+                        <span className="create-kind-sub">{t.sub}</span>
                       </button>
                     ))}
                   </div>
@@ -2284,8 +2399,10 @@ export default function Create() {
                         }}
                         onClick={() => { setRailNew(false); newCardOf(t.k); }}
                         title={"点击新建,或拖到画布上落卡 (" + (i + 1) + ")"}
+                        className="create-kind-btn"
                       >
-                        + {t.zh}
+                        <span className="create-kind-nm">+ {t.zh}</span>
+                        <span className="create-kind-sub">{t.sub}</span>
                       </button>
                     ))}
                   </div>
@@ -2345,7 +2462,26 @@ export default function Create() {
                     </div>
                   ) : (
               <section className="create-canvas" aria-label="卡画布">
-                <div className="create-card-kind t-meta">{KINDS[ki].zh}{desk.built.length > 0 && ` · 本台已建 ${desk.built.length}`}</div>
+                <div className="create-card-kind t-meta">{KINDS[ki].zh} · {KINDS[ki].sub}{desk.built.length > 0 && ` · 本台已建 ${desk.built.length}`}</div>
+                {/* R3 阶段条(主理人试样拍板):构思→落笔→收尾,由真实门控驱动(phase/comp/60 分线)。
+                    骨架路径直通落笔=构思打勾,如实;comp 过线才亮收尾(纯聊构思路径才有 comp)。 */}
+                {isDraftId(boardFocus) && (() => {
+                  const stage = phase !== "drafting" ? 0 : (desk.comp || 0) >= COMP_THRESHOLD ? 2 : 1;
+                  const names = ["构思", "落笔", "收尾"];
+                  return (
+                    <div className="create-phasesteps" aria-label={"创作阶段:" + names[stage]}>
+                      {names.map((s, i) => (
+                        <span key={s} className="create-phasestep-w">
+                          <span className={"create-phasestep" + (i < stage ? " is-done" : i === stage ? " is-on" : "")}>
+                            {i < stage ? "✓" : i + 1}
+                          </span>
+                          <span className={"create-phasestep-t t-meta" + (i === stage ? " is-on" : "")}>{s}</span>
+                          {i < 2 && <span className={"create-phasestep-line" + (i < stage ? " is-done" : "")} aria-hidden="true" />}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
                 {editingKey === "__name" ? (
                   <input
                     className="create-card-name create-name-edit t-kai"
@@ -2371,7 +2507,99 @@ export default function Create() {
                 )}
                 <div className="create-card-fields">
                   {fields.length ? (
-                    fields.map((f, fi) => (
+                    fields.map((f, fi) => {
+                      // P2b:世界书条目/故事书节拍=结构编辑块(标题/触发词/内容,世界书另有公开↔隐藏);
+                      // 长按条目空白处=AI 只改这条(伪字段进 aiCtx 定向指令管线);输入控件自己 stopPropagation。
+                      const spec = ENTRY_SPECS[f.k0];
+                      if (spec && Array.isArray(desk.draft[f.k0])) {
+                        const arr = desk.draft[f.k0] || [];
+                        return (
+                          <div className="create-field create-field-entries" style={{ "--ci": Math.min(fi, 8) }} key={f.k0}>
+                            <span className="create-field-k t-meta">
+                              {f.k}
+                              <span className="create-entry-note">
+                                <BlurHighlight highlightedBits={["触发词"]} highlightColor="color-mix(in srgb, var(--accent) 16%, transparent)" blurAmount={5}>
+                                  {f.k0 === "entries" ? "玩家聊到触发词,这条才注入给 AI" : "玩家聊到触发词,这个节拍被推进"}
+                                </BlurHighlight>
+                              </span>
+                            </span>
+                            <div className="create-entries">
+                              {arr.map((en, i) => {
+                                const keysArr = en[spec.keysKey] || [];
+                                const title = en[spec.titleKey] || "";
+                                return (
+                                  <div
+                                    className="create-entry"
+                                    key={f.k0 + "#" + i}
+                                    onPointerDown={(e) => {
+                                      if (e.button !== 0 || e.target.closest("input,textarea,button")) return;
+                                      lpStart(e.currentTarget, e, () =>
+                                        openAiForField({ k: `${spec.zh}·${title || "未命名"}`, k0: f.k0, empty: !(en[spec.bodyKey] || "").trim() })
+                                      );
+                                    }}
+                                    onPointerUp={lpCancel}
+                                    onPointerLeave={lpCancel}
+                                    onPointerCancel={lpCancel}
+                                  >
+                                    <div className="create-entry-row">
+                                      <input
+                                        className="create-entry-title"
+                                        value={title}
+                                        placeholder={spec.zh + "标题"}
+                                        aria-label={spec.zh + "标题"}
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                        onChange={(e) => patchEntryAt(f.k0, i, { [spec.titleKey]: e.target.value })}
+                                      />
+                                      {spec.canHide && (
+                                        <button
+                                          className={"create-entry-vis" + (en.visibility === "hidden" ? " is-hidden" : "")}
+                                          title={en.visibility === "hidden" ? "隐藏条目:不注入、玩家不可见的暗设定——点改公开" : "公开条目——点改隐藏(暗设定)"}
+                                          onPointerDown={(e) => e.stopPropagation()}
+                                          onClick={() => patchEntryAt(f.k0, i, { visibility: en.visibility === "hidden" ? "public" : "hidden" })}
+                                        >
+                                          {en.visibility === "hidden" ? "密" : "公"}
+                                        </button>
+                                      )}
+                                      <button
+                                        className="create-entry-del"
+                                        title={"删掉这" + (f.k0 === "entries" ? "条" : "个节拍")}
+                                        aria-label={"删掉" + spec.zh}
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                        onClick={() => delEntryAt(f.k0, i)}
+                                      >
+                                        ×
+                                      </button>
+                                    </div>
+                                    <input
+                                      className="create-entry-keys"
+                                      key={"keys" + i + ":" + keysArr.join("、")}
+                                      defaultValue={keysArr.join("、")}
+                                      placeholder="触发词:顿号或逗号分隔"
+                                      aria-label="触发词"
+                                      onPointerDown={(e) => e.stopPropagation()}
+                                      onBlur={(e) => patchEntryAt(f.k0, i, { [spec.keysKey]: splitKeys(e.target.value) })}
+                                    />
+                                    {!keysArr.length && <div className="create-entry-warn t-meta">没有触发词,永远不会出场</div>}
+                                    <textarea
+                                      className="create-entry-body"
+                                      rows={2}
+                                      value={en[spec.bodyKey] || ""}
+                                      placeholder={f.k0 === "entries" ? "这条设定的内容" : "这个节拍发生什么"}
+                                      aria-label={spec.zh + "内容"}
+                                      onPointerDown={(e) => e.stopPropagation()}
+                                      onChange={(e) => patchEntryAt(f.k0, i, { [spec.bodyKey]: e.target.value })}
+                                    />
+                                  </div>
+                                );
+                              })}
+                              <button className="create-entry-add" onClick={() => addEntryAt(f.k0)}>
+                                + 加一{f.k0 === "entries" ? "条" : "个节拍"}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+                      return (
                       <div
                         className={
                           "create-field" +
@@ -2398,11 +2626,12 @@ export default function Create() {
                           <textarea
                             className="create-field-edit t-ui-sm"
                             autoFocus
-                            rows={Math.min(8, Math.max(2, Math.ceil((editVal.length + 1) / 26)))}
+                            rows={Math.min(8, Math.max(2, f.list ? editVal.split("\n").length + 1 : Math.ceil((editVal.length + 1) / 26)))}
                             value={editVal}
                             onChange={(e) => setEditVal(e.target.value)}
                             onKeyDown={(e) => editKeys(e)}
                             onBlur={commitFieldEdit}
+                            placeholder={f.list ? "一行一条,空行不算" : undefined}
                             aria-label={"编辑" + f.k}
                           />
                         ) : f.empty || !f.v.trim() ? (
@@ -2416,6 +2645,11 @@ export default function Create() {
                         ) : (
                           <span className="create-field-v t-ui-sm">{f.hidden ? "(隐藏真相,玩家不可见)" + f.v : f.v}</span>
                         )}
+                        {/* P2c 防上帝视角:已知写了、未知空着=提示配对(引擎把两者一起进 prompt,缺「不知道」悬念全漏) */}
+                        {kind === "players" && f.k0 === "unknown" &&
+                          !!(desk.draft.known_facts || []).length && !(desk.draft.unknown || []).length && (
+                            <div className="create-field-pairwarn t-meta">「开局已知」写了,这里还空着——不写「不知道什么」,玩家容易开局全知,悬念漏光</div>
+                          )}
                         {editingKey !== f.k0 && f.editable && (
                           <span className="create-field-acts">
                             {/* I 系列:✦/⟳/「聊」/指示行退役——AI 统一走「长按这一块」;✎ 手改(非 AI)保留 */}
@@ -2432,7 +2666,8 @@ export default function Create() {
                           </span>
                         )}
                       </div>
-                    ))
+                      );
+                    })
                   ) : phase !== "drafting" &&
                     (desk.messages.length > 1 || (desk.questions || []).length > 0 || (desk.blueprint || []).length > 0) ? (
                     /* F8 构思纸面:聊开(或已有构思产物)之后,火候线/助手追问/圈选词/蓝图直接长在画布上 */
@@ -2446,7 +2681,7 @@ export default function Create() {
                         aria-label="这张卡的完整度"
                       >
                         <span className="create-comp-label t-meta">
-                          完整度 {desk.comp || 0}
+                          完整度 <CountUp to={desk.comp || 0} duration={0.7} />
                           <span className="create-comp-hint">{(desk.comp || 0) >= COMP_THRESHOLD ? " · 过线,可以落笔" : ` · 过 ${COMP_THRESHOLD} 才落笔`}</span>
                         </span>
                         <span className="create-comp-line" aria-hidden="true">
@@ -3000,16 +3235,49 @@ export default function Create() {
             <p className="create-seed-note t-meta">
               选一套骨架铺上画布:空字段自带引导,✦ 让 AI 补、✎ 自己写;开场指令会放进输入框,过目再发。
             </p>
-            <div className="create-import-picks">
-              {(TEMPLATES[kind] || []).map((t) => (
-                <button key={t.id} className="create-import-pick" onClick={() => applyTemplate(t)}>
-                  <span className="create-import-pick-t t-ui">
-                    {t.name}
-                    <span className="create-tpl-badge t-meta">{t.skeleton ? `${Object.keys(t.skeleton).length} 字段` : "纯引导"}</span>
-                  </span>
-                  <span className="create-import-pick-d t-meta">{t.hint}</span>
-                </button>
-              ))}
+            {/* R3 模板卡叠(主理人试样拍板):点卡面/「换一套」翻下一套,「应用这套」上画布 */}
+            <div className="create-tplstack" aria-label="模板卡叠">
+              {(TEMPLATES[kind] || []).map((t, i) => {
+                const pos = tplOrder.indexOf(i);
+                if (pos < 0) return null;
+                const leaving = tplLeaving && pos === 0;
+                const sk = t.skeleton || {};
+                const chips = Array.isArray(sk.entries) && sk.entries.length
+                  ? sk.entries.map((en) => en.comment || "条目").slice(0, 4)
+                  : t.skeleton
+                  ? Object.keys(sk).filter((k) => k !== "name" && k !== "title").slice(0, 6).map((k) => LABELS[k] || k)
+                  : ["纯引导起手"];
+                return (
+                  <div
+                    key={t.id}
+                    className={"create-tplcard" + (leaving ? " is-leaving" : "")}
+                    style={{
+                      zIndex: 10 - pos,
+                      transform: leaving ? undefined : `translateY(${-pos * 10}px) scale(${1 - pos * 0.045})`,
+                      opacity: leaving ? undefined : pos > 2 ? 0 : 1 - pos * 0.18,
+                      pointerEvents: pos === 0 && !tplLeaving ? "auto" : "none",
+                    }}
+                    onClick={() => cycleTpl()}
+                  >
+                    <div className="create-tplcard-h">
+                      <span className="create-tplcard-nm t-kai">{t.name}</span>
+                      <span className="create-tpl-badge t-meta">{t.skeleton ? `${Object.keys(sk).length} 字段` : "纯引导"}</span>
+                    </div>
+                    <div className="create-tplcard-hint t-meta">{t.hint}</div>
+                    <div className="create-tplcard-chips t-meta">
+                      {chips.map((c) => (
+                        <span key={c}>{c}</span>
+                      ))}
+                    </div>
+                    <div className="create-tplcard-acts">
+                      <Button variant="primary" onClick={(e) => { e.stopPropagation(); applyTemplate(t); }}>应用这套</Button>
+                      {(TEMPLATES[kind] || []).length > 1 && (
+                        <button className="create-blank-link" onClick={(e) => { e.stopPropagation(); cycleTpl(); }}>换一套</button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
