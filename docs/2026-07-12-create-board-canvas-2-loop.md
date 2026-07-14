@@ -237,3 +237,41 @@ plan: docs/2026-07-12-create-board-canvas-2-plan.md
 - 排障插曲:一轮改完页面白卡(0 卡)——**aiPos 声明在引用它的 persist effect 之后,TDZ ReferenceError 崩整组件**;前移声明即愈。教训:往既有 effect 的 deps 加新 state 时,先确认声明顺序。
 - 验收(5199 真调环境):按压 220ms 采样=环在按压点+conic 填充+卡抬起态;满环 sidebar 开、textarea 3 行可打字;**清选中后输入仍可用**;拖 sidebar (−200,130) 精确、持久化 __ai、双击回位 translate(0,0)。
 - 测试残留:preview localStorage 留测试台与 sidebar 位置。
+
+## 主题变更 · 2026-07-13(主理人拍板「米色 → 全白」,PR #169)
+
+- 范围:tokens raw 层四值白化(paper-bg/panel=#ffffff、sunk=#f4f4f2、line=#e4e4e1),墨/线中性化(#1f1f1e/#6b6b68),阴影与 scrim 去暖褐转中性;**朱砂/鎏金 accent、badge 彩底、stage 暖夜主题一律不动**——语义层结构不变,全站经 token 一次生效。
+- 治本顺手账:Home.css 5 处硬编码米色(#fffdfa/#d8d2c7)收编回 var(--panel)/var(--line);Styleguide 色卡同步新值。
+- 验收:body 计算色 rgb(255,255,255);创作页与首页扫描三个旧米色 hex 计算色零残留;画板层次(沉底/点阵/边界)由 fg color-mix 派生自动适配白底。
+- 备注:tokens 注释原写「raw 色板(不可变)」——本次是主理人显式改主题,注释已同步改口;若后续要双主题切换(米/白),在语义层加 data-theme 变体即可,raw 结构已就绪。
+
+## 第二轮 · 2026-07-13(全栈米色清剿 + 长按换 C 描金,同在 PR #169)
+
+- **全栈米色清剿**(主理人:「创作页面似乎依然不是全白,寻找全栈类似的米色改成白色」——实因 #169 未合,本机/线上仍旧版;顺势把 token 之外的硬编码米色全数清掉):
+  - Login.css 整卡最大残留:米色渐变底+茶色描边+暖字全套 → panel/line/fg/muted/accent-2 语义 token;
+  - StaggeredMenu 暖纸面板 #fbf8f2×3 → var(--paper-panel),墨字 → var(--ink);
+  - Home 白胶囊按钮/对话坞、Explore 浮条 rgba 暖纸底 → 纯白;ui.css 发送气泡字 → on-accent;depth-card 光斑去暖;AppShell 菜单钮新墨。
+  - **保留判定**:暗色场景上的暖色文字/鎏金饰(galgame 首页立绘区、卡背书脊纹理、stage 主题、身份卡纸质感)全部不动——米色治理只针对亮面底色。
+- **长按反馈换 C·描金一圈**(主理人四案试样〔conic 环/墨浸/描金/饼形对勾〕后拍板 C):鎏金线沿模块圆角 pathLength 归一自描一周,画满触发;松手快退、按满溅墨收拍。引擎(rAF+interval 兜底/is-pressing/lpFired)不变,零新依赖。注:I 系列曾废弃「线条描边」,当时败因=按周长走进度不归一+朱砂细线弱对比;C 案 pathLength=100 + 鎏金 2px + 封印帧,试样过关。
+- 验收(5199 preview):Login 卡计算色纯白+中性线;首页全元素扫描米色底命中=0;菜单面板 oklab≈1=纯白;长按全链路(trace 出现/rx 贴圆角/鎏金描边→触发开 AI sidebar→清场)与松手回退(is-out+dashoffset 回 100)实测通过,console 零报错。
+
+## 审核修复⑧ · 2026-07-13(主理人:「侧边的点击一直会失效」)
+
+- **病灶(永久性)**:`onBoardPointerDown` 的抓手/Space pan 分支对 target 不加区分——rail/缩放控件/空板引导都在 `.create-board` 内又没 stopPropagation,pointerdown 一到画布就 `setPointerCapture`,pointerup 被重定向、按钮 click 永不触发。**进了抓手整列点死,连「选择」都点不回**(只剩键盘 V 逃生);截图里抓手高亮正是这个状态。
+- 修:rail/缩放/空板加 `stopPropagation`(与 ctxbar/spawnmenu 既有口径对齐);另修连带伤——抓手/Space 下卡片不再起拖拽和长按(原来 pan 途中卡的长按机照跑,550ms 满环会误开 AI sidebar)。
+- **顺手记录(瞬时性,未动)**:路由涟漪 `.page-reveal` 扩圈期间(0.24~0.65s)`clip-path` 连带裁 hit-test,刚切进创作页立点 rail 会吞第一下;自愈短暂,若再被反馈可考虑涟漪只裁视觉克隆层。
+- 验收(5199 **真实鼠标**点击,headless 需先中和冻结的涟漪动画):进抓手→点「新建」(飞出菜单开)→点回「选择」全通;抓手下按卡片无描金无误开 AI;console 零报错。教训:**合成 dispatchEvent 绕过 hit-test 与 pointer capture,验证点击类 bug 必须走真实鼠标**(此前合成事件全绿、真点全死)。
+
+## rail 换装 · 2026-07-13(主理人:「line-sidebar 完整复刻」,同在 PR #169)
+
+- 工具 rail 从纸面小岛按钮列换成 **react-bits LineSidebar 完整复刻**(JS+CSS 版 verbatim 移植进 `components/react-bits/line-sidebar.{jsx,css}`,零新依赖):指针接近哪项右移染朱砂+左线标伸长同染、项间短刻度、等宽序号、单 rAF 指数平滑。对上游仅两处加法扩展(items 带 title/disabled、activeIndex 受控),头注有账。
+- 集成:10 条目/路由/快捷键与按钮版一一对应;工具态(选择/抓手)受控高亮;导出无草稿禁用;新建飞出菜单原样保留。色值全走语义 token。**原版 ±48px 隐形命中扩边收窄到 ±12px**——否则 rail 右侧一条画布区的点击被隐形偷走,和审核修复⑧同类病。
+- 取舍记录:资料/引用的「已挂载」is-on 指示在单 activeIndex 模型下暂无对应表达,若要可后补小圆点。
+- 验收(5199):结构/序号/楷体/受控高亮全对;--effect=1 手动灌注→字+线标染 #8f3c32、右移 12px(管线通;rAF 动画本环境冻结,机制 verbatim 上游);抓手/新建/选择路由全通;console 干净重载零新错(仅存两条旧 HMR 窗口期残留,模块时间戳可证)。
+
+## 审核修复⑨ · 2026-07-13(主理人:「选择和抓手移除,改左键选择右键抓手,每次进页给提示」)
+
+- **选择/抓手工具正式退役**(工具切换模式撤销):左键=选择/拖卡(原样),**平移=右键/中键拖或 Space+左键**。rail 缩到 8 项、无受控常亮(全瞬时动作);V/H 快捷键删除,1-4/⌘0 保留。
+- 手势细节:pan 手势中动态挂 is-pan(抓手光标+卡 pointer-events 关);右键落在卡上冒泡进平移(不起卡拖/长按);**输入区(INPUT/TEXTAREA/contentEditable)右键放行系统粘贴菜单**,画布其余区域抑制 contextmenu(否则右拖松手 Windows 会弹一发浏览器菜单)。
+- **进页操作提示**:底部居中胶囊,每次挂载都出(主理人点名「每次来到这个页面」),9s 自动收+×手动收,自带 stopPropagation(rail 教训口径)。
+- 验收(5199):右键按下→is-pan 挂/松手收,世界坐标 setView 提交(translate 519,257);contextmenu 画布抑制;右键点卡=平移;提示条重挂 200ms 即现。**排障记录:两次查不到提示条,实为工具调用间隔(含模型思考)>9s 已自动收——headless 里验时限性 UI 要单次调用内轮询**,console 零报错。

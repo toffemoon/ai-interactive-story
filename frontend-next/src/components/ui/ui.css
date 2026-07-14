@@ -243,7 +243,7 @@
 }
 .bubble--sent {
   background: var(--accent-2);
-  color: #f1efe6;
+  color: var(--on-accent);
   border-radius: 14px 4px 14px 14px;
 }
 
@@ -514,7 +514,7 @@
   padding: 3px 9px;
   border-radius: var(--r-sm);
   border: 1px solid rgba(255, 255, 255, 0.5);
-  background: rgba(255, 253, 250, 0.82);
+  background: rgba(255, 255, 255, 0.82);
   color: var(--cinnabar);
   backdrop-filter: blur(8px);
   white-space: nowrap;

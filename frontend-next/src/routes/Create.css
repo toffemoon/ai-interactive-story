@@ -2403,7 +2403,7 @@
     touch-action: none;
   }
   .create-board.is-pan {
-    cursor: grab;
+    cursor: grab; /* 右/中键拖或 Space 按住(平移手势中;抓手工具已退役) */
   }
   .create-board.is-dropover::after {
     content: "";
@@ -2417,7 +2417,7 @@
     font-family: var(--font-kai);
   }
   .create-board.is-pan .create-bcard {
-    pointer-events: none; /* 抓手态整板可拖,卡不截胡 */
+    pointer-events: none; /* 平移手势中整板可拖,卡不截胡 */
   }
   /* H1 世界容器:pan/zoom 只动它;零尺寸锚在左上,卡绝对定位其中 */
   .create-world {
@@ -2427,20 +2427,21 @@
     transform-origin: 0 0;
     will-change: transform;
   }
-  /* H3 工具 rail:左上竖排,纸面小岛;与底部中央 dock、右下 zoomctl 三不相扰 */
+  /* H3→LineSidebar 工具 rail(2026-07-13 主理人拍板完整复刻 react-bits/line-sidebar):
+     裸排线标+文字,不再是纸面小岛;条目/路由不变。下方 .create-rail button 样式只服务飞出菜单 */
   .create-rail {
     position: absolute;
-    left: var(--sp-3);
+    left: var(--sp-4);
     top: var(--sp-3);
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 4px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: var(--r-md);
-    box-shadow: var(--shadow-card);
     z-index: 5;
+  }
+  .create-rail .line-sidebar__label {
+    font-family: var(--font-kai);
+    letter-spacing: 0.08em;
+  }
+  /* 原版命中扩边 -48px 太阔:画布上会隐形偷走 rail 右侧一条卡片区的点击(同抓手吞点击一类病),收窄 */
+  .create-rail .line-sidebar__item::before {
+    inset: -5px -12px;
   }
   .create-rail button {
     min-width: 56px;
@@ -2475,8 +2476,8 @@
   }
   .create-rail-fly {
     position: absolute;
-    left: calc(100% + 8px);
-    top: 62px;
+    left: calc(100% + 16px);
+    top: 12px; /* 对齐 LineSidebar 第 1 项(新建) */
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -2495,6 +2496,44 @@
     height: 1px;
     margin: 3px 4px;
     background: var(--line);
+  }
+  /* 进页操作提示:底部居中胶囊,9s 自动收;定位不走 transform 以外的动画(fill 教训) */
+  .create-ctrlhint {
+    position: absolute;
+    left: 50%;
+    bottom: var(--sp-4);
+    transform: translateX(-50%);
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 9px 8px 16px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r-pill);
+    box-shadow: var(--shadow-card);
+    white-space: nowrap;
+    animation: ctrlHintIn 0.32s var(--ease-out);
+  }
+  @keyframes ctrlHintIn {
+    from {
+      opacity: 0;
+    }
+  }
+  .create-ctrlhint button {
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: transparent;
+    border-radius: 50%;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .create-ctrlhint button:hover {
+    color: var(--fg);
+    background: color-mix(in srgb, var(--fg) 6%, transparent);
   }
   .create-zoomctl {
     position: absolute;
@@ -2578,50 +2617,51 @@
     overflow: hidden;
     color: color-mix(in srgb, var(--fg) 55%, transparent);
   }
-  /* I 系列:长按反馈=按压点圆形进度环 + 目标模块按压抬起(线条描边方案已废——大卡周长太长,进度感知差) */
-  .create-lpring {
+  /* I 系列:长按反馈=C·描金一圈(2026-07-13 主理人四案试样拍板):鎏金线沿模块圆角自描一周,
+     pathLength=100 归一让大小卡进度节奏一致;松手描线快退,按满「封印」+溅墨收拍。 */
+  .create-lptrace {
     position: fixed;
     z-index: 60;
-    width: 40px;
-    height: 40px;
-    margin: -20px 0 0 -20px;
     pointer-events: none;
-    opacity: 0;
-    transform: scale(0.6);
-    transition: opacity 0.1s var(--ease-out), transform 0.16s cubic-bezier(0.34, 1.4, 0.64, 1);
   }
-  .create-lpring > i {
-    display: block;
+  .create-lptrace svg {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
-    border-radius: var(--r-pill);
-    background: conic-gradient(var(--accent) 0deg, color-mix(in srgb, var(--accent) 14%, transparent) 0);
-    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4.5px), #000 calc(100% - 3.5px));
-    mask: radial-gradient(farthest-side, transparent calc(100% - 4.5px), #000 calc(100% - 3.5px));
+    overflow: visible;
   }
-  .create-lpring::after {
-    content: "";
-    position: absolute;
-    inset: 14px;
-    border-radius: var(--r-pill);
-    background: color-mix(in srgb, var(--accent) 55%, transparent);
+  .create-lptrace rect {
+    fill: none;
+    stroke: var(--accent-3);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-dasharray: 100;
+    stroke-dashoffset: 100;
   }
-  .create-lpring.is-in {
-    opacity: 1;
-    transform: scale(1);
-  }
-  .create-lpring.is-out {
+  .create-lptrace.is-out {
     opacity: 0;
-    transform: scale(0.7);
-    transition: opacity 0.12s var(--ease-out), transform 0.12s var(--ease-out);
+    transition: opacity 0.18s var(--ease-out);
   }
-  .create-lpring.is-done {
-    animation: lpPop 0.26s var(--ease-out) both;
+  .create-lptrace.is-done {
+    animation: lpSeal 0.46s var(--ease-out) both;
   }
-  @keyframes lpPop {
-    0% { opacity: 1; transform: scale(1); }
-    40% { opacity: 1; transform: scale(1.25); }
-    100% { opacity: 0; transform: scale(1.5); }
+  .create-lptrace.is-done rect {
+    stroke-width: 2.5;
+  }
+  @keyframes lpSeal {
+    0% { opacity: 1; }
+    55% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  .create-lpspark {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 3px;
+    height: 11px;
+    border-radius: 2px;
+    pointer-events: none;
   }
   /* 目标模块按压态:抬起感——卡用阴影+底色(卡的 transform 被行内定位占用),字段可加 scale */
   .create-bcard.is-pressing {

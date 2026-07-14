@@ -11,6 +11,7 @@ import { TEMPLATES, getTpl } from "./createTemplates"; // D3 创作模板(文案
 import { loadPrompts, addPrompt, removePrompt } from "../lib/promptLib"; // F1 提示词库(localStorage)
 import { cardToRefText, makeRef } from "../lib/refText"; // F2 卡→引用文本(refs 通道)
 import { useAuth } from "../state/auth";
+import LineSidebar from "../components/react-bits/line-sidebar"; // rail=LineSidebar 完整复刻(2026-07-13 主理人拍板)
 import "./Create.css";
 
 // 角色卡的用户上传图(头像/立绘)单独保住,别被 AI 重建 draft 覆盖掉。
@@ -363,7 +364,7 @@ export default function Create() {
       window.removeEventListener("keyup", up);
     };
   }, []);
-  // H3 快捷键:V 选择 / H 抓手 / ⌘·Ctrl+0 适配全部 / 1-4 新建·继续四卡种。
+  // H3 快捷键:⌘·Ctrl+0 适配全部 / 1-4 新建·继续四卡种(V/H 随选择/抓手工具退役,2026-07-13)。
   // 守卫:输入态与任何弹层/聚焦态下不劫持(Esc 另有专职监听)。
   const kbdBlocked =
     !!boardFocus || !!finalize || !!importOpen || seedOpen || !!refPanel || !!libModal ||
@@ -380,17 +381,19 @@ export default function Create() {
       }
       if (e.metaKey || e.ctrlKey) return;
       const k = e.key.toLowerCase();
-      if (k === "v") setTool("select");
-      else if (k === "h") setTool("hand");
-      else if (k >= "1" && k <= "4") newCardOf(KINDS[Number(k) - 1].k);
+      if (k >= "1" && k <= "4") newCardOf(KINDS[Number(k) - 1].k);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMobile, kbdBlocked]);
-  // H3 工具态:select(默认)| hand(粘性抓手,Space=瞬时抓手不变);ref 镜像给 pointer 手势层用。
-  const [tool, setTool] = useState("select");
+  // 2026-07-13 主理人拍板:选择/抓手工具退役——左键=选择,右键(或中键/Space+左键)拖=平移画布。
   const [railNew, setRailNew] = useState(false); // rail「新建」飞出菜单(四卡种全名,可拖出落卡)
+  const [ctrlHint, setCtrlHint] = useState(true); // 每次进创作页都提示一次操作方式(主理人拍板)
+  useEffect(() => {
+    const t = setTimeout(() => setCtrlHint(false), 9000);
+    return () => clearTimeout(t);
+  }, []);
   // ── I 系列(主理人审核拍板):AI 统一入口=长按——按住任何 AI 可作用的对象,
   //    朱砂环沿模块四周描边生长(550ms),满环即开 AI 对话 sidebar;要改的对象同时进聚焦。
   //    旧入口(✦/⟳ 指示行/批注笺/对话抽屉/dock 批注行)全部退役,对话住右侧 sidebar。 ──
@@ -419,10 +422,26 @@ export default function Create() {
   const LP_MS = 550;
   const lpRef = useRef(null); // {iv, ring}
   const lpFiredRef = useRef(false); // 满环后的 pointerup/click 不再当单击
-  // 长按反馈重做(主理人:线条动画不行,找成熟范式):
-  // 按压点圆形进度环(conic 填充,小而聚焦——大卡描边周长太长,进度感知差)
-  // + 目标模块「按压抬起」态(轻微放大+底色渐亮,BlurHighlight 同族气质)。
-  // 完成=环收拢爆点、模块弹回;取消=环淡出、模块落回。零新依赖。
+  // 长按反馈=C·描金一圈(2026-07-13 主理人四案试样拍板,换掉按压点 conic 环):
+  // 鎏金线沿目标模块圆角自描一周(pathLength 归一,大小卡进度节奏一致),画满即「封印」触发;
+  // 松手=描线快速回退,按满=朱砂+鎏金溅墨收拍、模块弹回。零新依赖。
+  function lpSpark(host) {
+    for (let i = 0; i < 10; i++) {
+      const s = document.createElement("i");
+      s.className = "create-lpspark";
+      s.style.background = i % 2 ? "var(--accent-3)" : "var(--accent-bright)";
+      host.appendChild(s);
+      const a = (i / 10) * 2 * Math.PI;
+      const deg = (a * 180) / Math.PI + 90;
+      s.animate(
+        [
+          { transform: `translate(${Math.cos(a) * 14}px, ${Math.sin(a) * 14}px) rotate(${deg}deg) scaleY(1)`, opacity: 1 },
+          { transform: `translate(${Math.cos(a) * 42}px, ${Math.sin(a) * 42}px) rotate(${deg}deg) scaleY(0.3)`, opacity: 0 },
+        ],
+        { duration: 420, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+      );
+    }
+  }
   function lpCancel(fired = false) {
     const l = lpRef.current;
     if (!l) return;
@@ -430,30 +449,46 @@ export default function Create() {
     clearInterval(l.iv);
     cancelAnimationFrame(l.raf);
     l.el.classList.remove("is-pressing");
-    l.ring.classList.add(fired ? "is-done" : "is-out");
-    setTimeout(() => l.ring.remove(), fired ? 260 : 140);
+    if (fired) {
+      l.wrap.classList.add("is-done");
+      lpSpark(l.wrap);
+    } else {
+      l.rect.style.transition = "stroke-dashoffset 0.16s var(--ease-out)";
+      l.rect.style.strokeDashoffset = 100;
+      l.wrap.classList.add("is-out");
+    }
+    setTimeout(() => l.wrap.remove(), fired ? 460 : 190);
   }
   function lpStart(el, e, onFire) {
     lpCancel();
-    const ring = document.createElement("div");
-    ring.className = "create-lpring";
-    ring.style.left = e.clientX + "px";
-    ring.style.top = e.clientY + "px";
-    ring.innerHTML = `<i></i>`;
-    document.body.appendChild(ring);
-    void ring.offsetWidth;
-    ring.classList.add("is-in");
-    el.classList.add("is-pressing");
-    const disc = ring.firstChild;
+    el.classList.add("is-pressing"); // 先上按压态再量圆角(字段的圆角在按压态里才有)
+    const b = el.getBoundingClientRect();
+    const scale = el.offsetWidth ? b.width / el.offsetWidth : 1; // 画布缩放下屏上圆角=样式圆角×zoom
+    const rad = (parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0) * scale;
+    const wrap = document.createElement("div");
+    wrap.className = "create-lptrace";
+    wrap.style.cssText = `left:${b.left}px;top:${b.top}px;width:${b.width}px;height:${b.height}px`;
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    const rect = document.createElementNS(NS, "rect");
+    rect.setAttribute("x", 1);
+    rect.setAttribute("y", 1);
+    rect.setAttribute("width", Math.max(0, b.width - 2));
+    rect.setAttribute("height", Math.max(0, b.height - 2));
+    rect.setAttribute("rx", Math.max(0, rad - 1));
+    rect.setAttribute("pathLength", 100);
+    svg.appendChild(rect);
+    wrap.appendChild(svg);
+    document.body.appendChild(wrap);
     const t0 = performance.now();
     const paint = () => {
       const p = Math.min(1, (performance.now() - t0) / LP_MS);
-      disc.style.background = `conic-gradient(var(--accent) ${p * 360}deg, color-mix(in srgb, var(--accent) 14%, transparent) 0)`;
+      rect.style.strokeDashoffset = 100 - p * 100;
       return p;
     };
     const tick = () => {
       const l = lpRef.current;
-      if (!l || l.ring !== ring) return;
+      if (!l || l.wrap !== wrap) return;
       if (paint() >= 1) {
         lpFiredRef.current = true;
         lpCancel(true);
@@ -463,13 +498,14 @@ export default function Create() {
       l.raf = requestAnimationFrame(tick);
     };
     lpRef.current = {
-      ring,
+      wrap,
+      rect,
       el,
       raf: requestAnimationFrame(tick),
       // rAF 节流环境兜底:低频补帧+保证触发
       iv: setInterval(() => {
         const l = lpRef.current;
-        if (!l || l.ring !== ring) return;
+        if (!l || l.wrap !== wrap) return;
         if (paint() >= 1) {
           lpFiredRef.current = true;
           lpCancel(true);
@@ -510,14 +546,14 @@ export default function Create() {
     if (!text) return;
     send();
   }
-  const toolRef = useRef("select");
-  useEffect(() => {
-    toolRef.current = tool;
-  }, [tool]);
   function onBoardPointerDown(e) {
-    if (e.button === 1 || (e.button === 0 && (spaceRef.current || toolRef.current === "hand"))) {
+    // 平移=右键/中键拖,或 Space+左键拖(左键留给选择/拖卡)
+    if (e.button === 1 || e.button === 2 || (e.button === 0 && spaceRef.current)) {
+      const t = e.target;
+      if (e.button === 2 && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return; // 输入区右键留给系统粘贴菜单
       panRef.current = { sx: e.clientX, sy: e.clientY, bx: viewRef.current.x, by: viewRef.current.y };
       e.preventDefault();
+      boardElRef.current && boardElRef.current.classList.add("is-pan"); // 手势中抓手光标+卡不截胡
       try {
         e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId);
       } catch {}
@@ -540,6 +576,7 @@ export default function Create() {
   function onBoardPointerEnd() {
     if (!panRef.current) return;
     panRef.current = null;
+    if (!spaceRef.current && boardElRef.current) boardElRef.current.classList.remove("is-pan"); // Space 仍按着=光标态留给 keyup 收
     dragEndAtRef.current = performance.now(); // pan 刚结束的 dblclick 不当「双击空白落卡」
     setView({ ...viewRef.current });
   }
@@ -892,6 +929,7 @@ export default function Create() {
   const dragEndAtRef = useRef(0); // 拖后抑制原生 click/dblclick(浏览器拖完仍会派发)
   function onCardPointerDown(e, bc, pos) {
     if (e.button !== 0) return;
+    if (spaceRef.current) return; // Space=板平移接管,不起卡拖也不起长按(否则 pan 中途满环误开 AI)
     dragRef.current = { key: bc.key, startX: e.clientX, startY: e.clientY, baseX: pos.x, baseY: pos.y, moved: false, bc };
     e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId);
     lpStart(e.currentTarget, e, () => {
@@ -2011,8 +2049,13 @@ export default function Create() {
           {/* G0 全屏画板:四台物料全部挂板(可拖可选可聚焦);台账线/kind tabs 已退役进 boardbar */}
           <div className="create-studio is-board">
             <div
-              className={"create-board" + (tool === "hand" ? " is-pan" : "") + (boardDragOver ? " is-dropover" : "")}
+              className={"create-board" + (boardDragOver ? " is-dropover" : "")}
               ref={boardElRef}
+              onContextMenu={(e) => {
+                const t = e.target;
+                if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return; // 输入区保系统菜单
+                e.preventDefault(); // 右键=平移,画布上不弹浏览器菜单(含右拖松手后的那发)
+              }}
               onPointerDown={onBoardPointerDown}
               onPointerMove={onBoardPointerMove}
               onPointerUp={onBoardPointerEnd}
@@ -2037,7 +2080,7 @@ export default function Create() {
                     style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
                     data-bckey={bc.key}
                     onPointerDown={(e) => {
-                      if (spaceRef.current || e.button === 1) return; // 抓手/中键=板平移,让事件冒泡到板
+                      if (spaceRef.current || e.button === 1 || e.button === 2) return; // 右/中键或 Space=板平移,让事件冒泡到板
                       e.stopPropagation();
                       onCardPointerDown(e, bc, pos);
                     }}
@@ -2165,7 +2208,7 @@ export default function Create() {
               })()}
               </div>
               {boardCards.length === 0 && (
-                <div className="create-board-empty">
+                <div className="create-board-empty" onPointerDown={(e) => e.stopPropagation()}>
                   <span className="create-card-blank-seal t-kai" aria-hidden="true">板</span>
                   <span className="t-meta">板上还空着——起一张:</span>
                   {/* 修复(主理人审核反馈):新建入口就放在眼前——H3 把「+卡」搬去左 rail 后,
@@ -2190,20 +2233,45 @@ export default function Create() {
               {/* 工具 rail=能力总入口(主理人审核拍板):所有已有功能带字可见——
                   工具(选择/抓手)/起手(新建/模板/导入)/内容源(资料/引用/素材/拆回)/产出(导出)。
                   装订/发布/对话留在顶部 boardbar(文件级);快捷键 V/H/1-4/⌘0 不变 */}
-              <div className="create-rail" role="toolbar" aria-label="画板工具" aria-orientation="vertical">
-                <button className={tool === "select" ? "is-on" : ""} onClick={() => setTool("select")} title="选择 (V)">选择</button>
-                <button className={tool === "hand" ? "is-on" : ""} onClick={() => setTool("hand")} title="抓手·平移画板 (H,按住 Space 也行)">抓手</button>
-                <span className="create-rail-sep" aria-hidden="true" />
-                <button className={railNew ? "is-on" : ""} onClick={() => setRailNew((v) => !v)} title="新建一张卡 (1-4,或双击画板空白)" aria-expanded={railNew}>新建</button>
-                <button onClick={() => { setRailNew(false); setTplOpen(true); }} title="从模板起手:骨架直落画布">模板</button>
-                <button onClick={() => { setRailNew(false); setImportOpen({ step: "pick", text: "", err: "" }); }} title="导入已有内容:粘贴/上传文档/酒馆卡">导入</button>
-                <span className="create-rail-sep" aria-hidden="true" />
-                <button className={desk.seed ? "is-on" : ""} onClick={() => { setRailNew(false); openSeed(); }} title="挂参考资料:AI 每轮都参考">资料</button>
-                <button className={deskRefs.length ? "is-on" : ""} onClick={() => { setRailNew(false); refPanel ? setRefPanel(null) : openRefPanel("desk"); }} title="引用已有卡/提示词(输入 @ 也能唤起)">引用</button>
-                <button onClick={() => { setRailNew(false); openLib(); }} title="从我的卡库补素材到本台">素材</button>
-                <button onClick={() => { setRailNew(false); openPresets(); }} title="从我发布的故事整组拆回四台">拆回</button>
-                <span className="create-rail-sep" aria-hidden="true" />
-                <button onClick={() => exportCard(desk.draft)} disabled={!hasDraft} title={hasDraft ? "导出当前草稿 JSON" : "画布上还没有草稿"}>导出</button>
+              <div className="create-rail" role="toolbar" aria-label="画板工具" aria-orientation="vertical" onPointerDown={(e) => e.stopPropagation()}>
+                {/* 主理人 2026-07-13 拍板:rail 换 react-bits LineSidebar 完整复刻(指针接近=右移染朱砂+线标伸长,等宽序号+项间刻度)。
+                    选择/抓手已退役(左键=选择,右键拖=平移);activeIndex=null 让点按不留常亮(全是瞬时动作),导出无草稿禁用 */}
+                <LineSidebar
+                  items={[
+                    { label: "新建", title: "新建一张卡 (1-4,或双击画板空白)" },
+                    { label: "模板", title: "从模板起手:骨架直落画布" },
+                    { label: "导入", title: "导入已有内容:粘贴/上传文档/酒馆卡" },
+                    { label: "资料", title: "挂参考资料:AI 每轮都参考" },
+                    { label: "引用", title: "引用已有卡/提示词(输入 @ 也能唤起)" },
+                    { label: "素材", title: "从我的卡库补素材到本台" },
+                    { label: "拆回", title: "从我发布的故事整组拆回四台" },
+                    { label: "导出", title: hasDraft ? "导出当前草稿 JSON" : "画布上还没有草稿", disabled: !hasDraft },
+                  ]}
+                  activeIndex={null}
+                  onItemClick={(i) => {
+                    const acts = [
+                      () => setRailNew((v) => !v),
+                      () => { setRailNew(false); setTplOpen(true); },
+                      () => { setRailNew(false); setImportOpen({ step: "pick", text: "", err: "" }); },
+                      () => { setRailNew(false); openSeed(); },
+                      () => { setRailNew(false); refPanel ? setRefPanel(null) : openRefPanel("desk"); },
+                      () => { setRailNew(false); openLib(); },
+                      () => { setRailNew(false); openPresets(); },
+                      () => exportCard(desk.draft),
+                    ];
+                    acts[i]();
+                  }}
+                  accentColor="var(--accent)"
+                  textColor="var(--muted)"
+                  markerColor="color-mix(in srgb, var(--fg) 28%, transparent)"
+                  markerLength={30}
+                  markerGap={10}
+                  maxShift={12}
+                  proximityRadius={90}
+                  itemGap={13}
+                  fontSize={0.92}
+                  smoothing={90}
+                />
                 {railNew && (
                   <div className="create-rail-fly" role="menu" aria-label="新建卡种">
                     {KINDS.map((t, i) => (
@@ -2223,8 +2291,15 @@ export default function Create() {
                   </div>
                 )}
               </div>
+              {/* 每次进页的操作提示(主理人拍板):左键/右键分工 9s 自动收,× 手动收 */}
+              {ctrlHint && (
+                <div className="create-ctrlhint t-meta" role="note" onPointerDown={(e) => e.stopPropagation()}>
+                  <span>左键:选卡/拖卡 · 右键拖动:平移画布 · Ctrl+滚轮:缩放 · 双击空白:落新卡</span>
+                  <button aria-label="收起提示" onClick={() => setCtrlHint(false)}>×</button>
+                </div>
+              )}
               {/* H1 缩放控件:± 板中心锚定;点 % 回 100%;适配=装下全部卡 */}
-              <div className="create-zoomctl t-meta" aria-label="画板缩放">
+              <div className="create-zoomctl t-meta" aria-label="画板缩放" onPointerDown={(e) => e.stopPropagation()}>
                 <button onClick={() => zoomTo(viewRef.current.z / 1.2)} aria-label="缩小">−</button>
                 <button className="create-zoomctl-pct" onClick={() => zoomTo(1)} title="回到 100%">{Math.round(view.z * 100)}%</button>
                 <button onClick={() => zoomTo(viewRef.current.z * 1.2)} aria-label="放大">＋</button>

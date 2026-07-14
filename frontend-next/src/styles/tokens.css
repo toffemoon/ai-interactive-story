@@ -5,14 +5,14 @@
    值来自 spec「设计系统与地基」二·色值/字/间距。
    ————————————————————————————————————————————————————————————— */
 :root {
-  /* —— raw 色板(不可变)—— */
-  /* 纸 Paper */
-  --paper-bg: #f3f1ec;
-  --paper-sunk: #eae2cf;
-  --paper-panel: #fffdfa;
-  --ink: #20201d;
-  --ink-muted: #6f706b;
-  --paper-line: #d8d2c7;
+  /* —— raw 色板 —— */
+  /* 纸 Paper(2026-07-13 主理人拍板:米色 → 全白主题;墨/线随之中性化,朱砂鎏金不动) */
+  --paper-bg: #ffffff;
+  --paper-sunk: #f4f4f2;
+  --paper-panel: #ffffff;
+  --ink: #1f1f1e;
+  --ink-muted: #6b6b68;
+  --paper-line: #e4e4e1;
   --cinnabar: #8f3c32;
   --cinnabar-bright: #b5402e;
   --pine: #315d4f;
@@ -93,17 +93,17 @@
   --accent-bright: var(--cinnabar-bright);
   --accent-2: var(--pine);
   --accent-3: var(--gilt);
-  --on-accent: #f6efe6;
-  /* badge tints(纸面浅底)*/
-  --badge-pine-bg: #e2ebe4;
+  --on-accent: #ffffff;
+  /* badge tints(白底浅彩)*/
+  --badge-pine-bg: #e6efe9;
   --badge-pine-fg: #274a3f;
-  --badge-gilt-bg: #f0e6cf;
+  --badge-gilt-bg: #f4ecd9;
   --badge-gilt-fg: #6e4f12;
-  --badge-cinnabar-bg: #f1ddd8;
+  --badge-cinnabar-bg: #f6e2dd;
   --badge-cinnabar-fg: #7a3127;
-  --shadow-card: 0 14px 28px -16px rgba(43, 38, 32, 0.4);
-  --shadow-pop: 0 24px 60px -20px rgba(0, 0, 0, 0.45);
-  --scrim: rgba(34, 29, 22, 0.46);
+  --shadow-card: 0 14px 28px -16px rgba(30, 30, 30, 0.28);
+  --shadow-pop: 0 24px 60px -20px rgba(0, 0, 0, 0.35);
+  --scrim: rgba(24, 24, 24, 0.45);
 }
 
 [data-theme="stage"] {

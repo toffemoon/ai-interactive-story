@@ -225,8 +225,8 @@
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: rgba(255, 253, 250, 0.92);
-  color: #201d19;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink);
   box-shadow: 0 9px 22px -14px rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(8px);
   opacity: 0;
@@ -264,8 +264,8 @@
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.48);
   border-radius: var(--r-pill);
-  background: rgba(255, 253, 250, 0.88);
-  color: #201d19;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--ink);
   font-family: var(--font-sans);
   font-size: 10px;
   font-style: normal;
