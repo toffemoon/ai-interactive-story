@@ -18,6 +18,22 @@
   background-size: cover;
   background-position: center;
   z-index: 0;
+  /* onboarding 分场景:三层底图叠放,靠 is-active 交叉淡入淡出(默认透明,当前场景不透明)。 */
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+.home-bg.is-active {
+  opacity: 1;
+  animation: bgPanIn 0.62s var(--ease-out);
+}
+/* 换场:新场景从右侧推入 + 轻微缩放落定,给"走过去"的移动感(scale 1.05→1 避免平移露边)。 */
+@keyframes bgPanIn {
+  from {
+    transform: translateX(7%) scale(1.05);
+  }
+  to {
+    transform: translateX(0) scale(1);
+  }
 }
 /* 压暗 + 暖夜调:底部更暗给对话框、左侧略暗给按钮,整体压一层暖色让立绘融入 stage */
 .home-bg-scrim {
@@ -46,7 +62,22 @@
   pointer-events: none;
   /* 开场"掏卡"演出:从入场第三帧(居中)进 name 拍(左移 -8%)时,角色滑动到左边、给右侧淡入的身份卡让位。
      滑动期间气泡靠 transitionend 在滑完重算 +「先动作后气泡」延迟出现,避免贴头气泡量到过渡中途位。 */
-  transition: transform 0.62s var(--ease-out);
+  transition: transform 0.62s var(--ease-out), opacity 0.3s ease;
+}
+/* 换场瞬间:立绘外层短暂淡出(仅父层透明度,不碰 .home-portrait-img 的双层交叉溶解)。 */
+.home-portrait.is-scene-shift {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-bg {
+    transition: opacity 0.2s linear;
+  }
+  .home-bg.is-active {
+    animation: none;
+  }
+  .home-portrait.is-scene-shift {
+    opacity: 1;
+  }
 }
 /* 立绘图层:绝对定位,双缓冲两层完全重叠(交叉溶解)。顶偏移由 .home-portrait 的 top 承担,故这里 top:0。 */
 .home-portrait-img {
@@ -419,6 +450,11 @@
 .home.is-ob-demo-chat .home-portrait-img {
   height: 104%;
 }
+/* 门场景全程(叫角色拍 + 聊天)糖沐统一到跟吧台/故事拍一样大(122%),不缩水。
+   本规则在 .home.is-ob-demo-chat(104%)之后 → 同特异性后者失效,聊天拍也 122%。 */
+.home.is-ob-scene-door .home-portrait-img {
+  height: 122%;
+}
 .home.is-ob-finale .home-portrait {
   transform: none;
 }
@@ -453,19 +489,20 @@
 }
 .home-ob-demo--story {
   right: clamp(132px, 19vw, 300px);
-  width: 210px;
+  width: clamp(180px, 17vw, 340px);
   pointer-events: auto;
 }
 .home-ob-demo--character-card {
   right: clamp(132px, 19vw, 300px);
-  width: 210px;
+  width: clamp(180px, 17vw, 340px);
 }
 .home-demo-card {
-  width: 210px;
+  width: 100%;
 }
 .home-demo-card .card--shelf {
-  width: 210px;
-  height: 316px;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 210 / 316;
   cursor: pointer;
   box-shadow: 0 24px 54px -26px rgba(0, 0, 0, 0.72);
 }
@@ -515,22 +552,41 @@
   filter: drop-shadow(0 14px 22px rgba(48, 32, 20, 0.24));
 }
 .home-ob-demo--chat {
-  right: clamp(150px, 22vw, 340px);
-  top: auto;
-  bottom: -27px;
-  width: min(430px, 32vw);
-  height: min(695px, 91vh);
-  transform: none;
+  position: fixed; /* 镜像糖沐 .home-portrait:fixed + 同 top/bottom 定容器 */
+  right: clamp(96px, 13vw, 260px);
+  top: clamp(48px, 13vh, 132px);
+  bottom: 0;
+  width: min(680px, 50vw);
+  height: auto;
+  transform: translateY(1.5vh); /* 整体略往下(你眼调:数越大越低) */
   pointer-events: none;
+  /* 入场:先在门口(中间)显形,再滑到右侧。数值你眼调:-26vw=起始离最终位多远(约门口)。 */
+  /* 0.55s 延迟 = 等糖沐先动;1.6s = 慢;both = 延迟期间保持首帧(宣先隐身)。 */
+  animation: xuanFromDoor 1.6s var(--ease-out) 0.55s both;
+}
+@keyframes xuanFromDoor {
+  0% {
+    transform: translateX(-24vw) translateY(1.5vh);
+    opacity: 0;
+  }
+  40% {
+    transform: translateX(-24vw) translateY(1.5vh);
+    opacity: 1; /* 先在门口(中央)淡入。-24vw=起点离最终位多左(约门口),你眼调 */
+  }
+  100% {
+    transform: translateX(0) translateY(1.5vh);
+    opacity: 1; /* 再往右滑到最终位 */
+  }
 }
 .home-ob-demo--chat .home-demo-xuan-img {
   position: absolute;
   right: 0;
-  bottom: 0;
-  height: 100%;
+  top: 0; /* 镜像糖沐:从容器顶往下挂;倍率你眼调(数越大越高) */
+  height: 138%;
+  width: auto;
   max-width: 100%;
   object-fit: contain;
-  object-position: bottom right;
+  object-position: top right;
   filter: drop-shadow(0 18px 32px rgba(0, 0, 0, 0.42));
 }
 .home-ob-bubble--chat {
@@ -539,6 +595,20 @@
   right: auto;
   bottom: auto;
   transform: none;
+}
+/* 首条聊天气泡(tryChatTalk):等宣入场动画(0.55s 延迟 + 1.6s)走完再淡入。 */
+.home-ob-bubble--chat.is-after-entrance {
+  animation: bubbleAfterEntrance 0.45s var(--ease-out) 2.15s both;
+}
+@keyframes bubbleAfterEntrance {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 .home.is-ob-chat-flow-fallback .home-ob-bubble--chat {
   max-height: var(--ob-chat-flow-band-height);
@@ -792,7 +862,9 @@
 .home-ob-chips {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--sp-2);
+  min-height: 44px; /* 常驻保留一行高度:没选项时也占位,输入框不往下沉(#8) */
 }
 .home-ob-chip {
   padding: 9px 18px;

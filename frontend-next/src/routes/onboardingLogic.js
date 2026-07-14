@@ -404,7 +404,9 @@ export function resolveChatBubblePlacement({
   const height = Math.min(requestedHeight, safeBottom - safeTop);
   if (width <= 0 || height <= 0) return null;
 
-  const top = clampValue((speaker.top + speaker.bottom - height) / 2, safeTop, safeBottom - height);
+  // 气泡对齐说话者的头/嘴高度(约立绘上部 18%),而不是全身中心 —— 台词从嘴里出来,贴脸更自然。
+  const mouthY = speaker.top + (speaker.bottom - speaker.top) * 0.18;
+  const top = clampValue(mouthY - height / 2, safeTop, safeBottom - height);
   const sides = preferredSide === "left" ? ["left", "right"] : ["right", "left"];
   const makeSideRect = (side, candidateWidth, compact) => {
     const left = side === "left" ? speaker.left - safeGap - candidateWidth : speaker.right + safeGap;

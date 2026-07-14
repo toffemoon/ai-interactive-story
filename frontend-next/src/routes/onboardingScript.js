@@ -194,14 +194,14 @@ export const BEATS = [
     id: "avatar",
     emo: "spark", // 眼亮期待
     showCard: true,
-    line: (e) => `记下了,${e.name || "客人"}——卡上有名了。想给卡贴张头像吗? 传一张,或者用你名字的字头也成。`,
+    line: (e) => `记下了,${e.name || "客人"}——卡上有名了。头像呢,是你自己给我一张,还是我帮你选一张?`,
     // 玩家上传头像后糖沐的即时回应(Home 在 obCardAvatar 有值时用它替 line,让"传头像"像一段对话)。
     avatarLine: () => "诶,这张好看——给你嵌卡上了。头像妥了,点一下继续,我再给你补最后一行。",
-    backLine: (e) => `${e.name || "客人"},头像想换就换,不换用字头也清爽。`,
+    backLine: (e) => `${e.name || "客人"},头像想换就换——自己给一张,或者我帮你选,都行。`,
     backEmo: "smile",
     chips: [
       { label: "＋ 传张头像", upload: true },
-      { label: "用名字字头就好", next: "taste" },
+      { label: "用名字字头就好", next: "taste", pickAvatar: "/home/tangmu-q-normal.png" },
     ],
   },
   {
@@ -300,35 +300,15 @@ export const BEATS = [
     id: "tryCharacterCard",
     emo: "whisper",
     tour: "chat",
-    demo: {
-      type: "characterCard",
-      characterCard: {
-        name: "宣",
-        official: true,
-        data: {
-          spec: "chara_card_v2",
-          spec_version: "2.0",
-          data: {
-            name: "宣",
-            image: "/oc/xuan.png",
-            tags: ["补书人", "话少", "书坊"],
-            description: "补书间的补书人。话少、句短,把没写完的故事重新缝回书里。",
-            look: "白衣、执笔、像从书页边缘走出来的人。",
-          },
-        },
-      },
-    },
     line: () =>
       "我们这里还可以把角色从他们的世界里面喊出来。这本书里就有一个角色,叫宣。我们现在把她喊出来。",
-    backLine: () => "角色卡再看一眼?角色也像故事一样有卡,能从书里被请出来。",
+    backLine: () => "这段再听一遍?角色也能像故事一样,从书里被请出来。",
     backEmo: "whisper",
     chips: [{ label: "把宣喊出来", next: "tryChatTalk" }],
   },
   {
     id: "tryChatTalk",
     interruptible: true,
-    autoNext: "tryChatTangmuReply",
-    autoMs: 3200,
     speaker: "宣",
     emo: "smile",
     tour: "chat",
@@ -348,8 +328,6 @@ export const BEATS = [
   {
     id: "tryChatTangmuReply",
     interruptible: true,
-    autoNext: "tryChatIntro",
-    autoMs: 4200,
     speaker: "糖沐",
     emo: "smile",
     tour: "chat",
@@ -369,8 +347,6 @@ export const BEATS = [
   {
     id: "tryChatIntro",
     interruptible: true,
-    autoNext: "tryChatGreet",
-    autoMs: 4200,
     speaker: "糖沐",
     emo: "smile",
     tour: "chat",
@@ -500,6 +476,22 @@ export const BEATS = [
 
 export function beatById(id) {
   return BEATS.find((b) => b.id === id) || null;
+}
+
+// onboarding 分场景背景(视觉小说式换背景)。三张底图,吧台复用原图。
+export const SCENES = {
+  counter: "/home/background.png", // 吧台:入场 + 办卡 + 故事/书卡演示
+  door: "/home/background-door.png", // 门:把角色从书里叫出来 + 和宣对话
+  rest: "/home/background-rest.png", // 休息区:创作演示 + 收尾
+};
+// 每一拍所属场景;未列出的默认 counter(吧台)。
+const BEAT_SCENE = {
+  tryCharacterCard: "door", tryChatTalk: "door", tryChatTangmuReply: "door",
+  tryChatIntro: "door", tryChatGreet: "door", tryChatLeave: "door",
+  tryCreate: "rest", tryCreateResult: "rest", tryWrap: "rest",
+};
+export function sceneForBeat(beatId) {
+  return (beatId && BEAT_SCENE[beatId]) || "counter";
 }
 
 const AUTO_CHAT_CONTEXT_IDS = ["tryChatTalk", "tryChatTangmuReply", "tryChatIntro", "tryChatLeave"];

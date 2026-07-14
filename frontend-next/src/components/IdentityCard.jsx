@@ -8,7 +8,7 @@ import "./IdentityCard.css";
 //   name     称呼(必)。正面主角。
 //   taste    最近在看(口味);办好态在背面小字,登记态临时上正面(报口味时正面可见成形)
 //   message  糖沐给这位客人写的一句寄语(onboarding 时 AI 按感觉生成;空则用默认暖句)。长句前端会截断,生成侧另限字数。
-//   avatar   头像图 URL;无则用称呼首字(印章式字头,只取一字当徽记,不与称呼复读)
+//   avatar   头像图 URL;无则头像框留空(登记时先空着,选/传头像后再填)
 //   issuedAt 发卡日期字符串;空则「今日」
 //   shopName 发卡书坊名(默认 沐言书坊)
 //   clerk    落款店员(默认 糖沐)
@@ -21,8 +21,6 @@ export function IdentityCard({ name, taste, message, avatar, issuedAt, shopName 
   const nick = (name || "").trim();
   const hasName = !!nick;
   const shownNick = nick || "客人";
-  // 字头只取首字当徽记(不复读称呼)。用 Array.from 按 Unicode code point 拆,避免 emoji/代理对被 slice 截半成乱码。
-  const initial = Array.from(shownNick.replace(/\s+/g, ""))[0] || "客";
   const note = (message || "").trim() || "愿你在这儿,总能翻到想读的那一页。";
   const canFlip = !forming; // 登记态锁翻面:卡还没办好,别急着翻
   const toggle = () => canFlip && setFlipped((f) => !f);
@@ -52,11 +50,7 @@ export function IdentityCard({ name, taste, message, avatar, issuedAt, shopName 
           <span className="idcard-eyebrow">{shopName} · 入店凭证</span>
           <div className="idcard-front-main">
             <div className="idcard-avatar">
-              {avatar ? (
-                <img src={avatar} alt="" draggable="false" />
-              ) : (
-                <span className="idcard-avatar-mono t-kai">{hasName ? initial : ""}</span>
-              )}
+              {avatar ? <img src={avatar} alt="" draggable="false" /> : null}
             </div>
             {/* key 绑值:报名/改名时重挂 → 触发浮现动画(CSS)。空态显占位。 */}
             <div key={nick} className={"idcard-name t-kai" + (hasName ? "" : " is-empty")}>

@@ -534,13 +534,11 @@ test("compact and portrait viewports use the flow onboarding bubble layout", () 
   assert.equal(usesFlowOnboardingBubbleLayout({ width: 1280, height: 720 }), false);
 });
 
-test("only the NPC exchange auto-advances", () => {
-  assert.equal(beatById("tryChatTalk").autoNext, "tryChatTangmuReply");
-  assert.equal(beatById("tryChatTangmuReply").autoNext, "tryChatIntro");
-  assert.equal(beatById("tryChatIntro").autoNext, "tryChatGreet");
-  assert.equal(beatById("tryChatGreet").autoNext, undefined);
-  assert.equal(beatById("tryChatLeave").autoNext, undefined);
-  assert.equal(beatById("tryChatLeave").autoMs, undefined);
+test("chat demo is fully click-driven (no auto-advance)", () => {
+  for (const id of ["tryChatTalk", "tryChatTangmuReply", "tryChatIntro", "tryChatGreet", "tryChatLeave"]) {
+    assert.equal(beatById(id).autoNext, undefined, id);
+    assert.equal(beatById(id).autoMs, undefined, id);
+  }
 });
 
 test("story explanation beats use poses that match their distinct meanings", () => {
@@ -581,10 +579,7 @@ test("onboarding rehearses story chat and creation without route jumps", () => {
   assert.equal(storyModel.cover.startsWith("/covers/"), false);
 
   const characterCard = beatById("tryCharacterCard");
-  assert.equal(characterCard.demo.type, "characterCard");
-  const characterModel = toCardModel("character", characterCard.demo.characterCard);
-  assert.equal(characterModel.title, "宣");
-  assert.equal(characterModel.cover, "/oc/xuan.png");
+  assert.equal(characterCard.demo, undefined);
   assert.match(characterCard.line({}), /角色从他们的世界/);
   assert.equal(characterCard.chips[0].next, "tryChatTalk");
 

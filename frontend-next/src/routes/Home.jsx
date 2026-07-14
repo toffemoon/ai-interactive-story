@@ -7,7 +7,7 @@ import { toCardModel } from "../lib/cardModel";
 import { resolveMediaUrl } from "../lib/mediaUrl.js";
 import { useAuth } from "../state/auth";
 import { useGame } from "../state/game";
-import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, AUTO_CHAT_INTERRUPT_AI, ONBOARDING_EMOTION_REPLY_INSTRUCTION, FIRST_BEAT, beatById, buildAutoChatShownContext, consumeTestHomeBypass, loadEcho, markOnboarded, isOnboarded, saveEcho, setTestHomeBypass } from "./onboardingScript";
+import { PORTRAIT, INTRO, HEAD, INTRO_HEAD, AI_PERSONA, CHAT_SCENARIO, AUTO_CHAT_INTERRUPT_AI, ONBOARDING_EMOTION_REPLY_INSTRUCTION, FIRST_BEAT, beatById, SCENES, sceneForBeat, buildAutoChatShownContext, consumeTestHomeBypass, loadEcho, markOnboarded, isOnboarded, saveEcho, setTestHomeBypass } from "./onboardingScript";
 import { INITIAL_ONBOARDING_AUTO_CONTROL, analyzeNameCorrectionInput, analyzeNameInput, analyzePendingNameInput, extractNameFromAiFieldText, extractTasteFromAiFieldText, hasRestoredHomeConversation, isCurrentOnboardingInteraction, isExactFillChipSubmission, matchChipIntent, parseChipIntentReply, parseFieldIntentReply, parseOnboardingEmotionReply, resolveAutoAdvancePlan, resolveChatBubblePlacement, resolveChatStageLayout, resolveNextBeatAiLine, resolveVisibleImageRect, sanitizeCardMessage, shouldAcceptNameLocally, shouldCommitPortraitPreload, shouldConfirmBareNameLocally, transitionOnboardingAutoControl, usesFlowOnboardingBubbleLayout } from "./onboardingLogic";
 import { IdentityCard } from "../components/IdentityCard";
 import StaggeredText from "../components/staggered-text";
@@ -26,7 +26,6 @@ function todayYmd() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 const TANGMU_IMG = "/home/tangmu01.png";
-const BG_IMG = "/home/background.png";
 const GENERIC_PORTRAIT_HEAD = { x: 0.5, y: 0.2, edge: 0.26 };
 const TANGMU_ALPHA_BOUNDS = {
   "tangmu01.png": { left: 236, top: 0, right: 855, bottom: 1493 },
@@ -248,7 +247,7 @@ export default function Home({ testMode = false }) {
   const [obThinking, setObThinking] = useState(false); // AI 自适应:提交后糖沐"思考态"(等 /api/chat)
   const [obAiLine, setObAiLine] = useState(null); // AI 生成的自适应台词(当前拍开场,替静态 line);null=用脚本
   const [obCardMessage, setObCardMessage] = useState(null); // 身份卡上糖沐的 AI 寄语;null=卡组件用默认暖句
-  const [obCardAvatar, setObCardAvatar] = useState(null); // 身份卡头像(上传后 dataURL);null=用称呼字头
+  const [obCardAvatar, setObCardAvatar] = useState(null); // 身份卡头像(上传 dataURL 或「帮你选」的预设路径);null=头像框留空
   const [obPendingConfirm, setObPendingConfirm] = useState(null); // {field,value,reason}:奇怪/玩笑名先二次确认,不直接写卡
   const [obEmoOverride, setObEmoOverride] = useState(null); // 临时覆盖立绘(如奇怪名字→流汗 wry、接梗→惊讶 surprise)
   const [obContinueHint, setObContinueHint] = useState(false); // 长时间不点 chip 时的弱提示
@@ -257,6 +256,10 @@ export default function Home({ testMode = false }) {
   const [obAutoControl, setObAutoControl] = useState(INITIAL_ONBOARDING_AUTO_CONTROL);
   const obAutoControlRef = useRef(INITIAL_ONBOARDING_AUTO_CONTROL);
   const [obCrop, setObCrop] = useState(null); // 头像裁剪弹窗状态
+  // onboarding 分场景背景:obBgScene=当前显示的场景底图(比目标拍略滞后,给立绘先淡出再切);obSceneShift=换场瞬间立绘外层淡出。
+  const [obBgScene, setObBgScene] = useState("counter");
+  const [obSceneShift, setObSceneShift] = useState(false);
+  const obFirstSceneRef = useRef(true);
   // 立绘双层(交叉溶解):slots=两层各 src, layer=当前在顶(不透明)的层。合成一个 state 一次提交,避免换图/切层两次 setState 间的中间帧闪(重影根因之一)。
   const [obPortrait, setObPortrait] = useState({ slots: [null, null], layer: 0 });
   const prevImageRef = useRef(null); // 上一帧立绘 src,供双层比对
@@ -272,6 +275,22 @@ export default function Home({ testMode = false }) {
   const obDemo = obBeat && obBeat.demo;
   const introFrame = obIntro >= 0 ? INTRO[obIntro] : null;
   const obActive = obIntro >= 0 || !!obBeat;
+  // 当前拍所属场景(引导态跟拍走,否则吧台底图)。换场:先让立绘淡出(300ms)→ 切背景(交叉淡入)→ 淡回。
+  const obScene = obActive && obStep ? sceneForBeat(obStep) : "counter";
+  useEffect(() => {
+    if (obFirstSceneRef.current) {
+      obFirstSceneRef.current = false;
+      setObBgScene(obScene);
+      return;
+    }
+    setObSceneShift(true);
+    const t1 = setTimeout(() => setObBgScene(obScene), 300);
+    const t2 = setTimeout(() => setObSceneShift(false), 360);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [obScene]);
   const obReplySpeaker = (obBeat && obBeat.speaker) || "糖沐";
   const obThinkingLine = `${obReplySpeaker}正在思考...`;
   const obHasDraft = Boolean(obInput.trim());
@@ -917,7 +936,7 @@ export default function Home({ testMode = false }) {
     persistEcho(echo);
     setObPendingConfirm(null);
     setObInput("");
-    obGoNext("avatar", `行……我真给你写「${name}」了。先说好,以后这张卡就这么叫你。头像要贴一张吗?`, { emo: "wry" });
+    obGoNext("avatar", `行……我真给你写「${name}」了。先说好,以后这张卡就这么叫你。头像呢,自己给一张,还是我帮你选?`, { emo: "wry" });
   }
   function rejectPendingName() {
     setObPendingConfirm(null);
@@ -953,6 +972,13 @@ export default function Home({ testMode = false }) {
       setObInput(c.fill);
       requestAnimationFrame(() => obInputRef.current?.focus());
       return;
+    }
+    // 「我帮你选一张」chip:仅在还没有头像时,把预设默认头像(糖沐 Q 版)贴上卡,再照常推进(不覆盖用户已上传的)。
+    if (c.pickAvatar && !obCardAvatar && !(obEcho && obEcho.avatar)) {
+      setObCardAvatar(c.pickAvatar);
+      const picked = { ...obEcho, avatar: c.pickAvatar };
+      setObEcho(picked);
+      persistEcho(picked);
     }
     let echo = obEcho;
     if (c.set) {
@@ -993,7 +1019,7 @@ export default function Home({ testMode = false }) {
         persistEcho(echo);
         setObPendingConfirm(null);
         setObEmoOverride(null);
-        obGoNext("avatar", `${correction.value},那我改写这个。头像要贴一张吗?`);
+        obGoNext("avatar", `${correction.value},那我改写这个。头像呢,自己给一张还是我帮你选?`);
         return;
       }
       if (saysNo(v)) {
@@ -1455,19 +1481,27 @@ export default function Home({ testMode = false }) {
         (obBeat && obBeat.speaker === "宣" ? " is-ob-speaker-xuan" : "") +
         (obBeat && obBeat.centerBubble ? " is-ob-finale" : "") +
         (!obActive ? " is-home-mode" : "") +
+        (obActive && obScene ? ` is-ob-scene-${obScene}` : "") +
         (obChatBubblePos && obChatBubblePos.compact ? " is-ob-chat-compact" : "") +
         (chatFlowFallback ? " is-ob-chat-flow-fallback" : "") +
         (obDemo ? ` is-ob-demo is-ob-demo-${obDemo.type}` : "")
       }
       style={chatFlowStyle}
     >
-      {/* 背景层 */}
-      <div className="home-bg" style={{ backgroundImage: `url("${BG_IMG}")` }} aria-hidden="true" />
+      {/* 背景层:onboarding 分场景交叉淡入淡出(视觉小说式换背景);非引导态与吧台拍用底图 background.png。 */}
+      {Object.entries(SCENES).map(([scene, url]) => (
+        <div
+          key={scene}
+          className={"home-bg" + (obBgScene === scene ? " is-active" : "")}
+          style={{ backgroundImage: `url("${url}")` }}
+          aria-hidden="true"
+        />
+      ))}
       <div className="home-bg-scrim" aria-hidden="true" />
 
       {/* 立绘层:双层交叉溶解(纯 CSS opacity 过渡)。两层常驻,换图放到非当前层再切换当前层,
           新层淡入、旧层淡出。永远只 2 层,任意切换频率都不堆积、不透明。 */}
-      <div className="home-portrait">
+      <div className={"home-portrait" + (obSceneShift ? " is-scene-shift" : "")}>
         {image ? (
           obPortrait.slots.map((src, i) =>
             src ? (
@@ -1603,7 +1637,7 @@ export default function Home({ testMode = false }) {
               line={obLine}
               busy={obThinking}
               onSkip={() => endOnboarding()}
-              className={"home-ob-bubble--chat " + (obBeat.speaker === "宣" ? "is-xuan" : "is-tangmu")}
+              className={"home-ob-bubble--chat " + (obBeat.speaker === "宣" ? "is-xuan" : "is-tangmu") + (obBeat.id === "tryChatTalk" ? " is-after-entrance" : "")}
               style={obChatBubblePos ? { left: obChatBubblePos.left, top: obChatBubblePos.top, width: obChatBubblePos.width } : undefined}
             />
           )}
@@ -1650,13 +1684,16 @@ export default function Home({ testMode = false }) {
                     {obThinking ? "…" : obBeat.submitLabel || (obBeat.field ? "好" : "说")}
                   </Button>
                 </div>}
-                {(!obBeat.autoNext || obInterruptFailure) && !!obRenderChips.length && (
-                  <div className="home-ob-chips">
-                    {obRenderChips.map((c, i) => {
-                      // 头像拍传了头像后,chip 文案随之变(＋传张头像→换一张 / 用字头就好→好了,继续)。
+                {/* chips 槽常驻:没选项也占位,避免输入框往下沉(#8) */}
+                <div className="home-ob-chips">
+                    {(!obBeat.autoNext || obInterruptFailure) && obRenderChips.map((c, i) => {
+                      // 头像拍的 chip 显示文案在此覆写(label 本身留作 onboardingLogic 的身份键,勿改):
+                      //   未选头像:上传 chip→「我自己传一张」/ 另一颗→「我帮你选一张」(点后贴糖沐 Q 版默认头像);
+                      //   已有头像后:上传→换一张 / 另一颗→好了,继续。
                       let label = c.label;
-                      if (obBeat.id === "avatar" && (obCardAvatar || obEcho.avatar)) {
-                        label = c.upload ? "换一张" : "好了,继续";
+                      if (obBeat.id === "avatar") {
+                        if (obCardAvatar || obEcho.avatar) label = c.upload ? "换一张" : "好了,继续";
+                        else label = c.upload ? "我自己传一张" : "你帮我选一张";
                       }
                       return (
                         <button key={i} className={"home-ob-chip" + (obContinueHint && i === 0 ? " is-hinted" : "")} onClick={() => obChip(c)} disabled={obThinking}>
@@ -1666,7 +1703,6 @@ export default function Home({ testMode = false }) {
                     })}
                     {obContinueHint && <span className="home-ob-nexthint t-meta">点一下继续</span>}
                   </div>
-                )}
               </div>
             ) : obActive ? null : (
               <>
