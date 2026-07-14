@@ -2157,6 +2157,9 @@ export default function Create() {
 
           {/* G0 全屏画板:四台物料全部挂板(可拖可选可聚焦);台账线/kind tabs 已退役进 boardbar */}
           <div className="create-studio is-board">
+            {/* 文件 input 常驻画板层(原 #168 手动移植)——原来只住在 AI 对话坞 composer 里,
+                坞不渲染时「导入→上传文档」点 fileRef=null 点空;手机 .ct 自己那只不动 */}
+            <input ref={fileRef} type="file" accept=".txt,.md,.docx" hidden onChange={onUpload} />
             <div
               className={"create-board" + (boardDragOver ? " is-dropover" : "")}
               ref={boardElRef}
@@ -2938,7 +2941,6 @@ export default function Create() {
                     <button className="create-upload" onClick={() => { uploadHintRef.current = ""; fileRef.current && fileRef.current.click(); }} disabled={busy}>
                       上传文档
                     </button>
-                    <input ref={fileRef} type="file" accept=".txt,.md,.docx" hidden onChange={onUpload} />
                     <button
                       className={"create-seed-btn" + (desk.seed ? " has-seed" : "")}
                       onClick={openSeed}
