@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Brush, Compass, Home, MessageCircle, MessagesSquare, UserRound } from "lucide-react";
+import { Brush, Compass, MessageCircle, MessagesSquare, UserRound } from "lucide-react";
 import { NAV } from "./nav";
 import ResumeBar from "./ResumeBar";
 import StaggeredMenu from "../StaggeredMenu";
@@ -51,22 +51,16 @@ export default function AppShell({ children }) {
   // 立绘主页(家):背景+立绘满铺(无纸页顶留白);其余纸页保留顶部 52px 给浮动开关留白。
   // /test/onboarding = onboarding 测试页,渲染的也是 Home,同样要满铺(否则顶部 52px 壳留白会露出棕条)。
   const atHome = loc.pathname.startsWith("/home") || loc.pathname.startsWith("/test");
-  const navItems = [
-    {
-      label: "首页",
-      ariaLabel: "回到首页",
-      link: "/home",
-      icon: Home,
-      active: loc.pathname.startsWith("/home"),
-    },
-    ...NAV.map((item) => ({
-      label: item.zh,
-      ariaLabel: item.zh,
-      link: item.to,
-      icon: NAV_ICONS[item.icon],
-      active: loc.pathname.startsWith(item.to),
-    })),
-  ];
+  // 2026-07-14 主理人拍板:「首页」退出导航——/home 只作 onboard(首登=全量引导,已登=糖沐短欢迎,
+  // GREETING_BACK 那拍);进 app 仍先落 /home(根路由/登录跳转不变),菜单/PillNav 不再提供回去的项,
+  // 沐言 logo 仍回 /home。桌面菜单与手机 PillNav 同吃本数组,删这一处两端生效。
+  const navItems = NAV.map((item) => ({
+    label: item.zh,
+    ariaLabel: item.zh,
+    link: item.to,
+    icon: NAV_ICONS[item.icon],
+    active: loc.pathname.startsWith(item.to),
+  }));
   const activeHref = navItems.find((item) => item.active)?.link;
 
   if (immersive) {
