@@ -294,14 +294,30 @@ export const BEATS = [
     tour: "explore",
     demo: STORY_CARD_DEMO,
     line: () => "但是,你可以亲手去控制整个故事的走向,撰写独属于你自己的故事线和结局。",
-    chips: [{ label: "继续看角色", next: "tryCharacterCard" }],
+    chips: [{ label: "继续看角色", next: "doorIntro" }],
+  },
+  {
+    id: "doorIntro",
+    emo: "curious",
+    line: () => "看这扇门——它是书里世界的入口。", // 草稿·待雨钦润色
+    backLine: () => "这扇门,通向书里的世界。",
+    backEmo: "curious",
+    chips: [{ label: "继续", next: "doorGoIn" }],
+  },
+  {
+    id: "doorGoIn",
+    emo: "spark",
+    line: () => "门口摊开哪本书,你就能走进哪个故事,亲身去经历里面的一切。", // 草稿·待雨钦润色
+    backLine: () => "摊开一本书,你就能走进那个故事。",
+    backEmo: "spark",
+    chips: [{ label: "继续", next: "tryCharacterCard" }],
   },
   {
     id: "tryCharacterCard",
     emo: "whisper",
     tour: "chat",
     line: () =>
-      "我们这里还可以把角色从他们的世界里面喊出来。这本书里就有一个角色,叫宣。我们现在把她喊出来。",
+      "也可以反过来——把书里的人请出来,面对面聊。这本书里就有一个,叫宣。把她喊出来试试。", // 草稿·待雨钦润色
     backLine: () => "这段再听一遍?角色也能像故事一样,从书里被请出来。",
     backEmo: "whisper",
     chips: [{ label: "把宣喊出来", next: "tryChatTalk" }],
@@ -412,50 +428,45 @@ export const BEATS = [
     line: () => "我还有事,先回去了。糖沐,客人交给你了。",
     backLine: () => "我只是暂时出来一会儿。没写完的,回头再补。",
     backEmo: "smile",
-    chips: [{ label: "继续看创作", next: "tryCreate" }],
+    chips: [{ label: "继续看创作", next: "restIntro" }],
   },
   {
+    id: "restIntro",
+    emo: "smile",
+    line: () => "这边是休息处,坐累了来歇歇。也是创作区——你刚看到的那些卡,都是在这儿做出来的。", // 草稿·待雨钦润色
+    backLine: () => "这儿是休息处,也是创作区。",
+    backEmo: "smile",
+    chips: [{ label: "继续", next: "tryCreateWhat" }],
+  },
+  {
+    id: "tryCreateWhat",
+    emo: "proud",
+    tour: "create",
+    line: () => "角色、故事、整个世界……你都能亲手建。一张卡,就是一个开始。", // 草稿·待雨钦润色
+    backLine: () => "角色、故事、世界,在这儿都能亲手建。",
+    backEmo: "proud",
+    chips: [{ label: "继续", next: "tryCreate" }],
+  },
+  {
+    // 这拍不做真互动:只用画板示意「在这儿把卡搭起来」,具体上手引到「创作」页(执笔人详细带)。
     id: "tryCreate",
     emo: "proud",
     tour: "create",
     demo: {
       type: "createProjection",
+      readOnly: true, // 只展示画板,不出输入框/生成
     },
     line: () =>
-      "刚刚你看到的卡,你也可以创造。不用担心你的想法只是零碎的,我们的执笔人会帮你一步一步把你脑海中的角色带到现实来。",
-    backLine: () => "创作这处再试一次?先有一个零碎念头就够了,执笔人会帮你慢慢补。",
+      "至于怎么把它们搭起来、长成一个故事——三言两语说不完。真想动手,去「创作」那儿,执笔人会一步步陪你补出来。", // 草稿·待雨钦润色
+    backLine: () => "创作那一处,执笔人会详细带你;这儿先看个大概。",
     backEmo: "proud",
-    field: "createSeed",
-    next: "tryCreateResult",
-    placeholder: "说一个画面、一句话都行…",
-    submitLabel: "生成",
-    ai: {
-      optional: true,
-      scenario: () =>
-        "你是沐言书坊的店员糖沐。玩家正在 onboarding 里给一个创作种子。先判断:\n" +
-        "· 如果玩家给了人物、设定、画面、题材、短句或故事念头,回复以 [OK] 开头,用一两句把这个念头接成可以继续创作的方向,但不要替玩家写长设定。\n" +
-        "· 如果玩家说没有、想不出、随便,回复以 [NONE] 开头,温和接住,说先拿一个种子示范。\n" +
-        "· 如果玩家闲聊、反问、搞怪或试探边界,回复以 [CHAT] 开头,短短接话,再请他给一个很短的设想。\n" +
-        "台词控制在 55 字以内。\n" +
-        "只输出标记加糖沐台词,不要解释格式。\n" +
-        ONBOARDING_EMOTION_REPLY_INSTRUCTION,
-    },
-    chips: [{ label: "半夜给自己写信的人", fill: "半夜给自己写信的人" }],
+    chips: [{ label: "继续", next: "createRealize" }],
   },
   {
-    id: "tryCreateResult",
-    emo: "smile",
-    tour: "create",
-    demo: {
-      type: "createProjection",
-      seed: (e) => echoQuote(e, "createSeed", "半夜给自己写信的人"),
-      result: (e) => `从「${echoQuote(e, "createSeed", "半夜给自己写信的人")}」开始,先补出人物的渴望、阻力与第一场相遇。`,
-    },
-    line: (e) => {
-      const seed = echoQuote(e, "createSeed", "半夜给自己写信的人");
-      return `像「${seed}」这样的念头,先不用完整。它已经可以先长成一张角色卡,再慢慢补出世界、关系和故事。`;
-    },
-    backLine: () => "创作不是一口气写完,先有一个种子就够了。",
+    id: "createRealize",
+    emo: "spark",
+    line: () => "你的故事和想法,不用只锁在脑子里。在这儿,它们能真的长出来——被人读到,被人走进去。", // 草稿·待雨钦润色
+    backLine: () => "想法不用只留在脑子里,在这儿能真的实现。",
     backEmo: "smile",
     chips: [{ label: "收尾吧", next: "tryWrap" }],
   },
@@ -486,9 +497,11 @@ export const SCENES = {
 };
 // 每一拍所属场景;未列出的默认 counter(吧台)。
 const BEAT_SCENE = {
+  doorIntro: "door", doorGoIn: "door",
   tryCharacterCard: "door", tryChatTalk: "door", tryChatTangmuReply: "door",
   tryChatIntro: "door", tryChatGreet: "door", tryChatLeave: "door",
-  tryCreate: "rest", tryCreateResult: "rest", tryWrap: "rest",
+  restIntro: "rest", tryCreateWhat: "rest",
+  tryCreate: "rest", createRealize: "rest", tryWrap: "rest",
 };
 export function sceneForBeat(beatId) {
   return (beatId && BEAT_SCENE[beatId]) || "counter";

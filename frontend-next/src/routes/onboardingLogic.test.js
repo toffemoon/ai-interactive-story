@@ -445,7 +445,6 @@ test("onboarding LLM prompts request one whitelisted emotion tag in the same rep
     beatById("name").ai.scenario({}),
     beatById("taste").ai.scenario({ name: "雨飞" }),
     beatById("tryChatGreet").ai.scenario({}),
-    beatById("tryCreate").ai.scenario({}),
   ];
   for (const prompt of prompts) {
     assert.match(prompt, /\[EMO:<key>\]/);
@@ -564,7 +563,7 @@ test("onboarding rehearses story chat and creation without route jumps", () => {
     ["tryStoryCard", "喏,这就是书卡。正面看封面、类型和名字;点一下会翻到背面,能看简介和标签。", "tryStoryEnter"],
     ["tryStoryEnter", "选中后,你就可以亲身体验故事里的内容。", "tryStoryRole"],
     ["tryStoryRole", "你可以在里面扮演你想要的角色。它可以是主角,也可以只是一个 NPC。", "tryStoryAgency"],
-    ["tryStoryAgency", "但是,你可以亲手去控制整个故事的走向,撰写独属于你自己的故事线和结局。", "tryCharacterCard"],
+    ["tryStoryAgency", "但是,你可以亲手去控制整个故事的走向,撰写独属于你自己的故事线和结局。", "doorIntro"],
   ];
   for (const [id, line, next] of storyBeats) {
     const beat = beatById(id);
@@ -578,9 +577,14 @@ test("onboarding rehearses story chat and creation without route jumps", () => {
   assert.equal(storyModel.cover, "/onboarding/linghunbaiduren.jpg");
   assert.equal(storyModel.cover.startsWith("/covers/"), false);
 
+  const doorIntro = beatById("doorIntro");
+  assert.equal(doorIntro.demo, undefined);
+  assert.equal(doorIntro.chips[0].next, "doorGoIn");
+  assert.equal(beatById("doorGoIn").chips[0].next, "tryCharacterCard");
+
   const characterCard = beatById("tryCharacterCard");
   assert.equal(characterCard.demo, undefined);
-  assert.match(characterCard.line({}), /角色从他们的世界/);
+  assert.match(characterCard.line({}), /请出来/);
   assert.equal(characterCard.chips[0].next, "tryChatTalk");
 
   const talk = beatById("tryChatTalk");
@@ -613,7 +617,7 @@ test("onboarding rehearses story chat and creation without route jumps", () => {
   assert.equal(leave.speaker, "宣");
   assert.equal(leave.emo, "smile");
   assert.match(leave.line({}), /先回去了/);
-  assert.equal(leave.chips[0].next, "tryCreate");
+  assert.equal(leave.chips[0].next, "restIntro");
 
   for (const id of ["tryChatTalk", "tryChatTangmuReply", "tryChatIntro", "tryChatGreet", "tryChatLeave"]) {
     const chat = beatById(id);
@@ -622,21 +626,22 @@ test("onboarding rehearses story chat and creation without route jumps", () => {
     assert.equal(chat.demo.character.image, "/oc/xuan.png");
   }
 
+  const restIntro = beatById("restIntro");
+  assert.equal(restIntro.chips[0].next, "tryCreateWhat");
+  assert.equal(beatById("tryCreateWhat").chips[0].next, "tryCreate");
+
+  // 创作拍不再做引擎互动:无 field/ai,只用只读画板示意,靠 chip 推进(具体上手引到「创作」页)。
   const create = beatById("tryCreate");
-  assert.equal(create.field, "createSeed");
-  assert.equal(create.next, "tryCreateResult");
-  assert.equal(create.ai.optional, true);
+  assert.equal(create.field, undefined);
   assert.equal(create.demo.type, "createProjection");
+  assert.equal(create.demo.readOnly, true);
   assert.doesNotMatch(JSON.stringify(create.demo), /draftCard|角色卡/);
   assert.doesNotMatch(JSON.stringify(create), /雨夜侦探/);
-  assert.match(create.line({}), /刚刚你看到的卡/);
-  assert.match(create.line({}), /执笔人/);
+  assert.match(create.line({}), /创作|执笔人/);
+  assert.equal(create.chips[0].next, "createRealize");
 
-  const createResult = beatById("tryCreateResult");
-  assert.equal(createResult.demo.type, "createProjection");
-  assert.doesNotMatch(createResult.demo.result({ createSeed: "" }), /雨夜侦探/);
-  assert.match(createResult.line({ createSeed: "半夜给自己写信的人" }), /角色卡/);
-  assert.equal(createResult.chips[0].next, "tryWrap");
+  assert.equal(beatById("tryCreateResult"), null);
+  assert.equal(beatById("createRealize").chips[0].next, "tryWrap");
 
   const wrap = beatById("tryWrap");
   assert.equal(wrap.centerBubble, true);

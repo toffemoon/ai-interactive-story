@@ -775,6 +775,65 @@
   background: var(--cinnabar);
   opacity: 0.52;
 }
+
+/* 轻量创作画板(onboarding 演示,纯视觉 mock)——三张示意卡 + 一条淡连线,暗示「在这儿把卡搭起来」 */
+.home-create-board {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: clamp(10px, 1.4vw, 18px);
+  margin-top: var(--sp-4);
+  padding: clamp(14px, 1.8vw, 20px) 0;
+  border-radius: var(--r-md);
+  background: linear-gradient(rgba(34, 26, 18, 0.025), rgba(34, 26, 18, 0.025));
+  border: 1px dashed rgba(34, 26, 18, 0.16);
+}
+.home-create-board-thread {
+  position: absolute;
+  left: 20%;
+  right: 20%;
+  top: 46%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cinnabar), transparent);
+  opacity: 0.38;
+}
+.home-create-board-card {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  width: clamp(56px, 6vw, 76px);
+}
+.home-create-board-face {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: calc(var(--r-md) - 4px);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(34, 26, 18, 0.16);
+  box-shadow: 0 10px 22px -14px rgba(0, 0, 0, 0.45);
+}
+.home-create-board-cover {
+  position: absolute;
+  inset: 9% 12% auto 12%;
+  height: 46%;
+  border-radius: calc(var(--r-md) - 9px);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--cinnabar) 24%, transparent), color-mix(in srgb, var(--cinnabar) 6%, transparent));
+}
+.home-create-board-label {
+  color: rgba(32, 32, 29, 0.64);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+.home-create-projection-note--lead {
+  margin: var(--sp-4) 0 0;
+  color: rgba(32, 32, 29, 0.62);
+  font-size: 14px;
+  line-height: 1.5;
+}
 .home-demo-create-mark {
   width: 70px;
   height: 70px;

@@ -40,8 +40,15 @@ const TANGMU_ALPHA_BOUNDS = {
   "tangmu10.png": { left: 220, top: 9, right: 810, bottom: 1528 },
 };
 const XUAN_ALPHA_BOUNDS = { left: 300, top: 28, right: 701, bottom: 1503 };
-const GREETING_NEW =
-  "初次见面。我是糖沐,这家书坊的店员。你写的故事、想见的人,都能在这儿活过来——先挑一本读读,还是先跟我说说话?";
+// 首进 home(还没聊过、无存档)时糖沐的招呼语池:onboarding 之后已经认识了,不再「初次见面」;每次进 home 随机一句。
+// 台词草稿·待雨钦润色。
+const HOME_GREETINGS = [
+  "欢迎回来。今天想做点什么?还是就在这儿,跟我聊聊天?",
+  "回来啦。想找个故事钻进去,还是先陪我说说话?",
+  "来得正好。挑本书,或者就在这儿歇会儿、聊两句?",
+  "欢迎回来。灯我一直给你留着呢——想做什么,说一声就行。",
+  "回来啦。今天是想读点现成的,还是想自己搭一个?",
+];
 const GREETING_BACK = "欢迎回来。上次那段还悬着呢——接着往下,还是换一本新的?";
 // 兜底糖沐卡:presets 取不到时(后端抖动/无该预设)仍能聊,不卡在「正在把糖沐请出来」。
 const FALLBACK_TANGMU = {
@@ -211,6 +218,7 @@ function OnboardingDemo({ beat, echo, value, busy, inputRef, onChange, onSubmit 
         inputRef={inputRef}
         onChange={onChange}
         onSubmit={onSubmit}
+        readOnly={demo.readOnly}
       />
     );
   }
@@ -337,7 +345,9 @@ export default function Home({ testMode = false }) {
   const image = introFrame ? introFrame.img : obBeat ? PORTRAIT[obEmo] || TANGMU_IMG : isTangmu ? TANGMU_IMG : cardImageOf(card);
   const hasSaves = !!game || serverSaves.length > 0;
   const isReturning = hasSaves || messages.length > 0;
-  const greeting = isReturning ? GREETING_BACK : GREETING_NEW;
+  // 首进 home 随机一句招呼语(每次挂载定一次,渲染中不变)。
+  const [homeGreeting] = useState(() => HOME_GREETINGS[Math.floor(Math.random() * HOME_GREETINGS.length)]);
+  const greeting = isReturning ? GREETING_BACK : homeGreeting;
 
   // 对话框当前台词:最近一条角色发言,无则招呼语。
   const currentLine = useMemo(() => {
@@ -1656,8 +1666,8 @@ export default function Home({ testMode = false }) {
                     ← 上一步
                   </button>
                 )}
-                {/* 输入框:field 拍=回答登记(走 AI 辨别),导览/办卡/可打断自动拍=跟当前角色说话。 */}
-                {(!obDemo || obDemo.type !== "createProjection") && <div className="home-composer">
+                {/* 输入框:field 拍=回答登记(走 AI 辨别),导览/办卡/可打断自动拍 + 创作拍=跟当前角色说话(玩家可问更细的)。 */}
+                <div className="home-composer">
                   <input
                     ref={obInputRef}
                     className="home-input"
@@ -1688,7 +1698,7 @@ export default function Home({ testMode = false }) {
                   <Button variant="primary" onClick={() => (obBeat.field ? obFieldSubmit() : obChatSubmit())} disabled={!obInput.trim() || obThinking}>
                     {obThinking ? "…" : obBeat.submitLabel || (obBeat.field ? "好" : "说")}
                   </Button>
-                </div>}
+                </div>
                 {/* chips 槽常驻:没选项也占位,避免输入框往下沉(#8) */}
                 <div className="home-ob-chips">
                     {(!obBeat.autoNext || obInterruptFailure) && obRenderChips.map((c, i) => {
