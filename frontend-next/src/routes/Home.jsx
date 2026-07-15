@@ -93,6 +93,9 @@ function cardImageOf(card) {
 }
 
 function DialogueReveal({ text }) {
+  // 气泡台词的逐字入场。StaggeredText 默认靠 IntersectionObserver 触发,但换场(如进 rest)时
+  // observer 在立绘还没到位就建立、之后不再 fire,导致整段停在 opacity:0 = 空气泡(createProjection 那拍)。
+  // 台词气泡总在视口内,不需要滚动触发 → startInView 让它挂载即入场,不依赖 observer。
   return (
     <StaggeredText
       text={text}
@@ -104,6 +107,7 @@ function DialogueReveal({ text }) {
       blur={false}
       from={LINE_REVEAL_FROM}
       to={LINE_REVEAL_TO}
+      startInView
       respectReducedMotion
       className="home-line-reveal"
     />
@@ -574,7 +578,6 @@ export default function Home({ testMode = false }) {
 
     const portrait = document.querySelector(".home-portrait");
     const activeImg = document.querySelector(".home-portrait-img.is-on") || document.querySelector(".home-portrait img");
-    const bubble = portrait?.querySelector(obActive ? ".home-ob-bubble:not(.home-ob-bubble--chat):not(.home-ob-bubble--home)" : ".home-ob-bubble--home");
     const dock = document.querySelector(".home-dock");
     const observer = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
 
@@ -582,7 +585,9 @@ export default function Home({ testMode = false }) {
     window.addEventListener("resize", schedule);
     activeImg?.addEventListener("load", schedule);
     portrait?.addEventListener("transitionend", schedule);
-    if (bubble) observer?.observe(bubble);
+    // 不观察气泡自身:compute() 会改气泡定位,气泡宽度又随定位变 → ResizeObserver 触发 → 再 compute → …
+    // 在 createProjection 等被右侧面板挤窄的拍会形成反馈环、跑满主线程(逐字动画一跑就复现)。
+    // 气泡随台词/场景变化的重定位已由本 effect 的依赖数组 + resize/load/transitionend/fonts 覆盖。
     if (dock) observer?.observe(dock);
     document.fonts?.ready.then(schedule).catch(() => {});
 

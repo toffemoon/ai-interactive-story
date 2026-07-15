@@ -64,6 +64,9 @@ export interface StaggeredTextProps {
   /** Respect user's reduced motion preference */
   respectReducedMotion?: boolean;
 
+  /** Treat as already in view on mount — play immediately without waiting for the IntersectionObserver */
+  startInView?: boolean;
+
   /** Auto-exit animation when scrolled out of view */
   exitOnScrollOut?: boolean;
 
@@ -110,6 +113,7 @@ const StaggeredText = forwardRef<StaggeredTextHandle, StaggeredTextProps>(
       to,
       staggerDirection = "forward",
       respectReducedMotion = true,
+      startInView = false,
       exitOnScrollOut = false,
       onAnimationComplete,
       onExitComplete,
@@ -176,6 +180,16 @@ const StaggeredText = forwardRef<StaggeredTextHandle, StaggeredTextProps>(
 
       return () => observer.disconnect();
     }, [threshold, rootMargin, exitOnScrollOut, hasEnteredView]);
+
+    // startInView: element is known to be on-screen at mount (e.g. an always-visible dialogue bubble),
+    // so reveal without waiting for the IntersectionObserver (which can miss when the element mounts
+    // mid-transition and never re-fires). Flip AFTER mount via rAF rather than as the initial state —
+    // motion plays the entrance on the false→true change; starting true gives no change and doesn't animate.
+    useEffect(() => {
+      if (!startInView) return;
+      const raf = requestAnimationFrame(() => setHasEnteredView(true));
+      return () => cancelAnimationFrame(raf);
+    }, [startInView]);
 
     const defaultFrom = useMemo<MotionStyle>(() => {
       const base: MotionStyle = {
