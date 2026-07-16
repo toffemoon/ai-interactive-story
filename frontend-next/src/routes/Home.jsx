@@ -1690,7 +1690,10 @@ export default function Home({ testMode = false }) {
                     onFocus={() => setObComposerFocused(true)}
                     onBlur={() => setObComposerFocused(false)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.isComposing) {
+                      // 输入法守卫:必须读原生事件的 isComposing —— React 合成事件不暴露 isComposing,
+                      // 写 !e.isComposing 恒为 true(等于没守卫),中文 composing 中按 Enter 选词会误提交拼音。
+                      // 与全站其它输入框(Chat/Create/Login/Story/OnboardingCreateProjection)统一用 (e.nativeEvent||e).isComposing。
+                      if (e.key === "Enter" && !(e.nativeEvent || e).isComposing) {
                         e.preventDefault();
                         if (obBeat.field) obFieldSubmit();
                         else obChatSubmit();
@@ -1743,7 +1746,8 @@ export default function Home({ testMode = false }) {
                       placeholder={busy ? `${displayName}正在思考...` : card ? "和 " + displayName + " 说点什么…" : "正在把糖沐请出来…"}
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !busy) {
+                        // 同上:读原生 isComposing,React 合成事件不暴露该字段(!e.isComposing 恒真 = 没守卫)。
+                        if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
                           e.preventDefault();
                           send();
                         }
