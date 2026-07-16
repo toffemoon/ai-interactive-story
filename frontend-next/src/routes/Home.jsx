@@ -253,6 +253,7 @@ export default function Home({ testMode = false }) {
   const [obEcho, setObEcho] = useState({});
   const [obInput, setObInput] = useState("");
   const [obBubblePos, setObBubblePos] = useState(null); // 台词气泡贴头定位 {left,top}(px);null=走 CSS(窄屏/竖版底部)
+  const [obSdBottom, setObSdBottom] = useState(null); // 竖屏 Q版糖沐「站在气泡顶」的自适应 bottom(px);null=用 CSS 兜底
   const [obChatBubblePos, setObChatBubblePos] = useState(null); // chat 拍前景气泡,坐标相对 .home-ui
   const [obHistory, setObHistory] = useState([]); // 已访拍栈(不含当前),供「上一步」回退
   const [obViaBack, setObViaBack] = useState(false); // 当前拍是否由回退进入 → 显反悔反应(backLine/backEmo)
@@ -317,7 +318,8 @@ export default function Home({ testMode = false }) {
     replyBlocked: obReplyBlocked || obAutoControl.replyState !== "idle",
   });
   const introTimerPlan = resolveAutoAdvancePlan({
-    autoNext: introFrame ? (introFrame.hold ? "intro:hint" : "intro:advance") : null,
+    // 入场全程改点击推进:每一帧(含背身/回头)都不自动播,停留够久(背身/回头按原 dur、正面 2.5s)只冒「点击继续」提示,点屏才走下一句。
+    autoNext: introFrame ? "intro:hint" : null,
     autoMs: introFrame ? (introFrame.hold ? 2500 : introFrame.dur || 1200) : 0,
     menuOpen,
   });
@@ -415,7 +417,7 @@ export default function Home({ testMode = false }) {
       setObStep(FIRST_BEAT);
     }
   }
-  // 入场节奏:背身→回头(无 hold)按 dur 自动播到正面;正面对话帧(hold)停下等点击推进,太久没点(2.5s)冒"点击继续"提示。
+  // 入场节奏:全程点击推进——每帧都停下等点屏(背身/回头/正面一致);停留够久只冒"点击继续"提示(nextId 恒为 intro:hint,不再自动 advance)。
   useEffect(() => {
     if (obIntro < 0 || !introTimerPlan.shouldSchedule) return undefined;
     setShowIntroHint(false);
@@ -627,6 +629,52 @@ export default function Home({ testMode = false }) {
     obLine,
     obThinking,
   ]);
+
+  // 竖屏登记拍:Q版糖沐「站在气泡顶」的自适应定位 —— 量气泡实际顶边,把 Q版脚底锚到那儿,
+  // 不同手机 / 不同台词行数都踩在气泡上沿(桌面 Q版 display:none 不参与;量不到则回退 CSS 固定值)。
+  useLayoutEffect(() => {
+    if (!(obBeat && obBeat.showCard)) {
+      setObSdBottom(null);
+      return;
+    }
+    let frame = 0;
+    let cancelled = false;
+    const compute = () => {
+      const narrow = window.matchMedia("(max-width: 720px)").matches || window.innerHeight > window.innerWidth;
+      if (!narrow) return setObSdBottom(null);
+      const bubble = document.querySelector(".home-portrait .home-ob-bubble:not(.home-ob-bubble--chat):not(.home-ob-bubble--home)");
+      if (!bubble) return;
+      const r = bubble.getBoundingClientRect();
+      if (!r.height) return;
+      // 脚底落在气泡上沿之上 4px(不陷进气泡、不遮住它):+gap 抬高;像轻轻站在气泡顶。
+      setObSdBottom(Math.round(window.innerHeight - r.top + 4));
+    };
+    const schedule = () => {
+      if (cancelled) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(compute);
+    };
+    schedule();
+    window.addEventListener("resize", schedule);
+    document.fonts?.ready.then(schedule).catch(() => {});
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", schedule);
+    };
+  }, [obBeat && obBeat.showCard, obStep, obLine, obThinking]);
+
+  // 竖屏登记拍整体随屏宽缩放:按 (屏宽/390) 出一个系数(夹 0.82~1.2),身份卡与 Q版都乘它 → 不同手机成比例。
+  // 只在竖屏 CSS 里用到该变量(桌面规则不引用),JS 失效则 CSS 回退默认 1(= 原 scale 0.62),可安全降级。
+  useLayoutEffect(() => {
+    const apply = () => {
+      const s = Math.min(1.2, Math.max(0.82, window.innerWidth / 390));
+      document.documentElement.style.setProperty("--ob-mscale", s.toFixed(3));
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
+  }, []);
 
   // chat 拍气泡在 .home-ui 前景层：宣说话时从宣的真实 rect 右侧起排；糖沐说话时回到糖沐头侧。
   // 位置在首轮 layout、视口 resize、立绘位移结束及宣图片加载后重算，始终 clamp 在 UI/viewport 内。
@@ -1635,6 +1683,18 @@ export default function Home({ testMode = false }) {
                   头像前置到「头像拍」后那拍非 card,ref 为 null → 上传按钮点了没反应。 */}
               <input ref={obAvatarInputRef} type="file" accept="image/*" onChange={obAvatarChange} hidden />
             </div>
+          )}
+          {/* 竖屏登记拍:Q版糖沐(SD3)前景角色 —— 桌面 CSS 隐藏,只在 ≤720px/竖屏 is-cardbeat 显示。
+              放在 .home-ui(前景层)、z 在身份卡之上 → 可压在卡片上;右侧、脚踩气泡顶(bottom 由 JS 自适应)。 */}
+          {obBeat && obBeat.showCard && (
+            <img
+              className="home-ob-sd"
+              src="/home/tangmu-sd3.png"
+              alt=""
+              aria-hidden="true"
+              draggable="false"
+              style={obSdBottom != null ? { bottom: obSdBottom } : undefined}
+            />
           )}
           {obDemo && (
             <OnboardingDemo

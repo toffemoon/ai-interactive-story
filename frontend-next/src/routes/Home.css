@@ -432,6 +432,24 @@
     transform: translateY(calc(-50% + 44px)) scale(0.93) rotate(-2deg);
   }
 }
+/* 竖屏专用入场:只淡入 + 轻微上浮(18px),to 态严格等于竖屏静态 transform(translateX(-50%) scale(0.62)),
+   几何/位置/缩放全不变,只柔化「出现」——补上竖屏原本因 transform 冲突被关掉的入场动画。 */
+@keyframes obCardInM {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(18px) scale(calc(0.62 * var(--ob-mscale, 1)));
+  }
+}
+/* Q版糖沐(SD)前景角色:默认(桌面/宽屏)不显示;只在竖屏登记拍(≤720px/竖屏 + is-cardbeat)替代被身份卡挡住的大立绘。 */
+.home-ob-sd {
+  display: none;
+}
+@keyframes obSdIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
 /* 登记/办卡拍:糖沐向左让位(-8%),给右侧身份卡腾地方。滑动过渡挂在 .home-portrait 上(开场掏卡演出);
    气泡贴头定位靠 transitionend 在滑完重算 +「先动作后气泡」延迟出现,避开过渡中途位。 */
 .home.is-cardbeat .home-portrait {
@@ -1022,9 +1040,31 @@
     left: 50%;
     top: auto;
     bottom: 368px;
-    transform: translateX(-50%) scale(0.62);
+    transform: translateX(-50%) translateY(0) scale(calc(0.62 * var(--ob-mscale, 1)));
     transform-origin: bottom center;
-    animation: none;
+    animation: obCardInM 520ms var(--ease-out) both;
+  }
+  /* 登记拍(is-cardbeat):大立绘被身份卡挡住 → 隐掉大立绘 + 压暗背景,改用 Q版糖沐当前景角色。
+     位置/大小(left/bottom/height)是盲改起点,真机看了再调。 */
+  .home.is-cardbeat .home-portrait-img {
+    opacity: 0;
+  }
+  .home.is-cardbeat .home-bg-scrim {
+    background: rgba(8, 5, 3, 0.66);
+  }
+  .home.is-cardbeat .home-ob-sd {
+    display: block;
+    position: absolute;
+    /* 右侧、站在气泡顶(脚踩气泡上沿)、抬手指向左上的身份卡;z 在身份卡之上 → 可压在卡片上。
+       现渲染在 .home-ui(right/bottom 相对视口);bottom 由 JS 量气泡实际顶边设内联(自适应),276px 是兜底。 */
+    right: 2vw;
+    bottom: 276px;
+    height: min(calc(148px * var(--ob-mscale, 1)), 26vh);
+    width: auto;
+    z-index: 6;
+    pointer-events: none;
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
+    animation: obSdIn 520ms var(--ease-out) both;
   }
   /* 竖屏卡已横向居中,立绘无需左移让位 */
   .home.is-cardbeat .home-portrait,
