@@ -911,6 +911,10 @@
   .home-ob-demo {
     animation: none;
   }
+  /* Q版 SD 的消失/入场淡入淡出关掉 → 瞬间显隐(.is-in 仍控制显/隐,只是不带过渡)。 */
+  .home-ob-sd {
+    transition: none;
+  }
 }
 
 /* 底部操作盘:纯输入框 + 选项 chip(无台词) */
@@ -1067,18 +1071,18 @@
     transform-origin: bottom center;
     animation: obCardInM 520ms var(--ease-out) both;
   }
-  /* 登记拍(is-cardbeat):大立绘被身份卡挡住 → 隐掉大立绘 + 压暗背景,改用 Q版糖沐当前景角色。
+  /* 登记拍 + 书卡拍(is-ob-sd):大立绘被卡挡住 → 隐掉大立绘 + 压暗背景,改用 Q版糖沐当前景角色。
      位置/大小(left/bottom/height)是盲改起点,真机看了再调。 */
-  .home.is-cardbeat .home-portrait-img {
+  .home.is-ob-sd .home-portrait-img {
     opacity: 0;
   }
-  .home.is-cardbeat .home-bg-scrim {
+  .home.is-ob-sd .home-bg-scrim {
     background: rgba(8, 5, 3, 0.66);
   }
-  .home.is-cardbeat .home-ob-sd {
+  .home.is-ob-sd .home-ob-sd {
     display: block;
     position: absolute;
-    /* 右侧、站在气泡顶(脚踩气泡上沿)、抬手指向左上的身份卡;z 在身份卡之上 → 可压在卡片上。
+    /* 右侧、站在气泡顶(脚踩气泡上沿)、抬手指向左上的卡(入店卡 / 书卡);z 在卡之上 → 可压在卡片上。
        现渲染在 .home-ui(right/bottom 相对视口);bottom 由 JS 量气泡实际顶边设内联(自适应),276px 是兜底。 */
     right: 2vw;
     bottom: 276px;
@@ -1087,20 +1091,28 @@
     z-index: 6;
     pointer-events: none;
     filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
-    /* 延迟 780ms 入场:身份卡 ~520ms、气泡 ~380+320=700ms 都收完后再起,让糖沐 Q版明确最后出现。 */
-    animation: obSdIn 460ms var(--ease-out) 780ms both;
+    /* 入场/消失闸:默认隐藏(下沉 16px)。加/去 .is-in 靠 transition 做「入场淡入↑ / 消失淡出↓」。
+       每拍都消失+入场(见 Home.jsx obSdReady 闸,依赖 obStep);替掉旧的固定 780ms 延迟与纯瞬切隐藏。 */
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity 280ms var(--ease-out), transform 280ms var(--ease-out);
+  }
+  /* .is-in = 气泡台词逐字打完(StageSpeechBubble onLineDone):淡入 + 轻微上浮。去掉 .is-in = 淡出 + 下沉(消失)。 */
+  .home.is-ob-sd .home-ob-sd.is-in {
+    opacity: 1;
+    transform: translateY(0);
   }
   /* SD2 写字姿势是横版(趴着执笔):改按宽度定尺寸(高 auto),整体更宽,贴右;位置/大小盲调起点,真机再调。 */
-  .home.is-cardbeat .home-ob-sd.is-write {
+  .home.is-ob-sd .home-ob-sd.is-write {
     width: min(calc(160px * var(--ob-mscale, 1)), 46vw);
     height: auto;
     right: 0;
   }
-  /* 竖屏登记拍:底部「上一步」隐掉(小屏 + 键盘弹出会被压),改用气泡头部「跳过」旁常驻的返回。 */
-  .home.is-cardbeat .home-ob-back-inline {
+  /* 「上一步」进气泡头部:全 onboarding 拍统一(不再只登记拍),对应隐掉底部实体返回(小屏 + 键盘弹出会被压)。 */
+  .home.is-ob .home-ob-back-inline {
     display: inline-flex;
   }
-  .home.is-cardbeat .home-ob-tray .home-ob-back {
+  .home.is-ob .home-ob-tray .home-ob-back {
     display: none;
   }
   /* 竖屏卡已横向居中,立绘无需左移让位 */
@@ -1647,23 +1659,21 @@
   }
 }
 
-/* 窄屏 / 竖屏的两种卡片演示：立绘只占顶部半屏，底部气泡自然排在立绘之后。 */
+/* 窄屏 / 竖屏:角色卡演示(characterCard)立绘只占顶部半屏、气泡排其后。
+   书卡演示(story)已改套「登记拍」构图(隐大立绘 by is-ob-sd、书卡放大居中、SD3 指卡),见下方 story 专块;故这里只留 characterCard。 */
 @media (max-width: 720px), (orientation: portrait) {
-  .home.is-ob-demo-story .home-portrait,
   .home.is-ob-demo-characterCard .home-portrait {
     top: 0;
     bottom: auto;
     height: 56dvh;
   }
 
-  .home.is-ob-demo-story .home-portrait-img,
   .home.is-ob-demo-characterCard .home-portrait-img {
     left: 34%;
     height: 100%;
     max-height: 56dvh;
   }
 
-  .home.is-ob-demo-story .home-ob-bubble:not(.home-ob-bubble--chat),
   .home.is-ob-demo-characterCard .home-ob-bubble:not(.home-ob-bubble--chat) {
     position: fixed;
     top: calc(56dvh + 12px);
@@ -1684,5 +1694,30 @@
 
   .home.is-ob-demo-characterCard .home-demo-character-card .card--shelf {
     height: 199px;
+  }
+
+  /* 书卡拍(story demo)套登记拍构图:书卡放大、横向居中、坐在气泡上方 —— SD3 站气泡顶、指向左上书卡。
+     隐大立绘 + 压暗由 .home.is-ob-sd 统一给;气泡沉底(bottom:168px)由通用竖屏气泡规则给。
+     位置/大小(bottom / width / height)是盲改起点,真机看了再调。 */
+  .home.is-ob-demo-story .home-ob-demo--story {
+    left: 50%;
+    right: auto;
+    top: auto;
+    bottom: 356px;
+    transform: translateX(-50%);
+    width: auto;
+  }
+  .home.is-ob-demo-story .home-demo-story-card,
+  .home.is-ob-demo-story .home-demo-story-card .card--shelf {
+    width: calc(168px * var(--ob-mscale, 1));
+  }
+  .home.is-ob-demo-story .home-demo-story-card .card--shelf {
+    height: calc(252px * var(--ob-mscale, 1));
+  }
+  /* 书卡拍用 SD1(原朝向、指右上):放左侧 → 指向她右上方居中的书卡(= 登记拍 SD3 构图的左右镜像)。
+     登记拍仍是 SD3 在右(见 .home.is-ob-sd .home-ob-sd 的 right:2vw),此处只对 story 覆写到左。 */
+  .home.is-ob-demo-story .home-ob-sd {
+    right: auto;
+    left: 2vw;
   }
 }

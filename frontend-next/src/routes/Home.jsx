@@ -99,10 +99,11 @@ function cardImageOf(card) {
   return resolveMediaUrl(d.image || d.avatar || "");
 }
 
-function DialogueReveal({ text }) {
+function DialogueReveal({ text, onDone = null }) {
   // 气泡台词的逐字入场。StaggeredText 默认靠 IntersectionObserver 触发,但换场(如进 rest)时
   // observer 在立绘还没到位就建立、之后不再 fire,导致整段停在 opacity:0 = 空气泡(createProjection 那拍)。
   // 台词气泡总在视口内,不需要滚动触发 → startInView 让它挂载即入场,不依赖 observer。
+  // onDone:最后一个字符打完时触发(手机登记拍靠它让 Q版糖沐「等气泡加载完再出现」)。
   return (
     <StaggeredText
       text={text}
@@ -116,6 +117,7 @@ function DialogueReveal({ text }) {
       to={LINE_REVEAL_TO}
       startInView
       respectReducedMotion
+      onAnimationComplete={onDone || undefined}
       className="home-line-reveal"
     />
   );
@@ -150,7 +152,7 @@ function ThinkingIndicator({ speaker }) {
   );
 }
 
-function StageSpeechBubble({ speaker = "糖沐", line, busy = false, animateLine = true, onSkip, onBack = null, tools = null, className = "", style }) {
+function StageSpeechBubble({ speaker = "糖沐", line, busy = false, animateLine = true, onSkip, onBack = null, onLineDone = null, tools = null, className = "", style }) {
   return (
     <div className={["home-ob-bubble", className].filter(Boolean).join(" ")} style={style}>
       <div className="home-ob-bubble-head">
@@ -171,7 +173,7 @@ function StageSpeechBubble({ speaker = "糖沐", line, busy = false, animateLine
         </span>
       </div>
       <p className="home-ob-line t-read" aria-live="polite" aria-busy={busy}>
-        {busy ? <ThinkingIndicator speaker={speaker} /> : animateLine ? <DialogueReveal key={line} text={line} /> : line}
+        {busy ? <ThinkingIndicator speaker={speaker} /> : animateLine ? <DialogueReveal key={line} text={line} onDone={onLineDone} /> : line}
       </p>
     </div>
   );
@@ -262,6 +264,7 @@ export default function Home({ testMode = false }) {
   const [obInput, setObInput] = useState("");
   const [obBubblePos, setObBubblePos] = useState(null); // 台词气泡贴头定位 {left,top}(px);null=走 CSS(窄屏/竖版底部)
   const [obSdBottom, setObSdBottom] = useState(null); // 竖屏 Q版糖沐「站在气泡顶」的自适应 bottom(px);null=用 CSS 兜底
+  const [obSdReady, setObSdReady] = useState(false); // 竖屏 Q版糖沐入场闸:false=隐藏,true(=气泡打字完成)才淡入。事件驱动替掉旧的固定 780ms 延迟(慢机上追不上打字)。
   const [obChatBubblePos, setObChatBubblePos] = useState(null); // chat 拍前景气泡,坐标相对 .home-ui
   const [obHistory, setObHistory] = useState([]); // 已访拍栈(不含当前),供「上一步」回退
   const [obViaBack, setObViaBack] = useState(false); // 当前拍是否由回退进入 → 显反悔反应(backLine/backEmo)
@@ -343,9 +346,14 @@ export default function Home({ testMode = false }) {
       ? "sd4"
       : obBeat && obBeat.showCard && obBeat.id !== "name"
       ? "sd2"
+      : obDemo && obDemo.type === "story"
+      ? "sd1" // 书卡拍试 SD1(登记拍仍 SD3)
       : "sd3";
   const obSdSrc = `/home/tangmu-${obSdPose}.png`;
   const obSdWriting = obSdPose === "sd2"; // 仅 SD2 是横版写字,套 is-write 单独排布
+  // Q版糖沐(SD)何时以前景出现:登记段(showCard)本来就有;导览的「书卡」demo 拍(tryStoryCard→Agency)
+  // 也套登记拍构图 —— 隐大立绘、书卡放大居中、拉出 SD3 指卡。故判据 = showCard 或 story demo。
+  const obShowSd = !!(obBeat && (obBeat.showCard || (obDemo && obDemo.type === "story")));
   // 当前台词优先级:思考态 > 回退反悔(backLine,仅在还没生成新台词时) > 上传头像后的回应(avatarLine) > AI 自适应/闲聊(obAiLine) > 静态脚本(line)。
   // backLine 是「经上一步回来」的反悔招呼,只在刚回到该拍(obAiLine 尚为 null)时显示;
   // 一旦在该拍产生了新台词(二次确认提问 / 拒绝语 / 插话回应 / 没听清重试),就让位给 obAiLine —— 否则回退后卡在 backLine,确认 chip 出现却看不到确认问题。
@@ -447,6 +455,22 @@ export default function Home({ testMode = false }) {
     }, introTimerPlan.delay);
     return () => clearTimeout(timer);
   }, [obIntro, introTimerPlan.shouldSchedule, introTimerPlan.nextId, introTimerPlan.delay]);
+
+  // 竖屏 Q版糖沐入场闸(手机 SD:登记拍 + 书卡拍)。离开 SD 段就复位隐藏。
+  // 「所有对话都是气泡先、SD 后」:依赖 obStep(+ obSdPose 兜同拍内换姿势,如报怪名 SD3→SD4)——
+  //   每换一拍都重走「消失 → 等这拍气泡打字完成(onLineDone)→ 入场」,即使姿势没变(如 4 个书卡拍都 SD1)也照做消失+入场。
+  //   「消失」= 去掉 .is-in 后 CSS transition 把 SD 淡出(见 Home.css);「入场」= onLineDone 后加回 .is-in 淡入。
+  // 兜底:进拍 2.5s 内没等到「打完」信号(回调万一漏触发),也强制显示,防糖沐永久隐藏。
+  // 用 useLayoutEffect:换拍时在 paint 前同步复位,SD 从上一拍的可见态平滑淡出,不闪新姿势 1 帧。
+  useLayoutEffect(() => {
+    if (!obShowSd) {
+      setObSdReady(false);
+      return undefined;
+    }
+    setObSdReady(false);
+    const t = setTimeout(() => setObSdReady(true), 2500);
+    return () => clearTimeout(t);
+  }, [obShowSd, obStep, obSdPose]);
 
   // 拉默认糖沐卡(《新人入店》characters 里 name 含「糖沐」)。
   useEffect(() => {
@@ -653,7 +677,7 @@ export default function Home({ testMode = false }) {
   // 竖屏登记拍:Q版糖沐「站在气泡顶」的自适应定位 —— 量气泡实际顶边,把 Q版脚底锚到那儿,
   // 不同手机 / 不同台词行数都踩在气泡上沿(桌面 Q版 display:none 不参与;量不到则回退 CSS 固定值)。
   useLayoutEffect(() => {
-    if (!(obBeat && obBeat.showCard)) {
+    if (!obShowSd) {
       setObSdBottom(null);
       return;
     }
@@ -682,7 +706,7 @@ export default function Home({ testMode = false }) {
       cancelAnimationFrame(frame);
       window.removeEventListener("resize", schedule);
     };
-  }, [obBeat && obBeat.showCard, obStep, obLine, obThinking]);
+  }, [obShowSd, obStep, obLine, obThinking]);
 
   // 竖屏登记拍整体随屏宽缩放:按 (屏宽/390) 出一个系数(夹 0.82~1.2),身份卡与 Q版都乘它 → 不同手机成比例。
   // 只在竖屏 CSS 里用到该变量(桌面规则不引用),JS 失效则 CSS 回退默认 1(= 原 scale 0.62),可安全降级。
@@ -1560,6 +1584,8 @@ export default function Home({ testMode = false }) {
       className={
         "home" +
         (fullscreen ? " is-fullscreen" : "") +
+        (obBeat ? " is-ob" : "") +
+        (obShowSd ? " is-ob-sd" : "") +
         (obBeat && obBeat.showCard ? " is-cardbeat" : "") +
         (obBeat && obBeat.speaker ? ` is-ob-speaker-${obBeat.speaker}` : "") +
         (obBeat && obBeat.speaker === "糖沐" ? " is-ob-speaker-tangmu" : "") +
@@ -1612,6 +1638,7 @@ export default function Home({ testMode = false }) {
             busy={obThinking}
             onSkip={obBeat ? () => endOnboarding() : null}
             onBack={obBeat && obHistory.length && !obThinking ? obBack : null}
+            onLineDone={() => { if (obShowSd) setObSdReady(true); }}
             style={
               obBubblePos &&
               !(obBeat && obBeat.centerBubble)
@@ -1708,9 +1735,9 @@ export default function Home({ testMode = false }) {
           {/* 竖屏登记拍:Q版糖沐前景角色(随状态换姿势 obSdSrc:SD3 指卡 / SD4 搞笑名字反应 / SD2 写卡)。
               桌面 CSS 隐藏,只在 ≤720px/竖屏 is-cardbeat 显示;放在 .home-ui、z 在身份卡之上、右侧、脚踩气泡顶(bottom 自适应)。
               SD2 是横版写字姿势,加 is-write 单独排布。 */}
-          {obBeat && obBeat.showCard && (
+          {obShowSd && (
             <img
-              className={"home-ob-sd" + (obSdWriting ? " is-write" : "")}
+              className={"home-ob-sd" + (obSdWriting ? " is-write" : "") + (obSdReady ? " is-in" : "")}
               src={obSdSrc}
               alt=""
               aria-hidden="true"
@@ -1736,6 +1763,7 @@ export default function Home({ testMode = false }) {
               line={obLine}
               busy={obThinking}
               onSkip={() => endOnboarding()}
+              onBack={obBeat && obHistory.length && !obThinking ? obBack : null}
               className={"home-ob-bubble--chat " + (obBeat.speaker === "宣" ? "is-xuan" : "is-tangmu") + (obBeat.id === "tryChatTalk" ? " is-after-entrance" : "")}
               style={obChatBubblePos ? { left: obChatBubblePos.left, top: obChatBubblePos.top, width: obChatBubblePos.width } : undefined}
             />
