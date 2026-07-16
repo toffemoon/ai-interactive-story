@@ -150,17 +150,25 @@ function ThinkingIndicator({ speaker }) {
   );
 }
 
-function StageSpeechBubble({ speaker = "糖沐", line, busy = false, animateLine = true, onSkip, tools = null, className = "", style }) {
+function StageSpeechBubble({ speaker = "糖沐", line, busy = false, animateLine = true, onSkip, onBack = null, tools = null, className = "", style }) {
   return (
     <div className={["home-ob-bubble", className].filter(Boolean).join(" ")} style={style}>
       <div className="home-ob-bubble-head">
         <span className="home-dlg-name t-kai">{speaker}</span>
         {tools}
-        {onSkip && (
-          <button type="button" className="home-ob-skip" onClick={onSkip} disabled={busy} title="跳过引导,直接进店">
-            跳过
-          </button>
-        )}
+        <span className="home-ob-headbtns">
+          {/* 竖屏用:底部「上一步」小屏 + 键盘弹出会被压掉,这里在「跳过」旁常驻一个返回(CSS 只在窄屏显示)。 */}
+          {onBack && (
+            <button type="button" className="home-ob-back-inline" onClick={onBack} disabled={busy} title="回上一步,重新填">
+              ← 上一步
+            </button>
+          )}
+          {onSkip && (
+            <button type="button" className="home-ob-skip" onClick={onSkip} disabled={busy} title="跳过引导,直接进店">
+              跳过
+            </button>
+          )}
+        </span>
       </div>
       <p className="home-ob-line t-read" aria-live="polite" aria-busy={busy}>
         {busy ? <ThinkingIndicator speaker={speaker} /> : animateLine ? <DialogueReveal key={line} text={line} /> : line}
@@ -326,6 +334,18 @@ export default function Home({ testMode = false }) {
   // 当前有效 emo:回退进入且该拍有 backEmo → 用反悔姿势,否则常态 emo。
   const obEmoBase = obBeat ? (obViaBack && obBeat.backEmo ? obBeat.backEmo : obBeat.emo) : null;
   const obEmo = obEmoOverride || (obBeat && obBeat.id === "avatar" && obEcho.nameOdd ? "wry" : obEmoBase);
+  // 竖屏 Q版糖沐随状态换姿势(手机登记拍):
+  //   折回(上一步/反悔 obViaBack)或 name 拍遇搞笑/奇怪名字(二次确认 / wry / surprise)→ SD4(无奈冒汗);
+  //   名字确定后的拍(avatar/taste/cardDone,非折回)→ SD2(趴着执笔写卡,横版,单独排布 is-write);
+  //   否则(name 拍常态,问名字、指卡)→ SD3(站立指卡)。
+  const obSdPose =
+    obBeat && obBeat.showCard && (obViaBack || (obBeat.id === "name" && (obPendingConfirm || obEmoOverride === "wry" || obEmoOverride === "surprise")))
+      ? "sd4"
+      : obBeat && obBeat.showCard && obBeat.id !== "name"
+      ? "sd2"
+      : "sd3";
+  const obSdSrc = `/home/tangmu-${obSdPose}.png`;
+  const obSdWriting = obSdPose === "sd2"; // 仅 SD2 是横版写字,套 is-write 单独排布
   // 当前台词优先级:思考态 > 回退反悔(backLine,仅在还没生成新台词时) > 上传头像后的回应(avatarLine) > AI 自适应/闲聊(obAiLine) > 静态脚本(line)。
   // backLine 是「经上一步回来」的反悔招呼,只在刚回到该拍(obAiLine 尚为 null)时显示;
   // 一旦在该拍产生了新台词(二次确认提问 / 拒绝语 / 插话回应 / 没听清重试),就让位给 obAiLine —— 否则回退后卡在 backLine,确认 chip 出现却看不到确认问题。
@@ -1591,6 +1611,7 @@ export default function Home({ testMode = false }) {
             line={obLine}
             busy={obThinking}
             onSkip={obBeat ? () => endOnboarding() : null}
+            onBack={obBeat && obHistory.length && !obThinking ? obBack : null}
             style={
               obBubblePos &&
               !(obBeat && obBeat.centerBubble)
@@ -1684,12 +1705,13 @@ export default function Home({ testMode = false }) {
               <input ref={obAvatarInputRef} type="file" accept="image/*" onChange={obAvatarChange} hidden />
             </div>
           )}
-          {/* 竖屏登记拍:Q版糖沐(SD3)前景角色 —— 桌面 CSS 隐藏,只在 ≤720px/竖屏 is-cardbeat 显示。
-              放在 .home-ui(前景层)、z 在身份卡之上 → 可压在卡片上;右侧、脚踩气泡顶(bottom 由 JS 自适应)。 */}
+          {/* 竖屏登记拍:Q版糖沐前景角色(随状态换姿势 obSdSrc:SD3 指卡 / SD4 搞笑名字反应 / SD2 写卡)。
+              桌面 CSS 隐藏,只在 ≤720px/竖屏 is-cardbeat 显示;放在 .home-ui、z 在身份卡之上、右侧、脚踩气泡顶(bottom 自适应)。
+              SD2 是横版写字姿势,加 is-write 单独排布。 */}
           {obBeat && obBeat.showCard && (
             <img
-              className="home-ob-sd"
-              src="/home/tangmu-sd3.png"
+              className={"home-ob-sd" + (obSdWriting ? " is-write" : "")}
+              src={obSdSrc}
               alt=""
               aria-hidden="true"
               draggable="false"

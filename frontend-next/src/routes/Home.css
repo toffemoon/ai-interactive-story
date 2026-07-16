@@ -416,6 +416,29 @@
 .home-ob-skip:hover {
   color: #20201d;
 }
+.home-ob-headbtns {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+/* 气泡头部的「上一步」:默认不显示(桌面用底部 .home-ob-back);只在竖屏登记拍显示(见媒体查询),
+   避开底部按钮在小屏 + 键盘弹出时被压掉的问题。 */
+.home-ob-back-inline {
+  display: none;
+  align-items: center;
+  border: 1px solid rgba(232, 181, 99, 0.55);
+  border-radius: var(--r-pill);
+  background: rgba(28, 22, 16, 0.55);
+  color: #f1e7d6;
+  font-family: var(--font-sans);
+  font-size: var(--fs-ui-sm);
+  padding: 2px 10px;
+  cursor: pointer;
+}
+.home-ob-back-inline:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 
 /* —— 身份卡收尾拍:糖沐左移让位,卡放右侧,从下方递上来入场 —— */
 .home-ob-card {
@@ -1064,7 +1087,21 @@
     z-index: 6;
     pointer-events: none;
     filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.5));
-    animation: obSdIn 520ms var(--ease-out) both;
+    /* 延迟 780ms 入场:身份卡 ~520ms、气泡 ~380+320=700ms 都收完后再起,让糖沐 Q版明确最后出现。 */
+    animation: obSdIn 460ms var(--ease-out) 780ms both;
+  }
+  /* SD2 写字姿势是横版(趴着执笔):改按宽度定尺寸(高 auto),整体更宽,贴右;位置/大小盲调起点,真机再调。 */
+  .home.is-cardbeat .home-ob-sd.is-write {
+    width: min(calc(160px * var(--ob-mscale, 1)), 46vw);
+    height: auto;
+    right: 0;
+  }
+  /* 竖屏登记拍:底部「上一步」隐掉(小屏 + 键盘弹出会被压),改用气泡头部「跳过」旁常驻的返回。 */
+  .home.is-cardbeat .home-ob-back-inline {
+    display: inline-flex;
+  }
+  .home.is-cardbeat .home-ob-tray .home-ob-back {
+    display: none;
   }
   /* 竖屏卡已横向居中,立绘无需左移让位 */
   .home.is-cardbeat .home-portrait,
