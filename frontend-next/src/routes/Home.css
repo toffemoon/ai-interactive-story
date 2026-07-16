@@ -946,7 +946,10 @@
 }
 .home-ob-nexthint {
   align-self: center;
-  color: rgba(241, 231, 214, 0.42);
+  /* 弱提示专为「久读不点」的慢读者准备,但原 0.42 cream 无阴影,在明亮/繁杂立绘背景上会糊掉、
+     恰恰对它想帮的人不可读。提到 0.68 并加一层浅阴影托底:仍比选项 chip 弱(次级、无描边),但任意背景可读。 */
+  color: rgba(241, 231, 214, 0.68);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
   letter-spacing: 0.08em;
   padding: 8px 2px;
   animation: obNextHintIn 480ms var(--ease-out) both;
