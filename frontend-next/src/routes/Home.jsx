@@ -324,12 +324,14 @@ export default function Home({ testMode = false }) {
   // 当前有效 emo:回退进入且该拍有 backEmo → 用反悔姿势,否则常态 emo。
   const obEmoBase = obBeat ? (obViaBack && obBeat.backEmo ? obBeat.backEmo : obBeat.emo) : null;
   const obEmo = obEmoOverride || (obBeat && obBeat.id === "avatar" && obEcho.nameOdd ? "wry" : obEmoBase);
-  // 当前台词优先级:思考态 > 回退反悔(backLine) > 上传头像后的回应(avatarLine) > AI 自适应/闲聊(obAiLine) > 静态脚本(line)。
+  // 当前台词优先级:思考态 > 回退反悔(backLine,仅在还没生成新台词时) > 上传头像后的回应(avatarLine) > AI 自适应/闲聊(obAiLine) > 静态脚本(line)。
+  // backLine 是「经上一步回来」的反悔招呼,只在刚回到该拍(obAiLine 尚为 null)时显示;
+  // 一旦在该拍产生了新台词(二次确认提问 / 拒绝语 / 插话回应 / 没听清重试),就让位给 obAiLine —— 否则回退后卡在 backLine,确认 chip 出现却看不到确认问题。
   const obHasAvatar = !!(obCardAvatar || (obEcho && obEcho.avatar));
   const obLine = obThinking
     ? obThinkingLine
     : obBeat
-    ? obViaBack && obBeat.backLine
+    ? obViaBack && obBeat.backLine && !obAiLine
       ? obBeat.backLine(obEcho)
       : obBeat.avatarLine && obHasAvatar && !obAiLine
       ? obBeat.avatarLine(obEcho)
