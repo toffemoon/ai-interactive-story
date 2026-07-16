@@ -1,0 +1,1 @@
+import{j as o}from"./index-Cbu6UDIH.js";function r({tone:a="plain",className:t="",children:n}){return o.jsx("span",{className:["tag","tag--"+a,t].filter(Boolean).join(" "),children:n})}export{r as T};

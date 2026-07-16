@@ -915,6 +915,13 @@
   color: #20201d;
   box-shadow: none;
 }
+/* 键盘可达性:上面这条(.home-ob-tray .home-input,特指度 0,2,0)会盖过通用的 .home-input:focus
+   (0,1,1),导致 onboarding 输入框聚焦后没有任何焦点指示(边框不变、无 box-shadow)—— 键盘党 Tab
+   到输入框看不出选中。补一条同特指度的 :focus(0,2,1),恢复朱红描边 + 外发光,和通用输入框一致。 */
+.home-ob-tray .home-input:focus {
+  border-color: var(--cinnabar);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cinnabar) 16%, transparent);
+}
 .home-ob-tray .home-input::placeholder {
   color: #91897e;
 }
