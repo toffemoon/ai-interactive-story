@@ -1,0 +1,1 @@
+import{j as a}from"./index-B9szgK7I.js";function t({tone:e="pine",className:n="",children:o}){return a.jsx("span",{className:["badge","tone-"+e,n].filter(Boolean).join(" "),children:o})}export{t as B};
