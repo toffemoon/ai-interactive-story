@@ -421,10 +421,10 @@
   align-items: center;
   gap: var(--sp-2);
 }
-/* 气泡头部的「上一步」:默认不显示(桌面用底部 .home-ob-back);只在竖屏登记拍显示(见媒体查询),
-   避开底部按钮在小屏 + 键盘弹出时被压掉的问题。 */
+/* 气泡头部的「上一步」:全端常驻(2026-07-17 雨钦:桌面也收进气泡,和手机统一;底部 tray 实体返回已删)。
+   窄屏的另一层动机:底部按钮在小屏 + 键盘弹出时会被压掉。 */
 .home-ob-back-inline {
-  display: none;
+  display: inline-flex;
   align-items: center;
   border: 1px solid rgba(232, 181, 99, 0.55);
   border-radius: var(--r-pill);
@@ -481,8 +481,7 @@
 .home.is-ob-demo-story .home-portrait,
 .home.is-ob-demo-character .home-portrait,
 .home.is-ob-demo-characterCard .home-portrait,
-.home.is-ob-demo-create .home-portrait,
-.home.is-ob-demo-createProjection .home-portrait {
+.home.is-ob-demo-create .home-portrait {
   transform: translateX(-10%);
 }
 .home.is-ob-demo-chat .home-portrait {
@@ -716,165 +715,6 @@
   gap: 14px;
   padding: 18px;
 }
-.home-ob-demo--create-projection {
-  right: clamp(48px, 8vw, 132px);
-  width: min(440px, 38vw);
-  padding: clamp(20px, 2.4vw, 30px);
-  overflow: hidden;
-  background: rgba(250, 247, 241, 0.8);
-  border: 1px solid rgba(34, 26, 18, 0.14);
-  border-radius: var(--r-lg);
-  color: #20201d;
-  box-shadow: 0 24px 64px -28px rgba(0, 0, 0, 0.72);
-}
-.home-create-projection-head {
-  padding-bottom: var(--sp-4);
-  border-bottom: 1px solid rgba(34, 26, 18, 0.14);
-}
-.home-create-projection-kicker,
-.home-create-projection-label {
-  color: var(--cinnabar);
-  letter-spacing: 0.12em;
-}
-.home-create-projection-title {
-  margin: 5px 0 0;
-  color: #20201d;
-  font-size: clamp(27px, 2.5vw, 38px);
-  font-weight: 500;
-  line-height: 1.12;
-}
-.home-create-projection-form,
-.home-create-projection-result {
-  display: grid;
-  gap: var(--sp-4);
-  padding-top: var(--sp-5);
-}
-.home-create-projection-composer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--sp-2);
-  padding: 8px;
-  background: rgba(250, 247, 241, 0.8);
-  border: 1px solid rgba(34, 26, 18, 0.14);
-  border-radius: var(--r-md);
-  color: #20201d;
-}
-.home-create-projection-composer input {
-  min-width: 0;
-  height: 46px;
-  padding: 0 13px;
-  background: rgba(255, 255, 255, 0.85);
-  border: 1px solid #d8d2c7;
-  border-radius: calc(var(--r-md) - 3px);
-  color: #20201d;
-  font-family: var(--font-sans);
-  font-size: 16px;
-  outline: none;
-}
-.home-create-projection-composer input::placeholder {
-  color: #91897e;
-}
-.home-create-projection-composer input:focus {
-  border-color: var(--cinnabar);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cinnabar) 14%, transparent);
-}
-.home-create-projection-composer button {
-  min-width: 72px;
-  border: 1px solid var(--cinnabar);
-  border-radius: calc(var(--r-md) - 3px);
-  background: var(--cinnabar);
-  color: #fffaf1;
-  font-family: var(--font-sans);
-  font-size: var(--fs-ui);
-  cursor: pointer;
-}
-.home-create-projection-composer button:disabled {
-  opacity: 0.48;
-  cursor: default;
-}
-.home-create-projection-note {
-  margin: -4px 0 0;
-  color: rgba(32, 32, 29, 0.58);
-}
-.home-create-projection-block {
-  min-width: 0;
-}
-.home-create-projection-seed {
-  margin: 7px 0 0;
-  color: #20201d;
-  font-family: var(--font-kai);
-  font-size: clamp(22px, 2.1vw, 31px);
-  line-height: 1.35;
-}
-.home-create-projection-copy {
-  margin: 7px 0 0;
-  color: #20201d;
-}
-.home-create-projection-thread {
-  width: 44px;
-  height: 1px;
-  background: var(--cinnabar);
-  opacity: 0.52;
-}
-
-/* 轻量创作画板(onboarding 演示,纯视觉 mock)——三张示意卡 + 一条淡连线,暗示「在这儿把卡搭起来」 */
-.home-create-board {
-  position: relative;
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  gap: clamp(10px, 1.4vw, 18px);
-  margin-top: var(--sp-4);
-  padding: clamp(14px, 1.8vw, 20px) 0;
-  border-radius: var(--r-md);
-  background: linear-gradient(rgba(34, 26, 18, 0.025), rgba(34, 26, 18, 0.025));
-  border: 1px dashed rgba(34, 26, 18, 0.16);
-}
-.home-create-board-thread {
-  position: absolute;
-  left: 20%;
-  right: 20%;
-  top: 46%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--cinnabar), transparent);
-  opacity: 0.38;
-}
-.home-create-board-card {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 7px;
-  width: clamp(56px, 6vw, 76px);
-}
-.home-create-board-face {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 3 / 4;
-  border-radius: calc(var(--r-md) - 4px);
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(34, 26, 18, 0.16);
-  box-shadow: 0 10px 22px -14px rgba(0, 0, 0, 0.45);
-}
-.home-create-board-cover {
-  position: absolute;
-  inset: 9% 12% auto 12%;
-  height: 46%;
-  border-radius: calc(var(--r-md) - 9px);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--cinnabar) 24%, transparent), color-mix(in srgb, var(--cinnabar) 6%, transparent));
-}
-.home-create-board-label {
-  color: rgba(32, 32, 29, 0.64);
-  font-size: 12px;
-  letter-spacing: 0.06em;
-}
-.home-create-projection-note--lead {
-  margin: var(--sp-4) 0 0;
-  color: rgba(32, 32, 29, 0.62);
-  font-size: 14px;
-  line-height: 1.5;
-}
 .home-demo-create-mark {
   width: 70px;
   height: 70px;
@@ -931,29 +771,6 @@
   color: #20201d;
   box-shadow: 0 14px 38px -22px rgba(0, 0, 0, 0.72);
 }
-/* 上一步(回退键):实体按钮,叠在立绘上也必须清楚可点。 */
-.home-ob-back {
-  align-self: flex-start;
-  min-height: 44px;
-  padding: 0 16px;
-  border: 1px solid rgba(232, 181, 99, 0.62);
-  border-radius: var(--r-pill);
-  background: rgba(28, 22, 16, 0.82);
-  color: #f1e7d6;
-  font-family: var(--font-sans);
-  font-size: var(--fs-ui-sm);
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  box-shadow: 0 9px 24px -14px rgba(0, 0, 0, 0.86);
-  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
-}
-.home-ob-back:hover:not(:disabled) {
-  border-color: #e8b563;
-  background: rgba(48, 35, 23, 0.94);
-}
-.home-ob-back:active:not(:disabled) {
-  transform: translateY(1px);
-}
 .home-ob-tray .home-input {
   background: rgba(255, 255, 255, 0.85);
   border-color: #d8d2c7;
@@ -977,21 +794,27 @@
   gap: var(--sp-2);
   min-height: 44px; /* 常驻保留一行高度:没选项时也占位,输入框不往下沉(#8) */
 }
+/* 选项 chip:与主页「开始故事」统一为白胶囊(YOR-136 配方:米白底 + 白边 + 朱砂字 + 投影),
+   替掉旧 VN 暗棕金边款 —— onboarding 底部和正式态 dock 视觉不再跳(2026-07-17 雨钦)。 */
 .home-ob-chip {
-  padding: 9px 18px;
-  border: 1px solid rgba(199, 154, 78, 0.7);
+  padding: 10px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.62);
   border-radius: var(--r-pill);
-  background: rgba(28, 22, 16, 0.6);
-  color: #f1e7d6;
+  background: rgba(250, 247, 242, 0.94);
+  color: var(--cinnabar);
   font-family: var(--font-sans);
   font-size: var(--fs-ui);
+  letter-spacing: 0.12em;
   cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+  box-shadow: 0 8px 22px -8px rgba(0, 0, 0, 0.6);
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
 .home-ob-chip:hover:not(:disabled) {
-  background: var(--cinnabar);
-  border-color: var(--cinnabar);
-  color: #fff;
+  background: #fffdfa;
+  border-color: var(--accent-2);
+}
+.home-ob-chip:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
 }
 .home-ob-chip.is-hinted {
   animation: obChipHint 1.8s ease-in-out infinite;
@@ -1007,13 +830,15 @@
   animation: obNextHintIn 480ms var(--ease-out) both;
 }
 @keyframes obChipHint {
+  /* 呼吸提示跟白胶囊配套:0/100% 回到常态白边 + 常驻投影(keyframes 的 box-shadow 会顶掉常态投影,
+     必须把它带进每一帧);50% 金圈在白底上比暗底更难显,浓度 0.11 → 0.28。 */
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(232, 181, 99, 0);
-    border-color: rgba(199, 154, 78, 0.7);
+    box-shadow: 0 8px 22px -8px rgba(0, 0, 0, 0.6), 0 0 0 0 rgba(232, 181, 99, 0);
+    border-color: rgba(255, 255, 255, 0.62);
   }
   50% {
-    box-shadow: 0 0 0 5px rgba(232, 181, 99, 0.11);
+    box-shadow: 0 8px 22px -8px rgba(0, 0, 0, 0.6), 0 0 0 5px rgba(232, 181, 99, 0.28);
     border-color: rgba(232, 181, 99, 0.9);
   }
 }
@@ -1022,9 +847,8 @@
     opacity: 0;
   }
 }
-/* 思考态:选项 / 上一步 / 输入框 禁用 */
-.home-ob-chip:disabled,
-.home-ob-back:disabled {
+/* 思考态:选项 / 输入框 禁用(「上一步」在气泡头部,.home-ob-back-inline 自带 disabled 态) */
+.home-ob-chip:disabled {
   opacity: 0.45;
   cursor: default;
 }
@@ -1059,6 +883,18 @@
     top: auto;
     bottom: 168px;
     animation-name: obBubbleInM;
+  }
+  /* 收尾拍(is-ob-finale)要单独压一次:桌面版把收尾气泡挂左上(fixed + min(430px,34vw)),
+     其选择器(3 类)比上面沉底规则(2 类)特异性高,窄屏下 34vw 只剩百来像素、台词竖排成细条。
+     这里以更高特异性拉回手机沉底布局。 */
+  .home.is-ob-finale .home-ob-bubble:not(.home-ob-bubble--chat) {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    top: auto;
+    bottom: 168px;
+    transform: none;
   }
   /* 登记态/办好态身份卡:竖屏 460px 宽会横向溢出,故缩小居中、放气泡上方(立绘腰腹处、露脸),
      取消入场位移动画(其 translateY transform 与这里的缩放 transform 冲突)。 */
@@ -1108,21 +944,13 @@
     height: auto;
     right: 0;
   }
-  /* 「上一步」进气泡头部:全 onboarding 拍统一(不再只登记拍),对应隐掉底部实体返回(小屏 + 键盘弹出会被压)。 */
-  .home.is-ob .home-ob-back-inline {
-    display: inline-flex;
-  }
-  .home.is-ob .home-ob-tray .home-ob-back {
-    display: none;
-  }
   /* 竖屏卡已横向居中,立绘无需左移让位 */
   .home.is-cardbeat .home-portrait,
   .home.is-ob-demo-story .home-portrait,
   .home.is-ob-demo-character .home-portrait,
   .home.is-ob-demo-characterCard .home-portrait,
   .home.is-ob-demo-chat .home-portrait,
-  .home.is-ob-demo-create .home-portrait,
-  .home.is-ob-demo-createProjection .home-portrait {
+  .home.is-ob-demo-create .home-portrait {
     transform: none;
   }
   .home-ob-demo {
@@ -1165,17 +993,104 @@
     width: 108px;
     height: 178px;
   }
+  /* 聊天段(宣)手机重排 v4:大立绘、每次只显说话人。
+     对话中:宣从右往左滑入(停右侧),糖沐从左往右滑入(停左侧);入场首拍宣从门里(中)涌现。
+     顺序播放:上一个立绘先退(退场无延迟),下一个后进(入场延迟 ~560ms 等它退完),不交叉。动画放慢。
+     站位由根类 is-ob-chatpos-door/left/right(见 CHAT_POS_BY_BEAT)。JS 已在窄屏跳过 flow-fallback/内联定位。盲调起点,真机再调。 */
   .home-ob-demo--chat {
-    left: 8px;
+    left: 50%;
     right: auto;
     top: auto;
     bottom: -27px;
-    width: min(240px, 42vw);
-    height: min(695px, 91vh);
+    width: min(580px, 66vh);
+    height: min(760px, 88vh);
+    opacity: 0;
+    transform: translateX(-50%) scale(0.86); /* base:门 —— 居中、略小、隐(涌现的起点) */
+    animation: none;
+    transition: opacity 520ms var(--ease-out), transform 520ms var(--ease-out); /* 退场:无延迟,先退 */
   }
   .home-ob-demo--chat .home-demo-xuan-img {
     height: 100%;
     width: 100%;
+    object-fit: contain;
+    object-position: bottom center;
+  }
+  /* 宣在对话拍(右)/糖沐拍(左)时的隐藏态:待在屏外右 → 下次从右往左滑入。 */
+  .home.is-ob-demo-chat.is-ob-chatpos-right .home-ob-demo--chat,
+  .home.is-ob-demo-chat.is-ob-chatpos-left .home-ob-demo--chat {
+    transform: translateX(calc(-50% + 46vw)) scale(1);
+  }
+  /* 宣@门(tryChatTalk 涌现 / tryChatLeave 回门):居中涌现;入场延迟(等糖沐退完)+ 更慢。 */
+  .home.is-ob-demo-chat.is-ob-speaker-xuan.is-ob-chatpos-door .home-ob-demo--chat {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+    transition-duration: 780ms;
+    transition-delay: 560ms;
+  }
+  /* 首拍(tryChatTalk)涌现必须用 keyframe:宣的 DOM 随 chat demo 一起 mount,首帧样式即终态,
+     transition 不触发(rAF 采样实证:mount 后一帧已 op=1,无中间帧)。keyframe on mount 必播;
+     backwards + 560ms 延迟 = 延迟期停 from(隐、略小),等糖沐退完再从门里涌现。
+     fill 必须是 backwards 不能 both/forwards:播完值回落到上面静态规则(与 to 同值,无跳变),
+     animation 不再贡献值 —— 若钉住终态,切下一拍摘类时 Chrome 移除动画不触发 transition,退场会瞬跳(实测)。
+     tryChatLeave 同为 door 但不带 is-ob-chat-first,仍走 transition(从右位滑回门口),不受影响。 */
+  .home.is-ob-chat-first.is-ob-demo-chat.is-ob-speaker-xuan.is-ob-chatpos-door .home-ob-demo--chat {
+    animation: xuanEmergeM 780ms var(--ease-out) 560ms backwards;
+  }
+  @keyframes xuanEmergeM {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) scale(0.86);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) scale(1);
+    }
+  }
+  /* 宣@右(对话):从右往左滑入到右侧位;入场延迟。 */
+  .home.is-ob-demo-chat.is-ob-speaker-xuan.is-ob-chatpos-right .home-ob-demo--chat {
+    opacity: 1;
+    transform: translateX(calc(-50% + 16vw)) scale(1);
+    transition-delay: 560ms;
+  }
+  /* 糖沐:左侧大立绘;糖沐说话才在。隐藏态在屏外左 → 从左往右滑入。 */
+  .home.is-ob-demo-chat .home-portrait {
+    opacity: 0;
+    transition: opacity 520ms var(--ease-out); /* 退场无延迟 */
+  }
+  .home.is-ob-demo-chat.is-ob-speaker-tangmu .home-portrait {
+    opacity: 1;
+    transition-delay: 560ms; /* 入场延迟,等宣退完 */
+  }
+  .home.is-ob-demo-chat .home-portrait-img {
+    left: 50%;
+    right: auto;
+    top: auto;
+    bottom: 0;
+    width: auto;
+    height: min(760px, 88vh);
+    max-height: 88vh;
+    object-fit: contain;
+    object-position: bottom center;
+    transform: translateX(calc(-50% - 46vw)); /* 隐藏态:屏外左 */
+    transition: transform 520ms var(--ease-out); /* 退场无延迟 */
+  }
+  .home.is-ob-demo-chat.is-ob-speaker-tangmu .home-portrait-img {
+    transform: translateX(calc(-50% - 16vw)); /* 可见:左侧位 */
+    transition-delay: 560ms; /* 入场延迟 */
+  }
+  /* 聊天气泡沉底(修掉顶部被导航栏切)。 */
+  .home.is-ob-demo-chat .home-ob-bubble--chat {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 168px;
+    top: auto;
+    width: auto;
+    transform: none;
+    max-height: none;
+  }
+  .home.is-ob-demo-chat .home-ob-bubble--chat.is-after-entrance {
+    animation: none;
   }
   .home-demo-xuan-bubble {
     left: -74px;
@@ -1191,24 +1106,6 @@
     grid-template-columns: 58px 1fr;
     gap: 10px;
     padding: 14px;
-  }
-  .home-ob-demo--create-projection {
-    left: 12px;
-    right: 12px;
-    top: 56px;
-    width: auto;
-    padding: 18px;
-  }
-  .home-create-projection-title {
-    font-size: 28px;
-  }
-  .home-create-projection-form,
-  .home-create-projection-result {
-    gap: 12px;
-    padding-top: 16px;
-  }
-  .home-create-projection-composer {
-    grid-template-columns: minmax(0, 1fr) 72px;
   }
   .home-demo-create-mark {
     width: 54px;
@@ -1247,6 +1144,10 @@
   .home-ob-clickhint {
     animation: none;
     opacity: 0.85;
+  }
+  /* 聊天首拍涌现:减动效下不播 keyframe,落回静态规则(终态直显)。 */
+  .home.is-ob-chat-first.is-ob-demo-chat.is-ob-speaker-xuan.is-ob-chatpos-door .home-ob-demo--chat {
+    animation: none;
   }
 }
 

@@ -630,12 +630,10 @@ test("onboarding rehearses story chat and creation without route jumps", () => {
   assert.equal(restIntro.chips[0].next, "tryCreateWhat");
   assert.equal(beatById("tryCreateWhat").chips[0].next, "tryCreate");
 
-  // 创作拍不再做引擎互动:无 field/ai,只用只读画板示意,靠 chip 推进(具体上手引到「创作」页)。
+  // 创作拍纯台词:无 field/ai、无演示面板(创作功能太大,onboarding 不展开投射画板),靠 chip 推进(具体上手引到「创作」页)。
   const create = beatById("tryCreate");
   assert.equal(create.field, undefined);
-  assert.equal(create.demo.type, "createProjection");
-  assert.equal(create.demo.readOnly, true);
-  assert.doesNotMatch(JSON.stringify(create.demo), /draftCard|角色卡/);
+  assert.equal(create.demo, undefined);
   assert.doesNotMatch(JSON.stringify(create), /雨夜侦探/);
   assert.match(create.line({}), /创作|执笔人/);
   assert.equal(create.chips[0].next, "createRealize");

@@ -12,7 +12,6 @@ import { INITIAL_ONBOARDING_AUTO_CONTROL, analyzeNameCorrectionInput, analyzeNam
 import { IdentityCard } from "../components/IdentityCard";
 import StaggeredText from "../components/staggered-text";
 import AnimatedList from "../components/animated-list";
-import { OnboardingCreateProjection } from "../components/OnboardingCreateProjection";
 import "./Home.css";
 
 // 立绘主页(家)· YOR-136 · galgame 式登录后首屏。
@@ -101,7 +100,7 @@ function cardImageOf(card) {
 
 function DialogueReveal({ text, onDone = null }) {
   // 气泡台词的逐字入场。StaggeredText 默认靠 IntersectionObserver 触发,但换场(如进 rest)时
-  // observer 在立绘还没到位就建立、之后不再 fire,导致整段停在 opacity:0 = 空气泡(createProjection 那拍)。
+  // observer 在立绘还没到位就建立、之后不再 fire,导致整段停在 opacity:0 = 空气泡(当年创作投射拍首见,该拍已删)。
   // 台词气泡总在视口内,不需要滚动触发 → startInView 让它挂载即入场,不依赖 observer。
   // onDone:最后一个字符打完时触发(手机登记拍靠它让 Q版糖沐「等气泡加载完再出现」)。
   return (
@@ -159,7 +158,7 @@ function StageSpeechBubble({ speaker = "糖沐", line, busy = false, animateLine
         <span className="home-dlg-name t-kai">{speaker}</span>
         {tools}
         <span className="home-ob-headbtns">
-          {/* 竖屏用:底部「上一步」小屏 + 键盘弹出会被压掉,这里在「跳过」旁常驻一个返回(CSS 只在窄屏显示)。 */}
+          {/* 全端「上一步」:收在气泡头「跳过」旁(2026-07-17 雨钦:桌面也用这颗,底部 tray 的实体返回已删)。 */}
           {onBack && (
             <button type="button" className="home-ob-back-inline" onClick={onBack} disabled={busy} title="回上一步,重新填">
               ← 上一步
@@ -216,25 +215,26 @@ function OnboardingDemo({ beat, echo, value, busy, inputRef, onChange, onSubmit 
     );
   }
 
-  if (demo.type === "createProjection") {
-    return (
-      <OnboardingCreateProjection
-        value={value}
-        seed={demoText(demo.seed, echo)}
-        result={demoText(demo.result, echo)}
-        busy={busy}
-        placeholder={beat.placeholder}
-        submitLabel={beat.submitLabel}
-        inputRef={inputRef}
-        onChange={onChange}
-        onSubmit={onSubmit}
-        readOnly={demo.readOnly}
-      />
-    );
-  }
-
   return null;
 }
+
+// 聊天段(宣)每拍的立绘站位:门(中,宣涌现/回门)/ 左(糖沐)/ 右(宣对话)。用于手机聊天段的分镜编排。
+const CHAT_POS_BY_BEAT = {
+  tryChatTalk: "door", // 宣从门里涌现
+  tryChatTangmuReply: "left", // 糖沐 左
+  tryChatIntro: "left", // 糖沐 左
+  tryChatGreet: "right", // 宣 右(对话)
+  tryChatLeave: "door", // 宣回门淡出
+};
+
+// 书卡演示 4 拍:按叙事语气换 Q版姿势,增加叙事感。
+// SD5/6/7 = whisper/smile/proud(Q版对应大立绘 tangmu04/01/05);SD1 = 指卡。未列出的 story 拍回退 sd1。
+const STORY_SD_BY_BEAT = {
+  tryStoryCard: "sd1", // 「这就是书卡」——指卡介绍
+  tryStoryEnter: "sd6", // 「选中后亲身体验」——温和微笑(smile)
+  tryStoryRole: "sd5", // 「扮演你想要的角色」——凑近小声(whisper)
+  tryStoryAgency: "sd7", // 「亲手控制走向」——抱臂得意(proud)
+};
 
 export default function Home({ testMode = false }) {
   const { menuOpen, registerBeforeMenuNavigate } = useShellMenuCoordination();
@@ -265,6 +265,7 @@ export default function Home({ testMode = false }) {
   const [obBubblePos, setObBubblePos] = useState(null); // 台词气泡贴头定位 {left,top}(px);null=走 CSS(窄屏/竖版底部)
   const [obSdBottom, setObSdBottom] = useState(null); // 竖屏 Q版糖沐「站在气泡顶」的自适应 bottom(px);null=用 CSS 兜底
   const [obSdReady, setObSdReady] = useState(false); // 竖屏 Q版糖沐入场闸:false=隐藏,true(=气泡打字完成)才淡入。事件驱动替掉旧的固定 780ms 延迟(慢机上追不上打字)。
+  const [obSdShownSrc, setObSdShownSrc] = useState(null); // 当前「显示中」的 SD 图,滞后于目标 —— 换姿势时旧图先淡出、隐藏后才换,避免「先换后消失」
   const [obChatBubblePos, setObChatBubblePos] = useState(null); // chat 拍前景气泡,坐标相对 .home-ui
   const [obHistory, setObHistory] = useState([]); // 已访拍栈(不含当前),供「上一步」回退
   const [obViaBack, setObViaBack] = useState(false); // 当前拍是否由回退进入 → 显反悔反应(backLine/backEmo)
@@ -342,18 +343,26 @@ export default function Home({ testMode = false }) {
   //   名字确定后的拍(avatar/taste/cardDone,非折回)→ SD2(趴着执笔写卡,横版,单独排布 is-write);
   //   否则(name 拍常态,问名字、指卡)→ SD3(站立指卡)。
   const obSdPose =
-    obBeat && obBeat.showCard && (obViaBack || (obBeat.id === "name" && (obPendingConfirm || obEmoOverride === "wry" || obEmoOverride === "surprise")))
+    obThinking && obBeat && (obBeat.showCard || (obDemo && obDemo.type === "story"))
+      ? "sd8" // 思考态(AI 辨别名字/口味等):糖沐托腮思考立绘
+      : obBeat && obBeat.showCard && (obViaBack || (obBeat.id === "name" && (obPendingConfirm || obEmoOverride === "wry" || obEmoOverride === "surprise")))
       ? "sd4"
+      : obBeat && obBeat.showCard && obBeat.id === "taste"
+      ? "sd6" // 最近在看:她在问、不在写卡 → 微笑(smile),不用趴写的 SD2
       : obBeat && obBeat.showCard && obBeat.id !== "name"
-      ? "sd2"
+      ? "sd2" // avatar / cardDone:填卡 / 办卡落章 → 趴着执笔写
       : obDemo && obDemo.type === "story"
-      ? "sd1" // 书卡拍试 SD1(登记拍仍 SD3)
+      ? STORY_SD_BY_BEAT[obBeat.id] || "sd1" // 书卡拍按拍换姿势增加叙事感(SD1/6/5/7),登记拍仍 SD3
       : "sd3";
   const obSdSrc = `/home/tangmu-${obSdPose}.png`;
-  const obSdWriting = obSdPose === "sd2"; // 仅 SD2 是横版写字,套 is-write 单独排布
   // Q版糖沐(SD)何时以前景出现:登记段(showCard)本来就有;导览的「书卡」demo 拍(tryStoryCard→Agency)
-  // 也套登记拍构图 —— 隐大立绘、书卡放大居中、拉出 SD3 指卡。故判据 = showCard 或 story demo。
+  // 也套登记拍构图 —— 隐大立绘、书卡放大居中、拉出 SD 指卡。故判据 = showCard 或 story demo。
   const obShowSd = !!(obBeat && (obBeat.showCard || (obDemo && obDemo.type === "story")));
+  // 显示用 src(obSdImg)滞后于目标 obSdSrc:换拍时旧姿势先淡出,gate 在完全隐藏后(~300ms)才把 obSdShownSrc 换成新图,
+  // 避免「先换姿势 → 再消失 → 再出来」的观感。obSdShownSrc=null 时回退到目标(首次出现 / 刚进 SD 段)。
+  const obSdImg = obSdShownSrc || obSdSrc;
+  const obSdWriting = /tangmu-sd2\.png$/.test(obSdImg); // is-write(横版趴写)跟「当前显示」的姿势走 —— 退场时仍按旧姿势排布,不错位
+  const obSdIn = obSdReady && obSdImg === obSdSrc; // is-in:已就绪(气泡打完)且 已换到目标姿势 才淡入
   // 当前台词优先级:思考态 > 回退反悔(backLine,仅在还没生成新台词时) > 上传头像后的回应(avatarLine) > AI 自适应/闲聊(obAiLine) > 静态脚本(line)。
   // backLine 是「经上一步回来」的反悔招呼,只在刚回到该拍(obAiLine 尚为 null)时显示;
   // 一旦在该拍产生了新台词(二次确认提问 / 拒绝语 / 插话回应 / 没听清重试),就让位给 obAiLine —— 否则回退后卡在 backLine,确认 chip 出现却看不到确认问题。
@@ -465,12 +474,21 @@ export default function Home({ testMode = false }) {
   useLayoutEffect(() => {
     if (!obShowSd) {
       setObSdReady(false);
+      setObSdShownSrc(null); // 离开 SD 段:清滞后 src,下次进来直接用目标姿势(不残留上段的旧图)
       return undefined;
     }
     setObSdReady(false);
-    const t = setTimeout(() => setObSdReady(true), 2500);
-    return () => clearTimeout(t);
-  }, [obShowSd, obStep, obSdPose]);
+    // 换图时机:CSS 淡出 280ms,这里 300ms 后(确定已完全隐藏)才把显示图换成新姿势 —— 退场看到的始终是旧姿势,新姿势隐藏时悄悄换、随后再淡入。
+    const swap = setTimeout(() => setObSdShownSrc(obSdSrc), 300);
+    // 淡入时机:思考态没有逐字台词(onLineDone 不会触发),换到 SD08 后直接淡入(~400ms);
+    // 非思考态靠气泡打完(onLineDone)淡入,2.5s 为回调漏触发的兜底。
+    const readyMs = obThinking ? 400 : 2500;
+    const ready = setTimeout(() => setObSdReady(true), readyMs);
+    return () => {
+      clearTimeout(swap);
+      clearTimeout(ready);
+    };
+  }, [obShowSd, obStep, obSdPose, obThinking]);
 
   // 拉默认糖沐卡(《新人入店》characters 里 name 含「糖沐」)。
   useEffect(() => {
@@ -612,7 +630,7 @@ export default function Home({ testMode = false }) {
       const bubbleRect = bubble && bubble.getBoundingClientRect();
       const bubbleWidth = bubbleRect ? bubbleRect.width : 0;
       const bubbleHeight = bubbleRect ? bubbleRect.height : 0;
-      const demoShift = obActive && obDemo && ["story", "character", "characterCard", "create", "createProjection"].includes(obDemo.type) ? 0.1 : 0;
+      const demoShift = obActive && obDemo && ["story", "character", "characterCard", "create"].includes(obDemo.type) ? 0.1 : 0;
       const targetShift = obActive && obBeat && obBeat.showCard ? 0.08 : demoShift;
       const targetPortraitLeft = portrait.offsetLeft - portrait.offsetWidth * targetShift;
       const safePortraitLeft = Math.min(pr.left, targetPortraitLeft);
@@ -644,7 +662,7 @@ export default function Home({ testMode = false }) {
     activeImg?.addEventListener("load", schedule);
     portrait?.addEventListener("transitionend", schedule);
     // 不观察气泡自身:compute() 会改气泡定位,气泡宽度又随定位变 → ResizeObserver 触发 → 再 compute → …
-    // 在 createProjection 等被右侧面板挤窄的拍会形成反馈环、跑满主线程(逐字动画一跑就复现)。
+    // 在被右侧 demo 面板挤窄的拍会形成反馈环、跑满主线程(逐字动画一跑就复现;当年创作投射拍首见,该拍已删)。
     // 气泡随台词/场景变化的重定位已由本 effect 的依赖数组 + resize/load/transitionend/fonts 覆盖。
     if (dock) observer?.observe(dock);
     document.fonts?.ready.then(schedule).catch(() => {});
@@ -757,6 +775,17 @@ export default function Home({ testMode = false }) {
       const dock = ui.querySelector(".home-dock");
       const dockTop = dock ? dock.getBoundingClientRect().top - uiRect.top : uiRect.height - pad;
       const chatStage = ui.querySelector(".home-ob-demo--chat");
+      if (narrow) {
+        // 手机端(≤720px/竖屏)聊天段:改用固定 CSS 布局(气泡沉底 + 每次只显说话人、宣左糖右横向滑),
+        // 不走这套 JS 定位 / flow-fallback。清掉桌面态可能残留在 chatStage 上的内联 bottom/height。
+        if (chatStage) {
+          chatStage.style.removeProperty("bottom");
+          chatStage.style.removeProperty("height");
+        }
+        obChatFlowFallbackRef.current = { beatId: obStep, placement: null };
+        setObChatBubblePos(null);
+        return;
+      }
       const chatStageLayout = resolveChatStageLayout({ viewportHeight: uiRect.height, dockTop, narrow, padding: pad, gap });
       const applyPlacement = (placement) => {
         if (placement?.flowFallback) {
@@ -1595,7 +1624,10 @@ export default function Home({ testMode = false }) {
         (obActive && obScene ? ` is-ob-scene-${obScene}` : "") +
         (obChatBubblePos && obChatBubblePos.compact ? " is-ob-chat-compact" : "") +
         (chatFlowFallback ? " is-ob-chat-flow-fallback" : "") +
-        (obDemo ? ` is-ob-demo is-ob-demo-${obDemo.type}` : "")
+        (obDemo ? ` is-ob-demo is-ob-demo-${obDemo.type}` : "") +
+        (obBeat && CHAT_POS_BY_BEAT[obBeat.id] ? ` is-ob-chatpos-${CHAT_POS_BY_BEAT[obBeat.id]}` : "") +
+        // 聊天段首拍:宣的涌现在手机端走 keyframe(mount 时 transition 不触发),只在 tryChatTalk 挂
+        (obBeat && obBeat.id === "tryChatTalk" ? " is-ob-chat-first" : "")
       }
       style={chatFlowStyle}
     >
@@ -1737,8 +1769,8 @@ export default function Home({ testMode = false }) {
               SD2 是横版写字姿势,加 is-write 单独排布。 */}
           {obShowSd && (
             <img
-              className={"home-ob-sd" + (obSdWriting ? " is-write" : "") + (obSdReady ? " is-in" : "")}
-              src={obSdSrc}
+              className={"home-ob-sd" + (obSdWriting ? " is-write" : "") + (obSdIn ? " is-in" : "")}
+              src={obSdImg}
               alt=""
               aria-hidden="true"
               draggable="false"
@@ -1773,11 +1805,26 @@ export default function Home({ testMode = false }) {
             {obBeat ? (
               /* 新手引导态:底部只留输入框 + 选项 chip(台词在头侧气泡) */
               <div className="home-ob-tray">
-                {!!obHistory.length && (
-                  <button className="home-ob-back" onClick={obBack} disabled={obThinking} title="回上一步,重新填">
-                    ← 上一步
-                  </button>
-                )}
+                {/* chips 在输入框上面(2026-07-17 雨钦:选项=主推进放上、输入框贴底)。
+                    槽常驻:没选项也占位,下方输入框不跳位(#8)。 */}
+                <div className="home-ob-chips">
+                    {(!obBeat.autoNext || obInterruptFailure) && obRenderChips.map((c, i) => {
+                      // 头像拍的 chip 显示文案在此覆写(label 本身留作 onboardingLogic 的身份键,勿改):
+                      //   未选头像:上传 chip→「我自己传一张」/ 另一颗→「我帮你选一张」(点后贴糖沐 Q 版默认头像);
+                      //   已有头像后:上传→换一张 / 另一颗→好了,继续。
+                      let label = c.label;
+                      if (obBeat.id === "avatar") {
+                        if (obCardAvatar || obEcho.avatar) label = c.upload ? "换一张" : "好了,继续";
+                        else label = c.upload ? "我自己传一张" : "你帮我选一张";
+                      }
+                      return (
+                        <button key={i} className={"home-ob-chip" + (obContinueHint && i === 0 ? " is-hinted" : "")} onClick={() => obChip(c)} disabled={obThinking}>
+                          {label}
+                        </button>
+                      );
+                    })}
+                    {obContinueHint && <span className="home-ob-nexthint t-meta">点一下继续</span>}
+                  </div>
                 {/* 输入框:field 拍=回答登记(走 AI 辨别),导览/办卡/可打断自动拍 + 创作拍=跟当前角色说话(玩家可问更细的)。 */}
                 <div className="home-composer">
                   <input
@@ -1802,7 +1849,7 @@ export default function Home({ testMode = false }) {
                     onKeyDown={(e) => {
                       // 输入法守卫:必须读原生事件的 isComposing —— React 合成事件不暴露 isComposing,
                       // 写 !e.isComposing 恒为 true(等于没守卫),中文 composing 中按 Enter 选词会误提交拼音。
-                      // 与全站其它输入框(Chat/Create/Login/Story/OnboardingCreateProjection)统一用 (e.nativeEvent||e).isComposing。
+                      // 与全站其它输入框(Chat/Create/Login/Story)统一用 (e.nativeEvent||e).isComposing。
                       if (e.key === "Enter" && !(e.nativeEvent || e).isComposing) {
                         e.preventDefault();
                         if (obBeat.field) obFieldSubmit();
@@ -1814,25 +1861,6 @@ export default function Home({ testMode = false }) {
                     {obThinking ? "…" : obBeat.submitLabel || (obBeat.field ? "好" : "说")}
                   </Button>
                 </div>
-                {/* chips 槽常驻:没选项也占位,避免输入框往下沉(#8) */}
-                <div className="home-ob-chips">
-                    {(!obBeat.autoNext || obInterruptFailure) && obRenderChips.map((c, i) => {
-                      // 头像拍的 chip 显示文案在此覆写(label 本身留作 onboardingLogic 的身份键,勿改):
-                      //   未选头像:上传 chip→「我自己传一张」/ 另一颗→「我帮你选一张」(点后贴糖沐 Q 版默认头像);
-                      //   已有头像后:上传→换一张 / 另一颗→好了,继续。
-                      let label = c.label;
-                      if (obBeat.id === "avatar") {
-                        if (obCardAvatar || obEcho.avatar) label = c.upload ? "换一张" : "好了,继续";
-                        else label = c.upload ? "我自己传一张" : "你帮我选一张";
-                      }
-                      return (
-                        <button key={i} className={"home-ob-chip" + (obContinueHint && i === 0 ? " is-hinted" : "")} onClick={() => obChip(c)} disabled={obThinking}>
-                          {label}
-                        </button>
-                      );
-                    })}
-                    {obContinueHint && <span className="home-ob-nexthint t-meta">点一下继续</span>}
-                  </div>
               </div>
             ) : obActive ? null : (
               <>
