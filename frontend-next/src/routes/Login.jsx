@@ -1,9 +1,34 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "../lib/transitionNav";
 import { authApi } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { Button } from "../components/ui";
 import "./Login.css";
+
+// 密码强度粗评:长度 + 字符种类,注册/改密时给个直观反馈。纯前端提示,不替代后端 6 位下限校验。
+function pwScore(pw) {
+  if (!pw) return 0;
+  let variety = 0;
+  if (/[a-z]/.test(pw)) variety++;
+  if (/[A-Z]/.test(pw)) variety++;
+  if (/\d/.test(pw)) variety++;
+  if (/[^a-zA-Z0-9]/.test(pw)) variety++;
+  if (pw.length < 6) return 1;                 // 太短(后端也会拒)
+  if (pw.length < 8 || variety <= 1) return 2; // 偏弱
+  if (pw.length < 12 || variety === 2) return 3; // 中等
+  return 4;                                    // 较强
+}
+const PW_LABEL = { 1: "太短", 2: "偏弱", 3: "中等", 4: "较强" };
+function PwMeter({ value }) {
+  const s = pwScore(value);
+  if (!s) return null;
+  return (
+    <div className={`pw-meter s${s}`}>
+      <div className="pw-bars"><i /><i /><i /></div>
+      <span className="pw-label">{PW_LABEL[s]}</span>
+    </div>
+  );
+}
 
 export default function Login() {
   const { onAuthed, enabled } = useAuth();
@@ -18,6 +43,14 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
   const [hint, setHint] = useState("");
+  const [cooldown, setCooldown] = useState(0); // 验证码重发冷却秒数(对齐后端 60s 冷却)
+
+  // 冷却每秒递减到 0;卸载/重置时清 timer。
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
 
   // 网络层失败(断网/后端没起)fetch 抛英文 TypeError「Failed to fetch」,给人看中文(YOR-162);
   // HTTP 错误在 authApi 里已是中文(data.detail || 请求失败),原样透传。
@@ -37,7 +70,9 @@ export default function Login() {
     try {
       // 注册用 purpose=register,找回密码用 purpose=reset(后端按用途签发/校验验证码)。
       const d = await authApi("/api/auth/email/send_code", { email: email.trim(), purpose: tab === "reset" ? "reset" : "register" });
-      setHint(d.dev_code ? `验证码已发(本地测试码:${d.dev_code})` : "验证码已发到邮箱,10 分钟内有效");
+      // dev_code 只在开发构建里显示;生产 build(import.meta.env.DEV=false)即便后端误回该字段也不上屏。
+      setHint(d.dev_code && import.meta.env.DEV ? `验证码已发(本地测试码:${d.dev_code})` : "验证码已发到邮箱,10 分钟内有效");
+      setCooldown(60); // 发出后进入 60s 重发冷却
     } catch (e) {
       setErr(zhErr(e, "发送失败"));
     } finally {
@@ -126,12 +161,13 @@ export default function Login() {
             <div className="login-coderow">
               {/* 数字键盘 + 系统验证码自动填充(YOR-158) */}
               <input className="login-input" placeholder="邮箱验证码" inputMode="numeric" pattern="[0-9]*" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={onEnter} />
-              <button className="login-codebtn" disabled={sending} onClick={sendCode}>
-                {sending ? "…" : "发送验证码"}
+              <button className="login-codebtn" disabled={sending || cooldown > 0} onClick={sendCode}>
+                {sending ? "…" : cooldown > 0 ? `${cooldown}s 后重发` : "发送验证码"}
               </button>
             </div>
             <input className="login-input" placeholder="用户名(可选)" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} onKeyDown={onEnter} />
-            <input className="login-input" type="password" placeholder="密码(至少 6 位)" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter} />
+            <input className="login-input" type="password" placeholder="密码(至少 6 位)" minLength={6} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter} />
+            <PwMeter value={password} />
           </>
         )}
 
@@ -141,11 +177,12 @@ export default function Login() {
             <input className="login-input" type="email" placeholder="邮箱" autoCapitalize="none" spellCheck={false} autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter} />
             <div className="login-coderow">
               <input className="login-input" placeholder="邮箱验证码" inputMode="numeric" pattern="[0-9]*" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={onEnter} />
-              <button className="login-codebtn" disabled={sending} onClick={sendCode}>
-                {sending ? "…" : "发送验证码"}
+              <button className="login-codebtn" disabled={sending || cooldown > 0} onClick={sendCode}>
+                {sending ? "…" : cooldown > 0 ? `${cooldown}s 后重发` : "发送验证码"}
               </button>
             </div>
-            <input className="login-input" type="password" placeholder="新密码(至少 6 位)" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter} />
+            <input className="login-input" type="password" placeholder="新密码(至少 6 位)" minLength={6} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter} />
+            <PwMeter value={password} />
             <button type="button" className="login-alt" onClick={() => go("login")}>← 返回登录</button>
           </>
         )}
