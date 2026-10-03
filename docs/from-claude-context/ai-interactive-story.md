@@ -17,7 +17,7 @@ working-mode: ../WORKING-MODE.md
 
 > **一句话**：AI 互动故事引擎。多角色卡 / 世界书 / 故事书 / 玩家卡 → 可玩的互动故事回合（叙事 + 角色发言 + 玩家选项 + 状态更新）。**是 YoRHa-A2 当前的主线产出**（2026-06-17 战略排序更新）。
 >
-> **owner**：内容 / 故事 / 前端 / 素材 / 部署 = 雨飞；**引擎核心逻辑（记忆 / 状态机 / 召回 / abstention / story 引擎）= Gengyue**，设计 + 合 main 都归他（2026-06-04 拍板，见 repo `decisions/2026-06-04-architecture-ownership.md`）。‹此处一句涉及具体他人的评价已略›
+> **owner**：内容 / 故事 / 前端 / 素材 / 部署 = 雨飞；**引擎核心逻辑（记忆 / 状态机 / 召回 / abstention / story 引擎）= Gengyue**，设计 + 合 main 都归他（2026-06-04 拍板，见 repo `decisions/2026-06-04-architecture-ownership.md`）。‹…已略›
 >
 > **repo 是独立的**：用"卫星模式"挂进团队，不并进 claude-context。
 
