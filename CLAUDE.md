@@ -84,4 +84,5 @@ updated: 2026-10-04
 | Codex 本机反代模式 | [docs/LOCAL-CODEX-PROXY.md](docs/LOCAL-CODEX-PROXY.md) |
 | 记忆架构设计、升级计划、调研 | [docs/design/](docs/design/) · [docs/plans/](docs/plans/) · [docs/research/](docs/research/) |
 | 某次改动的计划与过程记录 | `docs/` 下按日期命名的文件 |
+| YoRHa-A2 视角的子项目速报(写到 2026-07-11,2026-10-04 从 claude-context 迁入) | [docs/from-claude-context/README.md](docs/from-claude-context/README.md) |
 | 团队硬约束 | 父 repo `yorha-a2-team` 的 `decisions/` |
