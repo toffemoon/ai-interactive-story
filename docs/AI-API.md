@@ -2,14 +2,27 @@
 
 纯后端服务(FastAPI)。所有能力通过 HTTP / JSON 暴露,任意客户端都能调。本文件是**给 AI / 程序调用方**的完整参考;人读的开局流程见 `docs/游玩流程.md`(若存在)。
 
-- Base URL(本地):`http://127.0.0.1:8000`
+- Base URL(本地):`http://127.0.0.1:8000`。生产:`https://ai-interactive-story.onrender.com`。
 - 交互式文档:`GET /docs`(Swagger)。机器可读 schema:`GET /openapi.json`。
-- 健康检查:根路径 `/` 由前端静态页占用;判活力用 `GET /openapi.json`(200 即在)。
+- 健康检查:`GET /api/health`(返回 db / embeddings 状态,DB 挂时 503;根路径 `/` 由前端静态页占用,别拿它判活)。
 
 ## 两种调用方式
 
 1. **MCP(推荐给 agent)**:用 `ai-interactive-story` MCP server 暴露的工具(`identify` / `library_list` / `story_start` / `story_act` …)。它替你缓存卡组、自动续玩,最省事。安装见 `integrations/mcp/README.md`。
 2. **原始 HTTP**:直接 `curl` / `httpx` 打下面的端点。MCP 工具就是这些端点的薄代理。
+
+## 认证(生产必读)
+
+生产部署 `AUTH_ENABLED=1`,**下面所有烧 LLM 的端点(identify* / build_card / chat / upload)与卡库/预设的写操作都要求先登录**,匿名调用返回 401。本地 dev 默认 `AUTH_ENABLED=0`,可裸调。
+
+- 拿 token:`POST /api/auth/register`(需邮箱验证码,见下)或 `POST /api/auth/login` body `{"identifier","password"}` → `{"token","user"}`。
+- 带 token:每个请求加 header `Authorization: Bearer <token>`(或 `X-Auth-Token: <token>`)。token 有效期 60 天,`POST /api/auth/logout` 使其立即失效。
+- 邮箱验证码:`POST /api/auth/email/send_code` body `{"email","purpose":"register|reset"}`。6 位数字、10 分钟有效、单邮箱 60s 重发冷却、单码 5 次尝试上限。生产不回码(走邮件);dev 开 `AUTH_DEV_OTP=1` 才在响应里回 `dev_code`。
+- 找回密码:`POST /api/auth/reset_password` body `{"email","code","new_password"}`(purpose=reset 的验证码)。
+- 当前用户:`GET /api/auth/me` → `{"user","auth_enabled"}`。
+- **story_turn / story_turn_stream / reroll 不套登录闸**,靠会话归属校验;但仍受成本护栏(per-IP 限流 + 全局每日熔断)约束。
+
+> `story_turn` 系走会话归属而非登录墙,是过渡期设计;其余烧钱端点 AUTH 开时一律要 token。凭证只在 `.env`(LLM key / DB 串)服务端读,调用方不接触。
 
 ## 核心概念
 
@@ -24,27 +37,34 @@
 
 ## 端点总览
 
-| 方法 | 路径 | 用途 |
-|---|---|---|
-| POST | `/api/identify` | 散文 → 角色卡(Card V2),入库 |
-| POST | `/api/identify_world` | 散文 → 世界书,入库 |
-| POST | `/api/identify_story` | 散文 → 故事书(多结局/时间线/事件),入库 |
-| POST | `/api/identify_player` | 散文 → 玩家卡,入库 |
-| POST | `/api/identify_auto` | 自动判类型 → 路由到对应解析 → 入库 |
-| POST | `/api/build_card` | 多轮对话式建卡(无状态,客户端带 messages+draft) |
-| POST | `/api/upload?filename=` | 上传 `.txt/.md/.docx` → 纯文本 |
-| GET | `/api/library/{kind}` | 列出某类卡(characters/worlds/stories/players) |
-| POST | `/api/library/save` | 存一张卡进库 |
-| DELETE | `/api/library/{kind}/{name}` | 删库中一张卡 |
-| GET | `/api/presets` | 列出预设 |
-| POST | `/api/presets` | 存预设 |
-| DELETE | `/api/presets/{name}` | 删预设 |
-| POST | `/api/story_turn` | 一回合(非流式) |
-| POST | `/api/story_turn_stream` | 一回合(流式 SSE) |
-| POST | `/api/reroll` | 重新生成上一回合 |
-| GET | `/api/session/{id}` | 查看/续玩会话 |
-| DELETE | `/api/session/{id}` | 删存档 |
-| POST | `/api/chat` | 单角色直聊(不走故事引擎) |
+| 方法 | 路径 | 用途 | 需登录* |
+|---|---|---|---|
+| GET | `/api/health` | 判活(db/embeddings 状态) | 否 |
+| POST | `/api/identify` | 散文 → 角色卡(Card V2),入库 | 是 |
+| POST | `/api/identify_world` | 散文 → 世界书,入库 | 是 |
+| POST | `/api/identify_story` | 散文 → 故事书(多结局/时间线/事件),入库 | 是 |
+| POST | `/api/identify_player` | 散文 → 玩家卡,入库 | 是 |
+| POST | `/api/identify_auto` | 自动判类型 → 路由到对应解析 → 入库 | 是 |
+| POST | `/api/build_card` | 多轮对话式建卡(无状态,客户端带 messages+draft) | 是 |
+| POST | `/api/upload?filename=` | 上传 `.txt/.md/.docx` → 纯文本(≤2MB) | 是 |
+| GET | `/api/library/{kind}` | 列出某类卡(characters/worlds/stories/players) | 读否/写是 |
+| POST | `/api/library/save` | 存一张卡进库 | 是 |
+| DELETE | `/api/library/{kind}/{name}` | 删库中一张卡 | 是 |
+| GET | `/api/presets` | 列出预设 | 读否/写是 |
+| POST | `/api/presets` | 存预设 | 是 |
+| DELETE | `/api/presets/{name}` | 删预设 | 是 |
+| POST | `/api/story_turn` | 一回合(非流式) | 会话归属 |
+| POST | `/api/story_turn_stream` | 一回合(流式 SSE) | 会话归属 |
+| POST | `/api/reroll` | 重新生成上一回合 | 会话归属 |
+| POST | `/api/undo_last` | 撤销上一回合(不重跑) | 会话归属 |
+| GET | `/api/session/{id}` | 查看/续玩会话 | 会话归属 |
+| GET | `/api/session/{id}/tail` | 拉流式回合的实时增量 | 会话归属 |
+| DELETE | `/api/session/{id}` | 删存档 | 会话归属 |
+| POST | `/api/chat` | 单角色直聊(不走故事引擎) | 是 |
+| POST | `/api/auth/*` | 注册/登录/登出/验证码/找回密码/me(见上「认证」节) | — |
+| GET | `/api/my/sessions` | 当前用户的存档列表 | 是 |
+
+\* `AUTH_ENABLED=1`(生产)时生效;本地 dev 默认关闭全放行。「会话归属」= 不套登录墙、按 session 所有权校验(见「认证」节)。`/api/local_proxy/*`(玩家自带 Codex 本机)需 superadmin 逐账户授权,普通调用方用不到,此处从略。
 
 ## 关键请求/响应
 
@@ -52,14 +72,16 @@
 `POST /api/identify_auto` body `{"text": "...", "kind"?: "character|world|story|player"}`
 → `{"kind","confidence","reason","data": <对应卡对象>}`。`kind` 显式给则强制改判。
 
-四个专用端点 body 都是 `{"text": "..."}`,返回对应卡对象本身。
+四个专用端点 body 是 `{"text": "...", "hint"?: "..."}`(`hint` 可选,给解析一点额外指向),返回对应卡对象本身。
+
+`POST /api/build_card` body `{"messages":[...], "draft"?:{...}, "kind"?, "seed"?, "phase"?, "threshold"?, "refs"?}`(除对话历史 `messages` 与当前草稿 `draft` 外,`kind` 指定卡种、`refs` 带入已有素材卡)。
 
 ### 回合(核心)
 `POST /api/story_turn` body:
 ```json
 {
   "session_id": "sess-001",
-  "characters": [<CharacterCard>, ...],   // 必填,最多取前 3 张参与本轮
+  "characters": [<CharacterCard>, ...],   // 必填,全部参与本轮(上限已解除,支持群像剧)
   "world":  <WorldBook|null>,
   "story":  <StoryBook|null>,
   "player": <PlayerCard|null>,
