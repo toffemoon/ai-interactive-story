@@ -47,6 +47,7 @@ from . import storage
 from . import db
 from . import costguard
 from . import auth
+from .lang import L, LANGS, LangMiddleware
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend-next" / "dist"  # 主前端 = frontend-next 构建产物(2026-07-07 cutover;旧零构建 frontend/ 已退役,HashRouter 无需 SPA fallback)
@@ -100,6 +101,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="AI Interactive Story", lifespan=lifespan)
+app.add_middleware(LangMiddleware)  # X-Lang → 本请求的界面 / AI 输出语言(src/lang.py)
 
 
 async def _database_unavailable(_request: Request, exc: Exception):
@@ -429,6 +431,16 @@ def api_me(user: dict | None = Depends(current_user_dep)):
                 user = {**user, "avatar": r["avatar"] if r else None}
         except Exception:
             user = {**user, "avatar": None}
+    if user is not None:
+        # 语言偏好单独查(不进认证热路径 SELECT:列若还没建,热路径会全挂);查不到 = 没选过,前端会让用户选。
+        try:
+            from .db import get_pool
+            with get_pool().connection() as conn, conn.cursor() as cur:
+                cur.execute("select language from users where id = %s::uuid", (user["id"],))
+                r = cur.fetchone()
+                user = {**user, "language": (r["language"] if r else None)}
+        except Exception:
+            user = {**user, "language": None}
     return {"user": user, "auth_enabled": auth.enabled()}
 
 
@@ -456,6 +468,25 @@ def api_my_display_name(req: DisplayNameReq, user: dict | None = Depends(current
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute("update users set display_name = %s where id = %s::uuid", (nm, user["id"]))
     return {"ok": True, "display_name": nm}
+
+
+class LanguageReq(BaseModel):
+    language: str
+
+
+@app.post("/api/my/language")
+def api_my_language(req: LanguageReq, user: dict | None = Depends(current_user_dep)):
+    """保存账户的界面 / AI 语言(en|zh)。注册用户没选过时前端开局强制选,之后在「我的」里可改。"""
+    if user is None:
+        raise HTTPException(401, L("Please log in first", "请先登录"))
+    lang = (req.language or "").strip().lower()
+    if lang not in LANGS:
+        raise HTTPException(400, L("Unsupported language", "不支持的语言"))
+    db.ensure_users_language_column()
+    pool = auth.get_pool()
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute("update users set language = %s where id = %s::uuid", (lang, user["id"]))
+    return {"ok": True, "language": lang}
 
 
 class AvatarReq(BaseModel):

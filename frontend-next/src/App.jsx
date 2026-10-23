@@ -4,6 +4,7 @@ import { getLastPoint, consumeSuppressReveal } from "./lib/transitionNav";
 import { useAuth } from "./state/auth";
 import AppShell from "./components/shell/AppShell";
 import Preloader from "./components/preloader";
+import LanguageGate from "./components/LanguageGate";
 import "./App.css";
 
 const Login = lazy(() => import("./routes/Login"));
@@ -123,6 +124,8 @@ export default function App() {
           </Routes>
         </Suspense>
       )}
+      {/* 开局语言选择:没选过(本机或账户)就盖住全屏 */}
+      <LanguageGate />
     </Preloader>
   );
 }

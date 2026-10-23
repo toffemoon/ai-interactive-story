@@ -38,6 +38,13 @@ export function AuthProvider({ children }) {
     // 登录成功本身就证明 AUTH 开着:同时置 enabled:true,否则冷启动 /api/auth/me 三次失败后
     // enabled 停在 false,登录成功也被全站(enabled && user)当游客(YOR-185)。
     setState((s) => ({ ...s, enabled: true, user }));
+    // 登录回包不带语言偏好:补查 /api/auth/me,让 LanguageGate 按账户语言处理(没选过要选)。
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && d.user) setState((s) => (s.user ? { ...s, user: { ...s.user, language: d.user.language ?? null } } : s));
+      })
+      .catch(() => {});
   };
   // 局部更新当前用户(改昵称/头像后回写 context,避免 Mine 重挂时被陈旧 user 盖回,YOR-186)。
   const patchUser = (patch) =>

@@ -2,6 +2,8 @@
 // 整段照搬现有 frontend/app.jsx 的 fetch 封装(token 注入 + 401 兜底 + /api/auth 豁免)。
 // 引擎域端点契约固定(Gengyue 域),这里只调用、不新增、不改行为。
 
+import { LANG } from "./i18n";
+
 const TOKEN_KEY = "ais_auth_token";
 
 export function getToken() {
@@ -31,6 +33,14 @@ export function setToken(t) {
   window.fetch = function (url, opts) {
     opts = opts || {};
     let hadToken = false;
+    try {
+      // 每个 /api/ 请求带界面语言:后端据此决定 AI 输出语言和报错文案(src/lang.py)。
+      if (typeof url === "string" && url.indexOf("/api/") === 0) {
+        const h = new Headers(opts.headers || {});
+        if (!h.has("X-Lang")) h.set("X-Lang", LANG);
+        opts = Object.assign({}, opts, { headers: h });
+      }
+    } catch (e) {}
     try {
       const t = getToken();
       if (t && typeof url === "string" && url.indexOf("/api/") === 0) {
