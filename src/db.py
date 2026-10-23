@@ -30,9 +30,9 @@ def _env_int(name: str, default: int, *, minimum: int = 0) -> int:
     try:
         value = int(raw)
     except (TypeError, ValueError) as exc:
-        raise RuntimeError(f"{name} 必须是整数") from exc
+        raise RuntimeError(f"{name} must be an integer") from exc
     if value < minimum:
-        raise RuntimeError(f"{name} 必须 >= {minimum}")
+        raise RuntimeError(f"{name} must be >= {minimum}")
     return value
 
 
@@ -41,9 +41,9 @@ def _env_float(name: str, default: float, *, minimum: float = 0.0) -> float:
     try:
         value = float(raw)
     except (TypeError, ValueError) as exc:
-        raise RuntimeError(f"{name} 必须是数字") from exc
+        raise RuntimeError(f"{name} must be a number") from exc
     if not math.isfinite(value) or value < minimum:
-        raise RuntimeError(f"{name} 必须 >= {minimum}")
+        raise RuntimeError(f"{name} must be >= {minimum}")
     return value
 
 
@@ -105,7 +105,7 @@ def init_pool() -> ConnectionPool:
         dsn = os.getenv("DATABASE_URL")
         if not dsn:
             raise RuntimeError(
-                "DATABASE_URL 没设。复制 .env.example → .env 填 Supabase 连接串。"
+                "DATABASE_URL is not set. Copy .env.example to .env and fill in the Supabase connection string."
             )
         # autocommit=False (默认): 每个 `with pool.connection()` 块是一个事务,
         # 块正常退出时 pool 自动 commit, 出错 rollback。save_session 的
@@ -113,7 +113,7 @@ def init_pool() -> ConnectionPool:
         min_size = _env_int("DB_POOL_MIN", 1, minimum=1)
         max_size = _env_int("DB_POOL_MAX", 10, minimum=1)
         if min_size > max_size:
-            raise RuntimeError("DB_POOL_MIN 不能大于 DB_POOL_MAX")
+            raise RuntimeError("DB_POOL_MIN cannot be greater than DB_POOL_MAX")
         checkout_timeout = _env_float("DB_POOL_TIMEOUT_SECONDS", 5.0, minimum=0.1)
         pool = ConnectionPool(
             conninfo=dsn,

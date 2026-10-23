@@ -13,14 +13,14 @@ import "./IdentityCard.css";
 //   shopName 发卡书坊名(默认 沐言书坊)
 //   clerk    落款店员(默认 糖沐)
 //   forming  登记态(边填边成形):不可翻面(还没办好)、正面临时显口味行、名字/口味用 key 触发浮现动画。
-export function IdentityCard({ name, taste, message, avatar, issuedAt, shopName = "沐言书坊", clerk = "糖沐", forming = false }) {
+export function IdentityCard({ name, taste, message, avatar, issuedAt, shopName = "Muyan Bookshop", clerk = "Tangmu", forming = false }) {
   const [flipped, setFlipped] = useState(false);
   const nick = (name || "").trim();
   const hasName = !!nick;
-  const shownNick = nick || "客人";
+  const shownNick = nick || "Guest";
   // 字头只取首字当徽记(不复读称呼)。用 Array.from 按 Unicode code point 拆,避免 emoji/代理对被 slice 截半成乱码。
-  const initial = Array.from(shownNick.replace(/\s+/g, ""))[0] || "客";
-  const note = (message || "").trim() || "愿你在这儿,总能翻到想读的那一页。";
+  const initial = Array.from(shownNick.replace(/\s+/g, ""))[0] || "G";
+  const note = (message || "").trim() || "May you always find the page you want to read here.";
   const canFlip = !forming; // 登记态锁翻面:卡还没办好,别急着翻
   const toggle = () => canFlip && setFlipped((f) => !f);
   return (
@@ -30,7 +30,7 @@ export function IdentityCard({ name, taste, message, avatar, issuedAt, shopName 
       role={canFlip ? "button" : undefined}
       tabIndex={canFlip ? 0 : -1}
       aria-pressed={canFlip ? flipped : undefined}
-      aria-label={forming ? `${shownNick} 的入店凭证(登记中)` : `${shownNick} 的入店凭证,点按翻面`}
+      aria-label={forming ? `${shownNick}'s entry pass (registering)` : `${shownNick}'s entry pass, tap to flip`}
       onKeyDown={
         canFlip
           ? (e) => {
@@ -46,7 +46,7 @@ export function IdentityCard({ name, taste, message, avatar, issuedAt, shopName 
         {/* 正面:眉标 / 头像+称呼(主角) / 底行。登记态底行=口味成形行;办好态底行=发卡日·翻面提示。 */}
         <div className="idcard-face idcard-front">
           <img className="idcard-seal-img" src="/home/seal-muyan.png" alt="" aria-hidden="true" draggable="false" />
-          <span className="idcard-eyebrow">{shopName} · 入店凭证</span>
+          <span className="idcard-eyebrow">{shopName} · Entry Pass</span>
           <div className="idcard-front-main">
             <div className="idcard-avatar">
               {avatar ? (
@@ -57,32 +57,32 @@ export function IdentityCard({ name, taste, message, avatar, issuedAt, shopName 
             </div>
             {/* key 绑值:报名/改名时重挂 → 触发浮现动画(CSS)。空态显占位。 */}
             <div key={nick} className={"idcard-name t-kai" + (hasName ? "" : " is-empty")}>
-              {hasName ? nick : "待登记"}
+              {hasName ? nick : "Unregistered"}
             </div>
           </div>
           {forming ? (
             <div className="idcard-forming-line t-kai">
-              最近在看 · <span key={taste || "_"} className={"idcard-forming-taste" + (taste ? "" : " is-empty")}>{taste || "…"}</span>
+              Lately into · <span key={taste || "_"} className={"idcard-forming-taste" + (taste ? "" : " is-empty")}>{taste || "…"}</span>
             </div>
           ) : (
             <div className="idcard-front-foot">
-              <span className="idcard-issued">发卡 {issuedAt || "今日"}</span>
-              <span className="idcard-hint">点一下翻面 ↻</span>
+              <span className="idcard-issued">Issued {issuedAt || "today"}</span>
+              <span className="idcard-hint">Tap to flip ↻</span>
             </div>
           )}
         </div>
         {/* 背面:糖沐寄语(主角)+ 落款 + 口味 + 归还语 */}
         <div className="idcard-face idcard-back">
-          <span className="idcard-eyebrow">凭卡出入</span>
+          <span className="idcard-eyebrow">Show this card to enter</span>
           <p className="idcard-message t-kai">{note}</p>
-          <div className="idcard-sign t-kai">—— {clerk}</div>
+          <div className="idcard-sign t-kai">— {clerk}</div>
           <div className="idcard-back-foot">
             {taste ? (
-              <div className="idcard-taste">最近在看 · {taste}</div>
+              <div className="idcard-taste">Lately into · {taste}</div>
             ) : (
-              <div className="idcard-taste">来日方长 · 总有一本等着你</div>
+              <div className="idcard-taste">Plenty of time ahead · A book is always waiting for you</div>
             )}
-            <span className="idcard-lost">如果捡到此卡,请归还至{shopName}</span>
+            <span className="idcard-lost">If found, please return to {shopName}</span>
           </div>
         </div>
       </div>

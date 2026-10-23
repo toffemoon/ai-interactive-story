@@ -206,7 +206,7 @@ def check_memory_probes(playthrough: list[dict], fixture: dict) -> dict:
 def check_speaker_validity(playthrough: list[dict], fixture: dict) -> dict:
     """每条发言者必须是 roster 或故事/世界书声明过的 canon 实体(放行涌现真凶罗伊洛特、别名村姑),
     否则=引擎从自身 IP 记忆凭空造的幻觉角色(如本 fixture 未声明的沙僧)。与引擎 _known_speaker_index 对齐。"""
-    valid = {"narrator", "旁白"}
+    valid = {"narrator", "旁白", "Narrator"}
     for c in fixture["characters"]:
         d = c["data"]
         valid.add(d.get("character_id", ""))

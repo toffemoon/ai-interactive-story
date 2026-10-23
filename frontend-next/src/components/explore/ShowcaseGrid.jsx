@@ -13,8 +13,8 @@ const ShowcaseProjectCard = forwardRef(function ShowcaseProjectCard(
   }, [model.cover]);
 
   const showImage = Boolean(model.cover) && imageState !== "error";
-  const typeLabel = model.kind === "story" ? "完整故事" : "角色卡";
-  const secondary = model.meta?.uploader || model.tags?.[0] || (model.kind === "story" ? "可直接进入" : "可以纯聊");
+  const typeLabel = model.kind === "story" ? "Full story" : "Character";
+  const secondary = model.meta?.uploader || model.tags?.[0] || (model.kind === "story" ? "Ready to play" : "Ready to chat");
   const overlayTags = [model.meta?.typeLabel, ...(model.tags || [])].filter(Boolean).slice(0, 2);
 
   return (
@@ -34,7 +34,7 @@ const ShowcaseProjectCard = forwardRef(function ShowcaseProjectCard(
       <button
         type="button"
         className="showcase4-card-open"
-        aria-label={model.kind === "story" ? `查看故事《${model.title}》` : `查看角色《${model.title}》`}
+        aria-label={model.kind === "story" ? `View story "${model.title}"` : `View character "${model.title}"`}
         onClick={() => onOpen(model)}
       >
         <span className="showcase4-card-media">
@@ -90,8 +90,8 @@ const ShowcaseProjectCard = forwardRef(function ShowcaseProjectCard(
       <button
         type="button"
         className={["showcase4-card-favorite", favorite ? "is-active" : ""].filter(Boolean).join(" ")}
-        aria-label={favorite ? `取消收藏《${model.title}》` : `收藏《${model.title}》`}
-        title={favorite ? "取消收藏" : "收藏"}
+        aria-label={favorite ? `Remove "${model.title}" from favorites` : `Add "${model.title}" to favorites`}
+        title={favorite ? "Remove from favorites" : "Add to favorites"}
         onClick={() => onToggleFavorite(model)}
       >
         <Star size={16} strokeWidth={1.7} fill={favorite ? "currentColor" : "none"} aria-hidden="true" />

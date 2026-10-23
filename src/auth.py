@@ -68,7 +68,7 @@ def role_at_least(role: str, minimum: str) -> bool:
 def set_user_role(identifier: str, role: str) -> bool:
     """super 用:把某用户设成 admin / user(不能经此设 superadmin —— 那由 env 钉)。"""
     if role not in ("admin", "user"):
-        raise HTTPException(400, "role 只能是 admin 或 user(superadmin 由 .env 钉死)")
+        raise HTTPException(400, "role must be admin or user (superadmin is fixed in .env)")
     uid = find_user_id(identifier)
     if not uid:
         return False
@@ -93,7 +93,7 @@ def set_local_proxy_enabled(identifier: str, enabled: bool) -> bool:
         if not target:
             return False
         if is_configured_superadmin(target) and not enabled:
-            raise HTTPException(400, "superadmin 的 Codex 本机反代权限不可撤销")
+            raise HTTPException(400, "The superadmin's Codex local proxy access cannot be revoked")
         cur.execute(
             "update users set local_proxy_enabled = %s where id = %s::uuid",
             (bool(enabled), str(target["id"])),
@@ -153,18 +153,18 @@ def create_user(email: str, password: str, username: str | None = None,
     email = (email or "").strip().lower()
     username = (username or "").strip() or None
     if not email or "@" not in email:
-        raise HTTPException(400, "邮箱不合法")
+        raise HTTPException(400, "Invalid email address")
     if not password or len(password) < 6:
-        raise HTTPException(400, "密码至少 6 位")
+        raise HTTPException(400, "Password must be at least 6 characters")
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute("select 1 from users where email = %s", (email,))
         if cur.fetchone():
-            raise HTTPException(409, "邮箱已注册")
+            raise HTTPException(409, "This email is already registered")
         if username:
             cur.execute("select 1 from users where username = %s", (username,))
             if cur.fetchone():
-                raise HTTPException(409, "用户名已被占用")
+                raise HTTPException(409, "This username is already taken")
         # display_name 不再用 username/邮箱前缀冒充:用户没主动起昵称就存 NULL,
         # 前端据此在登录后强制走「设置昵称」(见 /api/my/display_name)。
         cur.execute(
@@ -263,7 +263,7 @@ def current_user(authorization: str | None = None, x_auth_token: str | None = No
         return None
     user = resolve_token(token)
     if user is None:
-        raise HTTPException(401, "登录已失效,请重新登录")
+        raise HTTPException(401, "Your session has expired. Please log in again.")
     return user
 
 
@@ -275,7 +275,7 @@ def authorize_session(session_id: str, user: dict | None, claim: bool = True) ->
     owner = session_owner(session_id)
     if user is None:
         if owner is not None:                       # 有主存档、匿名访问 → 拒
-            raise HTTPException(401, "请先登录")
+            raise HTTPException(401, "Please log in first")
         return                                       # 无主(遗留/匿名)存档 → 过渡期放行
     if owner is None:
         if claim:
@@ -283,7 +283,7 @@ def authorize_session(session_id: str, user: dict | None, claim: bool = True) ->
         return
     # 只有 superadmin 能越权访问别人的存档(admin 管内容,不偷看玩家存档)。
     if owner != user["id"] and user.get("role") != "superadmin":
-        raise HTTPException(403, "无权访问该存档")
+        raise HTTPException(403, "You do not have permission to access this save")
 
 
 # ── 会话归属(放这里给 authorize_session 用;storage 也有同义薄封装)────────
@@ -353,12 +353,12 @@ def send_email_code(email: str, purpose: str = "register") -> dict:
     简单限流:同邮箱+用途 60 秒内只发一次。"""
     email = (email or "").strip().lower()
     if not email or "@" not in email:
-        raise HTTPException(400, "邮箱不合法")
+        raise HTTPException(400, "Invalid email address")
     dev = os.getenv("AUTH_DEV_OTP", "") == "1"   # 仅本地测试显式开;生产绝不开
     # 生产 fail-closed:账户系统开着却没配 SMTP 且没开 dev 开关 → 拒发,绝不把码回前端。
     # (防「dev 回码」泄漏被任何人读到 → 冒名注册 superadmin 邮箱 → 接管;邮件没配也不该假装发出去)
     if not email_send.configured() and enabled() and not dev:
-        raise HTTPException(503, "邮件服务未配置(SMTP),暂时无法发送验证码,请联系管理员")
+        raise HTTPException(503, "Email service (SMTP) is not configured, so verification codes cannot be sent right now. Please contact an administrator.")
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(
@@ -368,15 +368,16 @@ def send_email_code(email: str, purpose: str = "register") -> dict:
         )
         last = cur.fetchone()
         if last and (datetime.now(timezone.utc) - last["created_at"]).total_seconds() < 60:
-            raise HTTPException(429, "验证码刚发过,请 1 分钟后再试")
+            raise HTTPException(429, "A code was just sent. Please try again in 1 minute.")
         code = f"{secrets.randbelow(1_000_000):06d}"
         expires = datetime.now(timezone.utc) + timedelta(minutes=_OTP_TTL_MIN)
         cur.execute(
             "insert into email_otp (email, code_hash, purpose, expires_at) values (%s, %s, %s, %s)",
             (email, _otp_hash(email, code), purpose, expires),
         )
-    email_send.send_email(email, "你的验证码",
-                          f"你的验证码是 {code},{_OTP_TTL_MIN} 分钟内有效。如非本人操作请忽略。")
+    email_send.send_email(email, "Your verification code",
+                          f"Your verification code is {code}. It is valid for {_OTP_TTL_MIN} minutes. "
+                          "If you did not request this, please ignore this email.")
     out = {"sent": True}
     if not email_send.configured() and dev:
         out["dev_code"] = code  # 仅 AUTH_DEV_OTP=1(本地测试)才回码;生产永不回
@@ -415,7 +416,7 @@ def reset_password(email: str, new_password: str) -> bool:
     重置后吊销该用户全部存活 token:旧设备/可能泄露的会话立即失效。"""
     email = (email or "").strip().lower()
     if not new_password or len(new_password) < 6:
-        raise HTTPException(400, "密码至少 6 位")
+        raise HTTPException(400, "Password must be at least 6 characters")
     pool = get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute(

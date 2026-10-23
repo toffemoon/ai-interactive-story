@@ -9,8 +9,8 @@ export default function CharDetailModal({ model, onClose, onDelete, onAdapt }) {
   return (
     <div className="detail-charmodal" onClick={onClose}>
       <div className="detail-charmodal-card" onClick={(e) => e.stopPropagation()}>
-        <button className="detail-charmodal-x" onClick={onClose} aria-label="关闭">×</button>
-        <Badge tone="gilt">角色</Badge>
+        <button className="detail-charmodal-x" onClick={onClose} aria-label="Close">×</button>
+        <Badge tone="gilt">Character</Badge>
         <h2 className="t-h1 detail-charmodal-name">{model.title}</h2>
         {(model.tags || []).length > 0 && (
           <div className="detail-tags">
@@ -24,12 +24,12 @@ export default function CharDetailModal({ model, onClose, onDelete, onAdapt }) {
           <div className="detail-charmodal-foot">
             {onAdapt && (
               <button type="button" className="detail-charmodal-adapt" onClick={() => onAdapt(model)}>
-                去改编 · 复制成创作草稿
+                Adapt · Copy as a new draft
               </button>
             )}
             {onDelete && (
               <button type="button" className="detail-charmodal-del" onClick={() => onDelete(model)}>
-                删除这张卡
+                Delete this card
               </button>
             )}
           </div>

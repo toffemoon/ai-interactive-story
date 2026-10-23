@@ -123,7 +123,7 @@ def merge_worlds(worlds):
     return {"name": "世界书合集", "entries": entries}
 
 
-FALLBACK_PHRASES = ("故事引擎遇到了未预料的问题", "本地自然保底", "保底回合", "没有从后端拿到完整回应")
+FALLBACK_PHRASES = ("The story engine ran into an unexpected problem", "Local fallback continuation", "故事引擎遇到了未预料的问题", "本地自然保底", "保底回合", "没有从后端拿到完整回应")
 
 
 def is_fallback(turn):
@@ -134,7 +134,7 @@ def is_fallback(turn):
     if any(p in narr for p in FALLBACK_PHRASES):
         return True
     for m in turn.get("memory_write", []) or []:
-        if isinstance(m, dict) and "保底" in (m.get("text", "") or ""):
+        if isinstance(m, dict) and ("保底" in (m.get("text", "") or "") or "fallback" in (m.get("text", "") or "").lower()):
             return True
     return False
 

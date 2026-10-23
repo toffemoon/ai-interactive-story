@@ -59,19 +59,19 @@ export function saveModelSource(source) {
 
 function completionUrl(endpoint) {
   const base = String(endpoint || "").trim();
-  if (!base) throw new Error("请先填写本机反代地址");
+  if (!base) throw new Error("Please enter the local proxy address first");
   let parsed;
   try {
     parsed = new URL(base);
   } catch (e) {
-    throw new Error("本机反代地址格式不正确");
+    throw new Error("Local proxy address is not a valid URL");
   }
   const host = parsed.hostname.replace(/^\[|\]$/g, "").toLowerCase();
   const loopback = host === "127.0.0.1" || host === "::1" || host === "localhost" || host.endsWith(".localhost");
   if (!loopback || !["http:", "https:"].includes(parsed.protocol)) {
-    throw new Error("本机反代地址只允许 localhost 或回环 IP");
+    throw new Error("Local proxy address must be localhost or a loopback IP");
   }
-  if (parsed.username || parsed.password) throw new Error("本机反代地址不能内嵌账号密码");
+  if (parsed.username || parsed.password) throw new Error("Local proxy address must not contain a username or password");
   parsed.search = "";
   parsed.hash = "";
   parsed.pathname = parsed.pathname.replace(/\/+$/, "");
@@ -102,11 +102,11 @@ async function localControlRequest(path, { method = "GET", body, timeoutMs = 10_
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       const detail = data && data.error && (data.error.message || data.error.code);
-      throw new Error(detail || `本机连接助手返回 ${response.status}`);
+      throw new Error(detail || `Local connection helper returned ${response.status}`);
     }
     return data;
   } catch (error) {
-    if (error && error.name === "AbortError") throw new Error("本机连接助手响应超时");
+    if (error && error.name === "AbortError") throw new Error("Local connection helper timed out");
     throw error;
   } finally {
     clearTimeout(timer);
@@ -150,7 +150,7 @@ function responseError(response, data) {
     (payloadError && (payloadError.message || payloadError.code)) ||
     (data && data.detail) ||
     response.statusText;
-  const error = new Error("本机反代返回 " + response.status + (detail ? ": " + detail : ""));
+  const error = new Error("Local proxy returned " + response.status + (detail ? ": " + detail : ""));
   error.status = response.status;
   error.proxyCode = payloadError && payloadError.code;
   return error;
@@ -180,10 +180,10 @@ function consumeSseEvent(block, state, onDelta) {
   try {
     payload = JSON.parse(dataText);
   } catch (e) {
-    throw new Error("本机反代返回了无法解析的 SSE 数据");
+    throw new Error("Local proxy returned SSE data that could not be parsed");
   }
   if (payload && payload.error) {
-    const error = new Error(payload.error.message || payload.error.code || "本机 Codex 流式生成失败");
+    const error = new Error(payload.error.message || payload.error.code || "Local Codex generation failed");
     error.proxyCode = payload.error.code;
     throw error;
   }
@@ -200,7 +200,7 @@ function consumeSseEvent(block, state, onDelta) {
 
 async function readSseCompletion(response, onDelta) {
   if (!response.body || !response.body.getReader) {
-    throw new Error("当前浏览器不支持读取本机 Codex 流式响应");
+    throw new Error("This browser cannot read the local Codex response");
   }
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -221,13 +221,13 @@ async function readSseCompletion(response, onDelta) {
     if (done) break;
   }
   if (!state.done && buffer.trim()) consumeSseEvent(buffer, state, onDelta);
-  if (!state.content) throw new Error("本机反代没有返回 assistant 文本");
+  if (!state.content) throw new Error("Local proxy returned no assistant text");
   return state;
 }
 
 async function requestBrowserLocalProxy(call, settings, { stream, onDelta }) {
   const model = String(settings.model || "").trim();
-  if (!model) throw new Error("请先填写本机反代模型名");
+  if (!model) throw new Error("Please enter the local proxy model name first");
 
   const headers = { "Content-Type": "application/json" };
   if (settings.apiKey) headers.Authorization = "Bearer " + settings.apiKey;
@@ -267,16 +267,17 @@ async function requestBrowserLocalProxy(call, settings, { stream, onDelta }) {
       usage = data.usage || {};
       if (content && onDelta) onDelta(content);
     }
-    if (!content) throw new Error("本机反代没有返回 assistant 文本");
+    if (!content) throw new Error("Local proxy returned no assistant text");
     return {
       request_id: call.request_id,
       content,
       usage,
     };
   } catch (e) {
-    if (e && e.name === "AbortError") throw new Error("本机反代响应超时");
-    if (e && (e.status || e.proxyCode || /^本机反代/.test(e.message))) throw e;
-    throw new Error("无法连接本机反代,请检查地址、CORS 与 Private Network Access");
+    if (e && e.name === "AbortError") throw new Error("Local proxy timed out");
+    // i18n: kept, logic literal (Chinese prefix kept alongside the English one)
+    if (e && (e.status || e.proxyCode || /^(本机反代|Local proxy)/.test(e.message))) throw e;
+    throw new Error("Can't reach the local proxy. Check the address, CORS and Private Network Access.");
   } finally {
     clearTimeout(timer);
   }
@@ -300,7 +301,7 @@ async function runFlow(path, seed, settings, { onStep, onDelta } = {}) {
     const result = await postJSON(path, request);
     if (result.status === "done" && result.turn) return result.turn;
     if (result.status !== "needs_llm" || !result.call) {
-      throw new Error("服务端返回了未知的本机模型步骤");
+      throw new Error("The server returned an unknown local model step");
     }
     request.revision = result.revision || "";
     request.flow_id = result.flow_id || "";
@@ -308,7 +309,7 @@ async function runFlow(path, seed, settings, { onStep, onDelta } = {}) {
     const streamDelta = result.call.kind === "stream" ? onDelta : null;
     request.answers.push(await callBrowserLocalProxy(result.call, settings, streamDelta));
   }
-  throw new Error("本轮需要的模型调用过多,已停止");
+  throw new Error("This turn needed too many model calls, so it was stopped");
 }
 
 export function runLocalProxyTurn(turn, settings, options = {}) {

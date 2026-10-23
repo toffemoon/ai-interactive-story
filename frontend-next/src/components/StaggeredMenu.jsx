@@ -17,7 +17,7 @@ export const StaggeredMenu = ({
   displaySocials = true,
   displayItemNumbering = true,
   className,
-  brandText = "沐言",
+  brandText = "Muyan",
   menuButtonColor = "#fff",
   openMenuButtonColor = "#fff",
   accentColor = "#5227FF",
@@ -47,7 +47,7 @@ export const StaggeredMenu = ({
   const iconRef = useRef(null);
   const textInnerRef = useRef(null);
   const textWrapRef = useRef(null);
-  const [textLines, setTextLines] = useState([brandText, "关闭"]);
+  const [textLines, setTextLines] = useState([brandText, "Close"]);
 
   const openTlRef = useRef(null);
   const closeTweenRef = useRef(null);
@@ -409,8 +409,8 @@ export const StaggeredMenu = ({
     if (!inner) return;
     textCycleAnimRef.current?.kill();
 
-    const currentLabel = opening ? brandText : "关闭";
-    const targetLabel = opening ? "关闭" : brandText;
+    const currentLabel = opening ? brandText : "Close";
+    const targetLabel = opening ? "Close" : brandText;
     if (reducedMotion) {
       setTextLines([targetLabel]);
       gsap.set(inner, { yPercent: 0 });
@@ -420,7 +420,7 @@ export const StaggeredMenu = ({
     const seq = [currentLabel];
     let last = currentLabel;
     for (let i = 0; i < cycles; i++) {
-      last = last === brandText ? "关闭" : brandText;
+      last = last === brandText ? "Close" : brandText;
       seq.push(last);
     }
     if (last !== targetLabel) seq.push(targetLabel);
@@ -638,7 +638,7 @@ export const StaggeredMenu = ({
       <header
         ref={headerRef}
         className="staggered-menu-header"
-        aria-label="主导航菜单"
+        aria-label="Main navigation menu"
         onPointerEnter={hoverExpand ? handleHoverEnter : undefined}
         onPointerLeave={hoverExpand ? handleHoverLeave : undefined}
       >
@@ -646,7 +646,7 @@ export const StaggeredMenu = ({
         <button
           ref={toggleBtnRef}
           className="sm-toggle"
-          aria-label={open ? "关闭菜单" : "打开菜单"}
+          aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
           aria-controls="staggered-menu-panel"
           onClick={toggleMenu}
@@ -675,7 +675,7 @@ export const StaggeredMenu = ({
         id="staggered-menu-panel"
         ref={panelRef}
         className="staggered-menu-panel"
-        aria-label="主导航"
+        aria-label="Main navigation"
         aria-hidden={hoverExpand ? undefined : !open}
         onPointerEnter={hoverExpand ? handleHoverEnter : undefined}
         onPointerLeave={hoverExpand ? handleHoverLeave : undefined}

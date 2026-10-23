@@ -183,10 +183,10 @@ def deferred_backend(answers: list[dict[str, Any]]):
             raise call
         answer = answers[call.index]
         if not isinstance(answer, dict) or answer.get("request_id") != call.request_id:
-            raise DeferredReplayMismatch(f"第 {call.index + 1} 个本机模型回答与当前请求不匹配")
+            raise DeferredReplayMismatch(f"Local model answer #{call.index + 1} does not match the current request")
         content = answer.get("content")
         if not isinstance(content, str):
-            raise DeferredReplayMismatch(f"第 {call.index + 1} 个本机模型回答缺少文本内容")
+            raise DeferredReplayMismatch(f"Local model answer #{call.index + 1} has no text content")
         usage = answer.get("usage") if isinstance(answer.get("usage"), dict) else None
         return _ScriptedOutput(content, usage)
 
@@ -332,4 +332,4 @@ if __name__ == "__main__":
     import sys
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8")
-    print(chat("你是助手,用中文回答,最多三个字。", "说三个字"))
+    print(chat("You are an assistant. Answer in English, in at most three words.", "Say three words"))

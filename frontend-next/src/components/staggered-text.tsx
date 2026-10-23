@@ -91,6 +91,25 @@ const buildKeyframes = (
   return keyframes;
 };
 
+// chars 模式的断行分组:连续的非空白、非 CJK 字符算一个词(整体不断行);空格和 CJK 字符各自单列,保留原有的逐字换行。
+const isWordChar = (c: string) => !/\s/.test(c) && !/[　-鿿가-힯＀-￯]/.test(c);
+
+const groupWords = (segments: string[]) => {
+  const groups: { seg: string; idx: number }[][] = [];
+  let word: { seg: string; idx: number }[] = [];
+  segments.forEach((seg, idx) => {
+    if (isWordChar(seg)) {
+      word.push({ seg, idx });
+      return;
+    }
+    if (word.length) groups.push(word);
+    word = [];
+    groups.push([{ seg, idx }]);
+  });
+  if (word.length) groups.push(word);
+  return groups;
+};
+
 const StaggeredText = forwardRef<StaggeredTextHandle, StaggeredTextProps>(
   (
     {
@@ -307,7 +326,27 @@ const StaggeredText = forwardRef<StaggeredTextHandle, StaggeredTextProps>(
       >
         {rowsSegments.map((rowSegments, rowIndex) => (
           <React.Fragment key={`row-${rowIndex}`}>
-            {rowSegments.map((segment, rowSegIndex) => {
+            {segmentBy === "chars"
+              ? groupWords(rowSegments).map((g, gi) =>
+                  g.length === 1 && !isWordChar(g[0].seg) ? (
+                    renderSeg(g[0].seg, rowIndex, g[0].idx, rowSegments)
+                  ) : (
+                    // 英文:同一单词的字符包成不可断行的一组,只在空格处换行(逐字 inline-block 会把单词从中间劈开)
+                    <span key={`w-${rowIndex}-${gi}`} style={{ display: "inline-block", whiteSpace: "nowrap" }}>
+                      {g.map(({ seg, idx }) => renderSeg(seg, rowIndex, idx, rowSegments))}
+                    </span>
+                  ),
+                )
+              : rowSegments.map((segment, rowSegIndex) => renderSeg(segment, rowIndex, rowSegIndex, rowSegments))}
+            {rowIndex < rowsSegments.length - 1 && segmentBy !== "lines" && (
+              <br key={`br-${rowIndex}`} />
+            )}
+          </React.Fragment>
+        ))}
+      </Wrapper>
+    );
+
+    function renderSeg(segment: string, rowIndex: number, rowSegIndex: number, rowSegments: string[]) {
               const globalIndex = globalIndexCounter++;
               const isLast = globalIndex === totalSegments - 1;
 
@@ -363,14 +402,7 @@ const StaggeredText = forwardRef<StaggeredTextHandle, StaggeredTextProps>(
                     "\u00A0"}
                 </motion.span>
               );
-            })}
-            {rowIndex < rowsSegments.length - 1 && segmentBy !== "lines" && (
-              <br key={`br-${rowIndex}`} />
-            )}
-          </React.Fragment>
-        ))}
-      </Wrapper>
-    );
+    }
   },
 );
 

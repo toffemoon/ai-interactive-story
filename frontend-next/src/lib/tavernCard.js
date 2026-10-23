@@ -57,7 +57,7 @@ export function extractBookText(v2data) {
       const keys = Array.isArray(e.keys) ? e.keys.join("/") : "";
       const content = typeof e.content === "string" ? e.content.trim() : "";
       if (!content) return "";
-      return (keys ? `【${keys}】` : "") + content;
+      return (keys ? `[${keys}] ` : "") + content;
     })
     .filter(Boolean);
   return lines.join("\n");
@@ -68,11 +68,11 @@ export function parseJsonCard(text) {
   try {
     obj = JSON.parse(text);
   } catch (e) {
-    throw new Error("不是合法的 JSON 文件");
+    throw new Error("Not a valid JSON file");
   }
   const data = obj && typeof obj === "object" && obj.data && typeof obj.data === "object" ? obj.data : obj;
   const { draft, dropped } = pickDraftFields(data);
-  if (!Object.keys(draft).length) throw new Error("没读到可用的卡字段(需要 chara_card_v2 结构)");
+  if (!Object.keys(draft).length) throw new Error("No usable card fields found (expected chara_card_v2 format)");
   return { draft, dropped, bookText: extractBookText(data) };
 }
 
@@ -92,7 +92,7 @@ export function parsePngCard(buf) {
   const dv = new DataView(buf);
   const SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
   if (buf.byteLength < 8 || !SIG.every((b, i) => dv.getUint8(i) === b)) {
-    throw new Error("不是 PNG 文件");
+    throw new Error("Not a PNG file");
   }
   let off = 8;
   let sawCompressedText = false;
@@ -119,7 +119,7 @@ export function parsePngCard(buf) {
             for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
             jsonText = new TextDecoder("utf-8").decode(out);
           } catch (e) {
-            throw new Error("卡数据解码失败(base64/编码损坏)");
+            throw new Error("Failed to decode card data (corrupt base64/encoding)");
           }
           return parseJsonCard(jsonText);
         }
@@ -133,7 +133,7 @@ export function parsePngCard(buf) {
   }
   throw new Error(
     sawCompressedText
-      ? "这张 PNG 的卡数据是压缩格式(zTXt/iTXt),暂不支持——请在酒馆里导出为 JSON 再导入"
-      : "这张 PNG 里没有内嵌角色卡数据"
+      ? "This PNG stores its card data compressed (zTXt/iTXt), which isn't supported yet. Export the card as JSON from SillyTavern and import that instead."
+      : "This PNG has no embedded character card data"
   );
 }

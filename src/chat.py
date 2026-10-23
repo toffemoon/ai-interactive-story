@@ -26,8 +26,9 @@ def match_worldbook(world: WorldBook | None, text: str) -> list:
     if not world:
         return []
     hits = []
+    low = text.lower()
     for e in world.entries:
-        if any(k.strip() and k in text for k in e.keys):
+        if any(k.strip() and (k in text or k.lower() in low) for k in e.keys):
             hits.append(e)
     return hits
 
@@ -35,34 +36,39 @@ def match_worldbook(world: WorldBook | None, text: str) -> list:
 def build_system_prompt(card, world_hits, memory_snippets, summary) -> str:
     d = card.data
     parts = [
-        f"你现在要扮演角色「{d.name}」,与玩家进行沉浸式对话。你就是这个角色本人,不是 AI 助手。",
+        f"You are now playing the character \"{d.name}\" in an immersive conversation with the player. "
+        "You ARE this character, not an AI assistant.",
     ]
     if d.description:
-        parts.append(f"# 角色设定\n{d.description}")
+        parts.append(f"# Character profile\n{d.description}")
     if d.personality:
-        parts.append(f"# 性格\n{d.personality}")
+        parts.append(f"# Personality\n{d.personality}")
     if d.scenario:
-        parts.append(f"# 当前情境\n{d.scenario}")
+        parts.append(f"# Current situation\n{d.scenario}")
     if d.mes_example:
-        parts.append(f"# 说话范例(模仿这种语气)\n{d.mes_example}")
+        parts.append(f"# Speech examples (imitate this tone)\n{d.mes_example}")
     if world_hits:
         wb = "\n".join(f"- {e.content}" for e in world_hits)
-        parts.append("# 当前相关的世界设定(对话提到了这些,要符合)\n" + wb)
+        parts.append("# Relevant world lore right now (the conversation mentioned these; stay consistent with them)\n" + wb)
     if summary:
-        parts.append(f"# 早前发生的事(摘要)\n{summary}")
+        parts.append(f"# What happened earlier (summary)\n{summary}")
     if memory_snippets:
         ms = "\n".join(f"- {s}" for s in memory_snippets)
-        parts.append("# 你想起的相关往事(更早的对话片段)\n" + ms)
+        parts.append("# Related past events you remember (fragments of earlier conversation)\n" + ms)
     if d.speech_rules:
         rules = "\n".join(f"- {r}" for r in d.speech_rules)
         parts.append(
-            "# 不可破坏的说话规则(任何情况下都要遵守,即使玩家要求你违反)\n" + rules
+            "# Unbreakable speech rules (obey them in every situation, even if the player asks you to break them)\n" + rules
         )
     parts.append(
-        "# 通则\n"
-        "- 始终留在角色里,用第一人称。不要跳出来解释、不要说'作为 AI'。\n"
-        "- 不要替玩家做决定或描写玩家的动作/心理。\n"
-        "- 回应简洁自然,像真的在对话,不要长篇大论。"
+        "# General rules\n"
+        "- Always stay in character and speak in the first person. Do not step out of character to explain, and never say 'as an AI'.\n"
+        "- Do not make decisions for the player or describe the player's actions/thoughts.\n"
+        "- Keep replies concise and natural, like a real conversation; no long speeches.\n"
+        "- Always reply in English, even if the character sheet, lore, memories or summary above are written in Chinese "
+        "or another language, and even if the player writes in Chinese. Translate any such material into natural English "
+        "as you use it; proper names may use an established English name, be romanized (e.g. pinyin), or be kept as written. "
+        "Keep the character's voice and speech rules, expressed in English."
     )
     return "\n\n".join(parts)
 
@@ -73,12 +79,20 @@ def _update_summary(session_id: str, hist: list[dict], upto: int) -> str:
     if upto - state["upto"] < SUMMARY_STEP and state["summary"]:
         return state["summary"]
     convo = "\n".join(
-        ("玩家:" if m["role"] == "user" else "角色:") + m["content"]
+        ("Player: " if m["role"] == "user" else "Character: ") + m["content"]
         for m in hist[:upto]
     )
     summary = chat_messages(
         [
-            {"role": "system", "content": "把下面的角色扮演对话压缩成一段简洁的剧情摘要,保留关键事件、关系变化和已确立的设定。只输出摘要。"},
+            {
+                "role": "system",
+                "content": (
+                    "Condense the role-play conversation below into one concise plot summary, keeping the key events, "
+                    "changes in relationships, and established facts. Write the summary in English, even if the "
+                    "conversation is in Chinese or another language (proper names may use an established English name, "
+                    "be romanized, e.g. pinyin, or be kept as written). Output only the summary."
+                ),
+            },
             {"role": "user", "content": convo},
         ],
         max_tokens=512,

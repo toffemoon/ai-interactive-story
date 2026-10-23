@@ -19,7 +19,7 @@ const Styleguide = lazy(() => import("./routes/Styleguide"));
 const NavTest = lazy(() => import("./routes/NavTest"));
 
 function RouteFallback() {
-  return <div className="route-loading" role="status" aria-label="正在加载页面" />;
+  return <div className="route-loading" role="status" aria-label="Loading page" />;
 }
 
 // AUTH 关时(本地 dev)= 游客直通,不拦;AUTH 开且未登录 = 去登录。
@@ -89,7 +89,7 @@ export default function App() {
       duration={1200}
       zIndex={300}
       bgColor="#221c16"
-      loadingText="沐言"
+      loadingText="Muyan"
       respectReducedMotion
     >
       {ready && (

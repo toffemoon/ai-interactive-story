@@ -99,14 +99,14 @@ async def lifespan(app: FastAPI):
     db.close_pool()
 
 
-app = FastAPI(title="AI 互动故事", lifespan=lifespan)
+app = FastAPI(title="AI Interactive Story", lifespan=lifespan)
 
 
 async def _database_unavailable(_request: Request, exc: Exception):
     """池耗尽、断线或数据库超时统一变成可重试 503，不泄露 DSN/驱动正文。"""
     log.warning("database unavailable: %s stats=%s", type(exc).__name__, db.pool_stats())
     return JSONResponse(
-        {"detail": "数据库暂时不可用，请稍后重试"},
+        {"detail": "The database is temporarily unavailable. Please try again shortly."},
         status_code=503,
         headers={"Retry-After": "1"},
     )
@@ -195,7 +195,7 @@ def _write_owner(user: dict | None) -> str | None:
     if not auth.enabled():
         return None
     if user is None:
-        raise HTTPException(401, "请先登录")
+        raise HTTPException(401, "Please log in first")
     return user["id"]
 
 
@@ -211,7 +211,7 @@ def _write_scope(user: dict | None) -> tuple[str | None, bool]:
     if not auth.enabled():
         return None, True
     if user is None:
-        raise HTTPException(401, "请先登录")
+        raise HTTPException(401, "Please log in first")
     return user["id"], False
 
 
@@ -223,9 +223,9 @@ def require_role(min_role: str):
                   x_auth_token: str | None = Header(None)) -> dict:
         user = await asyncio.to_thread(auth.current_user, authorization, x_auth_token)
         if user is None:
-            raise HTTPException(401, "请先登录")
+            raise HTTPException(401, "Please log in first")
         if not auth.role_at_least(user.get("role", "user"), min_role):
-            raise HTTPException(403, f"需要 {min_role} 权限")
+            raise HTTPException(403, f"Requires {min_role} permission")
         return user
     return dep
 
@@ -237,9 +237,9 @@ async def require_configured_superadmin(
     """只允许 SUPERADMIN_EMAIL 指定的唯一账户执行敏感授权。"""
     user = await asyncio.to_thread(auth.current_user, authorization, x_auth_token)
     if user is None:
-        raise HTTPException(401, "请先登录")
+        raise HTTPException(401, "Please log in first")
     if not auth.is_configured_superadmin(user):
-        raise HTTPException(403, "只有指定 superadmin 可以管理 Codex 本机反代授权")
+        raise HTTPException(403, "Only the designated superadmin can manage Codex local proxy access")
     return user
 
 
@@ -249,9 +249,9 @@ _LOCAL_PROXY_MAX_OUTPUT_CHARS = 200_000
 
 def _require_local_proxy(user: dict | None) -> dict:
     if user is None:
-        raise HTTPException(401, "请先登录")
+        raise HTTPException(401, "Please log in first")
     if not user.get("local_proxy_enabled"):
-        raise HTTPException(403, "该账户未开通 Codex 本机反代")
+        raise HTTPException(403, "Codex local proxy is not enabled for this account")
     return user
 
 
@@ -276,23 +276,23 @@ def _local_flow_context(kind: str, user: dict, snapshot: dict[str, Any], payload
     current_revision = _session_revision(snapshot)
     expected_flow = _local_flow_id(kind, user["id"], current_revision, payload)
     if bool(revision) != bool(flow_id):
-        raise HTTPException(409, "本机模型回合凭据不完整,请重新发送")
+        raise HTTPException(409, "Local model turn credentials are incomplete. Please send again.")
     if revision:
         if revision != current_revision:
-            raise HTTPException(409, "该存档已发生变化,请重新生成本轮")
+            raise HTTPException(409, "This save has changed. Please regenerate this turn.")
         if flow_id != expected_flow:
-            raise HTTPException(409, "本机模型回合与当前输入不匹配,请重新发送")
+            raise HTTPException(409, "Local model turn does not match the current input. Please send again.")
     elif answers:
-        raise HTTPException(400, "缺少本机模型回合凭据")
+        raise HTTPException(400, "Missing local model turn credentials")
     if len(answers) > _LOCAL_PROXY_MAX_STEPS:
-        raise HTTPException(422, "本机模型调用步骤过多,已停止本轮")
+        raise HTTPException(422, "Too many local model calls; this turn was stopped")
     total_chars = 0
     for answer in answers:
         if len(answer.content) > _LOCAL_PROXY_MAX_OUTPUT_CHARS:
-            raise HTTPException(413, "本机模型单次输出过大")
+            raise HTTPException(413, "A single local model output is too large")
         total_chars += len(answer.content)
     if total_chars > 600_000:
-        raise HTTPException(413, "本机模型本轮累计输出过大")
+        raise HTTPException(413, "Total local model output for this turn is too large")
     return current_revision, expected_flow
 
 
@@ -344,10 +344,10 @@ def api_send_code(req: SendCodeReq, request: Request):
     ip = costguard.client_ip(request)
     em = (req.email or "").strip().lower()
     if req.purpose not in ("register", "reset"):
-        raise HTTPException(400, "purpose 只能是 register 或 reset")
+        raise HTTPException(400, "purpose must be register or reset")
     if not costguard.hit_rate(f"sendcode:ip:{ip}", 3600, _RL_CODE_IP) or \
        not costguard.hit_rate(f"sendcode:em:{em}", 86400, _RL_CODE_EM):
-        raise HTTPException(429, "发送过于频繁,请稍后再试")
+        raise HTTPException(429, "Too many code requests. Please try again later.")
     return auth.send_email_code(req.email, purpose=req.purpose)
 
 
@@ -356,9 +356,9 @@ def api_reset_password(req: ResetPasswordReq):
     """忘记密码:邮箱验证码(purpose=reset)+ 新密码。验证码即邮箱所有权证明;
     重置成功同时吊销该用户全部存活 token(旧设备立即失效),需重新登录。"""
     if not auth.verify_email_code(req.email, req.code, purpose="reset"):
-        raise HTTPException(400, "验证码不对或已过期")
+        raise HTTPException(400, "The verification code is incorrect or has expired")
     if not auth.reset_password(req.email, req.new_password):
-        raise HTTPException(404, "该邮箱未注册")
+        raise HTTPException(404, "This email is not registered")
     return {"ok": True}
 
 
@@ -366,7 +366,7 @@ def api_reset_password(req: ResetPasswordReq):
 def api_register(req: RegisterReq):
     """注册:邮箱 + 验证码 + 密码(可选用户名)。验证码对 → 建号(邮箱已验证)→ 返回 token + user。"""
     if not auth.verify_email_code(req.email, req.code, purpose="register"):
-        raise HTTPException(400, "验证码不对或已过期")
+        raise HTTPException(400, "The verification code is incorrect or has expired")
     user = auth.create_user(req.email, req.password, req.username, req.display_name, email_verified=True)
     token = auth.issue_token(user["id"])
     return {"token": token, "user": user}
@@ -380,10 +380,10 @@ def api_login(req: LoginReq, request: Request):
     ident = (req.identifier or "").strip().lower()
     if not costguard.hit_rate(f"login:ip:{ip}", 900, _RL_LOGIN_IP) or \
        not costguard.hit_rate(f"login:id:{ident}", 900, _RL_LOGIN_ID):
-        raise HTTPException(429, "尝试过于频繁,请 15 分钟后再试")
+        raise HTTPException(429, "Too many attempts. Please try again in 15 minutes.")
     user = auth.authenticate(req.identifier, req.password)
     if not user:
-        raise HTTPException(401, "邮箱/用户名或密码错误")
+        raise HTTPException(401, "Incorrect email/username or password")
     token = auth.issue_token(user["id"])
     return {"token": token, "user": user}
 
@@ -392,7 +392,7 @@ def api_login(req: LoginReq, request: Request):
 def api_set_role(req: SetRoleReq, actor: dict = Depends(require_role("superadmin"))):
     """superadmin 把某用户设成 admin / user。需 superadmin。"""
     if not auth.set_user_role(req.user, req.role):
-        raise HTTPException(404, f"找不到用户:{req.user}")
+        raise HTTPException(404, f"User not found: {req.user}")
     return {"ok": True, "user": req.user, "role": req.role}
 
 
@@ -403,7 +403,7 @@ def api_operator_local_proxy_access(
 ):
     """仅指定 superadmin 可按账户开关 Codex 本机反代能力;默认关闭。"""
     if not auth.set_local_proxy_enabled(req.user, req.enabled):
-        raise HTTPException(404, f"找不到用户:{req.user}")
+        raise HTTPException(404, f"User not found: {req.user}")
     return {"ok": True, "user": req.user, "enabled": req.enabled}
 
 
@@ -436,7 +436,7 @@ def api_me(user: dict | None = Depends(current_user_dep)):
 def api_my_sessions(user: dict | None = Depends(current_user_dep)):
     """「我的存档」:列出当前用户的会话(跨设备可见)。需登录。"""
     if user is None:
-        raise HTTPException(401, "请先登录")
+        raise HTTPException(401, "Please log in first")
     return storage.list_sessions(user_id=user["id"])
 
 
@@ -448,10 +448,10 @@ class DisplayNameReq(BaseModel):
 def api_my_display_name(req: DisplayNameReq, user: dict | None = Depends(current_user_dep)):
     """设置昵称(登录后无昵称时前端强制走这里;之后也可改)。1-24 字,去首尾空白。"""
     if user is None:
-        raise HTTPException(401, "请先登录")
+        raise HTTPException(401, "Please log in first")
     nm = (req.display_name or "").strip()
     if not nm or len(nm) > 24:
-        raise HTTPException(400, "昵称需为 1-24 个字符")
+        raise HTTPException(400, "Display name must be 1-24 characters")
     pool = auth.get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute("update users set display_name = %s where id = %s::uuid", (nm, user["id"]))
@@ -467,13 +467,13 @@ def api_my_avatar(req: AvatarReq, user: dict | None = Depends(current_user_dep))
     """上传/更换头像。前端已做居中裁方+缩放(256×256 JPEG);服务端只收 data URI 并设上限,
     防绕过前端直接塞大图。存 users.avatar(DB 持久;Render 磁盘易失不可存盘)。"""
     if user is None:
-        raise HTTPException(401, "请先登录")
+        raise HTTPException(401, "Please log in first")
     a = (req.avatar or "").strip()
     allowed = ("data:image/jpeg;base64,", "data:image/png;base64,", "data:image/webp;base64,")
     if not a.startswith(allowed):
-        raise HTTPException(400, "头像格式不支持(仅 jpeg/png/webp 的 data URI)")
+        raise HTTPException(400, "Unsupported avatar format (only jpeg/png/webp data URIs)")
     if len(a) > 200_000:   # 256² JPEG 一般 ~20KB;200KB 已是宽限,超出说明绕过了前端压缩
-        raise HTTPException(400, "头像过大,请重新选择(会自动压缩到 256×256)")
+        raise HTTPException(400, "Avatar is too large. Please choose it again (it is automatically compressed to 256x256).")
     pool = auth.get_pool()
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute("update users set avatar = %s where id = %s::uuid", (a, user["id"]))
@@ -589,7 +589,7 @@ async def _guarded_llm(request: Request, fn, *, fail_msg: str):
     except Exception:
         await asyncio.to_thread(costguard.record, res, {})
         log.exception("%s (path=%s)", fail_msg, request.url.path)
-        raise HTTPException(500, fail_msg + ",请稍后再试")   # 对外中性文案,细节进日志(P2-9)
+        raise HTTPException(500, fail_msg + ". Please try again later.")   # 对外中性文案,细节进日志(P2-9)
     await asyncio.to_thread(costguard.record, res, usage)
     return out
 
@@ -597,17 +597,17 @@ async def _guarded_llm(request: Request, fn, *, fail_msg: str):
 def _require_login_when_auth(user: dict | None) -> None:
     """AUTH 开时烧钱端点拒匿名(AUTH 关 = 本地开发,不拦)。"""
     if auth.enabled() and user is None:
-        raise HTTPException(401, "请先登录")
+        raise HTTPException(401, "Please log in first")
 
 
 @app.post("/api/identify")
 async def api_identify(req: TextReq, request: Request, user: dict | None = Depends(current_user_dep)):
     """散文设定 → 角色 Card V2。"""
     if not req.text.strip():
-        raise HTTPException(400, "设定文字不能为空")
+        raise HTTPException(400, "Character description cannot be empty")
     _require_login_when_auth(user)
     owner = _write_owner(user)
-    card = await _guarded_llm(request, lambda: identify(req.text, hint=req.hint), fail_msg="识别失败")
+    card = await _guarded_llm(request, lambda: identify(req.text, hint=req.hint), fail_msg="Recognition failed")
     try:
         storage.save_library("characters", card.data.name, card.model_dump(), user_id=owner)
     except Exception:
@@ -619,10 +619,10 @@ async def api_identify(req: TextReq, request: Request, user: dict | None = Depen
 async def api_identify_world(req: TextReq, request: Request, user: dict | None = Depends(current_user_dep)):
     """世界观文字 → 多条带关键词的世界书条目。"""
     if not req.text.strip():
-        raise HTTPException(400, "世界观文字不能为空")
+        raise HTTPException(400, "World setting text cannot be empty")
     _require_login_when_auth(user)
     owner = _write_owner(user)
-    world = await _guarded_llm(request, lambda: identify_worldbook(req.text, hint=req.hint), fail_msg="识别失败")
+    world = await _guarded_llm(request, lambda: identify_worldbook(req.text, hint=req.hint), fail_msg="Recognition failed")
     try:
         storage.save_library("worlds", world.name, world.model_dump(), user_id=owner)
     except Exception:
@@ -634,10 +634,10 @@ async def api_identify_world(req: TextReq, request: Request, user: dict | None =
 async def api_identify_story(req: TextReq, request: Request, user: dict | None = Depends(current_user_dep)):
     """故事书文字 → 时间线 / 主线 / 可触发事件节点。"""
     if not req.text.strip():
-        raise HTTPException(400, "故事书文字不能为空")
+        raise HTTPException(400, "Story book text cannot be empty")
     _require_login_when_auth(user)
     owner = _write_owner(user)
-    story = await _guarded_llm(request, lambda: identify_storybook(req.text, hint=req.hint), fail_msg="识别失败")
+    story = await _guarded_llm(request, lambda: identify_storybook(req.text, hint=req.hint), fail_msg="Recognition failed")
     try:
         storage.save_library("stories", story.title, story.model_dump(), user_id=owner)
     except Exception:
@@ -649,10 +649,10 @@ async def api_identify_story(req: TextReq, request: Request, user: dict | None =
 async def api_identify_player(req: TextReq, request: Request, user: dict | None = Depends(current_user_dep)):
     """玩家设定 → PlayerCard。"""
     if not req.text.strip():
-        raise HTTPException(400, "玩家设定不能为空")
+        raise HTTPException(400, "Player description cannot be empty")
     _require_login_when_auth(user)
     owner = _write_owner(user)
-    player = await _guarded_llm(request, lambda: identify_player(req.text, hint=req.hint), fail_msg="识别失败")
+    player = await _guarded_llm(request, lambda: identify_player(req.text, hint=req.hint), fail_msg="Recognition failed")
     try:
         storage.save_library("players", player.name, player.model_dump(), user_id=owner)
     except Exception:
@@ -671,7 +671,7 @@ async def api_build_card(req: BuildCardReq, request: Request, user: dict | None 
     return await _guarded_llm(request, lambda: build_card(req.kind, req.messages, req.draft, req.seed,
                                                           phase=req.phase, threshold=req.threshold,
                                                           refs=req.refs),
-                              fail_msg="建卡失败")
+                              fail_msg="Card building failed")
 
 
 @app.post("/api/identify_auto")
@@ -681,20 +681,20 @@ async def api_identify_auto(req: AutoReq, request: Request, user: dict | None = 
     返回 {kind, confidence, reason, data}。前端据 kind 放进对应卡槽;判错时可带 kind 重调改判。
     """
     if not req.text.strip():
-        raise HTTPException(400, "上传内容不能为空")
+        raise HTTPException(400, "Uploaded content cannot be empty")
     _require_login_when_auth(user)
     owner = _write_owner(user)
-    out = await _guarded_llm(request, lambda: identify_auto(req.text, kind=req.kind), fail_msg="识别失败")
+    out = await _guarded_llm(request, lambda: identify_auto(req.text, kind=req.kind), fail_msg="Recognition failed")
     kind, data = out["kind"], out["data"]
     try:
         if kind == "character":
-            storage.save_library("characters", (data.get("data") or {}).get("name") or "角色", data, user_id=owner)
+            storage.save_library("characters", (data.get("data") or {}).get("name") or "Character", data, user_id=owner)
         elif kind == "world":
-            storage.save_library("worlds", data.get("name") or "世界书", data, user_id=owner)
+            storage.save_library("worlds", data.get("name") or "World Book", data, user_id=owner)
         elif kind == "story":
-            storage.save_library("stories", data.get("title") or "故事书", data, user_id=owner)
+            storage.save_library("stories", data.get("title") or "Story Book", data, user_id=owner)
         elif kind == "player":
-            storage.save_library("players", data.get("name") or "玩家", data, user_id=owner)
+            storage.save_library("players", data.get("name") or "Player", data, user_id=owner)
     except Exception:
         log.exception("identify_auto 入库失败")  # 入库失败不影响返回识别结果
     return out
@@ -711,20 +711,20 @@ async def api_upload(request: Request, filename: str = "upload.txt",
     _require_login_when_auth(user)   # AUTH_ENABLED=1 时匿名 401;关时 no-op
     ip = costguard.client_ip(request)
     if not costguard.hit_rate(f"upload:ip:{ip}", 3600, _RL_UPLOAD_IP):
-        raise HTTPException(429, "上传过于频繁,请稍后再试")
+        raise HTTPException(429, "Too many uploads. Please try again later.")
     cl = request.headers.get("content-length")
     if cl and cl.isdigit() and int(cl) > _UPLOAD_MAX_BYTES:
-        raise HTTPException(413, "文件过大(上限 2MB)")
+        raise HTTPException(413, "File is too large (2MB max)")
     raw = await request.body()
     if not raw:
-        raise HTTPException(400, "空文件")
+        raise HTTPException(400, "The file is empty")
     if len(raw) > _UPLOAD_MAX_BYTES:
-        raise HTTPException(413, "文件过大(上限 2MB)")
+        raise HTTPException(413, "File is too large (2MB max)")
     try:
         text = extract_text_from_file(filename, raw)
     except Exception:
         log.exception("upload 解析失败 (filename=%s)", filename)
-        raise HTTPException(500, "读取失败,请确认文件格式")
+        raise HTTPException(500, "Could not read the file. Please check the file format.")
     return {"text": text}
 
 
@@ -733,34 +733,34 @@ async def api_chat(req: ChatReq, request: Request, user: dict | None = Depends(c
     """与角色对话。历史由后端按 session_id 维护,前端只传当轮输入。
     AUTH 开时拒匿名 + 过 costguard(P0-2:此前匿名可无上限烧 key)。"""
     if not req.user.strip():
-        raise HTTPException(400, "消息不能为空")
+        raise HTTPException(400, "Message cannot be empty")
     _require_login_when_auth(user)
     auth.authorize_session(req.session_id, user)  # 归属闸(AUTH 关时 no-op):防跨用户污染会话/记忆
     text = await _guarded_llm(request, lambda: reply(req.card, req.session_id, req.user, req.world),
-                              fail_msg="对话失败")
+                              fail_msg="Chat failed")
     return {"reply": text}
 
 
 def _fallback_turn_dict(req: StoryTurnReq, e: Exception) -> dict:
     """story_turn 自身抛异常时的端点级保底回合(题材中性,留在故事内)。"""
     first = req.characters[0]
-    name = first.data.name or "旁白"
+    name = first.data.name or "Narrator"
     cid = first.data.character_id or name
-    action = req.user.strip() or req.selected_choice.strip() or "观察当前局势"
+    action = req.user.strip() or req.selected_choice.strip() or "Observe the current situation"
     return {
-        "narration": "故事引擎遇到了未预料的问题,已保留当前输入并切换为保底回合。你可以继续操作,不用重开。",
+        "narration": "The story engine ran into an unexpected problem. Your input has been kept and this is a fallback turn. You can keep playing; no need to restart.",
         "messages": [{
             "character_id": cid,
             "name": name,
-            "text": f"她短暂停顿,把话题拉回现场:「刚才这一步先记下。我们从你说的“{action[:80]}”继续。」",
+            "text": f"{name} pauses for a moment and brings things back to the scene: \"Let's hold on to that last step. We'll pick up from '{action[:80]}'.\"",
         }],
         "choices": [
-            {"id": "retry_scene", "label": "重新整理当前场景", "intent": "observe", "description": "降低跑偏"},
-            {"id": "clarify_action", "label": "换一种说法继续行动", "intent": "custom", "description": "保留自由输入"},
-            {"id": "ask_character", "label": "让角色确认已知信息", "intent": "ask", "description": "补足事实边界"},
+            {"id": "retry_scene", "label": "Take stock of the current scene", "intent": "observe", "description": "Get the story back on track"},
+            {"id": "clarify_action", "label": "Rephrase and keep going", "intent": "custom", "description": "Free input stays available"},
+            {"id": "ask_character", "label": "Ask the character to confirm what is known", "intent": "ask", "description": "Fill in the facts"},
         ],
         "state_update": {},
-        "memory_write": [{"kind": "note", "text": f"保底回合:{e}", "importance": 2}],
+        "memory_write": [{"kind": "note", "text": f"Fallback turn: {e}", "importance": 2}],
         "triggered_events": [],
         "state": RuntimeState().model_dump(),
         "usage": {},
@@ -773,7 +773,7 @@ async def api_story_turn(req: StoryTurnReq, request: Request,
                          user: dict | None = Depends(current_user_dep)):
     """v2 故事回合(异步):多角色 + 世界书 + 故事书 + 玩家卡 + 状态/选项/记忆。非流式,作降级路径。"""
     if not req.characters:
-        raise HTTPException(400, "至少需要一个角色卡")
+        raise HTTPException(400, "At least one character card is required")
     # 归属闸(AUTH_ENABLED=0 时 no-op):无主→认领给当前用户;他人有主→拒。放 try 之前,401/403 不被保底吞。
     await asyncio.to_thread(auth.authorize_session, req.session_id, user)
     # Phase 0 成本闸:全局熔断 + 限流 + 预扣(COST_GUARD_ENABLED=0 时全程 no-op)。
@@ -808,7 +808,7 @@ async def api_story_turn_stream(req: StoryTurnReq, request: Request,
     - error:{"type":"error","turn":{...保底...}} story_turn 抛异常时的端点级保底。
     """
     if not req.characters:
-        raise HTTPException(400, "至少需要一个角色卡")
+        raise HTTPException(400, "At least one character card is required")
     # 归属闸 + Phase 0 成本闸:开流前先过(401/403/503/429 在这里抛,不进 SSE 流);两个门控关时 no-op。
     await asyncio.to_thread(auth.authorize_session, req.session_id, user)
     res = await asyncio.to_thread(costguard.preflight, costguard.client_ip(request))
@@ -863,7 +863,7 @@ async def api_local_proxy_story_turn(req: LocalProxyTurnReq,
     """授权用户专用:服务端编排故事引擎,每个 LLM 调用交给浏览器去请求玩家本机反代。"""
     actor = _require_local_proxy(user)
     if not req.turn.characters:
-        raise HTTPException(400, "至少需要一个角色卡")
+        raise HTTPException(400, "At least one character card is required")
     await asyncio.to_thread(auth.authorize_session, req.turn.session_id, actor)
     snapshot = await asyncio.to_thread(storage.load_session, req.turn.session_id)
     turn_payload = req.turn.model_dump(mode="json")
@@ -886,7 +886,7 @@ async def api_local_proxy_story_turn(req: LocalProxyTurnReq,
             )
     except DeferredLLMCall as call:
         if call.index >= _LOCAL_PROXY_MAX_STEPS:
-            raise HTTPException(422, "本机模型调用步骤过多,已停止本轮")
+            raise HTTPException(422, "Too many local model calls; this turn was stopped")
         return {
             "status": "needs_llm",
             "revision": revision,
@@ -897,7 +897,7 @@ async def api_local_proxy_story_turn(req: LocalProxyTurnReq,
         raise HTTPException(409, str(e))
     except Exception:
         log.exception("local proxy story_turn failed (session=%s)", req.turn.session_id)
-        raise HTTPException(502, "本机模型回合处理失败,请重试")
+        raise HTTPException(502, "Failed to process the local model turn. Please try again.")
     return {"status": "done", "turn": _display_clean(out.model_dump())}
 
 
@@ -910,11 +910,11 @@ async def api_local_proxy_reroll(req: LocalProxyRerollReq,
     current = await asyncio.to_thread(storage.load_session, req.session_id)
     reroll = current.get("_reroll")
     if not isinstance(reroll, dict) or not isinstance(reroll.get("snapshot"), dict):
-        raise HTTPException(400, "当前没有可重新生成的回合")
+        raise HTTPException(400, "There is no turn to regenerate right now")
     art = current.get("artifacts") or reroll["snapshot"].get("artifacts") or {}
     raw_chars = art.get("characters") or []
     if not raw_chars:
-        raise HTTPException(400, "缺少角色卡快照,无法重新生成")
+        raise HTTPException(400, "Missing character card snapshot; cannot regenerate")
     try:
         characters = [CharacterCard(**c) for c in raw_chars]
         world = WorldBook(**art["world"]) if art.get("world") else None
@@ -922,7 +922,7 @@ async def api_local_proxy_reroll(req: LocalProxyRerollReq,
         player = PlayerCard(**art["player"]) if art.get("player") else None
     except Exception:
         log.exception("local proxy reroll 卡组快照解析失败 (session=%s)", req.session_id)
-        raise HTTPException(500, "卡组快照解析失败,请稍后再试")
+        raise HTTPException(500, "Failed to load the deck snapshot. Please try again later.")
 
     payload = {"session_id": req.session_id}
     revision, flow_id = _local_flow_context(
@@ -944,7 +944,7 @@ async def api_local_proxy_reroll(req: LocalProxyRerollReq,
             )
     except DeferredLLMCall as call:
         if call.index >= _LOCAL_PROXY_MAX_STEPS:
-            raise HTTPException(422, "本机模型调用步骤过多,已停止重生成")
+            raise HTTPException(422, "Too many local model calls; regeneration was stopped")
         return {
             "status": "needs_llm",
             "revision": revision,
@@ -955,7 +955,7 @@ async def api_local_proxy_reroll(req: LocalProxyRerollReq,
         raise HTTPException(409, str(e))
     except Exception:
         log.exception("local proxy reroll failed (session=%s)", req.session_id)
-        raise HTTPException(502, "本机模型重生成处理失败,请重试")
+        raise HTTPException(502, "Failed to process the local model regeneration. Please try again.")
     return {"status": "done", "turn": _display_clean(out.model_dump())}
 
 
@@ -970,11 +970,11 @@ async def api_reroll(req: ReRollReq, request: Request,
     data = await asyncio.to_thread(storage.load_session, req.session_id)
     reroll = data.get("_reroll")
     if not isinstance(reroll, dict) or not isinstance(reroll.get("snapshot"), dict):
-        raise HTTPException(400, "当前没有可重新生成的回合")
+        raise HTTPException(400, "There is no turn to regenerate right now")
     art = data.get("artifacts") or reroll["snapshot"].get("artifacts") or {}
     raw_chars = art.get("characters") or []
     if not raw_chars:
-        raise HTTPException(400, "缺少角色卡快照,无法重新生成")
+        raise HTTPException(400, "Missing character card snapshot; cannot regenerate")
     try:
         characters = [CharacterCard(**c) for c in raw_chars]  # 上限已解除:还原全部角色卡
         world = WorldBook(**art["world"]) if art.get("world") else None
@@ -982,7 +982,7 @@ async def api_reroll(req: ReRollReq, request: Request,
         player = PlayerCard(**art["player"]) if art.get("player") else None
     except Exception:
         log.exception("reroll 卡组快照解析失败 (session=%s)", req.session_id)
-        raise HTTPException(500, "卡组快照解析失败,请稍后再试")
+        raise HTTPException(500, "Failed to load the deck snapshot. Please try again later.")
     mode = reroll.get("mode") or art.get("mode") or "standard"
     # Phase 0 成本闸:重跑也烧 LLM,过闸(在回滚之前;COST_GUARD_ENABLED=0 时 no-op)。
     res = await asyncio.to_thread(costguard.preflight, costguard.client_ip(request))
@@ -1002,7 +1002,7 @@ async def api_reroll(req: ReRollReq, request: Request,
     except Exception:
         log.exception("reroll story_turn failed (session=%s)", req.session_id)
         await asyncio.to_thread(costguard.record, res, {})
-        raise HTTPException(500, "重新生成失败,请稍后再试")
+        raise HTTPException(500, "Regeneration failed. Please try again later.")
     await asyncio.to_thread(costguard.record, res, out.usage)
     return _display_clean(out.model_dump())
 
@@ -1019,7 +1019,7 @@ async def api_undo_last(req: ReRollReq, user: dict | None = Depends(current_user
     data = await asyncio.to_thread(storage.load_session, req.session_id)
     reroll = data.get("_reroll")
     if not isinstance(reroll, dict) or not isinstance(reroll.get("snapshot"), dict):
-        raise HTTPException(400, "当前没有可撤回的回合")
+        raise HTTPException(400, "There is no turn to undo right now")
     snap = reroll["snapshot"]
     await asyncio.to_thread(storage.save_session, req.session_id, snap)
     turns = snap.get("turns") or []
@@ -1047,11 +1047,11 @@ def api_delete_session(session_id: str, user: dict | None = Depends(current_user
     """删除一局存档(存档列表的删除)。删会话 + 级联 messages;深度模式向量数据(memory_vec)留作孤儿(无害)。"""
     if auth.enabled():
         if user is None:
-            raise HTTPException(401, "请先登录")
+            raise HTTPException(401, "Please log in first")
         owner = auth.session_owner(session_id)
         # 删是破坏性的:有主只 owner/super 能删;无主(遗留)只 super 能删 —— 不让任意登录用户删别人/遗留存档。
         if user.get("role") != "superadmin" and owner != user["id"]:
-            raise HTTPException(403, "无权删除该存档")
+            raise HTTPException(403, "You do not have permission to delete this save")
     return {"deleted": storage.delete_session(session_id)}
 
 
@@ -1076,7 +1076,7 @@ _LIB_KINDS = {"characters", "worlds", "stories", "players"}
 def api_library(kind: str, user: dict | None = Depends(current_user_dep)):
     """列出卡库:AUTH 开时 = 官方公共卡 + 当前用户私有卡(各带 official 标记);关时 = 旧全局。"""
     if kind not in _LIB_KINDS:
-        raise HTTPException(400, "kind 必须是 characters/worlds/stories/players")
+        raise HTTPException(400, "kind must be characters/worlds/stories/players")
     uid, legacy = _read_scope(user)
     return storage.list_library(kind, user_id=uid, legacy_all=legacy)
 
@@ -1090,22 +1090,22 @@ class LibSaveReq(BaseModel):
 def api_library_save(req: LibSaveReq, user: dict | None = Depends(current_user_dep)):
     """把一张卡存进卡库(建好/编辑过的卡完成时自动入库;上传识别的卡已在识别端点入库)。AUTH 开时存进当前用户私有库。"""
     if req.kind not in _LIB_KINDS:
-        raise HTTPException(400, "kind 必须是 characters/worlds/stories/players")
+        raise HTTPException(400, "kind must be characters/worlds/stories/players")
     owner = _write_owner(user)
     d = req.data or {}
     if req.kind == "characters":
-        name = (d.get("data") or {}).get("name") or "角色"
+        name = (d.get("data") or {}).get("name") or "Character"
     elif req.kind == "worlds":
-        name = d.get("name") or "世界书"
+        name = d.get("name") or "World Book"
     elif req.kind == "stories":
-        name = d.get("title") or "故事书"
+        name = d.get("title") or "Story Book"
     else:
-        name = d.get("name") or "玩家"
+        name = d.get("name") or "Player"
     try:
         storage.save_library(req.kind, name, d, user_id=owner)
     except Exception:
         log.exception("library/save 入库失败 (kind=%s name=%s)", req.kind, name)
-        raise HTTPException(500, "入库失败,请稍后再试")
+        raise HTTPException(500, "Failed to save to the library. Please try again later.")
     return {"saved": True, "name": storage.slug(name)}
 
 
@@ -1113,7 +1113,7 @@ def api_library_save(req: LibSaveReq, user: dict | None = Depends(current_user_d
 def api_delete_library(kind: str, name: str, user: dict | None = Depends(current_user_dep)):
     """从卡库删除一张卡(name 取自 list 返回的 stem)。AUTH 开时只能删自己的(官方卡仅 admin)。"""
     if kind not in _LIB_KINDS:
-        raise HTTPException(400, "kind 必须是 characters/worlds/stories/players")
+        raise HTTPException(400, "kind must be characters/worlds/stories/players")
     uid, legacy = _write_scope(user)
     return {"deleted": storage.delete_library(kind, name, user_id=uid,
                                               is_admin=bool(user and user.get("is_admin")), legacy_all=legacy)}
@@ -1144,9 +1144,9 @@ def api_list_presets(user: dict | None = Depends(current_user_dep)):
 @app.post("/api/presets")
 def api_save_preset(req: PresetReq, user: dict | None = Depends(current_user_dep)):
     if not req.name.strip():
-        raise HTTPException(400, "预设名不能为空")
+        raise HTTPException(400, "Preset name cannot be empty")
     if not req.characters:
-        raise HTTPException(400, "故事预设至少要一个角色卡")
+        raise HTTPException(400, "A story preset needs at least one character card")
     owner = _write_owner(user)
     storage.save_preset(req.name, req.model_dump(), user_id=owner)
     return {"saved": True, "name": storage.slug(req.name)}
@@ -1171,7 +1171,7 @@ class OperatorInjectReq(BaseModel):
     now: bool = False        # 仅 director:立即跑一回合,AI 当场采纳(不等玩家)
 
 
-async def _operator_advance(session_id: str, user: str = "（场景继续）") -> dict:
+async def _operator_advance(session_id: str, user: str = "(The scene continues)") -> dict:
     """运营者触发:立即用该局存档卡组跑一回合,AI 当场出内容。
     卡组复用 artifacts(同 reroll)。user 默认中性"场景继续"(导演 now 用);
     传入玩家输入则等于运营者以玩家身份发话(/api/operator/say 用)。"""
@@ -1179,7 +1179,7 @@ async def _operator_advance(session_id: str, user: str = "（场景继续）") -
     art = data.get("artifacts") or {}
     raw = art.get("characters") or []
     if not raw:
-        raise HTTPException(400, "该局还没有卡组快照(玩家未正式开局?),无法立即推进")
+        raise HTTPException(400, "This game has no deck snapshot yet (has the player started?); cannot advance now")
     try:
         characters = [CharacterCard(**c) for c in raw]
         world = WorldBook(**art["world"]) if art.get("world") else None
@@ -1187,7 +1187,7 @@ async def _operator_advance(session_id: str, user: str = "（场景继续）") -
         player = PlayerCard(**art["player"]) if art.get("player") else None
     except Exception:
         log.exception("operator advance 卡组快照解析失败 (session=%s)", session_id)
-        raise HTTPException(500, "卡组快照解析失败")
+        raise HTTPException(500, "Failed to load the deck snapshot")
     out = await story_turn(session_id=session_id, characters=characters, user=user,
                            world=world, story=story, player=player, mode=art.get("mode") or "standard")
     return out.model_dump()
@@ -1202,7 +1202,7 @@ async def api_operator_inject(req: OperatorInjectReq, _actor: dict = Depends(req
     direct/narration 即时落地(不看 sticky/now);两路都写 operator_applied 留痕。"""
     content = req.content.strip()
     if not content:
-        raise HTTPException(400, "内容不能为空")
+        raise HTTPException(400, "Content cannot be empty")
     data = await asyncio.to_thread(storage.load_session, req.session_id)
     mode = req.mode if req.mode in ("director", "direct", "narration") else "director"
 
@@ -1310,14 +1310,14 @@ async def api_operator_oc_start(req: OCStartReq, _actor: dict = Depends(require_
     返回 {session_id, character, turn};该会话即普通 session,可在「对局」里继续(/api/operator/say)+ 导演注入。"""
     idx_file = OC_DIR / "index.json"
     if not idx_file.is_file():
-        raise HTTPException(404, "没有 OC 数据")
+        raise HTTPException(404, "No OC data")
     entries = json.loads(idx_file.read_text(encoding="utf-8"))
     if not (0 <= req.index < len(entries)):
-        raise HTTPException(400, "OC index 越界")
+        raise HTTPException(400, "OC index out of range")
     e = entries[req.index]
     card_path = (OC_DIR / e["card"]) if e.get("card") else None
     if not (card_path and card_path.is_file()):
-        raise HTTPException(400, f"该 OC 没有引擎角色卡(card.md):{e.get('character', '')}")
+        raise HTTPException(400, f"This OC has no engine character card (card.md): {e.get('character', '')}")
     card = parse_character(card_path.read_text(encoding="utf-8"))
     session_id = "octest-" + uuid.uuid4().hex[:12]
     out = await story_turn(session_id=session_id, characters=[card], user="", mode="standard")
@@ -1334,7 +1334,7 @@ async def api_operator_say(req: OperatorSayReq, _actor: dict = Depends(require_r
     """以【玩家】身份给某局发一句、推进一回合(用该局存档卡组)。需 operator 权限(admin/superadmin 登录)。
     给运营者在控制台直接测试对话用;与导演注入(/inject)互补:say=玩家行动,inject=幕后导演。"""
     if not req.user.strip():
-        raise HTTPException(400, "玩家输入不能为空")
+        raise HTTPException(400, "Player input cannot be empty")
     return await _operator_advance(req.session_id, user=req.user.strip())
 
 
@@ -1383,7 +1383,7 @@ def api_operator_assign_session(req: AssignSessionReq, _actor: dict = Depends(re
     """把某局存档归到某用户(账户系统迁移老存档)。需 operator 权限(admin/superadmin 登录)。"""
     uid = auth.find_user_id(req.user)
     if not uid:
-        raise HTTPException(404, f"找不到用户:{req.user}")
+        raise HTTPException(404, f"User not found: {req.user}")
     return {"assigned": storage.assign_session_owner(req.session_id, uid), "user_id": uid}
 
 
@@ -1392,7 +1392,7 @@ def api_operator_assign_card(req: AssignCardReq, _actor: dict = Depends(require_
     """把某张(原全局/官方)卡归到某用户;user 留空=设回官方公共。需 operator 权限(admin/superadmin 登录)。"""
     uid = auth.find_user_id(req.user) if req.user.strip() else None
     if req.user.strip() and not uid:
-        raise HTTPException(404, f"找不到用户:{req.user}")
+        raise HTTPException(404, f"User not found: {req.user}")
     return {"assigned": storage.assign_card_owner(req.kind, req.name, uid), "user_id": uid}
 
 
@@ -1401,7 +1401,7 @@ def api_operator_assign_preset(req: AssignPresetReq, _actor: dict = Depends(requ
     """把某个(原全局/官方)预设归到某用户;user 留空=设回官方公共。需 admin。"""
     uid = auth.find_user_id(req.user) if req.user.strip() else None
     if req.user.strip() and not uid:
-        raise HTTPException(404, f"找不到用户:{req.user}")
+        raise HTTPException(404, f"User not found: {req.user}")
     return {"assigned": storage.assign_preset_owner(req.name, uid), "user_id": uid}
 
 
@@ -1428,17 +1428,17 @@ async def api_operator_assign_oc(req: AssignOcReq, _actor: dict = Depends(requir
     """把某个 OC 分发给用户:用 OC 引擎卡开一局(生成开场)、存档归属设为该用户 → 他在「我的存档」即可续玩。需 superadmin。"""
     uid = auth.find_user_id(req.user)
     if not uid:
-        raise HTTPException(404, f"找不到用户:{req.user}")
+        raise HTTPException(404, f"User not found: {req.user}")
     idx_file = OC_DIR / "index.json"
     if not idx_file.is_file():
-        raise HTTPException(404, "没有 OC 数据")
+        raise HTTPException(404, "No OC data")
     entries = json.loads(idx_file.read_text(encoding="utf-8"))
     if not (0 <= req.index < len(entries)):
-        raise HTTPException(400, "OC index 越界")
+        raise HTTPException(400, "OC index out of range")
     e = entries[req.index]
     card_path = (OC_DIR / e["card"]) if e.get("card") else None
     if not (card_path and card_path.is_file()):
-        raise HTTPException(400, f"该 OC 没有引擎角色卡(card.md):{e.get('character', '')}")
+        raise HTTPException(400, f"This OC has no engine character card (card.md): {e.get('character', '')}")
     card = parse_character(card_path.read_text(encoding="utf-8"))
     session_id = "oc-" + uuid.uuid4().hex[:12]
     await asyncio.to_thread(auth.claim_session, session_id, uid)   # 先把空存档归到该用户
@@ -1450,7 +1450,7 @@ async def api_operator_assign_oc(req: AssignOcReq, _actor: dict = Depends(requir
 # 各 /api/operator/* 端点的 require_role(admin/superadmin 账号登录)。
 def _load_console_html() -> str:
     p = ROOT / "operator_console.html"
-    return p.read_text(encoding="utf-8") if p.is_file() else "<h1>控制台文件缺失</h1>"
+    return p.read_text(encoding="utf-8") if p.is_file() else "<h1>Operator console file is missing</h1>"
 
 
 @app.get("/operator", response_class=HTMLResponse)
@@ -1458,7 +1458,7 @@ def operator_console():
     """后台控制台(admin/superadmin)。页面不做鉴权,真正的闸是各 /api/operator/* 端点按角色校验。
     可达条件:开了账户系统(AUTH_ENABLED),由登录用户的角色决定能做什么;OPERATOR_TOKEN 后门已废。"""
     if not auth.enabled():
-        raise HTTPException(404, "未启用")
+        raise HTTPException(404, "Not enabled")
     return HTMLResponse(_load_console_html())
 
 

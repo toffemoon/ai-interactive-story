@@ -23,16 +23,16 @@ function todayYmd() {
 const TANGMU_IMG = "/home/tangmu01.png";
 const BG_IMG = "/home/background.png";
 const GREETING_NEW =
-  "初次见面。我是糖沐,这家书坊的店员。你写的故事、想见的人,都能在这儿活过来——先挑一本读读,还是先跟我说说话?";
-const GREETING_BACK = "欢迎回来。上次那段还悬着呢——接着往下,还是换一本新的?";
+  "Nice to meet you. I'm Tangmu, and I work here at the bookshop. The stories you write and the people you want to meet can all come to life here. Want to pick a book first, or chat with me for a bit?";
+const GREETING_BACK = "Welcome back. We left things on a cliffhanger last time. Pick up where you left off, or try a new one?";
 // 兜底糖沐卡:presets 取不到时(后端抖动/无该预设)仍能聊,不卡在「正在把糖沐请出来」。
 const FALLBACK_TANGMU = {
   spec: "chara_card_v2",
   spec_version: "2.0",
   data: {
-    name: "糖沐",
-    persona: "沐言书坊的店员、看板娘。温和爱书,话里带点暖意,常引着客人挑一本故事读。",
-    description: "这家「就是网站」的书店咖啡馆的店员,带你认识沐言。",
+    name: "Tangmu",
+    persona: "Clerk and resident face of Muyan Bookshop. Gentle and bookish, with a warm way of talking; often nudges guests toward a story to read.",
+    description: "A clerk at this bookstore café (which is the website itself) who shows you around Muyan.",
   },
 };
 const LINE_REVEAL_FROM = { opacity: 0, y: 4 };
@@ -110,7 +110,7 @@ export default function Home({ testMode = false }) {
   // 当前台词优先级:思考态 > 回退反悔(backLine) > 上传头像后的回应(avatarLine) > AI 自适应/闲聊(obAiLine) > 静态脚本(line)。
   const obHasAvatar = !!(obCardAvatar || (obEcho && obEcho.avatar));
   const obLine = obThinking
-    ? "（想一下……）"
+    ? "(Let me think…)"
     : obBeat
     ? obViaBack && obBeat.backLine
       ? obBeat.backLine(obEcho)
@@ -123,7 +123,7 @@ export default function Home({ testMode = false }) {
   // 当前姿势的「头中心」锚点(入场帧 / 差分 emo);用于把气泡贴到头侧、齐头高。
   const headAnchor = introFrame ? INTRO_HEAD[obIntro] : obEmo ? HEAD[obEmo] : null;
 
-  const displayName = cardName(card) || (isTangmu ? "糖沐" : "角色");
+  const displayName = cardName(card) || (isTangmu ? "Tangmu" : "Character");
   const image = introFrame ? introFrame.img : obBeat ? PORTRAIT[obEmo] || TANGMU_IMG : isTangmu ? TANGMU_IMG : cardImageOf(card);
   const hasSaves = !!game || serverSaves.length > 0;
   const isReturning = hasSaves || messages.length > 0;
@@ -213,7 +213,7 @@ export default function Home({ testMode = false }) {
         let t = null;
         for (const p of list) {
           const chars = (p.data && p.data.characters) || [];
-          const hit = chars.find((c) => cardName(c).includes("糖沐"));
+          const hit = chars.find((c) => cardName(c).includes("糖沐") || cardName(c).includes("Tangmu")); // i18n: kept, logic literal (matches backend preset name)
           if (hit) {
             t = hit;
             break;
@@ -321,9 +321,9 @@ export default function Home({ testMode = false }) {
     (async () => {
       let msg = null;
       try {
-        const card = { spec: "chara_card_v2", spec_version: "2.0", data: { name: "糖沐", description: AI_PERSONA, scenario: obBeat.msg(obEcho) } };
+        const card = { spec: "chara_card_v2", spec_version: "2.0", data: { name: "Tangmu", description: AI_PERSONA, scenario: obBeat.msg(obEcho) } };
         const r = await Promise.race([
-          postJSON("/api/chat", { card, session_id: newSessionId(), user: obEcho.taste || obEcho.name || "新客", world: null }),
+          postJSON("/api/chat", { card, session_id: newSessionId(), user: obEcho.taste || obEcho.name || "New guest", world: null }),
           new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000)),
         ]);
         msg = ((r && r.reply) || "").trim() || null;
@@ -355,9 +355,9 @@ export default function Home({ testMode = false }) {
     setInput("");
     try {
       const r = await postJSON("/api/chat", { card, session_id: sessionId, user: text, world: null });
-      setMessages((m) => [...m, { who: displayName, text: (r && r.reply) || "(无回应)", t: Date.now() }]);
+      setMessages((m) => [...m, { who: displayName, text: (r && r.reply) || "(No response)", t: Date.now() }]);
     } catch (e) {
-      setMessages((m) => [...m, { who: displayName, text: "(连接出错:" + e.message + ")", t: Date.now() }]);
+      setMessages((m) => [...m, { who: displayName, text: "(Connection error: " + e.message + ")", t: Date.now() }]);
     } finally {
       setBusy(false);
     }
@@ -425,7 +425,7 @@ export default function Home({ testMode = false }) {
       setObThinking(true);
       let reply = null;
       try {
-        const card = { spec: "chara_card_v2", spec_version: "2.0", data: { name: "糖沐", description: AI_PERSONA, scenario: beat.ai.scenario(obEcho) } };
+        const card = { spec: "chara_card_v2", spec_version: "2.0", data: { name: "Tangmu", description: AI_PERSONA, scenario: beat.ai.scenario(obEcho) } };
         const r = await Promise.race([
           postJSON("/api/chat", { card, session_id: newSessionId(), user: v, world: null }),
           new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000)),
@@ -462,7 +462,7 @@ export default function Home({ testMode = false }) {
     setObThinking(true);
     let reply = null;
     try {
-      const card = { spec: "chara_card_v2", spec_version: "2.0", data: { name: "糖沐", description: AI_PERSONA, scenario: CHAT_SCENARIO } };
+      const card = { spec: "chara_card_v2", spec_version: "2.0", data: { name: "Tangmu", description: AI_PERSONA, scenario: CHAT_SCENARIO } };
       const r = await Promise.race([
         postJSON("/api/chat", { card, session_id: newSessionId(), user: v, world: null }),
         new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 12000)),
@@ -542,7 +542,7 @@ export default function Home({ testMode = false }) {
 
   function libItemName(it) {
     const d = (it && it.data && it.data.data) || (it && it.data) || {};
-    return d.name || it.name || "未命名";
+    return d.name || it.name || "Untitled";
   }
 
   function renderSwitchOption(entry) {
@@ -551,7 +551,7 @@ export default function Home({ testMode = false }) {
       return (
         <button type="button" className="home-switch-item" onClick={pickTangmu}>
           <span className="home-switch-av" style={{ backgroundImage: `url("${TANGMU_IMG}")` }} />
-          <span className="t-ui-sm">糖沐 · 看板娘(默认)</span>
+          <span className="t-ui-sm">Tangmu · Shop host (default)</span>
         </button>
       );
     }
@@ -603,9 +603,9 @@ export default function Home({ testMode = false }) {
             }
           >
             <div className="home-ob-bubble-head">
-              <span className="home-dlg-name t-kai">糖沐</span>
+              <span className="home-dlg-name t-kai">Tangmu</span>
               {obBeat && (
-                <button className="home-ob-skip" onClick={() => endOnboarding()} disabled={obThinking} title="跳过引导,直接进店">跳过</button>
+                <button className="home-ob-skip" onClick={() => endOnboarding()} disabled={obThinking} title="Skip the tour and head straight in">Skip</button>
               )}
             </div>
             <p className="home-ob-line t-read" aria-live="polite" aria-busy={obThinking}>
@@ -628,21 +628,21 @@ export default function Home({ testMode = false }) {
               advanceIntro();
             }
           }}
-          aria-label="继续新手引导"
+          aria-label="Continue onboarding"
           autoFocus
         />
       )}
       {/* 入场点击推进:太久没点冒出"点击继续"提示(闪烁),引导玩家点屏。 */}
       {introFrame && showIntroHint && (
-        <div className="home-ob-clickhint t-meta" aria-hidden="true">点击继续 ▾</div>
+        <div className="home-ob-clickhint t-meta" aria-hidden="true">Click to continue ▾</div>
       )}
 
       {/* 全屏:整屏点击捕获层(点任意处退出);只在全屏存在,不干扰常态交互、无冒泡竞态 */}
       {fullscreen && <div className="home-fs-catcher" onClick={() => setFullscreen(false)} aria-hidden="true" />}
       {/* 全屏退出角标(Esc / 点任意处 / 点这里 都可退) */}
       {fullscreen && (
-        <button className="home-exitfs t-meta" onClick={() => setFullscreen(false)} aria-label="退出全屏">
-          ✕ 退出全屏
+        <button className="home-exitfs t-meta" onClick={() => setFullscreen(false)} aria-label="Exit fullscreen">
+          ✕ Exit fullscreen
         </button>
       )}
 
@@ -672,8 +672,8 @@ export default function Home({ testMode = false }) {
               /* 新手引导态:底部只留输入框 + 选项 chip(台词在头侧气泡) */
               <div className="home-ob-tray">
                 {!!obHistory.length && (
-                  <button className="home-ob-back" onClick={obBack} disabled={obThinking} title="回上一步,重新填">
-                    ← 上一步
+                  <button className="home-ob-back" onClick={obBack} disabled={obThinking} title="Go back a step and redo it">
+                    ← Back
                   </button>
                 )}
                 {/* 输入框:所有引导拍常驻。field 拍=回答登记(走 AI 辨别);其余(导览/办卡)=跟糖沐说话(闲聊,不填卡、不推进导览)。 */}
@@ -685,12 +685,12 @@ export default function Home({ testMode = false }) {
                     disabled={obThinking}
                     placeholder={
                       obThinking
-                        ? "糖沐正想着怎么接…"
+                        ? "Tangmu is thinking of a reply…"
                         : obBeat.field === "name"
-                        ? "输入你的称呼…"
+                        ? "Enter your name…"
                         : obBeat.field === "taste"
-                        ? "随口说说…"
-                        : "想跟糖沐说点什么…"
+                        ? "Whatever comes to mind…"
+                        : "Say something to Tangmu…"
                     }
                     onChange={(e) => setObInput(e.target.value)}
                     onKeyDown={(e) => {
@@ -702,7 +702,7 @@ export default function Home({ testMode = false }) {
                     }}
                   />
                   <Button variant="primary" onClick={() => (obBeat.field ? obFieldSubmit() : obChatSubmit())} disabled={!obInput.trim() || obThinking}>
-                    {obThinking ? "…" : obBeat.field ? "好" : "说"}
+                    {obThinking ? "…" : obBeat.field ? "OK" : "Say"}
                   </Button>
                 </div>
                 {!!(obBeat.chips && obBeat.chips.length) && (
@@ -711,7 +711,7 @@ export default function Home({ testMode = false }) {
                       // 头像拍传了头像后,chip 文案随之变(＋传张头像→换一张 / 用字头就好→好了,继续)。
                       let label = c.label;
                       if (obBeat.id === "avatar" && (obCardAvatar || obEcho.avatar)) {
-                        label = c.upload ? "换一张" : "好了,继续";
+                        label = c.upload ? "Change it" : "Done, continue";
                       }
                       return (
                         <button key={i} className="home-ob-chip" onClick={() => obChip(c)} disabled={obThinking}>
@@ -726,11 +726,11 @@ export default function Home({ testMode = false }) {
               <>
                 <div className="home-actions">
                   <Button variant="primary" className="home-go" onClick={() => navigate("/explore")}>
-                    {isReturning ? "探索故事" : "开始故事"}
+                    {isReturning ? "Explore stories" : "Start a story"}
                   </Button>
                   {hasSaves && (
                     <Button variant="secondary" className="home-go" onClick={() => setSavesModal(true)}>
-                      继续故事
+                      Continue story
                     </Button>
                   )}
                 </div>
@@ -740,7 +740,7 @@ export default function Home({ testMode = false }) {
                   <div className="home-dlg-head">
                     <span className="home-dlg-name t-kai">{displayName}</span>
                     <div className="home-dlg-tools">
-                      <button className="home-tool" onClick={openSwitcher} title="换个人聊" aria-label="换个人聊">
+                      <button className="home-tool" onClick={openSwitcher} title="Chat with someone else" aria-label="Chat with someone else">
                         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                           <circle cx="9" cy="8" r="3" />
                           <path d="M3.5 19c0-3 2.5-4.5 5.5-4.5" />
@@ -750,20 +750,20 @@ export default function Home({ testMode = false }) {
                           <path d="M21 19c0-2-1.8-3-4.5-3" />
                         </svg>
                       </button>
-                      <button className="home-tool" onClick={restart} disabled={busy} title="重开(清空这段对话)" aria-label="重开">⟳</button>
-                      <button className="home-tool" onClick={() => setLogOpen(true)} disabled={!messages.length} title="查看记录" aria-label="查看记录">≡</button>
-                      <button className="home-tool" onClick={() => setFullscreen(true)} title="全屏(只留背景+立绘,方便截图)" aria-label="全屏">⛶</button>
+                      <button className="home-tool" onClick={restart} disabled={busy} title="Restart (clear this conversation)" aria-label="Restart">⟳</button>
+                      <button className="home-tool" onClick={() => setLogOpen(true)} disabled={!messages.length} title="View log" aria-label="View log">≡</button>
+                      <button className="home-tool" onClick={() => setFullscreen(true)} title="Fullscreen (background and portrait only, for screenshots)" aria-label="Fullscreen">⛶</button>
                     </div>
                   </div>
                   <p className="home-dlg-line t-read" aria-live="polite" aria-busy={busy}>
-                    {busy ? `(${displayName}正在回应…)` : <DialogueReveal key={`${displayName}-${currentLine}`} text={currentLine} />}
+                    {busy ? `(${displayName} is replying…)` : <DialogueReveal key={`${displayName}-${currentLine}`} text={currentLine} />}
                   </p>
                   <div className="home-composer">
                     <input
                       className="home-input"
                       value={input}
                       disabled={busy || !card}
-                      placeholder={card ? "和 " + displayName + " 说点什么…" : "正在把糖沐请出来…"}
+                      placeholder={card ? "Say something to " + displayName + "…" : "Calling Tangmu over…"}
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !busy) {
@@ -773,7 +773,7 @@ export default function Home({ testMode = false }) {
                       }}
                     />
                     <Button variant="primary" onClick={send} disabled={busy || !input.trim() || !card}>
-                      发送
+                      Send
                     </Button>
                   </div>
                 </div>
@@ -787,9 +787,9 @@ export default function Home({ testMode = false }) {
       {switcher && (
         <div className="home-modal" onClick={() => setSwitcher(null)}>
           <div className="home-modal-card" onClick={(e) => e.stopPropagation()}>
-            <button className="home-modal-x" onClick={() => setSwitcher(null)} aria-label="关闭">×</button>
-            <h2 className="t-h2">换个人聊</h2>
-            <p className="t-meta home-modal-sub">挑一张你的角色卡,沿用 TA 自己的设定。</p>
+            <button className="home-modal-x" onClick={() => setSwitcher(null)} aria-label="Close">×</button>
+            <h2 className="t-h2">Chat with Someone Else</h2>
+            <p className="t-meta home-modal-sub">Pick one of your character cards. They keep their own settings.</p>
             <div className="home-switch-list">
               <AnimatedList
                 items={switchOptions}
@@ -805,7 +805,7 @@ export default function Home({ testMode = false }) {
                 className="home-switch-animated"
               />
               {!switcher.items.length && (
-                <p className="t-ui home-modal-sub">{switcher.err ? "读库失败:" + switcher.err : "卡库里还没有你的角色卡。去创作造一张。"}</p>
+                <p className="t-ui home-modal-sub">{switcher.err ? "Failed to load library: " + switcher.err : "No characters in your Card Library yet. Head to Create to make one."}</p>
               )}
             </div>
           </div>
@@ -816,30 +816,30 @@ export default function Home({ testMode = false }) {
       {savesModal && (
         <div className="home-modal" onClick={() => setSavesModal(false)}>
           <div className="home-modal-card" onClick={(e) => e.stopPropagation()}>
-            <button className="home-modal-x" onClick={() => setSavesModal(false)} aria-label="关闭">×</button>
-            <h2 className="t-h2">继续故事</h2>
+            <button className="home-modal-x" onClick={() => setSavesModal(false)} aria-label="Close">×</button>
+            <h2 className="t-h2">Continue Story</h2>
             <div className="home-saves">
               {game && (
                 <button className="home-save home-save--cur" onClick={() => navigate("/play")}>
                   <span className="home-save-dot" aria-hidden="true" />
                   <span className="home-save-tx">
-                    <span className="t-ui-sm">{game.title || "当前故事"}</span>
-                    <span className="t-meta">本机进行中 · 点继续</span>
+                    <span className="t-ui-sm">{game.title || "Current story"}</span>
+                    <span className="t-meta">In progress on this device · click to continue</span>
                   </span>
-                  <span className="t-meta">继续 →</span>
+                  <span className="t-meta">Continue →</span>
                 </button>
               )}
               {serverSaves.map((s) => (
-                <button className="home-save" key={s.id} onClick={() => navigate("/mine")} title="在「我的」存档里查看">
+                <button className="home-save" key={s.id} onClick={() => navigate("/mine")} title="View in your saves under Me">
                   <span className="home-save-tx">
-                    <span className="t-ui-sm">{s.story || s.player || "未命名存档"}</span>
-                    <span className="t-meta">第 {s.turns} 回合{s.updated_at ? " · " + String(s.updated_at).slice(0, 16) : ""}</span>
+                    <span className="t-ui-sm">{s.story || s.player || "Untitled save"}</span>
+                    <span className="t-meta">Turn {s.turns}{s.updated_at ? " · " + String(s.updated_at).slice(0, 16) : ""}</span>
                   </span>
-                  <span className="t-meta">我的 →</span>
+                  <span className="t-meta">Me →</span>
                 </button>
               ))}
               {!game && !serverSaves.length && (
-                <p className="t-ui home-modal-sub">还没有进行中的故事。去探索取一本书开局。</p>
+                <p className="t-ui home-modal-sub">No stories in progress yet. Pick a book in Explore to begin.</p>
               )}
             </div>
           </div>
@@ -850,18 +850,18 @@ export default function Home({ testMode = false }) {
       {logOpen && (
         <div className="home-modal" onClick={() => setLogOpen(false)}>
           <div className="home-modal-card" onClick={(e) => e.stopPropagation()}>
-            <button className="home-modal-x" onClick={() => setLogOpen(false)} aria-label="关闭">×</button>
-            <h2 className="t-h2">和 {displayName} 的记录</h2>
+            <button className="home-modal-x" onClick={() => setLogOpen(false)} aria-label="Close">×</button>
+            <h2 className="t-h2">Conversation with {displayName}</h2>
             <div className="home-log">
               {messages.length ? (
                 messages.map((m, i) => (
                   <div key={i} className={"home-log-row" + (m.who === "me" ? " is-me" : "")}>
-                    <span className="home-log-who t-meta">{m.who === "me" ? "你" : m.who}</span>
+                    <span className="home-log-who t-meta">{m.who === "me" ? "You" : m.who}</span>
                     <span className="home-log-text t-ui">{m.text}</span>
                   </div>
                 ))
               ) : (
-                <p className="t-ui home-modal-sub">还没聊过。在下面说第一句吧。</p>
+                <p className="t-ui home-modal-sub">Nothing here yet. Say the first line below.</p>
               )}
             </div>
           </div>

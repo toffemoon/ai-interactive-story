@@ -7,24 +7,24 @@ import { toCardModel } from "../lib/cardModel";
 import "./Styleguide.css";
 
 const PAPER_SWATCHES = [
-  ["纸底(全白)", "#ffffff"],
-  ["凹底", "#f4f4f2"],
-  ["面板", "#ffffff"],
-  ["墨", "#20201d"],
-  ["弱墨", "#6f706b"],
-  ["线", "#e4e4e1"],
-  ["朱砂", "#8f3c32"],
-  ["松绿", "#315d4f"],
-  ["赭金", "#ad7a24"],
+  ["Paper (pure white)", "#ffffff"],
+  ["Inset", "#f4f4f2"],
+  ["Panel", "#ffffff"],
+  ["Ink", "#20201d"],
+  ["Muted ink", "#6f706b"],
+  ["Line", "#e4e4e1"],
+  ["Cinnabar", "#8f3c32"],
+  ["Pine", "#315d4f"],
+  ["Ochre gold", "#ad7a24"],
 ];
 const STAGE_SWATCHES = [
-  ["底", "#221c16"],
-  ["面板", "#2c241c"],
-  ["线", "#3a3127"],
-  ["月白", "#ece3d2"],
-  ["弱", "#b3a890"],
-  ["朱", "#d15a40"],
-  ["赭金", "#c79a4e"],
+  ["Base", "#221c16"],
+  ["Panel", "#2c241c"],
+  ["Line", "#3a3127"],
+  ["Moon white", "#ece3d2"],
+  ["Muted", "#b3a890"],
+  ["Vermilion", "#d15a40"],
+  ["Ochre gold", "#c79a4e"],
 ];
 
 function Swatches({ items }) {
@@ -44,21 +44,21 @@ function Swatches({ items }) {
 // 各 kind 的 actions 插槽,精确对齐 卡片-翻转手感.html(去玩/纯聊/开故事/用到创作 + 详情)。
 const ACTIONS = {
   story: [
-    { label: "去玩", variant: "primary" },
-    { label: "详情", variant: "line", isDetail: true },
+    { label: "Play", variant: "primary" },
+    { label: "Details", variant: "line", isDetail: true },
   ],
   character: [
-    { label: "纯聊", variant: "secondary" },
-    { label: "开故事", variant: "primary" },
-    { label: "查看详情", variant: "line", full: true, isDetail: true },
+    { label: "Chat", variant: "secondary" },
+    { label: "Start story", variant: "primary" },
+    { label: "View details", variant: "line", full: true, isDetail: true },
   ],
   world: [
-    { label: "用到创作", variant: "secondary" },
-    { label: "详情", variant: "line", isDetail: true },
+    { label: "Use in Create", variant: "secondary" },
+    { label: "Details", variant: "line", isDetail: true },
   ],
   player: [
-    { label: "用到创作", variant: "secondary" },
-    { label: "详情", variant: "line", isDetail: true },
+    { label: "Use in Create", variant: "secondary" },
+    { label: "Details", variant: "line", isDetail: true },
   ],
 };
 
@@ -82,7 +82,7 @@ export default function Styleguide() {
         if (players[0]) pick.push(toCardModel("player", players[0]));
         setCards(pick);
       } catch (e) {
-        setErr(e.message || "加载失败");
+        setErr(e.message || "Failed to load");
       }
     })();
   }, []);
@@ -91,21 +91,21 @@ export default function Styleguide() {
     <div className="sg page" data-testid="styleguide">
       <div className="sg-head">
         <div>
-          <p className="u-eyebrow">沐言 · design system v0</p>
-          <h1 className="t-display">组件预览 · styleguide</h1>
-          <p className="t-ui sg-sub">一套 DNA,两个 register。纸 = 官网与 app 外壳;台 = 当前故事沉浸层。</p>
+          <p className="u-eyebrow">Muyan · design system v0</p>
+          <h1 className="t-display">Component preview · styleguide</h1>
+          <p className="t-ui sg-sub">One DNA, two registers. Paper = website and app shell; Stage = the immersive layer of the current story.</p>
         </div>
         <Link to="/explore" className="sg-back t-ui">
-          → 去探索
+          → Go to Explore
         </Link>
       </div>
 
       {/* 色 */}
       <section className="sg-section">
-        <h2 className="t-h2 sg-label">色 · 纸 paper</h2>
+        <h2 className="t-h2 sg-label">Color · paper</h2>
         <Swatches items={PAPER_SWATCHES} />
         <h2 className="t-h2 sg-label" data-theme="stage" style={{ background: "transparent" }}>
-          色 · 台 stage(去绿)
+          Color · stage (no green)
         </h2>
         <div data-theme="stage" className="sg-stage-wrap">
           <Swatches items={STAGE_SWATCHES} />
@@ -114,31 +114,31 @@ export default function Styleguide() {
 
       {/* 字 */}
       <section className="sg-section">
-        <h2 className="t-h2 sg-label">字 · 修过字阶</h2>
+        <h2 className="t-h2 sg-label">Type · revised scale</h2>
         <div className="sg-type">
           <div className="sg-type-row">
-            <span className="t-display">沐言书坊</span>
-            <span className="t-mono sg-hex">宋 · display 30/1.05</span>
+            <span className="t-display">Muyan Bookshop</span>
+            <span className="t-mono sg-hex">Serif · display 30/1.05</span>
           </div>
           <div className="sg-type-row">
-            <span className="t-h2">探索 · 当前故事</span>
-            <span className="t-mono sg-hex">宋 · 标题 22</span>
+            <span className="t-h2">Explore · Current story</span>
+            <span className="t-mono sg-hex">Serif · heading 22</span>
           </div>
           <div className="sg-type-row">
-            <span className="t-read sg-read-sample">夜里下了点雨,书坊的灯还亮着。你推门进去,纸页的味道先一步迎上来。</span>
-            <span className="t-mono sg-hex">宋 · 叙事正文 16/1.75</span>
+            <span className="t-read sg-read-sample">It rained a little in the night, and the bookshop's lamps were still on. You push the door open, and the smell of paper reaches you first.</span>
+            <span className="t-mono sg-hex">Serif · narration body 16/1.75</span>
           </div>
           <div className="sg-type-row">
-            <span className="t-kai sg-quote">「提笔者即执笔人,落墨处自有山河。」</span>
-            <span className="t-mono sg-hex">楷 · 引文 / 卡面书名</span>
+            <span className="t-kai sg-quote">"Whoever lifts the brush holds the pen; where the ink falls, mountains and rivers appear."</span>
+            <span className="t-mono sg-hex">Kai · quotes / card titles</span>
           </div>
           <div className="sg-type-row">
-            <span className="t-ui">探索　创作　纯聊　我的</span>
-            <span className="t-mono sg-hex">无衬线 · UI 14</span>
+            <span className="t-ui">Explore · Create · Chat · Me</span>
+            <span className="t-mono sg-hex">Sans-serif · UI 14</span>
           </div>
           <div className="sg-type-row">
             <span className="t-mono">token 1,280 / 8k</span>
-            <span className="t-mono sg-hex">等宽 · 数值</span>
+            <span className="t-mono sg-hex">Monospace · numbers</span>
           </div>
         </div>
       </section>
@@ -147,38 +147,38 @@ export default function Styleguide() {
       <section className="sg-section">
         <h2 className="t-h2 sg-label">Button</h2>
         <div className="sg-row">
-          <Button variant="primary">去游玩 →</Button>
-          <Button variant="secondary">开始创作</Button>
-          <Button variant="ghost">了解更多</Button>
-          <Button variant="line">详情</Button>
+          <Button variant="primary">Play →</Button>
+          <Button variant="secondary">Start creating</Button>
+          <Button variant="ghost">Learn more</Button>
+          <Button variant="line">Details</Button>
           <Button variant="primary" size="sm">
-            小号
+            Small
           </Button>
           <Button variant="primary" disabled>
-            禁用
+            Disabled
           </Button>
         </div>
 
-        <h2 className="t-h2 sg-label">Chip · 筛选</h2>
+        <h2 className="t-h2 sg-label">Chip · filters</h2>
         <div className="sg-row">
-          <Chip active>全部</Chip>
-          <Chip>完整故事</Chip>
-          <Chip>角色卡</Chip>
-          <Chip>仙侠</Chip>
+          <Chip active>All</Chip>
+          <Chip>Full story</Chip>
+          <Chip>Character</Chip>
+          <Chip>Xianxia</Chip>
         </div>
 
-        <h2 className="t-h2 sg-label">Badge · 类型角标</h2>
+        <h2 className="t-h2 sg-label">Badge · type labels</h2>
         <div className="sg-row">
-          <Badge tone="pine">完整故事 · 可直接玩</Badge>
-          <Badge tone="gilt">角色卡</Badge>
-          <Badge tone="cinnabar">推荐</Badge>
+          <Badge tone="pine">Full story · Play now</Badge>
+          <Badge tone="gilt">Character</Badge>
+          <Badge tone="cinnabar">Featured</Badge>
         </div>
 
-        <h2 className="t-h2 sg-label">Tag · 状态 / 元信息</h2>
+        <h2 className="t-h2 sg-label">Tag · status / meta</h2>
         <div className="sg-row">
-          <Tag>权谋</Tag>
-          <Tag tone="scene">场景 · 雨夜长街</Tag>
-          <Tag tone="relation">关系 · 微妙</Tag>
+          <Tag>Intrigue</Tag>
+          <Tag tone="scene">Scene · Rainy night street</Tag>
+          <Tag tone="relation">Relationship · Subtle</Tag>
         </div>
       </section>
 
@@ -186,52 +186,52 @@ export default function Styleguide() {
       <section className="sg-section">
         <h2 className="t-h2 sg-label">Input / Search</h2>
         <div className="sg-row sg-row--stack">
-          <SearchField placeholder="搜故事 / 角色卡…" />
-          <Input placeholder="表单输入,focus 见朱环" />
+          <SearchField placeholder="Search stories / characters…" />
+          <Input placeholder="Form input, focus shows the cinnabar ring" />
         </div>
 
-        <h2 className="t-h2 sg-label">ChatBubble · 微信式(纸)</h2>
+        <h2 className="t-h2 sg-label">ChatBubble · messenger style (paper)</h2>
         <div className="sg-chat">
-          <ChatBubble side="received">在的,今天想去哪一段故事?</ChatBubble>
-          <ChatBubble side="sent">先陪我把上次那个结局写完</ChatBubble>
+          <ChatBubble side="received">I'm here. Which story do you want to visit today?</ChatBubble>
+          <ChatBubble side="sent">First, help me finish that ending from last time</ChatBubble>
         </div>
       </section>
 
       {/* 台 register */}
       <section className="sg-section sg-stage-section" data-theme="stage">
-        <h2 className="t-h2 sg-label">台 stage · 暖夜 · 朱 + 金</h2>
-        <p className="t-kai sg-stage-line">月光落在青石上,她没有回头,只把伞往你这边偏了偏。</p>
+        <h2 className="t-h2 sg-label">Stage · warm night · vermilion + gold</h2>
+        <p className="t-kai sg-stage-line">Moonlight fell on the bluestone. She didn't look back, only tilted her umbrella a little toward you.</p>
         <div className="sg-row">
-          <Tag tone="scene">场景 · 雨夜长街</Tag>
-          <Tag tone="relation">关系 · 微妙</Tag>
+          <Tag tone="scene">Scene · Rainy night street</Tag>
+          <Tag tone="relation">Relationship · Subtle</Tag>
           <span className="t-mono sg-stage-meta">token 1,280 / 8k</span>
         </div>
         <div className="sg-row">
-          <Button variant="primary">继续</Button>
-          <Button variant="secondary">存档</Button>
+          <Button variant="primary">Continue</Button>
+          <Button variant="secondary">Save</Button>
         </div>
         <div className="sg-chat">
-          <ChatBubble side="received">我在这里等了你很久。</ChatBubble>
-          <ChatBubble side="sent">这次我不会再走了。</ChatBubble>
+          <ChatBubble side="received">I've been waiting here for you for a long time.</ChatBubble>
+          <ChatBubble side="sent">This time I won't leave again.</ChatBubble>
         </div>
       </section>
 
       {/* 统一 Card · 各 kind 各一张(真数据) */}
       <section className="sg-section">
-        <h2 className="t-h2 sg-label">统一 Card · shelf(点卡翻面 · 各 kind 真数据)</h2>
-        <p className="t-ui-sm sg-sub">封面 → tap 翻转看简介 + 标签 → 背面操作 / 详情。一次只翻一张,点别处收(受控 flip,结案 YOR-47)。</p>
+        <h2 className="t-h2 sg-label">Unified Card · shelf (tap to flip · live data for each kind)</h2>
+        <p className="t-ui-sm sg-sub">Cover → tap to flip for synopsis + tags → back-side actions / details. Only one card flips at a time; tap elsewhere to close it (controlled flip, closes YOR-47).</p>
         {err && <p className="sg-err">{err}</p>}
-        {!cards.length && !err && <p className="t-ui-sm sg-sub">载入真数据中…</p>}
+        {!cards.length && !err && <p className="t-ui-sm sg-sub">Loading live data…</p>}
         <CardShelf
           models={cards}
           actionsFor={(m) => ACTIONS[m.kind] || []}
-          onOpen={(m) => alert("详情(复用 ReconStoryDetail,后续接):" + m.title)}
+          onOpen={(m) => alert("Details (will reuse ReconStoryDetail later): " + m.title)}
         />
 
-        <h2 className="t-h2 sg-label">统一 Card · row / thumb 变体(不翻)</h2>
+        <h2 className="t-h2 sg-label">Unified Card · row / thumb variants (no flip)</h2>
         <div className="sg-row sg-row--stack">
           {cards.map((m) => (
-            <Card key={"row-" + m.kind} model={m} variant="row" actions={[{ label: "打开", variant: "line" }]} />
+            <Card key={"row-" + m.kind} model={m} variant="row" actions={[{ label: "Open", variant: "line" }]} />
           ))}
         </div>
         <div className="sg-row">
@@ -243,27 +243,27 @@ export default function Styleguide() {
 
       {/* 身份卡 · IdentityCard(onboarding 收尾凭证,点一下翻面) */}
       <section className="sg-section">
-        <h2 className="t-h2 sg-label">身份卡 · IdentityCard(点一下翻面 · 入店凭证)</h2>
+        <h2 className="t-h2 sg-label">Identity card · IdentityCard (tap to flip · entry pass)</h2>
         <p className="t-ui-sm sg-sub">
-          onboarding 收尾:糖沐递给新客的凭证。正面 = 字头头像 + 称呼;点一下翻到背面 = 最近在看 / 发卡 / 落款。暖夜金边,复用统一 Card 的翻转技术(两面各自 perspective+rotateY,背面可点)。
+          End of onboarding: the pass Tangmu hands to a new guest. Front = monogram avatar + name; tap to flip to the back = lately into / issue date / signature. Warm-night gold border, reusing the unified Card's flip technique (each face has its own perspective+rotateY, so the back stays clickable).
         </p>
         <div className="sg-idcards">
           <IdentityCard
-            name="小满"
-            taste="最近在追《雾山五行》,重看《红楼梦》"
-            message="小满,愿你手边的故事,像这时节的麦子,慢慢就熟了。"
+            name="Xiaoman"
+            taste="Fog Hill of Five Elements, rereading Red Chamber"
+            message="Xiaoman, may the story in your hands ripen slowly, like the wheat this season."
             issuedAt="2026-07-06"
           />
           <IdentityCard
-            name="夜游客"
+            name="Night Wanderer"
             taste=""
-            message="夜游客,灯我给你留着,想读到多晚都成。"
+            message="Night Wanderer, I'll leave the lamp on for you. Read as late as you like."
             issuedAt="2026-07-06"
           />
         </div>
       </section>
 
-      <p className="sg-foot t-meta">沐言设计系统 v0 · YOR-92 · frontend-next</p>
+      <p className="sg-foot t-meta">Muyan design system v0 · YOR-92 · frontend-next</p>
     </div>
   );
 }

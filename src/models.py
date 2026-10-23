@@ -14,25 +14,25 @@ from pydantic import BaseModel, Field
 class CharacterData(BaseModel):
     """Card V2 的 data 字段。MVP 聚焦核心几项,其余可选。"""
 
-    name: str = Field(..., description="角色名")
-    character_id: str = Field("", description="稳定角色 ID;为空时由前端/后端按名字生成")
-    description: str = Field("", description="角色主设定:背景、外貌、身份")
-    personality: str = Field("", description="性格摘要")
-    scenario: str = Field("", description="当前情境 / 故事背景")
-    first_mes: str = Field("", description="开场白(角色对玩家说的第一句)")
-    mes_example: str = Field("", description="对话范例,用于锁定说话语气")
+    name: str = Field(..., description="Character name")
+    character_id: str = Field("", description="Stable character ID; generated from the name by the frontend/backend when empty")
+    description: str = Field("", description="Main character setting: background, appearance, identity")
+    personality: str = Field("", description="Personality summary")
+    scenario: str = Field("", description="Current scenario / story background")
+    first_mes: str = Field("", description="Opening line (the character's first line to the player)")
+    mes_example: str = Field("", description="Example dialogue, used to lock in the speaking voice")
     # voice 锁定:从设定里抽出的硬规则(说话方式、口头禅、绝不做的事)
-    speech_rules: list[str] = Field(default_factory=list, description="说话/行为硬规则,锁 voice 不漂")
+    speech_rules: list[str] = Field(default_factory=list, description="Hard speech/behavior rules that keep the voice from drifting")
     tags: list[str] = Field(default_factory=list)
     # —— 卡片模板「引擎摘要」扩展字段(2026-06-04,只落字段;接引擎注入由 Gengyue 决策)——
-    anchor: str = Field("", description="一句话锚点:角色是谁、对玩家是什么、底色")
-    tension: str = Field("", description="核心矛盾:不该被抹平的内在张力")
-    look: str = Field("", description="外貌锚点:一句话视觉印象,供描写 + 图像生成")
-    keys: list[str] = Field(default_factory=list, description="召回关键词:世界书触发 + 向量召回(比 tags 更细)")
-    versions: list[str] = Field(default_factory=list, description="版本人格 / 状态轴原文(离散切版或连续轴;含揭穿后覆盖。只落字段,不接运行时切换)")
+    anchor: str = Field("", description="One-line anchor: who the character is, what they are to the player, their core tone")
+    tension: str = Field("", description="Core conflict: the inner tension that should not be smoothed over")
+    look: str = Field("", description="Appearance anchor: a one-line visual impression, for descriptions and image generation")
+    keys: list[str] = Field(default_factory=list, description="Recall keywords: world book triggers + vector recall (finer-grained than tags)")
+    versions: list[str] = Field(default_factory=list, description="Raw text of persona versions / state axes (discrete versions or continuous axes, including post-reveal overrides; stored only, no runtime switching)")
     # 知识边界(防剧透防全知);hidden 注入给 AI 但默认不说破(输出控制,非不注入)
-    known_public: list[str] = Field(default_factory=list, description="角色公开可知、可主动说的")
-    known_hidden: list[str] = Field(default_factory=list, description="隐藏真相 / 反转,注入给 AI 但披露前不说破")
+    known_public: list[str] = Field(default_factory=list, description="Publicly known facts the character may share freely")
+    known_hidden: list[str] = Field(default_factory=list, description="Hidden truths / twists, given to the AI but not revealed before disclosure")
 
 
 class CharacterCard(BaseModel):
@@ -46,18 +46,18 @@ class CharacterCard(BaseModel):
 class WorldEntry(BaseModel):
     """世界书的一个条目。对齐酒馆 World Info:关键词命中才注入,省 token。"""
 
-    entry_id: str = Field("", description="稳定条目 ID")
-    keys: list[str] = Field(default_factory=list, description="触发关键词,任一命中即注入")
-    content: str = Field("", description="命中时注入进 prompt 的世界设定")
-    comment: str = Field("", description="条目标题/说明,仅给人看")
-    source: str = Field("world", description="来源:world/faction/location/rule/story/player/session")
+    entry_id: str = Field("", description="Stable entry ID")
+    keys: list[str] = Field(default_factory=list, description="Trigger keywords; the entry is injected when any of them matches")
+    content: str = Field("", description="World setting text injected into the prompt on a match")
+    comment: str = Field("", description="Entry title/note, for humans only")
+    source: str = Field("world", description="Source: world/faction/location/rule/story/player/session")
     truth_status: Literal["canon", "uncertain", "player_created", "inferred"] = "canon"
     visibility: Literal["public", "hidden", "character_only"] = "public"
-    priority: int = Field(100, description="越小越优先注入")
+    priority: int = Field(100, description="Lower values are injected first")
 
 
 class WorldBook(BaseModel):
-    name: str = "世界书"
+    name: str = "World Book"
     entries: list[WorldEntry] = Field(default_factory=list)
 
 
@@ -69,25 +69,25 @@ class SettingCard(BaseModel):
     """
 
     name: str
-    category: str = Field("", description="子类:组织 / 地点 / …")
-    scene_type: str = Field("", description="地点专用:城邦 / 村庄 / 区域 / 设施 / 秘境")
-    ip: str = Field("", description="所属 IP / 世界")
-    parent_world: str = Field("", description="母本:依附的顶层世界设定集")
-    tier: str = Field("轻量", description="档位:轻量 / 满配")
-    anchor: str = Field("", description="一句话锚点")
-    keys: list[str] = Field(default_factory=list, description="召回关键词:专名 / 地名 / 组织名")
-    public: list[str] = Field(default_factory=list, description="知识分层 public:角色普遍可知")
-    hidden: list[str] = Field(default_factory=list, description="知识分层 hidden:元真相 / 内幕,默认不说破")
-    tone: str = Field("", description="口吻 / 禁区")
-    overview: str = Field("", description="概览正文")
-    sections: dict[str, str] = Field(default_factory=dict, description="其余标号段原文(宗旨 / 结构 / 关键人物 / 关系…),保留中层全貌不强约束 schema")
-    hooks: list[str] = Field(default_factory=list, description="剧情钩子")
+    category: str = Field("", description="Subtype: organization / location / ...")
+    scene_type: str = Field("", description="Locations only: city-state / village / region / facility / secret realm")
+    ip: str = Field("", description="IP / world it belongs to")
+    parent_world: str = Field("", description="Parent: the top-level world setting it belongs to")
+    tier: str = Field("轻量", description="Tier: 轻量 (light) / 满配 (full)")
+    anchor: str = Field("", description="One-line anchor")
+    keys: list[str] = Field(default_factory=list, description="Recall keywords: proper nouns / place names / organization names")
+    public: list[str] = Field(default_factory=list, description="Knowledge layer public: commonly known to characters")
+    hidden: list[str] = Field(default_factory=list, description="Knowledge layer hidden: meta truths / inside information, not revealed by default")
+    tone: str = Field("", description="Tone / taboos")
+    overview: str = Field("", description="Overview text")
+    sections: dict[str, str] = Field(default_factory=dict, description="Raw text of the other numbered sections (purpose / structure / key figures / relations...), kept whole without a strict schema")
+    hooks: list[str] = Field(default_factory=list, description="Plot hooks")
 
 
 class PlayerCard(BaseModel):
     """玩家设定卡:玩家扮演谁、以什么身份进入故事。"""
 
-    name: str = "玩家"
+    name: str = "Player"
     role: str = ""
     background: str = ""
     goals: list[str] = Field(default_factory=list)
@@ -95,8 +95,8 @@ class PlayerCard(BaseModel):
     constraints: list[str] = Field(default_factory=list)
     known_facts: list[str] = Field(default_factory=list)
     # —— 卡片模板扩展(2026-06-04,只落字段)——
-    unknown: list[str] = Field(default_factory=list, description="开局不知道的:主线反转 / 别处的事 / 元真相;与 known_facts 配对防上帝视角")
-    opening: str = Field("", description="开局场景 / 时间锚点:玩家默认从哪、什么时间点入局")
+    unknown: list[str] = Field(default_factory=list, description="Unknown at the start: main-plot twists / events elsewhere / meta truths; paired with known_facts to prevent a god's-eye view")
+    opening: str = Field("", description="Opening scene / time anchor: where and when the player enters the story by default")
 
 
 class StoryEvent(BaseModel):
@@ -114,16 +114,16 @@ class StoryEvent(BaseModel):
     consequences: list[str] = Field(default_factory=list)
     status: Literal["pending", "active", "resolved", "locked"] = "pending"
     # 第5组 · 世界时钟调度(运行时由时钟逻辑读取;5a 仅落字段,5b 接入推进):
-    due_clock: int | None = Field(None, description="故事内时钟(分钟)到此值,事件主动登场/恶化(纯时间触发)")
-    escalate_after_idle: int | None = Field(None, description="主线静默这么多故事分钟后升级催促(时间+停滞,认真查就重置)")
-    severity: int = Field(2, description="恶化烈度 + 注入优先级,1-5")
+    due_clock: int | None = Field(None, description="When the in-story clock (minutes) reaches this value, the event appears/escalates on its own (pure time trigger)")
+    escalate_after_idle: int | None = Field(None, description="Escalate after the main plot has been idle for this many story minutes (time + stagnation; resets when the player actively investigates)")
+    severity: int = Field(2, description="Escalation severity + injection priority, 1-5")
     # —— 隐藏事件卡扩展(2026-06-04,只落字段;门控注入 + flag 自动求值是 Gengyue 决策域)——
-    hidden: bool = Field(False, description="隐藏事件:注入给 AI 但默认不触发 + 玩家界面不可见,触发条件满足才发生(输出控制,非不注入)")
-    unlock_conditions: list[str] = Field(default_factory=list, description="触发 / 解锁条件的自然语言描述(flag / 前置事件 / 玩家行为 / 时钟);现状不自动求值,只落字段")
-    set_flags: list[str] = Field(default_factory=list, description="触发后置位的 flag / fact,是「事件 → 结局谓词」的联动接口")
-    once: bool = Field(True, description="触发性:True=一次性(触发后不再重复);False=可重复(配合 cooldown_minutes)")
-    cooldown_minutes: int | None = Field(None, description="可重复事件的冷却(故事内分钟);once=True 时忽略")
-    affects_ending: bool = Field(False, description="本事件是否影响结局(对应分支需在故事书结局段补谓词)")
+    hidden: bool = Field(False, description="Hidden event: given to the AI but not triggered by default and invisible in the player UI; happens only when its trigger conditions are met (output control, not withheld from injection)")
+    unlock_conditions: list[str] = Field(default_factory=list, description="Natural-language trigger / unlock conditions (flags / prerequisite events / player actions / clock); not evaluated automatically yet, stored only")
+    set_flags: list[str] = Field(default_factory=list, description="Flags / facts set after triggering; the link between events and ending predicates")
+    once: bool = Field(True, description="Trigger mode: True = one-time (does not repeat after triggering); False = repeatable (with cooldown_minutes)")
+    cooldown_minutes: int | None = Field(None, description="Cooldown for repeatable events (story minutes); ignored when once=True")
+    affects_ending: bool = Field(False, description="Whether this event affects the ending (the matching branch needs a predicate in the story book's endings section)")
 
 
 class Ending(BaseModel):
@@ -132,41 +132,41 @@ class Ending(BaseModel):
     ending_id: str = ""
     title: str = ""
     summary: str = ""
-    conditions: list[str] = Field(default_factory=list, description="触发条件,自然语言为主,可含 flag 关键词")
-    tone: str = Field("", description="基调:好结局/悲剧/开放/隐藏等")
-    required_events: list[str] = Field(default_factory=list, description="代码客观判定:这些 event_id 全部 resolved 即达成本结局(留空则回退模型在 state_update 里给 main_resolved 的判定)")
-    required_facts: list[str] = Field(default_factory=list, description="代码客观判定:这些事实全部已 revealed 即达成本结局(子串匹配;留空则回退模型判定)")
+    conditions: list[str] = Field(default_factory=list, description="Trigger conditions, mostly natural language, may include flag keywords")
+    tone: str = Field("", description="Tone: good ending / tragedy / open / hidden, etc.")
+    required_events: list[str] = Field(default_factory=list, description="Objective check in code: this ending is reached when all of these event_ids are resolved (if empty, falls back to the model's main_resolved judgment in state_update)")
+    required_facts: list[str] = Field(default_factory=list, description="Objective check in code: this ending is reached when all of these facts are revealed (substring match; if empty, falls back to the model's judgment)")
 
 
 class CharacterBoundary(BaseModel):
     """角色信息边界,从 freedom_rules 单独结构化,喂角色思维链防 OOC / 世界观硬约束。"""
 
     character: str = ""
-    public: list[str] = Field(default_factory=list, description="公开可知信息")
-    hidden: list[str] = Field(default_factory=list, description="隐藏信息,未披露前角色不能说出")
-    hard_limits: list[str] = Field(default_factory=list, description="硬边界:身份/实力/能力上限,玩家不可单方面突破")
+    public: list[str] = Field(default_factory=list, description="Publicly known information")
+    hidden: list[str] = Field(default_factory=list, description="Hidden information the character must not say before it is disclosed")
+    hard_limits: list[str] = Field(default_factory=list, description="Hard limits: identity / strength / ability caps the player cannot break unilaterally")
 
 
 class StoryBook(BaseModel):
     """故事书:时间线、主线剧情、事件节点、多结局与全局节奏。"""
 
-    title: str = "故事书"
+    title: str = "Story Book"
     premise: str = ""
     timeline: list[str] = Field(default_factory=list)
     main_plot: list[str] = Field(default_factory=list)
     events: list[StoryEvent] = Field(default_factory=list)
     freedom_rules: list[str] = Field(default_factory=list)
     # 第5组 · 故事书结构化新增:
-    endings: list[Ending] = Field(default_factory=list, description="多结局 + 各自触发条件")
-    clock_start: int = Field(0, description="开局故事内时钟(分钟),供世界时钟起算")
-    pacing: list[str] = Field(default_factory=list, description="全局节奏/时间提示,供时钟调度参考")
-    character_boundaries: list[CharacterBoundary] = Field(default_factory=list, description="各角色信息边界")
-    needs_confirm: list[str] = Field(default_factory=list, description="AI 推断、建议作者确认的字段说明")
+    endings: list[Ending] = Field(default_factory=list, description="Multiple endings, each with its trigger conditions")
+    clock_start: int = Field(0, description="In-story clock at the start (minutes), the starting point for the world clock")
+    pacing: list[str] = Field(default_factory=list, description="Global pacing/time hints, used as a reference by the clock scheduler")
+    character_boundaries: list[CharacterBoundary] = Field(default_factory=list, description="Information boundaries for each character")
+    needs_confirm: list[str] = Field(default_factory=list, description="Notes on fields inferred by the AI that the author should confirm")
 
 
 class SceneState(BaseModel):
-    location: str = "未定地点"
-    time: str = "未定时间"
+    location: str = "Unknown location"
+    time: str = "Unknown time"
     atmosphere: str = ""
     present_characters: list[str] = Field(default_factory=list)
     objects: list[str] = Field(default_factory=list)
@@ -174,8 +174,8 @@ class SceneState(BaseModel):
 
 
 class PlayerState(BaseModel):
-    location: str = "未定地点"
-    status: str = "正常"
+    location: str = "Unknown location"
+    status: str = "Normal"
     inventory: list[str] = Field(default_factory=list)
     active_goals: list[str] = Field(default_factory=list)
     known_facts: list[str] = Field(default_factory=list)
@@ -223,10 +223,10 @@ class RuntimeState(BaseModel):
     facts: FactBoundary = Field(default_factory=FactBoundary)
     turn_count: int = 0
     # 第5组 5b · 世界时钟(故事内分钟,不用轮数):
-    clock_minutes: int = Field(0, description="当前故事内时钟,分钟(开局取故事书 clock_start)")
-    idle_minutes: int = Field(0, description="主线静默累计故事分钟,事件被推进时清零;供 escalate_after_idle")
-    main_resolved: bool = Field(False, description="主线核心问题是否已结案(供面板/摘要不再显示进行中)")
-    reached_endings: list[str] = Field(default_factory=list, description="已达成的结局 ID")
+    clock_minutes: int = Field(0, description="Current in-story clock, in minutes (starts from the story book's clock_start)")
+    idle_minutes: int = Field(0, description="Accumulated story minutes with the main plot idle; reset when an event advances; used by escalate_after_idle")
+    main_resolved: bool = Field(False, description="Whether the main plot's core question is resolved (so panels/summaries stop showing it as in progress)")
+    reached_endings: list[str] = Field(default_factory=list, description="IDs of endings reached")
 
 
 class StoryChoice(BaseModel):
@@ -248,7 +248,7 @@ class MemoryWrite(BaseModel):
     importance: int = 3
     # 长程记忆 A 档(实体轴):这条记忆挂在哪个实体上(角色 ID / 名,从【活跃角色】受限词表里选)。
     # 空 = 未挂载到具体实体(走旧的整体/相似度召回)。挂上的会在该实体在场时被确定性召回注入。
-    entity: str = Field("", description="挂载的实体(角色ID),供按在场实体确定性召回;空=未挂载")
+    entity: str = Field("", description="Attached entity (character ID), for deterministic recall by present entities; empty = not attached")
 
 
 class StoryTurn(BaseModel):
