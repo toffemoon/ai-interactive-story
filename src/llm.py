@@ -169,6 +169,8 @@ def deferred_backend(answers: list[dict[str, Any]]):
     每次 HTTP 续跑都会从同一会话快照重新执行。request_id 同时绑定调用序号、messages
     和参数,因此旧回合/错顺序的回答不能被误消费。
     """
+    from .lang import L
+
     cursor = 0
 
     def replay(kind: str, messages: list[dict], *, model: str | None,
@@ -183,10 +185,10 @@ def deferred_backend(answers: list[dict[str, Any]]):
             raise call
         answer = answers[call.index]
         if not isinstance(answer, dict) or answer.get("request_id") != call.request_id:
-            raise DeferredReplayMismatch(f"Local model answer #{call.index + 1} does not match the current request")
+            raise DeferredReplayMismatch(L(f"Local model answer #{call.index + 1} does not match the current request", f"第 {call.index + 1} 个本机模型回答与当前请求不匹配"))
         content = answer.get("content")
         if not isinstance(content, str):
-            raise DeferredReplayMismatch(f"Local model answer #{call.index + 1} has no text content")
+            raise DeferredReplayMismatch(L(f"Local model answer #{call.index + 1} has no text content", f"第 {call.index + 1} 个本机模型回答缺少文本内容"))
         usage = answer.get("usage") if isinstance(answer.get("usage"), dict) else None
         return _ScriptedOutput(content, usage)
 

@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import Cropper from "react-easy-crop";
 import { fileToDataURL, getCroppedDataURL } from "../lib/image";
+import { L } from "../lib/i18n";
 import "./ImageCropField.css";
 
 // 头像 / 立绘上传 + 固定框裁剪(react-easy-crop)。
@@ -51,7 +52,7 @@ export default function ImageCropField({
       onChange && onChange(out);
       setSrc(null);
     } catch (e) {
-      setErr("Crop failed: " + e.message);
+      setErr(L("Crop failed: ", "裁剪失败:") + e.message);
     } finally {
       setBusy(false);
     }
@@ -70,9 +71,9 @@ export default function ImageCropField({
           type="button"
           className="icf-gen t-meta"
           disabled
-          title="Auto-generate image (coming soon)"
+          title={L("Auto-generate image (coming soon)", "自动生成图片(暂未开放,留位)")}
         >
-          Auto-generate (coming soon)
+          {L("Auto-generate (coming soon)", "自动生成(暂未开放)")}
         </button>
       </div>
       <button
@@ -80,14 +81,14 @@ export default function ImageCropField({
         className={"icf-thumb" + (round ? " icf-thumb--round" : "") + (value ? " has-img" : "")}
         style={{ aspectRatio: String(aspect), ...(value ? { backgroundImage: `url("${value}")` } : {}) }}
         onClick={() => fileRef.current && fileRef.current.click()}
-        title={value ? "Change image / Re-crop" : "Upload"}
+        title={value ? L("Change image / Re-crop", "换图 / 重裁") : L("Upload", "上传")}
       >
-        {!value && <span className="t-meta">+ Upload</span>}
+        {!value && <span className="t-meta">{L("+ Upload", "+ 上传")}</span>}
       </button>
       <div className="icf-foot">
         {value && (
           <button type="button" className="icf-clear t-meta" onClick={() => onChange && onChange("")}>
-            Remove
+            {L("Remove", "移除")}
           </button>
         )}
         {hint && <span className="icf-hint t-meta">{hint}</span>}
@@ -97,7 +98,7 @@ export default function ImageCropField({
       <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPick} />
 
       {src && (
-        <div className="icf-cropper" role="dialog" aria-modal="true" aria-label="Crop image">
+        <div className="icf-cropper" role="dialog" aria-modal="true" aria-label={L("Crop image", "裁剪图片")}>
           <div className="icf-cropper-stage">
             <Cropper
               image={src}
@@ -115,7 +116,7 @@ export default function ImageCropField({
             />
           </div>
           <div className="icf-cropper-bar">
-            <div className="icf-cropper-tip t-meta">Drag to frame · Pinch, scroll or use the slider to zoom</div>
+            <div className="icf-cropper-tip t-meta">{L("Drag to frame · Pinch, scroll or use the slider to zoom", "拖动取景 · 捏合 / 滚轮 / 滑杆缩放")}</div>
             <input
               className="icf-zoom"
               type="range"
@@ -124,15 +125,15 @@ export default function ImageCropField({
               step={0.01}
               value={zoom}
               onChange={(e) => setZoom(Number(e.target.value))}
-              aria-label="Zoom"
+              aria-label={L("Zoom", "缩放")}
             />
             {err && <div className="icf-err t-meta">{err}</div>}
             <div className="icf-cropper-actions">
               <button type="button" className="btn btn--line btn--sm" onClick={cancelCrop} disabled={busy}>
-                Cancel
+                {L("Cancel", "取消")}
               </button>
               <button type="button" className="btn btn--primary btn--sm" onClick={confirmCrop} disabled={busy || !areaPx}>
-                {busy ? "Processing…" : "Confirm"}
+                {busy ? L("Processing…", "处理中…") : L("Confirm", "确定")}
               </button>
             </div>
           </div>

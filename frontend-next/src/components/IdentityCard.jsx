@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { L } from "../lib/i18n";
 import "./IdentityCard.css";
 
 // 身份卡(入店凭证)· 横版暖米白纸质 · 点一下翻面。onboarding 收尾:糖沐递给新客,印上称呼 + 口味 + 一句寄语。
@@ -13,14 +14,14 @@ import "./IdentityCard.css";
 //   shopName 发卡书坊名(默认 沐言书坊)
 //   clerk    落款店员(默认 糖沐)
 //   forming  登记态(边填边成形):不可翻面(还没办好)、正面临时显口味行、名字/口味用 key 触发浮现动画。
-export function IdentityCard({ name, taste, message, avatar, issuedAt, shopName = "Muyan Bookshop", clerk = "Tangmu", forming = false }) {
+export function IdentityCard({ name, taste, message, avatar, issuedAt, shopName = L("Muyan Bookshop", "沐言书坊"), clerk = L("Tangmu", "糖沐"), forming = false }) {
   const [flipped, setFlipped] = useState(false);
   const nick = (name || "").trim();
   const hasName = !!nick;
-  const shownNick = nick || "Guest";
+  const shownNick = nick || L("Guest", "客人");
   // 字头只取首字当徽记(不复读称呼)。用 Array.from 按 Unicode code point 拆,避免 emoji/代理对被 slice 截半成乱码。
-  const initial = Array.from(shownNick.replace(/\s+/g, ""))[0] || "G";
-  const note = (message || "").trim() || "May you always find the page you want to read here.";
+  const initial = Array.from(shownNick.replace(/\s+/g, ""))[0] || L("G", "客");
+  const note = (message || "").trim() || L("May you always find the page you want to read here.", "愿你在这儿,总能翻到想读的那一页。");
   const canFlip = !forming; // 登记态锁翻面:卡还没办好,别急着翻
   const toggle = () => canFlip && setFlipped((f) => !f);
   return (
@@ -30,7 +31,7 @@ export function IdentityCard({ name, taste, message, avatar, issuedAt, shopName 
       role={canFlip ? "button" : undefined}
       tabIndex={canFlip ? 0 : -1}
       aria-pressed={canFlip ? flipped : undefined}
-      aria-label={forming ? `${shownNick}'s entry pass (registering)` : `${shownNick}'s entry pass, tap to flip`}
+      aria-label={forming ? L(`${shownNick}'s entry pass (registering)`, `${shownNick} 的入店凭证(登记中)`) : L(`${shownNick}'s entry pass, tap to flip`, `${shownNick} 的入店凭证,点按翻面`)}
       onKeyDown={
         canFlip
           ? (e) => {
@@ -46,7 +47,7 @@ export function IdentityCard({ name, taste, message, avatar, issuedAt, shopName 
         {/* 正面:眉标 / 头像+称呼(主角) / 底行。登记态底行=口味成形行;办好态底行=发卡日·翻面提示。 */}
         <div className="idcard-face idcard-front">
           <img className="idcard-seal-img" src="/home/seal-muyan.png" alt="" aria-hidden="true" draggable="false" />
-          <span className="idcard-eyebrow">{shopName} · Entry Pass</span>
+          <span className="idcard-eyebrow">{shopName} · {L("Entry Pass", "入店凭证")}</span>
           <div className="idcard-front-main">
             <div className="idcard-avatar">
               {avatar ? (
@@ -57,32 +58,32 @@ export function IdentityCard({ name, taste, message, avatar, issuedAt, shopName 
             </div>
             {/* key 绑值:报名/改名时重挂 → 触发浮现动画(CSS)。空态显占位。 */}
             <div key={nick} className={"idcard-name t-kai" + (hasName ? "" : " is-empty")}>
-              {hasName ? nick : "Unregistered"}
+              {hasName ? nick : L("Unregistered", "待登记")}
             </div>
           </div>
           {forming ? (
             <div className="idcard-forming-line t-kai">
-              Lately into · <span key={taste || "_"} className={"idcard-forming-taste" + (taste ? "" : " is-empty")}>{taste || "…"}</span>
+              {L("Lately into", "最近在看")} · <span key={taste || "_"} className={"idcard-forming-taste" + (taste ? "" : " is-empty")}>{taste || "…"}</span>
             </div>
           ) : (
             <div className="idcard-front-foot">
-              <span className="idcard-issued">Issued {issuedAt || "today"}</span>
-              <span className="idcard-hint">Tap to flip ↻</span>
+              <span className="idcard-issued">{L("Issued ", "发卡 ")}{issuedAt || L("today", "今日")}</span>
+              <span className="idcard-hint">{L("Tap to flip ↻", "点一下翻面 ↻")}</span>
             </div>
           )}
         </div>
         {/* 背面:糖沐寄语(主角)+ 落款 + 口味 + 归还语 */}
         <div className="idcard-face idcard-back">
-          <span className="idcard-eyebrow">Show this card to enter</span>
+          <span className="idcard-eyebrow">{L("Show this card to enter", "凭卡出入")}</span>
           <p className="idcard-message t-kai">{note}</p>
-          <div className="idcard-sign t-kai">— {clerk}</div>
+          <div className="idcard-sign t-kai">{L("—", "——")} {clerk}</div>
           <div className="idcard-back-foot">
             {taste ? (
-              <div className="idcard-taste">Lately into · {taste}</div>
+              <div className="idcard-taste">{L("Lately into", "最近在看")} · {taste}</div>
             ) : (
-              <div className="idcard-taste">Plenty of time ahead · A book is always waiting for you</div>
+              <div className="idcard-taste">{L("Plenty of time ahead · A book is always waiting for you", "来日方长 · 总有一本等着你")}</div>
             )}
-            <span className="idcard-lost">If found, please return to {shopName}</span>
+            <span className="idcard-lost">{L("If found, please return to ", "如果捡到此卡,请归还至")}{shopName}</span>
           </div>
         </div>
       </div>

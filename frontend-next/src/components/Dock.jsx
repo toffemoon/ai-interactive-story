@@ -1,5 +1,6 @@
 import { Children, cloneElement, useEffect, useRef, useState } from "react";
 import { motion, useMotionValue, useSpring, useTransform, AnimatePresence } from "motion/react";
+import { L } from "../lib/i18n";
 import "./Dock.css";
 
 // React Bits · Dock(本地 vendored,改吃沐言 token + 加触摸放大)。
@@ -82,7 +83,7 @@ export default function Dock({
         className={`dock-panel ${className}`}
         style={{ height: panelHeight }}
         role="toolbar"
-        aria-label="Navigation dock"
+        aria-label={L("Navigation dock", "导航 dock")}
       >
         {items.map((item, index) => (
           <DockItem

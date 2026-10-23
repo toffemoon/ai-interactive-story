@@ -10,6 +10,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from .lang import L
+
 
 class CharacterData(BaseModel):
     """Card V2 的 data 字段。MVP 聚焦核心几项,其余可选。"""
@@ -57,7 +59,7 @@ class WorldEntry(BaseModel):
 
 
 class WorldBook(BaseModel):
-    name: str = "World Book"
+    name: str = Field(default_factory=lambda: L("World Book", "世界书"))
     entries: list[WorldEntry] = Field(default_factory=list)
 
 
@@ -87,7 +89,7 @@ class SettingCard(BaseModel):
 class PlayerCard(BaseModel):
     """玩家设定卡:玩家扮演谁、以什么身份进入故事。"""
 
-    name: str = "Player"
+    name: str = Field(default_factory=lambda: L("Player", "玩家"))
     role: str = ""
     background: str = ""
     goals: list[str] = Field(default_factory=list)
@@ -150,7 +152,7 @@ class CharacterBoundary(BaseModel):
 class StoryBook(BaseModel):
     """故事书:时间线、主线剧情、事件节点、多结局与全局节奏。"""
 
-    title: str = "Story Book"
+    title: str = Field(default_factory=lambda: L("Story Book", "故事书"))
     premise: str = ""
     timeline: list[str] = Field(default_factory=list)
     main_plot: list[str] = Field(default_factory=list)
@@ -165,8 +167,8 @@ class StoryBook(BaseModel):
 
 
 class SceneState(BaseModel):
-    location: str = "Unknown location"
-    time: str = "Unknown time"
+    location: str = Field(default_factory=lambda: L("Unknown location", "未定地点"))
+    time: str = Field(default_factory=lambda: L("Unknown time", "未定时间"))
     atmosphere: str = ""
     present_characters: list[str] = Field(default_factory=list)
     objects: list[str] = Field(default_factory=list)
@@ -174,8 +176,8 @@ class SceneState(BaseModel):
 
 
 class PlayerState(BaseModel):
-    location: str = "Unknown location"
-    status: str = "Normal"
+    location: str = Field(default_factory=lambda: L("Unknown location", "未定地点"))
+    status: str = Field(default_factory=lambda: L("Normal", "正常"))
     inventory: list[str] = Field(default_factory=list)
     active_goals: list[str] = Field(default_factory=list)
     known_facts: list[str] = Field(default_factory=list)

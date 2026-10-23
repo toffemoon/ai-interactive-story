@@ -1,6 +1,9 @@
 import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
+import { L } from "../lib/i18n";
 import "./StaggeredMenu.css";
+
+const CLOSE_LABEL = L("Close", "关闭");
 
 // React Bits · StaggeredMenu(JS+CSS 变体)· 适配沐言:
 //   - logo 用文字「沐言」(无 logo 资产);开关文案「菜单/关闭」;
@@ -17,7 +20,7 @@ export const StaggeredMenu = ({
   displaySocials = true,
   displayItemNumbering = true,
   className,
-  brandText = "Muyan",
+  brandText = L("Muyan", "沐言"),
   menuButtonColor = "#fff",
   openMenuButtonColor = "#fff",
   accentColor = "#5227FF",
@@ -47,7 +50,7 @@ export const StaggeredMenu = ({
   const iconRef = useRef(null);
   const textInnerRef = useRef(null);
   const textWrapRef = useRef(null);
-  const [textLines, setTextLines] = useState([brandText, "Close"]);
+  const [textLines, setTextLines] = useState([brandText, CLOSE_LABEL]);
 
   const openTlRef = useRef(null);
   const closeTweenRef = useRef(null);
@@ -409,8 +412,8 @@ export const StaggeredMenu = ({
     if (!inner) return;
     textCycleAnimRef.current?.kill();
 
-    const currentLabel = opening ? brandText : "Close";
-    const targetLabel = opening ? "Close" : brandText;
+    const currentLabel = opening ? brandText : CLOSE_LABEL;
+    const targetLabel = opening ? CLOSE_LABEL : brandText;
     if (reducedMotion) {
       setTextLines([targetLabel]);
       gsap.set(inner, { yPercent: 0 });
@@ -420,7 +423,7 @@ export const StaggeredMenu = ({
     const seq = [currentLabel];
     let last = currentLabel;
     for (let i = 0; i < cycles; i++) {
-      last = last === brandText ? "Close" : brandText;
+      last = last === brandText ? CLOSE_LABEL : brandText;
       seq.push(last);
     }
     if (last !== targetLabel) seq.push(targetLabel);
@@ -638,7 +641,7 @@ export const StaggeredMenu = ({
       <header
         ref={headerRef}
         className="staggered-menu-header"
-        aria-label="Main navigation menu"
+        aria-label={L("Main navigation menu", "主导航菜单")}
         onPointerEnter={hoverExpand ? handleHoverEnter : undefined}
         onPointerLeave={hoverExpand ? handleHoverLeave : undefined}
       >
@@ -646,7 +649,7 @@ export const StaggeredMenu = ({
         <button
           ref={toggleBtnRef}
           className="sm-toggle"
-          aria-label={open ? "Close menu" : "Open menu"}
+          aria-label={open ? L("Close menu", "关闭菜单") : L("Open menu", "打开菜单")}
           aria-expanded={open}
           aria-controls="staggered-menu-panel"
           onClick={toggleMenu}
@@ -675,7 +678,7 @@ export const StaggeredMenu = ({
         id="staggered-menu-panel"
         ref={panelRef}
         className="staggered-menu-panel"
-        aria-label="Main navigation"
+        aria-label={L("Main navigation", "主导航")}
         aria-hidden={hoverExpand ? undefined : !open}
         onPointerEnter={hoverExpand ? handleHoverEnter : undefined}
         onPointerLeave={hoverExpand ? handleHoverLeave : undefined}

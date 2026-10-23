@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useNavigate } from "../../lib/transitionNav";
 import { useGame } from "../../state/game";
+import { L } from "../../lib/i18n";
 
 // 「继续游玩」浮动入口:有进行中故事(game 已装配在 sessionStorage)才显,
 // 一键回 /play;无进行中故事不占位;已在 /play 沉浸态时不显(自己就在里面)。
@@ -51,12 +52,12 @@ export default function ResumeBar() {
     <button
       className={"resume-bar" + (atHome ? " resume-bar--home" : "") + (retracted ? " is-retracted" : "")}
       onClick={() => navigate("/play")}
-      aria-label="Continue the current story"
+      aria-label={L("Continue the current story", "继续游玩当前故事")}
     >
       <span className="resume-bar-dot" aria-hidden="true" />
       <span className="resume-bar-tx">
-        <span className="resume-bar-label t-meta">Continue</span>
-        <span className="resume-bar-title t-kai">{game.title || "Current story"}</span>
+        <span className="resume-bar-label t-meta">{L("Continue", "继续游玩")}</span>
+        <span className="resume-bar-title t-kai">{game.title || L("Current story", "当前故事")}</span>
       </span>
       <span className="resume-bar-arrow" aria-hidden="true">→</span>
     </button>

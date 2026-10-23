@@ -1,6 +1,7 @@
 import { useState } from "react";
 import PillNav from "../components/PillNav";
 import Dock from "../components/Dock";
+import { L } from "../lib/i18n";
 import "./NavTest.css";
 
 // /test —— 手机端导航原型(D2/D5)。两摆法给 yufei 真机评估:
@@ -17,12 +18,12 @@ const Icon = {
 };
 
 const ITEMS = [
-  { label: "Home", href: "/home", icon: Icon.home },
-  { label: "Explore", href: "/explore", icon: Icon.compass },
-  { label: "Chat", href: "/chat", icon: Icon.chat },
-  { label: "Create", href: "/create", icon: Icon.brush },
-  { label: "Me", href: "/mine", icon: Icon.user },
-  { label: "Forum", href: "/forum", icon: Icon.forum },
+  { label: L("Home", "看板"), href: "/home", icon: Icon.home },
+  { label: L("Explore", "探索"), href: "/explore", icon: Icon.compass },
+  { label: L("Chat", "纯聊"), href: "/chat", icon: Icon.chat },
+  { label: L("Create", "创作"), href: "/create", icon: Icon.brush },
+  { label: L("Me", "我的"), href: "/mine", icon: Icon.user },
+  { label: L("Forum", "论坛"), href: "/forum", icon: Icon.forum },
 ];
 
 export default function NavTest() {
@@ -45,17 +46,19 @@ export default function NavTest() {
 
       <div className="navtest-body">
         <div className="navtest-seg">
-          <button className={variant === "pills" ? "is-on" : ""} onClick={() => setVariant("pills")}>Pill row (top)</button>
-          <button className={variant === "dock" ? "is-on" : ""} onClick={() => setVariant("dock")}>Dock (bottom)</button>
+          <button className={variant === "pills" ? "is-on" : ""} onClick={() => setVariant("pills")}>{L("Pill row (top)", "pill 一行(顶部)")}</button>
+          <button className={variant === "dock" ? "is-on" : ""} onClick={() => setVariant("dock")}>{L("Dock (bottom)", "Dock(底部)")}</button>
         </div>
-        <p className="navtest-hint t-ui">/test · Navigation prototype. Selected: <b>{activeLabel}</b> (tapping a pill / dock item only moves the highlight).</p>
+        <p className="navtest-hint t-ui">/test · {L("Navigation prototype. Selected: ", "导航原型。当前选中:")}<b>{activeLabel}</b>{L(" (tapping a pill / dock item only moves the highlight).", "(点 pill / dock 项只切高亮)。")}</p>
         <p className="navtest-note t-meta">
-          "Pill row" = ghost pills on a cream bar at the top, cinnabar when selected; "Dock" = a macOS-style icon dock at the bottom that magnifies as your mouse or finger gets close, cinnabar when selected.
-          These colors follow the paper theme. Tell me whether they work.
+          {L(
+            '"Pill row" = ghost pills on a cream bar at the top, cinnabar when selected; "Dock" = a macOS-style icon dock at the bottom that magnifies as your mouse or finger gets close, cinnabar when selected. These colors follow the paper theme. Tell me whether they work.',
+            "「pill 一行」= 顶部米底幽灵 pill、选中朱砂;「Dock」= 底部 macOS 式图标坞,鼠标/手指靠近放大、选中朱砂。 颜色这套贴 paper,合不合给我说。"
+          )}
         </p>
-        <div className="navtest-card">Page content placeholder ①</div>
-        <div className="navtest-card">Page content placeholder ②</div>
-        <div className="navtest-card tall">Scroll down to check that the dock stays pinned to the bottom</div>
+        <div className="navtest-card">{L("Page content placeholder ①", "页面内容占位 ①")}</div>
+        <div className="navtest-card">{L("Page content placeholder ②", "页面内容占位 ②")}</div>
+        <div className="navtest-card tall">{L("Scroll down to check that the dock stays pinned to the bottom", "往下滚 —— 看 dock 是否钉底")}</div>
       </div>
 
       {variant === "dock" && (

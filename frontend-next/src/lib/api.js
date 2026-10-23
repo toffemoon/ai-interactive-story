@@ -2,7 +2,7 @@
 // 整段照搬现有 frontend/app.jsx 的 fetch 封装(token 注入 + 401 兜底 + /api/auth 豁免)。
 // 引擎域端点契约固定(Gengyue 域),这里只调用、不新增、不改行为。
 
-import { LANG } from "./i18n";
+import { LANG, L } from "./i18n";
 
 const TOKEN_KEY = "ais_auth_token";
 
@@ -78,7 +78,7 @@ export async function authApi(path, body) {
         };
   const r = await fetch(path, opts);
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.detail || "Request failed");
+  if (!r.ok) throw new Error(data.detail || L("Request failed", "请求失败"));
   return data;
 }
 
@@ -90,7 +90,7 @@ export async function postJSON(url, body) {
   });
   if (!r.ok) {
     const err = await r.json().catch(() => ({ detail: r.statusText }));
-    throw new Error(err.detail || "Request failed");
+    throw new Error(err.detail || L("Request failed", "请求失败"));
   }
   return r.json();
 }
@@ -106,7 +106,7 @@ export async function delJSON(url) {
   const r = await fetch(url, { method: "DELETE" });
   if (!r.ok) {
     const err = await r.json().catch(() => ({ detail: r.statusText }));
-    throw new Error(err.detail || "Delete failed");
+    throw new Error(err.detail || L("Delete failed", "删除失败"));
   }
   return r.json().catch(() => ({}));
 }
@@ -116,7 +116,7 @@ export async function uploadFile(file) {
     method: "POST",
     body: file,
   });
-  if (!r.ok) throw new Error("Upload failed");
+  if (!r.ok) throw new Error(L("Upload failed", "上传失败"));
   return (await r.json()).text;
 }
 
@@ -190,7 +190,7 @@ export async function streamTurn(body, { onDelta }) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!r.ok || !r.body) throw new Error("Streaming endpoint unavailable");
+  if (!r.ok || !r.body) throw new Error(L("Streaming endpoint unavailable", "流式端点不可用"));
   const reader = r.body.getReader();
   const dec = new TextDecoder();
   let buf = "";

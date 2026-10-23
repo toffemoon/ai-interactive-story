@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { Tag } from "./Tag";
+import { L } from "../../lib/i18n";
 
 // ── 统一 Card ───────────────────────────────────────────────────────────────
 // 展示型组件,只认 CardModel(见 lib/cardModel.js)。禁 kind 大开关:
@@ -46,7 +47,7 @@ function CoverFront({ model, flipped, onToggleFlip, frontRef, eager = false }) {
       tabIndex={flipped ? -1 : 0}
       aria-hidden={flipped || undefined}
       aria-expanded={flipped}
-      aria-label={`Flip "${title}"`}
+      aria-label={L(`Flip "${title}"`, `翻看《${title}》`)}
       onClick={(event) => {
         event.stopPropagation();
         onToggleFlip?.();
@@ -73,7 +74,7 @@ function CoverFront({ model, flipped, onToggleFlip, frontRef, eager = false }) {
           {meta.typeLabel ? <span className="card-type">{meta.typeLabel}</span> : null}
         </div>
         {/* 已收藏 = 封面右上垂一枚书签(YOR-171);走 CardModel.fav,由用处决定亮不亮 */}
-        {model.fav ? <span className="card-fav-mark" title="Saved to favorites" aria-label="Saved to favorites" /> : null}
+        {model.fav ? <span className="card-fav-mark" title={L("Saved to favorites", "已收藏")} aria-label={L("Saved to favorites", "已收藏")} /> : null}
       </div>
       <div className="card-bar">
         <span className="card-bar-title t-kai">{title}</span>
@@ -110,7 +111,7 @@ function ActionRow({ actions, onOpen, tabbable = true }) {
             onOpen();
           }}
         >
-          Details
+          {L("Details", "详情")}
         </button>
       )}
     </div>
@@ -188,8 +189,8 @@ function ShelfCard({ model, flipped, onToggleFlip, actions, onOpen, eager }) {
             type="button"
             className="card-back-close"
             tabIndex={flipped ? 0 : -1}
-            aria-label={`Back to the cover of "${title}"`}
-            title="Back to cover"
+            aria-label={L(`Back to the cover of "${title}"`, `返回《${title}》封面`)}
+            title={L("Back to cover", "返回封面")}
             onClick={(event) => {
               event.stopPropagation();
               onToggleFlip?.();
@@ -204,7 +205,7 @@ function ShelfCard({ model, flipped, onToggleFlip, actions, onOpen, eager }) {
               <Tag key={i}>{t}</Tag>
             ))}
           </div>
-          {meta && meta.heat ? <div className="card-heat t-meta">{meta.heat} playing</div> : null}
+          {meta && meta.heat ? <div className="card-heat t-meta">{L(`${meta.heat} playing`, `在玩 ${meta.heat}`)}</div> : null}
           {note ? <div className="card-note t-meta">{note}</div> : null}
           <ActionRow actions={actions} onOpen={onOpen} tabbable={flipped} />
         </div>

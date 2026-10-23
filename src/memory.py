@@ -30,6 +30,7 @@ import threading
 from psycopg.types.json import Jsonb
 from pgvector import Vector
 
+from .lang import L
 from .db import get_pool
 
 log = logging.getLogger("memory")
@@ -276,8 +277,8 @@ def search(session_id: str, query: str, k: int = 3, max_turn: int | None = None)
             out = []
             for r in cur.fetchall():
                 meta = r["meta"] or {}
-                role = "Player" if meta.get("role") == "user" else "Character"
-                out.append(f"{_present_tag(meta)}{role}: {r['content']}")
+                role = L("Player", "玩家") if meta.get("role") == "user" else L("Character", "角色")
+                out.append(f"{_present_tag(meta)}{role}{L(': ', ':')}{r['content']}")
             return out
     except Exception as e:
         _mark_unavailable(e)
@@ -318,8 +319,8 @@ def search_scored(session_id: str, query: str, k: int = 4,
             out = []
             for r in cur.fetchall():
                 meta = r["meta"] or {}
-                role = "Player" if meta.get("role") == "user" else "Character"
-                out.append((f"{_present_tag(meta)}{role}: {r['content']}", float(r["dist"])))
+                role = L("Player", "玩家") if meta.get("role") == "user" else L("Character", "角色")
+                out.append((f"{_present_tag(meta)}{role}{L(': ', ':')}{r['content']}", float(r["dist"])))
             return out
     except Exception as e:
         _mark_unavailable(e)

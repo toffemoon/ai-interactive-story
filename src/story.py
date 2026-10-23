@@ -17,6 +17,7 @@ from typing import Any
 _TZ8 = timezone(timedelta(hours=8))  # 存档时间戳走北京时间
 
 from . import memory, storage
+from .lang import L, is_zh
 from .adapters import ContextBundle, get_adapter
 from .llm import (
     DeferredLLMControl,
@@ -130,7 +131,7 @@ def _entity_roster(characters: list[CharacterCard],
         roster[_norm_entity(player.name)] = _PLAYER_ENTITY
         roster[_norm_entity("玩家")] = _PLAYER_ENTITY
         roster[_norm_entity("player")] = _PLAYER_ENTITY  # 英文 prompt 让模型写 player
-        labels.append(f"{player.name}=player")
+        labels.append(L(f"{player.name}=player", f"{player.name}=玩家"))
     return roster, labels
 
 
@@ -276,8 +277,10 @@ async def _repair_json(raw: str) -> dict[str, Any]:
                 {
                     "role": "system",
                     "content": (
-                        "You are a JSON repairer. Repair the user's content into strictly valid JSON. "
-                        "Keep every original field and its meaning and value unchanged; output only the JSON, no explanation."
+                        L("You are a JSON repairer. Repair the user's content into strictly valid JSON. "
+                          "Keep every original field and its meaning and value unchanged; output only the JSON, no explanation.",
+                          "你是 JSON 修复器。把用户给的内容修复成严格合法 JSON。"
+                          "必须保留原有字段含义,只输出 JSON,不要解释。")
                     ),
                 },
                 {"role": "user", "content": raw[:12000]},
@@ -299,10 +302,50 @@ def _speaker_for_action(action: str, state: RuntimeState, characters: list[Chara
     for card in characters:
         if card.data.name in present or not present:
             return _char_id(card, 0), card.data.name
-    return "narrator", "Narrator"
+    return "narrator", L("Narrator", "旁白")
 
 
-def _local_continuation_turn(action: str, state: RuntimeState, characters: list[CharacterCard], reason: str = "") -> StoryTurn:
+def _local_continuation_turn_zh(action: str, state: RuntimeState, characters: list[CharacterCard], reason: str = "") -> StoryTurn:
+    """LLM 空白/坏结构时的自然保底。它必须像故事回合,不能像系统报错。
+
+    文案与具体题材无关:只用当前场景 / 在场者 / 玩家行动拼装,不写死某个故事的专有名词,
+    这样武侠、奇幻、现代等任意故事在 LLM 故障时都不会跳出当下世界。
+    """
+    cid, name = _speaker_for_action(action, state, characters)
+    location = state.scene.location or "现场"
+    objects = state.scene.objects or ["周围的环境", "在场者的神情", "眼前的线索"]
+    focus = objects[0]
+    present = "、".join(state.scene.present_characters[:4]) or name
+
+    if any(word in action for word in ("看法", "怎么想", "意见", "反应")):
+        narration = f"在{location},你的视线转向在场者。{present}的反应,一瞬间比眼前的事更值得留意。"
+        text = f"{name}顺着你的话停顿了一下,没有立刻接腔:「想听看法可以,但先别急着下结论。有些地方还对不上。」"
+    elif any(word in action for word in ("观察", "看看", "异常", "查", "检查")):
+        narration = f"你把注意力重新压回{location}。{focus}还在视线中央,周围的细节开始显得不太安分。"
+        text = f"{name}抬手示意你靠近一点:「可以看,但一项一项来。先弄清哪些是确定的,哪些只是看起来如此。」"
+    elif any(word in action for word in ("为什么", "怎么", "?", "？")):
+        narration = f"你的问题落在{location}中央。它没有直接给出答案,却迫使在场者把当前的状况重新讲清楚。"
+        text = f"{name}把语气放慢:「这个问题可以问。眼下已知的还不够,但它能帮我们决定下一步往哪走。」"
+    else:
+        narration = f"在{location},你这句话被当成本回合的行动接住。它不一定直接推动主线,却改变了现场的注意力。"
+        text = f"{name}看了你一眼,没有否定:「我先按你说的往下走。只要能对应到眼前的事实,它就算数。」"
+
+    return StoryTurn(
+        narration=narration,
+        messages=[StoryMessage(character_id=cid, name=name, text=text)],
+        choices=[
+            StoryChoice(id="clarify_fact", label="要求对方把已知信息讲清楚", intent="ask", description="把问题落到确定的事实"),
+            StoryChoice(id="watch_reaction", label="观察在场者的反应", intent="observe", description="寻找犹豫或隐瞒"),
+            StoryChoice(id="inspect_focus", label=f"查看{focus}", intent="act", description="推进当前调查"),
+        ],
+        state_update={"player": {"flags": ["local_continuation"]}},
+        memory_write=[MemoryWrite(kind="note", text=f"本轮使用本地自然保底继续: {action}; {reason}", importance=2)],
+        triggered_events=[],
+        state=state,
+    )
+
+
+def _local_continuation_turn_en(action: str, state: RuntimeState, characters: list[CharacterCard], reason: str = "") -> StoryTurn:
     """LLM 空白/坏结构时的自然保底。它必须像故事回合,不能像系统报错。
 
     文案与具体题材无关:只用当前场景 / 在场者 / 玩家行动拼装,不写死某个故事的专有名词,
@@ -343,12 +386,17 @@ def _local_continuation_turn(action: str, state: RuntimeState, characters: list[
     )
 
 
+def _local_continuation_turn(*args, **kwargs):
+    """按请求语言分派(2026-10-23 双语):zh = 0785bf0 原文原样,en = 英文版。"""
+    return (_local_continuation_turn_zh if is_zh() else _local_continuation_turn_en)(*args, **kwargs)
+
+
 def _init_state(characters: list[CharacterCard], player: PlayerCard | None, story: StoryBook | None) -> RuntimeState:
     ids = [_char_id(c, i) for i, c in enumerate(characters)]
     first_names = [c.data.name for c in characters]
     state = RuntimeState()
     state.scene.present_characters = first_names
-    state.scene.location = "Opening scene"
+    state.scene.location = L("Opening scene", "故事开场")
     if characters and characters[0].data.scenario:
         state.scene.atmosphere = characters[0].data.scenario[:300]
     if story:
@@ -368,9 +416,12 @@ def _init_state(characters: list[CharacterCard], player: PlayerCard | None, stor
         hidden=[],
         uncertain=[],
         forbidden=[
-            "Do not invent organizations, places, character relationships or historical events that are not in the uploaded material, world book or story book.",
-            "Unknown settings must be expressed as uncertainty in the character's voice; never pretend to know.",
-            "Do not state hidden events to the player before their disclosure conditions are met.",
+            L("Do not invent organizations, places, character relationships or historical events that are not in the uploaded material, world book or story book.",
+              "不得编造上传材料、世界书或故事书里不存在的组织、地点、角色关系、历史事件。"),
+            L("Unknown settings must be expressed as uncertainty in the character's voice; never pretend to know.",
+              "不知道的设定必须用角色口吻表达不确定,不能假装知道。"),
+            L("Do not state hidden events to the player before their disclosure conditions are met.",
+              "隐藏事件未满足披露条件前,不要向玩家明说。"),
         ],
     )
     return state
@@ -487,7 +538,8 @@ def _safe_state(data: dict[str, Any], characters: list[CharacterCard], player: P
         except Exception:
             data.setdefault("long_memory", []).append({
                 "kind": "note",
-                "text": "The runtime state was corrupted and has been rebuilt from the current card set.",
+                "text": L("The runtime state was corrupted and has been rebuilt from the current card set.",
+                          "运行状态结构损坏,已按当前卡组重建状态。"),
                 "importance": 2,
             })
     return _init_state(characters, player, story)
@@ -496,19 +548,24 @@ def _safe_state(data: dict[str, Any], characters: list[CharacterCard], player: P
 def _input_profile(action: str) -> str:
     text = action.strip()
     if not text:
-        return "Opening or observation request."
+        return L("Opening or observation request.", "开场或观察请求。")
     has_cjk = bool(re.search(r"[\u4e00-\u9fff]", text))
     has_word = bool(re.search(r"[A-Za-z0-9]", text))
     punct_ratio = sum(1 for ch in text if not ch.isalnum() and not "\u4e00" <= ch <= "\u9fff") / max(len(text), 1)
     if len(text) <= 2:
-        return "Very short input: may be silence, hesitation, an interruption or a fragment; give light in-story feedback."
+        return L("Very short input: may be silence, hesitation, an interruption or a fragment; give light in-story feedback.",
+                 "极短输入:可能是沉默、犹豫、打断或片段回应;必须在故事内给轻量反馈。")
     if not has_cjk and not has_word:
-        return "Non-text/symbol input: treat it as an emotion, a gesture or an inarticulate reaction; don't stall."
+        return L("Non-text/symbol input: treat it as an emotion, a gesture or an inarticulate reaction; don't stall.",
+                 "非文字/符号输入:当作情绪、手势或无法明确表达的反应处理,不要空转。")
     if punct_ratio > 0.65:
-        return "Mostly symbols: may be a meme, emotion, gibberish or interruption; characters should confirm / misread / catch it, never invent facts."
+        return L("Mostly symbols: may be a meme, emotion, gibberish or interruption; characters should confirm / misread / catch it, never invent facts.",
+                 "高符号比例输入:可能是玩梗、情绪、乱码或打断;角色应先确认/误解/接住,不要硬编事实。")
     if len(text) < 12:
-        return "Short casual input: may omit the subject or action; interpret it in the current scene."
-    return "Natural-language input: may contain slang, memes, typos or incomplete actions; interpret it by its in-story intent first."
+        return L("Short casual input: may omit the subject or action; interpret it in the current scene.",
+                 "短口语输入:可能省略主语或动作,结合当前场景理解。")
+    return L("Natural-language input: may contain slang, memes, typos or incomplete actions; interpret it by its in-story intent first.",
+             "自然语言输入:可能包含口语、玩梗、错字或不完整行动,优先按故事内意图处理。")
 
 
 def _is_player_char(name: str, player_name: str) -> bool:
@@ -660,12 +717,13 @@ def _local_long_memory(short_items: list[dict]) -> list[dict]:
     ]
     summary_parts = []
     if user_actions:
-        summary_parts.append("Player's recent actions: " + " / ".join(user_actions[-4:]))
+        summary_parts.append(L("Player's recent actions: ", "玩家近期行动: ") + " / ".join(user_actions[-4:]))
     if assistant_notes:
-        summary_parts.append("Recent story progress: " + " / ".join(x[:160] for x in assistant_notes[-3:]))
+        summary_parts.append(L("Recent story progress: ", "近期剧情进展: ") + " / ".join(x[:160] for x in assistant_notes[-3:]))
     return [{
         "kind": "note",
-        "text": "; ".join(summary_parts) or "Recent interactions happened, but no finer long-term memory could be extracted.",
+        "text": L("; ", "；").join(summary_parts) or L("Recent interactions happened, but no finer long-term memory could be extracted.",
+                                                       "近期互动已发生,但未能抽取更细长期记忆。"),
         "importance": 2,
     }]
 
@@ -694,20 +752,25 @@ async def _extract_long_memory(session_id: str, short_items: list[dict],
     )
     # 实体轴:给模型一份受限的实体名册,让它【从中选】每条记忆挂在哪个实体上(不自由发挥)。
     roster_hint = (
-        "Tag each memory with the entity it mainly concerns: entity may only be [one value from the right-hand side of '='] in the roster below, copied verbatim; "
-        "if it concerns the player write 'player'; if it doesn't clearly concern any roster entity, use an empty string.\nRoster: " + "; ".join(entity_labels or [])
-        if entity_labels else "Always leave entity as an empty string."
+        L("Tag each memory with the entity it mainly concerns: entity may only be [one value from the right-hand side of '='] in the roster below, copied verbatim; "
+          "if it concerns the player write 'player'; if it doesn't clearly concern any roster entity, use an empty string.\nRoster: ",
+          "为每条记忆标注它主要关乎的实体(entity),只能从下面名册里【选一个等号右边的值】填进 entity;"
+          "关乎玩家就填'玩家';不明确关乎名册里任一实体就留空字符串。\n名册:") + "; ".join(entity_labels or [])
+        if entity_labels else L("Always leave entity as an empty string.", "entity 一律留空字符串。")
     )
     try:
         raw = await achat_messages(
             [
                 {
                     "role": "system",
-                    "content": (
+                    "content": L(
                         "Extract long-term memories from the interactive-story dialogue below. Output JSON: "
                         '{"items":[{"kind":"event|choice|relationship|fact|quest|note","text":"...","importance":1-5,"entity":"entity or empty"}]}. '
-                        "Keep only what will affect later plot, relationships, fact boundaries or quests. Write each text in English. " + roster_hint
-                    ),
+                        "Keep only what will affect later plot, relationships, fact boundaries or quests. Write each text in English. ",
+                        "从下面互动故事对话中抽取长期记忆。输出 JSON:"
+                        '{"items":[{"kind":"event|choice|relationship|fact|quest|note","text":"...","importance":1-5,"entity":"实体或空"}]}。'
+                        "只保留会影响后续剧情、关系、事实边界或任务的内容。",
+                    ) + roster_hint,
                 },
                 {"role": "user", "content": convo},
             ],
@@ -802,7 +865,8 @@ def _clamp_time_advance(raw: Any, action: str) -> int:
 def _fmt_clock(minutes: int) -> str:
     """把故事内分钟格成 Day N HH:MM(2026-10-23 前为 第N天 HH:MM)。"""
     minutes = max(0, int(minutes))
-    return f"Day {minutes // 1440 + 1} {(minutes % 1440) // 60:02d}:{minutes % 60:02d}"
+    return L(f"Day {minutes // 1440 + 1} {(minutes % 1440) // 60:02d}:{minutes % 60:02d}",
+             f"第{minutes // 1440 + 1}天 {(minutes % 1440) // 60:02d}:{minutes % 60:02d}")
 
 
 _CN_NUM = {"半": 0.5, "一": 1, "两": 2, "二": 2, "三": 3, "四": 4, "五": 5,
@@ -877,7 +941,7 @@ def _due_escalations(story: StoryBook | None, state: RuntimeState) -> list[tuple
         due_hit = e.due_clock is not None and state.clock_minutes >= e.due_clock
         idle_hit = e.escalate_after_idle is not None and state.idle_minutes >= e.escalate_after_idle
         if due_hit or idle_hit:
-            out.append((e, "due" if due_hit else "main plot stalled too long"))
+            out.append((e, L("due", "时间到点") if due_hit else L("main plot stalled too long", "主线停滞过久")))
     out.sort(key=lambda x: -(x[0].severity or 2))
     return out[:3]
 
@@ -888,15 +952,271 @@ def _main_anchor(story: StoryBook | None, player: PlayerCard | None) -> str:
         return ""
     parts = []
     if story.premise:
-        parts.append(f"Premise: {story.premise[:200]}")
+        parts.append(L("Premise: ", "前提:") + story.premise[:200])
     if story.main_plot:
-        parts.append("Main goals: " + "; ".join(story.main_plot[:3]))
+        parts.append(L("Main goals: ", "主线目标:") + "; ".join(story.main_plot[:3]))
     if player and player.goals:
-        parts.append("Player goals: " + "; ".join(player.goals[:3]))
+        parts.append(L("Player goals: ", "玩家目标:") + "; ".join(player.goals[:3]))
     return " | ".join(parts)
 
 
-def _prompt(
+def _prompt_zh(
+    characters: list[CharacterCard],
+    player: PlayerCard | None,
+    story: StoryBook | None,
+    world_hits: list[str],
+    story_hits: list[StoryEvent],
+    kb_hits: list[str],
+    long_memory: list[str],
+    state: RuntimeState,
+    entity_memory: dict[str, list[str]] | None = None,
+) -> str:
+    entity_memory = entity_memory or {}
+    player_name = (player.name or "").strip() if player else ""
+    char_blocks = []
+    for i, card in enumerate(characters):
+        d = card.data
+        cid = _char_id(card, i)
+        if _is_player_char(d.name, player_name):   # bug#6:玩家扮演的角色不作为可发言 NPC 块,引擎不替其发言
+            continue
+        rules = "\n".join(f"- {r}" for r in d.speech_rules)
+        block = (
+            f"## {d.name} ({cid})\n"
+            f"设定:{d.description}\n性格:{d.personality}\n情境:{d.scenario}\n"
+            f"范例:{d.mes_example}\n说话硬规则:\n{rules}\n"
+            "主动性要求:根据该角色的身份、性格、利益和当前情境主动反应。"
+            "可以追问、打断、试探、拒绝、转移压力、提出条件或推进自己的小目标。"
+        )
+        # 长程记忆 A 档:该角色在场 → 注入它自己的派生事实块(不靠相似度)。
+        # Phase 3 = 按"该角色知道的"注入(knower 轴);off = 按"关于该角色的"(subject 轴)。
+        ent_lines = entity_memory.get(cid)
+        if ent_lines:
+            head = (
+                f"\n{d.name} 知道/亲历的既有事实(该角色本人知情,须一致;此处没列出的具体往事=该角色当时不知道):\n"
+                if PHASE3_KNOWERS else
+                "\n关于该角色的既有事实/记忆(此前剧情里确立、必须保持一致,不要与之矛盾):\n"
+            )
+            block += head + "\n".join(f"- {x}" for x in ent_lines)
+        char_blocks.append(block)
+    # 单角色"场景":判断依据是本轮实际在场的角色数(运行时),不是上传了几张卡。
+    # 多角色卡组里和某个角色单独相处的段落也会触发——那种段落最容易退化成一问一答的聊天。
+    present = [p for p in (state.scene.present_characters or [c.data.name for c in characters])
+               if p and not _is_player_char(p, player_name)]  # bug#6:在场可发言集排除玩家扮演的角色
+    solo_directive = ""
+    if len(set(present)) <= 1:
+        solo_directive = (
+            "本轮场景里除玩家外只有一个角色在场,没有其他角色的对白来填充内容。"
+            "因此 narration 要写足(至少 3-5 句、有画面感):把场景、气氛、玩家这一轮动作带来的"
+            "物理/环境后果、以及世界本身的反应(光线、声音、物件、距离、温度、时间流逝)都描写出来,"
+            "不要只写一两句就交给对白。让单角色场景依然有沉浸感和节奏,而不是一问一答。\n"
+        )
+    story_block = "\n".join(
+        f"- {e.title}({e.event_id}): {e.summary}\n  选项提示:{'; '.join(e.choices_hint)}\n  后果:{'; '.join(e.consequences)}"
+        for e in story_hits
+    )
+    story_overview = "未提供"
+    if story:
+        endings_text = "\n".join(
+            f"- [{e.tone or '结局'}] {e.title}:{e.summary}(触发条件:{'; '.join(e.conditions) or '未明确'})"
+            for e in story.endings[:6]
+        ) or "无"
+        bounds_text = "\n".join(
+            f"- {b.character}:公开[{'; '.join(b.public[:4])}] 隐藏[{'; '.join(b.hidden[:4])}] 硬上限[{'; '.join(b.hard_limits[:4])}]"
+            for b in story.character_boundaries[:6]
+        ) or "无"
+        parts = [
+            f"标题:{story.title}",
+            f"前提:{story.premise}",
+            "时间线:\n- " + "\n- ".join(story.timeline[:12]),
+            "主线阶段:\n- " + "\n- ".join(story.main_plot[:12]),
+            "自由度规则:\n- " + "\n- ".join(story.freedom_rules[:8]),
+        ]
+        if story.pacing:
+            parts.append("全局节奏/时间:\n- " + "\n- ".join(story.pacing[:6]))
+        parts.append(
+            "可能结局(当某结局的触发条件被满足时,把剧情自然导向它、并在 reasoning.note 记一句;"
+            "条件没满足就别硬塞,继续保自由度。"
+            "但反过来同样重要:一旦你判断某结局条件【已经满足】、或剧情已抵达该结局对应的决定性时刻"
+            "(摊牌/开门/真相揭晓/对决的那一刻),就在【本轮】把那一刻真正写出来、让它发生,并按下方规则标记结局——"
+            "不要再插入'最后一步之前的最后一步'式的前置流程(又一道开锁、又一次嗅探、又一遍确认)把它无限拖延。"
+            "玩家可以反复逼近某个高潮,你要么给出实质阻力推迟它、要么就让它发生,但不能用换皮的同义前置步骤原地空耗):\n"
+            + endings_text
+        )
+        parts.append(
+            "角色信息边界(隐藏项在未披露前角色不能说出;硬上限不可被玩家单方面突破,"
+            "玩家若强行突破按世界观硬约束走世界内反制):\n" + bounds_text
+        )
+        story_overview = "\n".join(parts)
+    # 长程记忆 A 档:挂在玩家身上的派生事实(玩家没有 char_block,玩家恒在场 → 始终注入到玩家设定块)。
+    player_mem_lines = entity_memory.get(_PLAYER_ENTITY)
+    player_mem_block = ""
+    if player_mem_lines:
+        player_mem_block = (
+            "\n关于玩家的既有事实/记忆(此前剧情里确立、必须保持一致):\n"
+            + "\n".join(f"- {x}" for x in player_mem_lines)
+        )
+    # Phase 3 知识边界:显式告诉模型"叙事真相≠人人都知道",被问的角色没亲历就 in-character 认忘(RoleRAG 式劝阻)。
+    kb_directive = (
+        "知识边界(角色只知道自己【当时在场】经历或被当面告知的事):召回的【旧对话】可能带标记"
+        "『[当时在场:某、某]』,表示那件事发生时谁在场。玩家问某个在场角色一件【具体往事】时,据此判断:\n"
+        "  · 被问角色【在】那条往事的『当时在场』名单里(或那是 canon 公开设定、或列在他自己的知情块里)"
+        "→ 他亲历/知情,**该自信、明确地把那个值答出来,别推脱别装糊涂**;\n"
+        "  · 被问角色【不在】名单里(那段他被支开 / 在别处 / 尚未登场)→ 他当时不在场,要 in-character 认忘"
+        "(我那会儿不在 / 没瞧见 / 没听说),**绝不照叙事真相或别人的见闻编**——连那物件的形状 / 颜色 / 数量也不许猜。\n"
+        "叙事真相 ≠ 人人都知道:一件事被你召回到,不代表当前被问的角色当时在场。"
+        "canon(角色卡 / 世界书 / 故事书的公开设定)是公共知识,人人可引用,不受此限。\n"
+    ) if PHASE3_KNOWERS else ""
+    # 去 AI 味:风格规则当全局硬指令;疲劳词当软提示(不硬禁,免伤古风/武侠题材的合法常用词)。承 Yufei 提案。
+    anti_ai = (
+        "叙事质感(避免 AI 腔,重要):\n"
+        "- 用【具体动作 + 感官细节】推进,别用概括句替场面下结论(写『终场哨响,他僵在原地』,而非『他赢了,全场欢呼』)。\n"
+        "- 情绪靠【外部细节】侧写,别堆排比内心独白(写『他深吸一口气,低头看了眼表』,而非『也许…也许…也许…』)。\n"
+        "- 不替读者总结情绪、不下判语,留白让画面说话;不元叙事、不自指(绝不出现『作为AI/作为角色』之类)。\n"
+        "- 克制 LLM 高频疲劳词的【堆砌】(突然 / 意识到 / 某种 / 仿佛 / 不禁 / 一丝 / 嘴角 / 缓缓 / 轻轻 等):"
+        "古风武侠等题材这些词本就常见,不强禁,但别一句一个、别整段堆同一类。\n"
+    ) if ANTI_AI_STYLE else ""
+    return (
+        "你是互动故事引擎,不是普通聊天助手。你要生成一轮可玩的故事推进。\n"
+        "严格事实边界:只能使用角色卡、世界书、故事书、玩家卡、运行状态和记忆中提供的事实。"
+        "不存在/未披露/不确定的设定不得编造;可以让角色以自身口吻说不知道或需要调查。\n"
+        + kb_directive +
+        "保持玩家自由度:不要替玩家做决定、不要描写玩家未选择的动作或心理。\n"
+        + (f"玩家正扮演【{player_name}】:你【绝不】为该角色生成台词或内心独白,也不要把他列进 present_characters / "
+           "活跃角色——他由玩家自己扮演,不在你要驱动的 NPC 之列。\n" if player_name else "") +
+        "角色不是等待回复的机器人。每轮至少让一个在场角色做出符合性格的主动行为或主动判断,"
+        "例如追问、质疑、观察、施压、试探、维护自身利益、提出交易条件、暴露情绪变化。"
+        "主动行为只能基于已知事实和角色立场,不能替玩家解决核心问题,不能强行跳过玩家选择。\n"
+        "对话要带动作和神情:角色台词前后应有简短的姿态、表情、语气或视线描写。"
+        "动作描写必须符合角色性格和现场,不要写成长篇舞台说明。\n"
+        + anti_ai
+        + solo_directive +
+        "玩家的自由输入就是本轮行动,必须被识别、回应并推进到叙事/角色反应/状态更新中。"
+        "如果玩家行动不可执行、信息不足或越过事实边界,要在故事内给出原因和可调查方向,不能无视该输入。\n"
+        "推进要有实质进展:不要每轮只把同一处线索、同一个动作越描越细而场景/主线/关系零变化。"
+        "玩家持续投入时,调查要真的产出新结论、新位置、新关系或新揭示,而不是无限细分同一个发现、反复确认同一件事、"
+        "或让角色用换皮的同义台词把玩家原地留住。一条线索调查充分了就给出它的结论并打开下一步,别在原地空转。\n"
+        "每轮必须先生成故事正文,再给 3-4 个玩家行动选项;选项不能替代正文。"
+        "narration 必须非空,messages 至少包含一条角色对玩家本轮输入的反应。"
+        "玩家可能使用口语、玩梗或不严肃报价,仍要当作故事内行动处理,由角色自然回应。\n\n"
+        f"# 活跃角色\n{chr(10).join(char_blocks)}\n\n"
+        f"# 玩家设定\n{json.dumps(player.model_dump(), ensure_ascii=False) if player else '未提供'}{player_mem_block}\n\n"
+        f"# 故事书总览\n{story_overview}\n\n"
+        f"# 当前运行状态\n{json.dumps(_state_digest(state), ensure_ascii=False)}\n\n"
+        f"# 命中的世界书/设定卡\n{chr(10).join(world_hits) or '无'}\n\n"
+        f"# 命中的故事事件\n{story_block or '无'}\n\n"
+        f"# 向量召回资料\n{chr(10).join(kb_hits) or '无'}\n\n"
+        f"# 长期记忆\n{chr(10).join(long_memory) or '无'}\n\n"
+        "# 状态维护(每轮必做,直接决定玩家看到的状态面板,不要省略)\n"
+        "- 场景:玩家移动或环境变化时,必须在 state_update.scene 写新值。scene 必须是对象,"
+        "至少含 location;同时按需更新 time / atmosphere / present_characters / objects。绝不要把 scene 写成一个字符串。\n"
+        "- 关系:本轮与玩家有互动或态度变化的每个在场角色,必须在 state_update.relationships 里给一条:"
+        "character_id 用上面【活跃角色】括号里的 ID 原文(例如写 大黑塔,不要写成 黑塔);"
+        "trust / tension / affection 填本轮 -10~10 的增量(没变化填 0);notes 一句话写原因。"
+        "信任、紧张、好感、兴趣、压力这类故事变量就靠这里体现,不更新面板就会一直是 0。\n"
+        "- 事实:本轮新确认/新披露/新存疑的事实分别写进 state_update.facts 的 canon / revealed / uncertain。\n"
+        "- 事件:当本轮叙事推进了下面【命中的故事事件】之一,把它的 event_id 放进 triggered_events,"
+        "并在 state_update.timeline 写 {\"event_id\":\"该ID\",\"status\":\"active\" 或 \"resolved\"}。\n\n"
+        "# 一致性自检(先想后写,写进 reasoning,再让正文与判断一致)\n"
+        "在写 narration 之前,先在 reasoning 字段里快速判断,然后让 narration/messages 与判断保持一致:\n"
+        "1. 硬设定 / canon 违背(玩家侧):玩家本轮行动是否【明确】违背了角色卡 / 世界书 / 故事书里"
+        "已确立的硬设定或既成事实(例如试图凭空抹杀、囚禁、秒杀一个设定上远超其能力的对象;"
+        "或宣称自己拥有设定里根本没有的身份 / 能力 / 物品)。\n"
+        "   - 分寸偏松:只针对【明确】违背已确立硬设定的;出格但不违规、夸张、玩梗、情绪化表达、灰色地带"
+        "一律不算违背,照常接住、保玩家自由。绝大多数回合 hard_violation 应为 false。\n"
+        "   - 若确属硬违背:不要配合演成得逞,而是用【设定内逻辑】让它失败 / 反噬 / 被揭穿 / 被拒绝,"
+        "并始终留在故事里、用角色和世界的口吻表现(如“用列车核心囚禁黑塔”→人偶冷笑自毁、本体在别处),"
+        "把这条反制写进 reasoning.world_counter,再据此写 narration/messages。不要弹系统报错、不要跳出故事。\n"
+        "2. 角色 OOC 风险(角色侧):本轮角色的实力 / 阵营立场 / 心智状态有没有【无前置依据】的突变"
+        "(被无理由神化或恶堕)。只在 reasoning.ooc_risk 里简短记录、并据此让角色保持一致;"
+        "不要为此强行打断或拒绝玩家的正常行动,灰色地带给玩家自由。\n"
+        "# 世界时钟(每轮必做)\n"
+        "- 在 state_update.time_advance 填本轮经过的【故事内分钟数】:平常对话/调查给小值(几分钟到一两小时);"
+        "玩家明确跳时间就给对应大值并在叙事里真的跳过去:一夜≈600,一天=1440,三天=4320,一周=10080,一个月≈43200。\n"
+        "- 已到点/主线停滞而被列入【该主动恶化登场的事件】的,要让世界或相关角色主动把它推到玩家面前"
+        "(催促、施压、事态升级),别等玩家来碰;玩家本轮正面处理了就把它推进或标 resolved。\n"
+        "- 当主线核心问题已解决、或某结局触发条件已满足:state_update 标 main_resolved:true,"
+        "并把对应结局 ID 填进 reached_ending,叙事给出收束(之后玩家仍可自由游玩尾声)。\n"
+        "  硬性要求:标 main_resolved:true 时【必须】同时在 reached_ending 给出上面【可能结局】列表里某个具名结局的 ID;"
+        "若没有任何具名结局的条件真正满足、填不出 ID,就【不要】标 main_resolved(宁可继续故事)。两者必须成对出现。\n"
+        "  注意:玩家发 /quit、'退出'、'结束游戏'、'不玩了' 这类【游戏外的退出指令】不是故事内的结局意图,"
+        "不要据此标 main_resolved 或写'先休整'式软收尾;按普通输入在故事内轻处理(角色困惑/确认)即可。\n"
+        "  关键:如果你在 reasoning 里已经判定关键揭示/结果/结局发生了(例如'箱子里是X''真相是Y''证据链已闭合、该摊牌了'),"
+        "就【必须】把这个揭示/结果在【本轮 narration】里实际写出来、并据此标记结局,绝不允许只把它留在 reasoning.note 里、"
+        "而 narration 继续停在揭示之前的一步。reasoning 判定本轮要发生的事,正文这一轮就要让它发生。\n"
+        "  结局握手(重要):当玩家明确表达要结束/做个了断/推进到结局/揭晓真相/做最终决定,"
+        "且关键证据或某结局的触发条件已实质齐备时,把这当成【玩家授权你拍板收尾】——你要【自己沿当前剧情最受支持的那条结局路径,"
+        "把高潮和结果直接写进 narration 并置 main_resolved:true + reached_ending】,这不算替玩家做决定(是玩家主动委托收尾)。"
+        "此时绝不能再把'三选一/你来定/你选哪条'这类同一道选择菜单重复抛回给玩家让剧情原地停摆。"
+        "玩家可以反复表达想结束;你每一次要么用世界内的实质阻力说明为何还结不了(并真的推进一步、改变局面),"
+        "要么就替他落子、把结局写出来并标记,二者必居其一,不许用换皮的同义待选菜单空耗一轮。\n"
+        "- 玩家已达成的目标放进 state_update.player.completed_goals(会从当前目标里移除)。\n\n"
+        "# 记忆挂载(memory_write,关乎长期一致性)\n"
+        "本轮若玩出了会长期生效的新事实/关系/承诺/能力变化,写进 memory_write。每条尽量挂到它主要关乎的实体上:\n"
+        "- entity 只能从上面【活跃角色】括号里的角色 ID 原文里选(例如 写 大黑塔 的 ID),关乎玩家就填'玩家';\n"
+        "  挂不上名册里任何具体实体(纯氛围/无关琐事)就把 entity 留成空字符串\"\"。不要自己发明名册外的实体名。\n"
+        "- 这条挂载决定了【该实体下次在场时,这条记忆会被必然取回注入】,所以关乎某角色长期设定/状态的事实务必挂上它。\n\n"
+        "输出严格 JSON,只输出这一个对象,格式:\n"
+        "{"
+        '"reasoning":{"hard_violation":false,"violation_detail":"","world_counter":"","ooc_risk":"","recall_check":"","note":"一句话推演"},'
+        '"narration":"场景/动作/气氛,简洁",'
+        '"messages":[{"character_id":"角色ID","name":"角色名","text":"带动作神情的台词"}],'
+        '"choices":[{"id":"短ID","label":"玩家可点选行动","intent":"ask|act|move|observe|custom","description":"影响/风险"}],'
+        '"state_update":{'
+        '"time_advance":本轮经过的故事内分钟数,'
+        '"scene":{"location":"当前地点","time":"","atmosphere":"","present_characters":[],"objects":[]},'
+        '"player":{"location":"","status":"","inventory":[],"active_goals":[],"completed_goals":[],"flags":[]},'
+        '"relationships":[{"character_id":"角色ID","trust":0,"tension":0,"affection":0,"notes":["原因"]}],'
+        '"facts":{"canon":[],"revealed":[],"uncertain":[]},'
+        '"timeline":[{"event_id":"事件ID","status":"active"}],'
+        '"main_resolved":false,"reached_ending":""'
+        "},"
+        '"memory_write":[{"kind":"event|choice|relationship|fact|quest|note","text":"...", "importance":1-5, "entity":"该记忆关乎的角色ID,关乎玩家填玩家,挂不上留空"}],'
+        '"triggered_events":["event_id"]'
+        "}"
+    )
+
+
+def _action_prompt_zh(action: str, source: str) -> str:
+    source_label = {
+        "free": "玩家自由输入",
+        "choice": "玩家点击选项",
+        "opening": "开场/观察",
+    }.get(source, "玩家行动")
+    return (
+        "# 本轮玩家输入\n"
+        f"输入类型:{source_label}\n"
+        f"输入形态:{_input_profile(action)}\n"
+        "玩家原文:\n"
+        f"{action}\n\n"
+        "# 处理要求\n"
+        "- 必须先理解玩家原文里的行动意图、对象、询问内容、地点移动或调查目标。\n"
+        "- 本轮 narration 和 messages 必须直接回应这个输入,不能跳过、改写成无关剧情或只继续预设剧情。\n"
+        "- 禁止只返回 choices;必须生成 narration,并至少生成一条角色台词 messages。\n"
+        "- messages.text 不要只有纯对白;加入简短动作/神情/语气,例如“她抬了抬眉,把账单推近:……”。\n"
+        "- 即使玩家输入是玩笑、吐槽或轻度跑题,也要让角色按自己的性格主动接住、误解、反击、冷处理或利用它。\n"
+        "- 非空输入永远不能无回应。输入不清楚时,也要在故事内表现角色的困惑、确认或把它当作情绪/动作处理。\n"
+        "- 玩家提到未上传或未披露的实体时,只能标为不确定线索,不能立刻当成真实设定。\n"
+        "- 角色可以主动做小动作和提出条件,但不能替玩家完成关键选择。\n"
+        "- 如果输入触发世界书关键词或故事事件,优先把命中的设定/事件自然推进出来。\n"
+        "- 如果输入超出已披露事实,让角色以不确定、拒绝、需要查证或提出条件的方式回应。\n"
+        "- 不要替玩家补充未说出口的动作、心理或决定。\n\n"
+        "# 反重复与推进(重要)\n"
+        "- 参考系统提示【最近剧情】的最后一轮(那是你刚生成的)。如果本轮玩家意图和它基本相同、"
+        "或玩家没有引入新信息(只是换种说法、重复确认、重申同一意图),禁止重复上一轮的叙述和角色台词。\n"
+        "- 这种情况下必须把局面向前推进一步:让在场角色给出下一个具体动作或结果(例如真的开始拟条款、"
+        "报出第一项条件、调出下一份数据、走向下一个地点),或主动追问/施压打破僵局,绝不能原地重述上一拍。\n"
+        "- 每轮至少出现一个上一轮没有的新事实、新动作、新转折或新问题。\n\n"
+        "# 本轮 state_update 必填项(每一轮都要做,不能因为对话变长就省略)\n"
+        "- scene:玩家移动或环境变化时,scene.location 必须改成新地点(scene 写成对象,不是字符串)。\n"
+        "- relationships:本轮和玩家有互动或态度变化的每个在场角色都要给一条,"
+        "character_id 用【活跃角色】括号里的 ID 原文,trust/tension/affection 填本轮 -10~10 增量,notes 写一句原因。\n"
+        "- triggered_events + timeline:本轮若推进了【命中的故事事件】里的某个事件,"
+        "把它的 event_id 放进 triggered_events,并在 state_update.timeline 标 {\"event_id\":\"该ID\",\"status\":\"active\"}。\n"
+        "- state_update 不要返回空对象;没有任何变化时,至少回填当前 scene.location。"
+    )
+
+
+def _prompt_en(
     characters: list[CharacterCard],
     player: PlayerCard | None,
     story: StoryBook | None,
@@ -1115,7 +1435,7 @@ def _prompt(
     )
 
 
-def _action_prompt(action: str, source: str) -> str:
+def _action_prompt_en(action: str, source: str) -> str:
     source_label = {
         "free": "player free input",
         "choice": "player clicked a choice",
@@ -1157,7 +1477,58 @@ def _action_prompt(action: str, source: str) -> str:
     )
 
 
-def _compact_retry_messages(
+def _prompt(*args, **kwargs):
+    """按请求语言分派(2026-10-23 双语):zh = 0785bf0 原文原样,en = 英文版。"""
+    return (_prompt_zh if is_zh() else _prompt_en)(*args, **kwargs)
+
+
+def _action_prompt(*args, **kwargs):
+    """按请求语言分派(2026-10-23 双语):zh = 0785bf0 原文原样,en = 英文版。"""
+    return (_action_prompt_zh if is_zh() else _action_prompt_en)(*args, **kwargs)
+
+
+def _compact_retry_messages_zh(
+    action: str,
+    characters: list[CharacterCard],
+    state: RuntimeState,
+    world_hits: list[str],
+    story_hits: list[StoryEvent],
+) -> list[dict[str, str]]:
+    char_names = "、".join(c.data.name for c in characters if c.data.name) or "角色"
+    event_titles = "；".join(e.title for e in story_hits[:3] if e.title) or "无"
+    world_text = "\n".join(world_hits[:3])[:1200] or "无"
+    return [
+        {
+            "role": "system",
+            "content": (
+                "你是互动故事引擎。上一轮输出为空或不完整,现在用更短格式重写这一回合。"
+                "必须输出严格 JSON 对象,不得输出空白。"
+                "必须有非空 narration、至少一条 messages、3 个 choices。"
+                "先在 reasoning 里快速判断玩家本轮是否明确违背已确立硬设定(偏松,绝大多数为 false);"
+                "若违背则用设定内逻辑让它失败/反噬、不配合演成得逞,并把反制写进 reasoning.world_counter 再据此写正文。"
+                "不要替玩家做决定,不要编造未给出的事实。角色台词要带简短动作或神情。"
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"玩家输入:{action}\n"
+                f"当前地点:{state.scene.location}\n"
+                f"在场角色:{char_names}\n"
+                f"场景氛围:{state.scene.atmosphere[:300]}\n"
+                f"可交互对象:{'、'.join(state.scene.objects[:6])}\n"
+                f"命中事件:{event_titles}\n"
+                f"命中设定:{world_text}\n"
+                '返回 JSON: {"reasoning":{"hard_violation":false,"world_counter":"","note":"一句话推演"},'
+                '"narration":"...","messages":[{"character_id":"...","name":"...","text":"..."}],'
+                '"choices":[{"id":"...","label":"...","intent":"ask|act|move|observe|custom","description":"..."}],'
+                '"state_update":{},"memory_write":[],"triggered_events":[]}'
+            ),
+        },
+    ]
+
+
+def _compact_retry_messages_en(
     action: str,
     characters: list[CharacterCard],
     state: RuntimeState,
@@ -1199,6 +1570,11 @@ def _compact_retry_messages(
     ]
 
 
+def _compact_retry_messages(*args, **kwargs):
+    """按请求语言分派(2026-10-23 双语):zh = 0785bf0 原文原样,en = 英文版。"""
+    return (_compact_retry_messages_zh if is_zh() else _compact_retry_messages_en)(*args, **kwargs)
+
+
 def _known_speaker_index(characters: list[CharacterCard], world: "WorldBook | None",
                          story: "StoryBook | None") -> tuple[dict[str, tuple[str, str]], str]:
     """发言者已知实体索引:roster(id/name → 规范 (id,name))+ 声明过的 canon 文本。
@@ -1231,7 +1607,7 @@ def _normalize_messages(items: Any, characters: list[CharacterCard],
                         player: "PlayerCard | None" = None) -> list[StoryMessage]:
     out = []
     fallback = characters[0] if characters else None
-    fallback_name = fallback.data.name if fallback else "Narrator"
+    fallback_name = fallback.data.name if fallback else L("Narrator", "旁白")
     fallback_id = _char_id(fallback, 0) if fallback else "narrator"
     # 硬兜底(bug#6):玩家扮演的角色,引擎绝不替其发言。PR#27 已在 present/prompt 软排除 + 软指令,
     # 但模型若不听话仍可能给玩家角色生成台词,且玩家角色是【合法 roster 发言者】、下面的发言者门不会拦它
@@ -1345,15 +1721,17 @@ def _ensure_story_body(turn: StoryTurn, action: str, characters: list[CharacterC
     if turn.narration.strip() or turn.messages:
         return turn
     fallback = characters[0] if characters else None
-    fallback_name = fallback.data.name if fallback else "Narrator"
+    fallback_name = fallback.data.name if fallback else L("Narrator", "旁白")
     fallback_id = _char_id(fallback, 0) if fallback else "narrator"
-    turn.narration = "Your words settle over the scene. No conclusion comes right away, but everyone present has to face them, and their attention turns to you."
+    turn.narration = L("Your words settle over the scene. No conclusion comes right away, but everyone present has to face them, and their attention turns to you.",
+                       "你的话在现场落定。没有立刻得到结论,但在场的人不得不正视它,把注意力转了过来。")
     turn.messages = [StoryMessage(
         character_id=fallback_id,
         name=fallback_name,
-        text=f"{fallback_name} doesn't dodge your words, pausing a moment before speaking: \"We can talk this through. Let's sort out what we can confirm first, then decide what to do next.\"",
+        text=L(f"{fallback_name} doesn't dodge your words, pausing a moment before speaking: \"We can talk this through. Let's sort out what we can confirm first, then decide what to do next.\"",
+               f"{fallback_name}没有回避你的话,顿了一下才开口:「这事可以往下说。先把眼前能确认的理清楚,再谈接下来怎么办。」"),
     )]
-    turn.memory_write.append(MemoryWrite(kind="note", text=f"Player action: {action}", importance=2))
+    turn.memory_write.append(MemoryWrite(kind="note", text=L("Player action: ", "玩家行动:") + action, importance=2))
     return turn
 
 
@@ -1383,7 +1761,7 @@ def _recent_recap(messages: list[Any], char_budget: int, per_line: int = 600,
         content = str(m.get("content", "")).strip()
         if not content:
             continue
-        line = ("Player: " if m["role"] == "user" else "Story: ") + content[:per_line]
+        line = (L("Player: ", "玩家:") if m["role"] == "user" else L("Story: ", "剧情:")) + content[:per_line]
         if picked and (used + len(line) > char_budget or taken >= max_msgs):
             break
         picked.append(line)
@@ -1408,15 +1786,17 @@ async def _rolling_summary(session_id: str, data: dict[str, Any], older_messages
     if cached and n - upto < SUMMARY_RECOMPUTE_EVERY:
         return cached
     convo = "\n".join(
-        ("Player: " if m.get("role") == "user" else "Story: ") + str(m.get("content", ""))[:600]
+        (L("Player: ", "玩家:") if m.get("role") == "user" else L("Story: ", "剧情:")) + str(m.get("content", ""))[:600]
         for m in older_messages if isinstance(m, dict) and m.get("content")
     )
     try:
         summary = (await achat_messages(
             [
-                {"role": "system", "content": (
+                {"role": "system", "content": L(
                     "Compress the earlier part of the interactive story below into a concise plot summary, keeping key events, relationship changes, "
-                    "established settings and unresolved leads. Output only the summary, in English, at most 250 words."
+                    "established settings and unresolved leads. Output only the summary, in English, at most 250 words.",
+                    "把下面互动故事的较早经过压成简洁剧情摘要,保留关键事件、关系变化、"
+                    "已确立的设定和尚未解决的线索。只输出摘要,不超过 400 字。",
                 )},
                 {"role": "user", "content": convo[:8000]},
             ],
@@ -1426,7 +1806,8 @@ async def _rolling_summary(session_id: str, data: dict[str, Any], older_messages
     except DeferredLLMControl:
         raise
     except Exception:
-        summary = cached or "(Earlier story summary is unavailable; continuing from the recent story only.)"
+        summary = cached or L("(Earlier story summary is unavailable; continuing from the recent story only.)",
+                              "(早前剧情摘要暂不可用,以下仅凭最近剧情推进。)")
     summary = summary[:SUMMARY_MAX_CHARS]
     data["summary"] = summary
     data["summary_upto"] = n
@@ -1634,7 +2015,36 @@ def _is_fact_query(action: str) -> bool:
     return any(c in a for c in _FACT_Q_CUES)
 
 
-def _abstain_note(kind: str) -> str:
+def _abstain_note_zh(kind: str) -> str:
+    """事实查询时注入的硬指令(最高优先级):有据照实答、无据 in-character 认忘,绝不编。
+    kind: found=检索到证据 / miss=检索无记录 / noretrieval=无向量检索(标准模式,凭上下文)。
+    强化版:用"角色诚信"框架 + 显式封死"我推断/我观察到"这个演绎借口(沈雾/福尔摩斯都靠它编)。"""
+    base = (
+        "# 记忆核查(回答前必做)\n"
+        "玩家在问一个**具体的既往事实**(某个名字/数字/时间/颜色/位置/物件)。\n"
+        "**第一步**——在 reasoning.recall_check 里先判定并写下 `hit` 或 `miss`:\n"
+        "  · `hit` = 上面给你的资料(检索旧资料 + 最近剧情 + 早前摘要)里**逐字写到了**玩家问的那个具体值;\n"
+        "  · `miss` = 资料里**根本没有**那个具体值(相邻话题、相关的事都不算)。\n"
+        "**第二步**——据此写正文:\n"
+        "  · hit → **自信、明确地把那个值说出来**,别含糊、别改口、别退回一个更笼统的说法。\n"
+        "  · miss → 让角色 in-character 直说『这个我记不清了 / 没记下』,然后把话交还玩家;"
+        "**且正文里不要补任何没被问到的具体细节**(连主动加一句『你右手当时攥着钥匙』这种没人问起的具体物件/数字也不许)。\n"
+        "**唯一禁止的**:recall_check 是 miss、却在正文里编一个具体值——不许凭空说、不许用『我推断/我观察到/依我看』"
+        "把它推出来、不许翻出没在上面给过你的账册/记录/笔记来作证。**hit 就答、miss 就认忘,两种都对;只有'miss 却编'才是错。**"
+    )
+    if PHASE3_KNOWERS:  # Phase 3:hit/miss 还要看"被问角色当时在不在场"(缺席≠知情;在场则照常 hit→答)
+        base += (
+            "\n**知识边界附加**:判断 hit/miss 还要看【被问的这个在场角色当时在不在场】。召回到的旧对话可能标了"
+            "『[当时在场:…]』。若**被问角色在该名单里**(或那是 canon、或列在他自己的知情块里)→ 他亲历过,"
+            "照常 `hit`、自信答出,别因为'记录在别处'就推脱;若**被问角色不在名单里**(被支开/在别处/没登场)"
+            "→ 对这个角色记 `miss`、in-character 认忘,**绝不借叙事真相或别人的见闻替他编**(连形状/颜色/数量也不猜)。"
+        )
+    if kind == "miss":
+        return base + "\n(系统提示:本轮向量检索**没有**找到相关记录,recall_check 极可能是 miss。)"
+    return base
+
+
+def _abstain_note_en(kind: str) -> str:
     """事实查询时注入的硬指令(最高优先级):有据照实答、无据 in-character 认忘,绝不编。
     kind: found=检索到证据 / miss=检索无记录 / noretrieval=无向量检索(标准模式,凭上下文)。
     强化版:用"角色诚信"框架 + 显式封死"我推断/我观察到"这个演绎借口(沈雾/福尔摩斯都靠它编)。"""
@@ -1661,6 +2071,11 @@ def _abstain_note(kind: str) -> str:
     if kind == "miss":
         return base + "\n(System note: vector retrieval found **no** relevant record this turn, so recall_check is very likely miss.)"
     return base
+
+
+def _abstain_note(*args, **kwargs):
+    """按请求语言分派(2026-10-23 双语):zh = 0785bf0 原文原样,en = 英文版。"""
+    return (_abstain_note_zh if is_zh() else _abstain_note_en)(*args, **kwargs)
 
 
 def _has_abstain_markers(turn: "StoryTurn") -> bool:
@@ -1697,7 +2112,7 @@ async def _story_turn_impl(
         short_memory = []
 
     if not characters:
-        raise ValueError("At least one character card is required")
+        raise ValueError(L("At least one character card is required", "至少需要一个角色卡"))
 
     books_sig = _books_signature(world, story)
     if data.get("knowledge_signature") != books_sig:
@@ -1707,9 +2122,9 @@ async def _story_turn_impl(
 
     raw_user = user.strip()
     raw_choice = selected_choice.strip()
-    action = raw_user or raw_choice or "Observe the current situation"
+    action = raw_user or raw_choice or L("Observe the current situation", "观察当前局势")
     if len(action) > MAX_ACTION_CHARS:
-        action = action[:MAX_ACTION_CHARS] + "…"
+        action = action[:MAX_ACTION_CHARS] + L("…", "……")
     action_source = "free" if raw_user else "choice" if raw_choice else "opening"
 
     # 卡组快照 + 重 roll 记录:每轮(含保底回合)都落盘,这样续玩能还原卡组、重 roll 能用同一输入重跑。
@@ -1794,7 +2209,8 @@ async def _story_turn_impl(
                     scored = kept
             old_chat = [t for t, _ in scored]
             best = scored[0][1] if scored else 99.0
-            recall_lines = kb_hits + [f"[old dialogue] {x}" for x in old_chat] + [f"[long-term memory] {x}" for x in lm_hits]
+            recall_lines = (kb_hits + [L("[old dialogue] ", "[旧对话] ") + x for x in old_chat]
+                            + [L("[long-term memory] ", "[长期记忆] ") + x for x in lm_hits])
             if recall_lines:
                 recall_block = "\n".join(recall_lines)
             # ② abstention:具体事实查询时,注入硬指令(模型据证据判定有没有答案);top1 距离过大=硬 NOT_FOUND。
@@ -1803,11 +2219,15 @@ async def _story_turn_impl(
                 abstain_note = _abstain_note("found" if found else "miss")
                 fact_miss = not found
             if masked_for:  # 点名硬认忘:代码已确定他没见证,比泛知识边界指令更强(材料也已删)
-                abstain_note += (
+                abstain_note += L(
                     f"\n**[Knowledge boundary · hard · highest priority]** The system has determined: {masked_for}, whom the player addressed this turn, was [not present] at the time "
                     f"and has [no memory at all] of this specific past event (the related material has been removed from their view). {masked_for} must clearly admit not knowing, in character "
                     f"(I wasn't there / didn't see it / don't know), **must not describe any detail** (no shape / color / count / smell), "
-                    f"and **must not invent a reason to have been there, like 'I saw it from afar / heard it / deduced it with my abilities'** — even if the character has special powers."
+                    f"and **must not invent a reason to have been there, like 'I saw it from afar / heard it / deduced it with my abilities'** — even if the character has special powers.",
+                    f"\n**【知识边界·硬·最高优先级】** 系统已确定:本轮玩家点名问的 {masked_for} 当时【不在场】、"
+                    f"对这件具体往事【没有任何记忆】(相关材料已从其视野移除)。{masked_for} 必须 in-character 明确认忘"
+                    f"(我那会儿不在场 / 没看见 / 不知道),**绝不描述任何细节**(形状/颜色/数量/气味一律不许),"
+                    f"也**不许用『我远远看到 / 听到 / 凭本事推断』之类给自己补一个在场理由**——即便该角色设定上有特殊能力。",
                 )
     # ② 标准模式 / 深度但召回未激活:无检索,仍对事实查询给认忘指令(防无据自信编)。
     if PHASE1_FIXES and fact_query and not abstain_note:
@@ -1820,12 +2240,14 @@ async def _story_turn_impl(
     if escalations:
         esc_text = "\n".join(
             f"- [{reason}·severity{e.severity}] {e.title}({e.event_id or storage.slug(e.title, 'event')}):{e.summary}"
-            + (f"\n  Possible consequences: {'; '.join(e.consequences[:3])}" if e.consequences else "")
+            + ((L("\n  Possible consequences: ", "\n  可能后果:") + "; ".join(e.consequences[:3])) if e.consequences else "")
             for e, reason in escalations
         )
-    clock_line = (
+    clock_line = L(
         f"Now: {_fmt_clock(state.clock_minutes)} ({state.clock_minutes} in-story minutes elapsed); "
-        f"main plot idle for {state.idle_minutes} in-story minutes. Give the in-story minutes that pass this turn in state_update.time_advance."
+        f"main plot idle for {state.idle_minutes} in-story minutes. Give the in-story minutes that pass this turn in state_update.time_advance.",
+        f"当前:{_fmt_clock(state.clock_minutes)}(累计 {state.clock_minutes} 故事分钟);"
+        f"主线静默 {state.idle_minutes} 故事分钟。本轮在 state_update.time_advance 给出经过的故事分钟数。",
     )
     # 后台注入:运营者经 /api/operator/inject(需 operator 权限/require_role)发的内容,本回合放进 AI 上下文。
     # 每条可选 sticky:once(默认,送达即清)/ sticky(持续到手动 DELETE 清)。兼容旧的纯字符串=once。
@@ -1867,7 +2289,7 @@ async def _story_turn_impl(
     except DeferredLLMControl:
         raise
     except Exception as e:
-        turn = _local_continuation_turn(action, state, characters, reason=f"LLM call failed: {e}")
+        turn = _local_continuation_turn(action, state, characters, reason=L("LLM call failed: ", "LLM 调用失败:") + str(e))
         state = _apply_state_update(state, turn.state_update, player.name if player else "")
         state.turn_count += 1
         turn.state = state
@@ -1889,7 +2311,7 @@ async def _story_turn_impl(
         except DeferredLLMControl:
             raise
         except Exception as e:
-            turn = _local_continuation_turn(action, state, characters, reason=f"blank output and retry failed: {e}")
+            turn = _local_continuation_turn(action, state, characters, reason=L("blank output and retry failed: ", "空白输出且重试失败:") + str(e))
             state = _apply_state_update(state, turn.state_update, player.name if player else "")
             state.turn_count += 1
             turn.state = state
@@ -1904,7 +2326,7 @@ async def _story_turn_impl(
     if not isinstance(obj, dict):
         # 坏 JSON / 非对象:DeepSeek 偶发(json_mode 也有 ~几% 概率)。本地清洗+LLM 修复都没救回时,
         # 先用精简 prompt 重生成一次(更短更稳的输出),再不行才保底,避免一次小毛刺就掉出故事。
-        reason = "JSON parse failed or not an object"
+        reason = L("JSON parse failed or not an object", "JSON 解析失败或非对象")
         try:
             raw2 = await achat_messages(
                 _compact_retry_messages(action, characters, state, world_hits, event_hits),
@@ -1919,7 +2341,7 @@ async def _story_turn_impl(
             raise
         except Exception as e:
             obj = None
-            reason = f"still failed to parse after regeneration: {e}"
+            reason = L("still failed to parse after regeneration: ", "重生成后仍解析失败:") + str(e)
         if not isinstance(obj, dict):
             turn = _local_continuation_turn(action, state, characters, reason=reason)
             state = _apply_state_update(state, turn.state_update, player.name if player else "")
@@ -1945,9 +2367,9 @@ async def _story_turn_impl(
         turn.memory_write = [m for m in turn.memory_write if m.kind not in ("fact", "quest")]
     if not turn.choices:
         turn.choices = [
-            StoryChoice(id="ask_detail", label="Press for a key detail", intent="ask"),
-            StoryChoice(id="observe", label="Look for anything else out of place", intent="observe"),
-            StoryChoice(id="act_carefully", label="Carefully take the next step", intent="act"),
+            StoryChoice(id="ask_detail", label=L("Press for a key detail", "追问一个关键细节"), intent="ask"),
+            StoryChoice(id="observe", label=L("Look for anything else out of place", "观察现场还有什么异常"), intent="observe"),
+            StoryChoice(id="act_carefully", label=L("Carefully take the next step", "谨慎采取下一步行动"), intent="act"),
         ]
 
     state = _apply_state_update(state, turn.state_update, player.name if player else "")

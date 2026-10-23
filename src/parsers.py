@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import re
 
+from .lang import L
 from .models import (
     CharacterBoundary,
     CharacterCard,
@@ -255,7 +256,7 @@ def parse_character(text: str) -> CharacterCard:
     if not name:
         # h1 是占位 / 缺失:frontmatter tags 末项常是角色名,再不行用 ip
         tags = _split_list(fm.get("tags", ""))
-        name = tags[-1] if tags else (_clean(fm.get("ip", "")) or "Character")
+        name = tags[-1] if tags else (_clean(fm.get("ip", "")) or L("Character", "角色"))
 
     data = CharacterData(name=name)
     data.tags = _split_list(fm.get("tags", ""))
@@ -305,7 +306,7 @@ def parse_player(text: str) -> PlayerCard:
     fm, body = split_frontmatter(text)
     secs = split_sections(body)
     h1 = next((s for s in secs if s.level == 1), None)
-    card = PlayerCard(name=_title_first_token(h1.title) if h1 else fm.get("ip", "Player") or "Player")
+    card = PlayerCard(name=_title_first_token(h1.title) if h1 else fm.get("ip", L("Player", "玩家")) or L("Player", "玩家"))
 
     def sec_text(*n: str) -> str:
         s = _find(secs, *n)
@@ -368,7 +369,7 @@ def parse_settingcard(text: str) -> SettingCard:
     secs = split_sections(body)
     h1 = next((s for s in secs if s.level == 1), None)
     card = SettingCard(
-        name=_title_first_token(h1.title) if h1 else _clean(fm.get("ip", "")) or "Setting",
+        name=_title_first_token(h1.title) if h1 else _clean(fm.get("ip", "")) or L("Setting", "设定"),
         category=_clean(fm.get("类别", "")),
         scene_type=_clean(fm.get("场景类型", "")),
         ip=_clean(fm.get("ip", "")),
@@ -462,7 +463,7 @@ def parse_storybook(text: str) -> StoryBook:
     fm, body = split_frontmatter(text)
     secs = split_sections(body)
     h1 = next((s for s in secs if s.level == 1), None)
-    book = StoryBook(title=_title_first_token(h1.title) if h1 else _clean(fm.get("ip", "")) or "Story Book")
+    book = StoryBook(title=_title_first_token(h1.title) if h1 else _clean(fm.get("ip", "")) or L("Story Book", "故事书"))
 
     # 把标号段归组(顶层 1..9 / A..E),其 `###` 子段也收进来
     by_num: dict[str, list[Section]] = {}

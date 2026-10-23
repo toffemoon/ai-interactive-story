@@ -28,7 +28,7 @@ export async function applyLanguageChoice(lang, signedIn) {
 
 export default function LanguageGate() {
   const { ready, enabled, user } = useAuth();
-  const [chosen, setChosen] = useState(hasChosenLang());
+  const chosen = hasChosenLang();
   const [busy, setBusy] = useState(false);
   const signedIn = !!(enabled && user);
   const acct = signedIn ? user.language : undefined;
@@ -36,11 +36,8 @@ export default function LanguageGate() {
   useEffect(() => {
     if (!ready || !signedIn || acct === undefined) return;
     if (LANGS.includes(acct)) {
-      if (acct !== LANG) setLang(acct); // 账户为准,整页换语言
-      else if (!chosen) {
-        setLang(acct, { reload: false });
-        setChosen(true);
-      }
+      // 账户为准:本机没选过或与账户不同 → 写本机并整页 reload(App 在本机选定语言前不渲染路由)
+      if (acct !== LANG || !chosen) setLang(acct);
     } else if (chosen) {
       saveAccountLanguage(LANG);
     }

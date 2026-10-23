@@ -1,3 +1,5 @@
+import { L } from "./i18n";
+
 // 引用体系(F2 · AI 触点可控):把一张卡的核心字段拼成模型可读的紧凑文本。
 // refs 通道单条 3000 字预算(后端 identify.py 截断),这里主动收敛到 2800 留余量。
 // 字段名对齐 src/models.py(CharacterData / PlayerCard / WorldBook / StoryBook)。
@@ -6,8 +8,8 @@ const LIMIT = 2800;
 
 function line(label, v) {
   if (v == null) return "";
-  const s = Array.isArray(v) ? v.filter(Boolean).join(", ") : String(v).trim();
-  return s ? `${label}: ${s}\n` : "";
+  const s = Array.isArray(v) ? v.filter(Boolean).join(L(", ", "、")) : String(v).trim();
+  return s ? L(`${label}: ${s}\n`, `${label}:${s}\n`) : "";
 }
 
 export function cardToRefText(kind, data) {
@@ -15,39 +17,39 @@ export function cardToRefText(kind, data) {
   let out = "";
   if (kind === "characters") {
     out =
-      line("Name", d.name) +
-      line("Description", d.description) +
-      line("Personality", d.personality) +
-      line("Scenario", d.scenario) +
-      line("Opening line", d.first_mes) +
-      line("Example dialogue", d.mes_example) +
-      line("Speech rules", d.speech_rules) +
-      line("Tags", d.tags);
+      line(L("Name", "名字"), d.name) +
+      line(L("Description", "设定"), d.description) +
+      line(L("Personality", "性格"), d.personality) +
+      line(L("Scenario", "情境"), d.scenario) +
+      line(L("Opening line", "开场白"), d.first_mes) +
+      line(L("Example dialogue", "对话范例"), d.mes_example) +
+      line(L("Speech rules", "说话规则"), d.speech_rules) +
+      line(L("Tags", "标签"), d.tags);
   } else if (kind === "players") {
     out =
-      line("Name", d.name) +
-      line("Role", d.role) +
-      line("Background", d.background) +
-      line("Goals", d.goals) +
-      line("Abilities", d.abilities) +
-      line("Constraints", d.constraints) +
-      line("Known facts", d.known_facts) +
-      line("Opening", d.opening);
+      line(L("Name", "名字"), d.name) +
+      line(L("Role", "身份"), d.role) +
+      line(L("Background", "背景"), d.background) +
+      line(L("Goals", "目标"), d.goals) +
+      line(L("Abilities", "能力"), d.abilities) +
+      line(L("Constraints", "限制"), d.constraints) +
+      line(L("Known facts", "已知"), d.known_facts) +
+      line(L("Opening", "开局"), d.opening);
   } else if (kind === "worlds") {
-    out = line("World Book", d.name);
+    out = line(L("World Book", "世界书"), d.name);
     for (const e of d.entries || []) {
       const keys = (e.keys || []).filter(Boolean).join("/");
       const c = String(e.content || "").trim();
-      if (c) out += `- ${keys ? keys + ": " : ""}${c}\n`;
+      if (c) out += `- ${keys ? keys + L(": ", ":") : ""}${c}\n`;
       if (out.length > LIMIT) break;
     }
   } else if (kind === "stories") {
     out =
-      line("Title", d.title) +
-      line("Premise", d.premise) +
-      line("Timeline", d.timeline) +
-      line("Main plot", d.main_plot) +
-      line("Freedom rules", d.freedom_rules);
+      line(L("Title", "标题"), d.title) +
+      line(L("Premise", "前提"), d.premise) +
+      line(L("Timeline", "时间线"), d.timeline) +
+      line(L("Main plot", "主线"), d.main_plot) +
+      line(L("Freedom rules", "自由度规则"), d.freedom_rules);
   }
   // 兜底:未识别的形状(或字段全空)直接给 JSON 片段,宁可粗也别丢
   if (!out.trim()) {
@@ -64,7 +66,7 @@ export function cardToRefText(kind, data) {
 export function makeRef(type, label, text) {
   return {
     type, // 'card' | 'prompt' | 'text'
-    label: String(label || "").trim().slice(0, 60) || "Reference",
+    label: String(label || "").trim().slice(0, 60) || L("Reference", "参考"),
     text: String(text || "").trim().slice(0, 3000),
   };
 }

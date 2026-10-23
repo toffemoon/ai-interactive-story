@@ -1,4 +1,5 @@
 import { Tag, Badge } from "./ui";
+import { L } from "../lib/i18n";
 
 // 角色「查看详情」弹层:完整介绍,长则滚动。StoryDetail 路由 + 创作预览共用(详情页样式在 StoryDetail.css)。
 // 固定全屏覆盖 —— 放在轮播外用,不被卡的 transform 顶歪。
@@ -9,8 +10,8 @@ export default function CharDetailModal({ model, onClose, onDelete, onAdapt }) {
   return (
     <div className="detail-charmodal" onClick={onClose}>
       <div className="detail-charmodal-card" onClick={(e) => e.stopPropagation()}>
-        <button className="detail-charmodal-x" onClick={onClose} aria-label="Close">×</button>
-        <Badge tone="gilt">Character</Badge>
+        <button className="detail-charmodal-x" onClick={onClose} aria-label={L("Close", "关闭")}>×</button>
+        <Badge tone="gilt">{L("Character", "角色")}</Badge>
         <h2 className="t-h1 detail-charmodal-name">{model.title}</h2>
         {(model.tags || []).length > 0 && (
           <div className="detail-tags">
@@ -24,12 +25,12 @@ export default function CharDetailModal({ model, onClose, onDelete, onAdapt }) {
           <div className="detail-charmodal-foot">
             {onAdapt && (
               <button type="button" className="detail-charmodal-adapt" onClick={() => onAdapt(model)}>
-                Adapt · Copy as a new draft
+                {L("Adapt · Copy as a new draft", "去改编 · 复制成创作草稿")}
               </button>
             )}
             {onDelete && (
               <button type="button" className="detail-charmodal-del" onClick={() => onDelete(model)}>
-                Delete this card
+                {L("Delete this card", "删除这张卡")}
               </button>
             )}
           </div>
