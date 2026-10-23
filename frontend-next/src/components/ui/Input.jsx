@@ -13,7 +13,7 @@ export function SearchField({ icon = "⌕", className = "", onClear, value, ...r
       <span className="search-icon" aria-hidden="true">{icon}</span>
       <input className="search-input" value={value} {...rest} />
       {onClear && hasValue ? (
-        <button type="button" className="search-clear" onClick={onClear} aria-label="清除搜索" title="清除搜索">
+        <button type="button" className="search-clear" onClick={onClear} aria-label="Clear search" title="Clear search">
           ×
         </button>
       ) : null}

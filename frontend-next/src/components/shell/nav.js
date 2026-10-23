@@ -6,9 +6,9 @@
 //
 // 纯数据(无 JSX),保持 .js 可直接被 Vite 解析;图标按 `icon` 名在 AppShell 内映射成内联 SVG。
 export const NAV = [
-  { key: "explore", to: "/explore", zh: "探索", icon: "compass" },
-  { key: "chat", to: "/chat", zh: "纯聊", icon: "chat" },
-  { key: "create", to: "/create", zh: "创作", icon: "brush", plus: true },
-  { key: "mine", to: "/mine", zh: "我的", icon: "user" },
-  { key: "forum", to: "/forum", zh: "论坛", icon: "forum" },
+  { key: "explore", to: "/explore", zh: "Explore", icon: "compass" },
+  { key: "chat", to: "/chat", zh: "Chat", icon: "chat" },
+  { key: "create", to: "/create", zh: "Create", icon: "brush", plus: true },
+  { key: "mine", to: "/mine", zh: "Me", icon: "user" },
+  { key: "forum", to: "/forum", zh: "Forum", icon: "forum" },
 ];

@@ -46,7 +46,7 @@ function CoverFront({ model, flipped, onToggleFlip, frontRef, eager = false }) {
       tabIndex={flipped ? -1 : 0}
       aria-hidden={flipped || undefined}
       aria-expanded={flipped}
-      aria-label={`翻看《${title}》`}
+      aria-label={`Flip "${title}"`}
       onClick={(event) => {
         event.stopPropagation();
         onToggleFlip?.();
@@ -73,7 +73,7 @@ function CoverFront({ model, flipped, onToggleFlip, frontRef, eager = false }) {
           {meta.typeLabel ? <span className="card-type">{meta.typeLabel}</span> : null}
         </div>
         {/* 已收藏 = 封面右上垂一枚书签(YOR-171);走 CardModel.fav,由用处决定亮不亮 */}
-        {model.fav ? <span className="card-fav-mark" title="已收藏" aria-label="已收藏" /> : null}
+        {model.fav ? <span className="card-fav-mark" title="Saved to favorites" aria-label="Saved to favorites" /> : null}
       </div>
       <div className="card-bar">
         <span className="card-bar-title t-kai">{title}</span>
@@ -110,7 +110,7 @@ function ActionRow({ actions, onOpen, tabbable = true }) {
             onOpen();
           }}
         >
-          详情
+          Details
         </button>
       )}
     </div>
@@ -188,8 +188,8 @@ function ShelfCard({ model, flipped, onToggleFlip, actions, onOpen, eager }) {
             type="button"
             className="card-back-close"
             tabIndex={flipped ? 0 : -1}
-            aria-label={`返回《${title}》封面`}
-            title="返回封面"
+            aria-label={`Back to the cover of "${title}"`}
+            title="Back to cover"
             onClick={(event) => {
               event.stopPropagation();
               onToggleFlip?.();
@@ -204,7 +204,7 @@ function ShelfCard({ model, flipped, onToggleFlip, actions, onOpen, eager }) {
               <Tag key={i}>{t}</Tag>
             ))}
           </div>
-          {meta && meta.heat ? <div className="card-heat t-meta">在玩 {meta.heat}</div> : null}
+          {meta && meta.heat ? <div className="card-heat t-meta">{meta.heat} playing</div> : null}
           {note ? <div className="card-note t-meta">{note}</div> : null}
           <ActionRow actions={actions} onOpen={onOpen} tabbable={flipped} />
         </div>

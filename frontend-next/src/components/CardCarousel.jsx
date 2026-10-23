@@ -10,7 +10,7 @@ const SPACING = 198; // 相邻卡水平间距(px)
 const EASE = 0.18; // lerp 缓动(越大切换越快;D4 真机反馈「再快点」0.09→0.18)
 const WAVE_AMP = 16; // 微浪振幅(px),乘滚动速度 → 静止平、滚动起伏
 
-export default function CardCarousel({ items, renderItem, activeIndex, onActiveChange, ariaLabel = "卡片轮播" }) {
+export default function CardCarousel({ items, renderItem, activeIndex, onActiveChange, ariaLabel = "Card carousel" }) {
   const list = items || [];
   const n = list.length;
   const [internal, setInternal] = useState(0);
@@ -190,7 +190,7 @@ export default function CardCarousel({ items, renderItem, activeIndex, onActiveC
               key={i}
               type="button"
               className={"ccz-dot" + (i === active ? " is-on" : "")}
-              aria-label={"第 " + (i + 1) + " 张"}
+              aria-label={"Card " + (i + 1)}
               onClick={() => setActive(i)}
             />
           ))}

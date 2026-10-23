@@ -68,7 +68,7 @@ export async function authApi(path, body) {
         };
   const r = await fetch(path, opts);
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.detail || "请求失败");
+  if (!r.ok) throw new Error(data.detail || "Request failed");
   return data;
 }
 
@@ -80,7 +80,7 @@ export async function postJSON(url, body) {
   });
   if (!r.ok) {
     const err = await r.json().catch(() => ({ detail: r.statusText }));
-    throw new Error(err.detail || "请求失败");
+    throw new Error(err.detail || "Request failed");
   }
   return r.json();
 }
@@ -96,7 +96,7 @@ export async function delJSON(url) {
   const r = await fetch(url, { method: "DELETE" });
   if (!r.ok) {
     const err = await r.json().catch(() => ({ detail: r.statusText }));
-    throw new Error(err.detail || "删除失败");
+    throw new Error(err.detail || "Delete failed");
   }
   return r.json().catch(() => ({}));
 }
@@ -106,7 +106,7 @@ export async function uploadFile(file) {
     method: "POST",
     body: file,
   });
-  if (!r.ok) throw new Error("上传失败");
+  if (!r.ok) throw new Error("Upload failed");
   return (await r.json()).text;
 }
 
@@ -180,7 +180,7 @@ export async function streamTurn(body, { onDelta }) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!r.ok || !r.body) throw new Error("流式端点不可用");
+  if (!r.ok || !r.body) throw new Error("Streaming endpoint unavailable");
   const reader = r.body.getReader();
   const dec = new TextDecoder();
   let buf = "";

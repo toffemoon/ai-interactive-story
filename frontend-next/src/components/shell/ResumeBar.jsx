@@ -51,12 +51,12 @@ export default function ResumeBar() {
     <button
       className={"resume-bar" + (atHome ? " resume-bar--home" : "") + (retracted ? " is-retracted" : "")}
       onClick={() => navigate("/play")}
-      aria-label="继续游玩当前故事"
+      aria-label="Continue the current story"
     >
       <span className="resume-bar-dot" aria-hidden="true" />
       <span className="resume-bar-tx">
-        <span className="resume-bar-label t-meta">继续游玩</span>
-        <span className="resume-bar-title t-kai">{game.title || "当前故事"}</span>
+        <span className="resume-bar-label t-meta">Continue</span>
+        <span className="resume-bar-title t-kai">{game.title || "Current story"}</span>
       </span>
       <span className="resume-bar-arrow" aria-hidden="true">→</span>
     </button>

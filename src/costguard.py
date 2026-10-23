@@ -127,7 +127,7 @@ def preflight(ip: str) -> Reservation:
             row = cur.fetchone()
             spent = float(row["usd"] or 0)
             if row["tripped"] or spent >= cap:
-                raise HTTPException(503, "服务今日已达容量上限,请明天再来")
+                raise HTTPException(503, "The service has reached today's capacity limit. Please come back tomorrow.")
 
             # 2) 按 IP 限流(原子 upsert + 窗口重置;超限即 429,本事务回滚不持久化本次自增,
             #    稳态下计数停在 max、每个越限请求都被挡)。
@@ -143,7 +143,7 @@ def preflight(ip: str) -> Reservation:
                 (f"ip:{ip}", win, win),
             )
             if int(cur.fetchone()["count"]) > max_turns:
-                raise HTTPException(429, "操作太频繁,请稍后再试")
+                raise HTTPException(429, "Too many requests. Please try again later.")
 
             # 3) 单来源每日回合上限(宽松,0=不限)。
             if subj_cap > 0:
@@ -153,7 +153,7 @@ def preflight(ip: str) -> Reservation:
                 )
                 r = cur.fetchone()
                 if r and int(r["turns"] or 0) >= subj_cap:
-                    raise HTTPException(429, "今日次数已用完,明天再来")
+                    raise HTTPException(429, "You have reached today's usage limit. Please come back tomorrow.")
 
             # 4) 预扣:先把 reserve 记进 spend_daily,并发请求立刻看得到(防越顶)。
             cur.execute(

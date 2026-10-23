@@ -276,8 +276,8 @@ def search(session_id: str, query: str, k: int = 3, max_turn: int | None = None)
             out = []
             for r in cur.fetchall():
                 meta = r["meta"] or {}
-                role = "玩家" if meta.get("role") == "user" else "角色"
-                out.append(f"{_present_tag(meta)}{role}:{r['content']}")
+                role = "Player" if meta.get("role") == "user" else "Character"
+                out.append(f"{_present_tag(meta)}{role}: {r['content']}")
             return out
     except Exception as e:
         _mark_unavailable(e)
@@ -318,8 +318,8 @@ def search_scored(session_id: str, query: str, k: int = 4,
             out = []
             for r in cur.fetchall():
                 meta = r["meta"] or {}
-                role = "玩家" if meta.get("role") == "user" else "角色"
-                out.append((f"{_present_tag(meta)}{role}:{r['content']}", float(r["dist"])))
+                role = "Player" if meta.get("role") == "user" else "Character"
+                out.append((f"{_present_tag(meta)}{role}: {r['content']}", float(r["dist"])))
             return out
     except Exception as e:
         _mark_unavailable(e)

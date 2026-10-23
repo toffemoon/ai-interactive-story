@@ -7,10 +7,10 @@
 //   kind ∈ story | character | world | player   (库卡 = 同 kind + 不同 actions,由用处传)
 
 const BADGE = {
-  story: { label: "完整故事 · 可直接玩", tone: "pine" },
-  character: { label: "角色卡", tone: "gilt" },
-  world: { label: "世界书", tone: "gilt" },
-  player: { label: "演出卡", tone: "gilt" },
+  story: { label: "Full story · Play now", tone: "pine" },
+  character: { label: "Character", tone: "gilt" },
+  world: { label: "World Book", tone: "gilt" },
+  player: { label: "Player Card", tone: "gilt" },
 };
 
 function clip(s, n = 90) {
@@ -25,16 +25,16 @@ function fromStory(p) {
   return {
     id: d.name || p.name || "story",
     kind: "story",
-    title: d.name || p.name || "未命名故事",
+    title: d.name || p.name || "Untitled story",
     cover: d.cover || "",
-    blurb: clip(d.synopsis || (d.story && d.story.premise) || "一个等你走进的故事。"),
+    blurb: clip(d.synopsis || (d.story && d.story.premise) || "A story waiting for you to step in."),
     badge: BADGE.story,
     tags: (d.tags || []).slice(0, 3),
     meta: {
       characters: nch,
       author: d.author || "",
       uploader: d.author || "", // 上传者(真数据:故事 author)
-      typeLabel: p && p.official ? "官方" : "", // 原创/同人 需引擎类型字段(YOR-95),暂只标官方
+      typeLabel: p && p.official ? "Official" : "", // 原创/同人 需引擎类型字段(YOR-95),暂只标官方
       useCount: pickCount(d.uses, p && p.uses, p && p.use_count), // 被使用次数:留位,等 YOR-95 后端字段
     },
     note: "",
@@ -56,14 +56,14 @@ function fromCharacter(it) {
   return {
     id: cd.name || (it && it.name) || "character",
     kind: "character",
-    title: cd.name || (it && it.name) || "角色",
+    title: cd.name || (it && it.name) || "Character",
     cover: cd.image || cd.avatar || "",
-    blurb: clip(cd.look || cd.description || "一张待你揭晓的角色卡。"),
+    blurb: clip(cd.look || cd.description || "A character waiting to be discovered."),
     badge: BADGE.character,
     tags: (cd.tags || []).slice(0, 3),
     meta: {
       uploader: cd.author || "", // 角色卡作者多无 → 留位(YOR-95)
-      typeLabel: it && it.official ? "官方" : "", // OC/CN/同人 需引擎类型字段(YOR-95),暂只标官方
+      typeLabel: it && it.official ? "Official" : "", // OC/CN/同人 需引擎类型字段(YOR-95),暂只标官方
       useCount: pickCount(cd.uses, it && it.uses, it && it.use_count), // 留位
     },
     note: "",
@@ -78,13 +78,13 @@ function fromWorld(it) {
   return {
     id: d.name || (it && it.name) || "world",
     kind: "world",
-    title: d.name || (it && it.name) || "设定卡",
+    title: d.name || (it && it.name) || "Lore Card",
     cover: d.cover || d.image || "",
-    blurb: clip(d.synopsis || (n ? `一份可挂进任何故事的世界设定,共 ${n} 条条目。` : "一份世界设定。")),
+    blurb: clip(d.synopsis || (n ? `A world setting you can attach to any story, with ${n} ${n === 1 ? "entry" : "entries"}.` : "A world setting.")),
     badge: BADGE.world,
     tags: (d.tags || []).slice(0, 3),
     meta: { entries: n },
-    note: "创作素材 · 非直接游玩",
+    note: "Creation material · Not directly playable",
     raw: it,
   };
 }
@@ -95,13 +95,13 @@ function fromPlayer(it) {
   return {
     id: d.name || (it && it.name) || "player",
     kind: "player",
-    title: d.name || (it && it.name) || "演出卡",
+    title: d.name || (it && it.name) || "Player Card",
     cover: d.image || "",
-    blurb: clip(d.role || (d.goals || []).join(" / ") || "一张可扮演的演出卡。"),
+    blurb: clip(d.role || (d.goals || []).join(" / ") || "A role you can step into."),
     badge: BADGE.player,
     tags: (d.tags || []).slice(0, 3),
     meta: { role: d.role || "" },
-    note: "玩家身份 · 入局扮演",
+    note: "Player identity · Play as this role",
     raw: it,
   };
 }
@@ -119,7 +119,7 @@ const ADAPTERS = {
 
 export function toCardModel(kind, raw) {
   const fn = ADAPTERS[kind];
-  if (!fn) throw new Error("toCardModel: 未知 kind " + kind);
+  if (!fn) throw new Error("toCardModel: unknown kind " + kind);
   return fn(raw);
 }
 

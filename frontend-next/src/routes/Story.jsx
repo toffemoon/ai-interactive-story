@@ -17,7 +17,7 @@ import "./Story.css";
 function splitSpeech(text) {
   const t = text || "";
   const parts = [];
-  const re = /[“”][^“”]*[“”]/g;
+  const re = /[“”][^“”]*[“”]|"[^"]*"/g; // 英文输出多用直双引号,一并拆
   let last = 0,
     m;
   while ((m = re.exec(t)) !== null) {
@@ -73,7 +73,7 @@ function StatusSection({ title, count, children, open }) {
   );
 }
 
-const EMPTY = <span className="status-empty t-meta">暂无</span>;
+const EMPTY = <span className="status-empty t-meta">None yet</span>;
 
 export default function Story() {
   const { game } = useGame();
@@ -121,7 +121,7 @@ export default function Story() {
     if (source === "local_proxy") {
       const settings = loadLocalProxySettings();
       if (!settings.endpoint || !settings.model) {
-        setError("请先在「我的」里填写本机反代地址和模型名");
+        setError("Set your local proxy URL and model name in Me first");
         return;
       }
     }
@@ -161,10 +161,10 @@ export default function Story() {
       let raw = "";
       let finalTurn = null;
       if (localProxyAllowed && modelSource === "local_proxy") {
-        setPendingLabel("连接本机 Codex…");
+        setPendingLabel("Connecting to local Codex…");
         finalTurn = await runLocalProxyTurn(body, loadLocalProxySettings(), {
           onStep: (call) => setPendingLabel(
-            call.index === 0 ? "本机 Codex 推演中…" : `本机 Codex 处理步骤 ${call.index + 1}…`
+            call.index === 0 ? "Local Codex is thinking…" : `Local Codex step ${call.index + 1}…`
           ),
           onDelta: (text) => {
             raw += text;
@@ -183,7 +183,7 @@ export default function Story() {
           finalTurn = await postJSON("/api/story_turn", body);
         }
       }
-      if (!finalTurn) throw new Error("没有拿到回合结果");
+      if (!finalTurn) throw new Error("No turn result received");
       setStreaming(null);
       setTurns((xs) => [...xs, { kind: "story", data: finalTurn }]);
       setChoices(finalTurn.choices || []);
@@ -192,7 +192,7 @@ export default function Story() {
       syncedRef.current += 1; // 本地出了一回合,服务器也已存 → 同步计数跟上,避免 tail 重复拉回本轮
     } catch (e) {
       setStreaming(null);
-      setError("本轮生成失败:" + e.message);
+      setError("This turn failed: " + e.message);
     } finally {
       setPendingLabel("");
       setLoading(false);
@@ -224,7 +224,7 @@ export default function Story() {
       setCanUndo(false);
       syncedRef.current = Math.max(0, syncedRef.current - 1); // 撤回一回合 → 同步计数回退
     } catch (e) {
-      setError("撤回失败:" + e.message);
+      setError("Undo failed: " + e.message);
     } finally {
       setLoading(false);
     }
@@ -250,10 +250,10 @@ export default function Story() {
       let out;
       let raw = "";
       if (localProxyAllowed && modelSource === "local_proxy") {
-        setPendingLabel("连接本机 Codex…");
+        setPendingLabel("Connecting to local Codex…");
         out = await runLocalProxyReroll(game.sessionId, loadLocalProxySettings(), {
           onStep: (call) => setPendingLabel(
-            call.index === 0 ? "本机 Codex 重生成中…" : `本机 Codex 处理步骤 ${call.index + 1}…`
+            call.index === 0 ? "Local Codex is regenerating…" : `Local Codex step ${call.index + 1}…`
           ),
           onDelta: (text) => {
             raw += text;
@@ -270,7 +270,7 @@ export default function Story() {
       setCanUndo(true);
     } catch (e) {
       setStreaming(null);
-      setError("重新生成失败:" + e.message);
+      setError("Regenerate failed: " + e.message);
       setChoices(prevChoices); // 恢复原选项,避免无选项可点
     } finally {
       setPendingLabel("");
@@ -372,27 +372,27 @@ export default function Story() {
       {/* 顶栏:离开(保留进行中故事)/ 标题 / token / 撤回·重生成·记录·dev */}
       <header className="story-top">
         <button className="story-back" onClick={() => navigate("/explore", { transition: "contract" })}>
-          ← 离开
+          ← Leave
         </button>
-        <div className="story-title t-kai">{game.title || "当前故事"}</div>
+        <div className="story-title t-kai">{game.title || "Current story"}</div>
         <div className="story-top-right">
           {tokenTotal > 0 && <span className="t-mono story-usage">token {tokenTotal}</span>}
-          <button className="story-toolbtn" disabled={!canUndo || loading} onClick={undoLast} title="撤回上一轮" aria-label="撤回上一轮">
+          <button className="story-toolbtn" disabled={!canUndo || loading} onClick={undoLast} title="Undo last turn" aria-label="Undo last turn">
             <span className="tb-ic" aria-hidden="true">↩</span>
-            <span className="tb-tx">撤回</span>
+            <span className="tb-tx">Undo</span>
           </button>
-          <button className="story-toolbtn" disabled={!storyTurns.length || loading} onClick={rerollLast} title="重生成上一轮" aria-label="重生成上一轮">
+          <button className="story-toolbtn" disabled={!storyTurns.length || loading} onClick={rerollLast} title="Regenerate last turn" aria-label="Regenerate last turn">
             <span className="tb-ic" aria-hidden="true">↻</span>
-            <span className="tb-tx">重生成</span>
+            <span className="tb-tx">Reroll</span>
           </button>
-          <button className="story-toolbtn" disabled={!turns.length} onClick={() => setLogOpen(true)} title="故事记录" aria-label="故事记录">
+          <button className="story-toolbtn" disabled={!turns.length} onClick={() => setLogOpen(true)} title="Story log" aria-label="Story log">
             <span className="tb-ic" aria-hidden="true">☰</span>
-            <span className="tb-tx">记录</span>
+            <span className="tb-tx">Log</span>
           </button>
-          <button className={"story-statusbtn" + (statusOpen ? " is-on" : "")} onClick={() => setStatusOpen((v) => !v)} title="世界状态(可收起)">
-            {statusOpen ? "收起状态" : "世界状态"}
+          <button className={"story-statusbtn" + (statusOpen ? " is-on" : "")} onClick={() => setStatusOpen((v) => !v)} title="World status (collapsible)">
+            {statusOpen ? "Hide status" : "World status"}
           </button>
-          <button className={"story-toolbtn story-devbtn" + (dev ? " is-on" : "")} onClick={toggleDev} title="玩家仪表盘 / 开发者视图">
+          <button className={"story-toolbtn story-devbtn" + (dev ? " is-on" : "")} onClick={toggleDev} title="Player dashboard / developer view">
             dev
           </button>
         </div>
@@ -402,24 +402,24 @@ export default function Story() {
         {/* 左:卡组栏(仅作者/dev 视图;玩家不见) */}
         {dev && (
           <aside className="story-deck">
-            <div className="story-deck-h t-kai">卡组栏</div>
-            <div className="story-deck-note t-meta">作者视图 · 移除随本局生效;编辑/上传归创作端</div>
+            <div className="story-deck-h t-kai">Deck</div>
+            <div className="story-deck-note t-meta">Author view · removals apply to this run; edit/upload in Create</div>
             <div className="story-deck-list">
               {(deck.characters || []).map((c, i) => {
-                const nm = (c.data && c.data.name) || c.name || "角色";
+                const nm = (c.data && c.data.name) || c.name || "Character";
                 return (
                   <div className="story-deck-card" key={i}>
                     <span className="story-deck-card-name t-ui-sm">{nm}</span>
-                    <button className="story-deck-x" onClick={() => removeFromDeck(nm)} title="移出本局">
-                      移除
+                    <button className="story-deck-x" onClick={() => removeFromDeck(nm)} title="Remove from this run">
+                      Remove
                     </button>
                   </div>
                 );
               })}
-              {deck.world && <div className="story-deck-card"><span className="t-ui-sm">世界书</span></div>}
-              {deck.story && <div className="story-deck-card"><span className="t-ui-sm">故事书</span></div>}
+              {deck.world && <div className="story-deck-card"><span className="t-ui-sm">World Book</span></div>}
+              {deck.story && <div className="story-deck-card"><span className="t-ui-sm">Story Book</span></div>}
               {!(deck.characters || []).length && !deck.world && !deck.story && (
-                <div className="status-empty t-meta">本局无卡组</div>
+                <div className="status-empty t-meta">No deck for this run</div>
               )}
             </div>
           </aside>
@@ -428,7 +428,7 @@ export default function Story() {
         {/* 中:叙事区 */}
         <main className="story-stage">
           <div className="story-scene-head">
-            <span className="story-round t-meta">第 {storyTurns.length || (loading ? 1 : 0)} 回合</span>
+            <span className="story-round t-meta">Turn {storyTurns.length || (loading ? 1 : 0)}</span>
             {scene.location && <span className="story-scene-loc t-kai">{scene.location}</span>}
             {scene.time && <span className="story-scene-time t-meta">{scene.time}</span>}
           </div>
@@ -453,19 +453,19 @@ export default function Story() {
                 <Dialogue messages={streaming.messages} />
               </div>
             ) : loading ? (
-              <div className="story-pending t-ui-sm">{pendingLabel || "推演中…"}</div>
+              <div className="story-pending t-ui-sm">{pendingLabel || "Thinking…"}</div>
             ) : null}
 
             {/* 选项并入叙事流、随内容滚动(细节③:不再单独固定底栏占空间) */}
             {choices.length > 0 && !loading && (
               <div className="story-choices">
-                <span className="story-choices-hint t-meta">接下来,你可以——(点一个填进下方输入框,可改可直接发送)</span>
+                <span className="story-choices-hint t-meta">What next? (Tap one to fill the box below, then edit it or send as is)</span>
                 {choices.map((c, i) => (
                   <button
                     key={c.id || i}
                     className="story-choice"
                     onClick={() => setInput(c.label)}
-                    title="填入下方输入框,可改可直接执行"
+                    title="Fills the box below; edit it or send as is"
                   >
                     <span className="story-choice-label t-ui">{c.label}</span>
                     {c.description && <span className="story-choice-desc t-meta">{c.description}</span>}
@@ -481,8 +481,8 @@ export default function Story() {
           <div className="story-composer">
             {localProxyAllowed && (
               <div className="story-model-bar">
-                <span className="t-meta">模型</span>
-                <div className="story-model-segment" aria-label="模型来源">
+                <span className="t-meta">Model</span>
+                <div className="story-model-segment" aria-label="Model source">
                   <button
                     className={modelSource === "deepseek" ? "is-on" : ""}
                     onClick={() => selectModelSource("deepseek")}
@@ -495,11 +495,11 @@ export default function Story() {
                     onClick={() => selectModelSource("local_proxy")}
                     disabled={loading}
                   >
-                    Codex 本机
+                    Local Codex
                   </button>
                 </div>
                 <button className="story-model-settings" onClick={() => navigate("/mine")} disabled={loading}>
-                  设置
+                  Settings
                 </button>
               </div>
             )}
@@ -515,11 +515,11 @@ export default function Story() {
                   runTurn({ text: input });
                 }
               }}
-              placeholder="写下你的行动或台词…（Enter 发送,Shift+Enter 换行;选项只是建议）"
+              placeholder="Write your action or line… (Enter to send, Shift+Enter for a new line; choices are only suggestions)"
               disabled={loading}
             />
             <Button variant="primary" onClick={() => runTurn({ text: input })} disabled={loading || !input.trim()}>
-              发送
+              Send
             </Button>
           </div>
         </main>
@@ -527,49 +527,49 @@ export default function Story() {
         {/* 右:世界状态(8 栏目,默认收起;移动端为抽屉) */}
         <aside className="story-status">
           <div className="story-status-h">
-            <span className="t-kai">世界状态</span>
-            <button className="story-status-x" onClick={() => setStatusOpen(false)} aria-label="收起">
+            <span className="t-kai">World status</span>
+            <button className="story-status-x" onClick={() => setStatusOpen(false)} aria-label="Close">
               ×
             </button>
           </div>
           <div className="story-status-list">
-            <StatusSection title="场景" open>
+            <StatusSection title="Scene" open>
               {scene.location || scene.time || scene.atmosphere || (scene.present_characters || []).length ? (
                 <div className="status-kv">
-                  {scene.location && <div><span className="status-k">地点</span>{scene.location}</div>}
-                  {scene.time && <div><span className="status-k">时间</span>{scene.time}</div>}
-                  {scene.atmosphere && <div><span className="status-k">氛围</span>{scene.atmosphere}</div>}
+                  {scene.location && <div><span className="status-k">Location</span>{scene.location}</div>}
+                  {scene.time && <div><span className="status-k">Time</span>{scene.time}</div>}
+                  {scene.atmosphere && <div><span className="status-k">Mood</span>{scene.atmosphere}</div>}
                   {(scene.present_characters || []).length > 0 && (
-                    <div><span className="status-k">在场</span>{scene.present_characters.join("、")}</div>
+                    <div><span className="status-k">Present</span>{scene.present_characters.join(", ")}</div>
                   )}
-                  {(scene.exits || []).length > 0 && <div><span className="status-k">出口</span>{scene.exits.join("、")}</div>}
+                  {(scene.exits || []).length > 0 && <div><span className="status-k">Exits</span>{scene.exits.join(", ")}</div>}
                 </div>
               ) : (
                 EMPTY
               )}
             </StatusSection>
 
-            <StatusSection title="玩家">
+            <StatusSection title="Player">
               {ps.location || ps.status || (ps.active_goals || []).length || (ps.known_facts || []).length || (ps.inventory || []).length ? (
                 <div className="status-kv">
-                  {ps.location && <div><span className="status-k">位置</span>{ps.location}</div>}
-                  {ps.status && <div><span className="status-k">状态</span>{ps.status}</div>}
-                  {(ps.active_goals || []).length > 0 && <div><span className="status-k">目标</span>{ps.active_goals.join("；")}</div>}
-                  {(ps.known_facts || []).length > 0 && <div><span className="status-k">已知</span>{ps.known_facts.join("；")}</div>}
-                  {(ps.inventory || []).length > 0 && <div><span className="status-k">物品</span>{ps.inventory.join("、")}</div>}
+                  {ps.location && <div><span className="status-k">Location</span>{ps.location}</div>}
+                  {ps.status && <div><span className="status-k">Status</span>{ps.status}</div>}
+                  {(ps.active_goals || []).length > 0 && <div><span className="status-k">Goals</span>{ps.active_goals.join("; ")}</div>}
+                  {(ps.known_facts || []).length > 0 && <div><span className="status-k">Known</span>{ps.known_facts.join("; ")}</div>}
+                  {(ps.inventory || []).length > 0 && <div><span className="status-k">Items</span>{ps.inventory.join(", ")}</div>}
                 </div>
               ) : (
                 EMPTY
               )}
             </StatusSection>
 
-            <StatusSection title="关系" count={rels.length || null}>
+            <StatusSection title="Relationships" count={rels.length || null}>
               {rels.length ? (
                 <div className="status-rels">
                   {rels.map((r, i) => (
                     <div className="status-rel" key={i}>
                       <span className="status-rel-nm t-ui-sm">{r.character_id}</span>
-                      <span className="status-rel-v t-meta">信任 {r.trust} · 张力 {r.tension} · 好感 {r.affection}</span>
+                      <span className="status-rel-v t-meta">Trust {r.trust} · Tension {r.tension} · Affection {r.affection}</span>
                     </div>
                   ))}
                 </div>
@@ -578,18 +578,18 @@ export default function Story() {
               )}
             </StatusSection>
 
-            <StatusSection title="记忆卡" count={memWrites.length || null}>
+            <StatusSection title="Memory cards" count={memWrites.length || null}>
               {memWrites.length ? (
                 <div className="status-mem">
                   {memLong.length > 0 && (
                     <div className="status-mem-grp">
-                      <div className="status-k">长期</div>
+                      <div className="status-k">Long-term</div>
                       {memLong.slice(-8).map((m, i) => <div className="status-mem-i t-meta" key={i}>· {m.text}</div>)}
                     </div>
                   )}
                   {memShort.length > 0 && (
                     <div className="status-mem-grp">
-                      <div className="status-k">短期</div>
+                      <div className="status-k">Short-term</div>
                       {memShort.slice(-8).map((m, i) => <div className="status-mem-i t-meta" key={i}>· {m.text}</div>)}
                     </div>
                   )}
@@ -599,19 +599,19 @@ export default function Story() {
               )}
             </StatusSection>
 
-            <StatusSection title="Token 用量">
+            <StatusSection title="Token usage">
               {tokenTotal > 0 ? (
                 <div className="status-kv">
-                  <div><span className="status-k">本局累计</span>{tokenTotal}</div>
-                  {usageBlock.total_tokens != null && <div><span className="status-k">上一轮</span>{usageBlock.total_tokens}</div>}
-                  {usageBlock.calls != null && <div><span className="status-k">调用</span>{usageBlock.calls}</div>}
+                  <div><span className="status-k">This run</span>{tokenTotal}</div>
+                  {usageBlock.total_tokens != null && <div><span className="status-k">Last turn</span>{usageBlock.total_tokens}</div>}
+                  {usageBlock.calls != null && <div><span className="status-k">Calls</span>{usageBlock.calls}</div>}
                 </div>
               ) : (
                 EMPTY
               )}
             </StatusSection>
 
-            <StatusSection title="历史书" count={(historyEvents.length || triggeredAll.length) || null}>
+            <StatusSection title="History" count={(historyEvents.length || triggeredAll.length) || null}>
               {historyEvents.length || triggeredAll.length ? (
                 <div className="status-hist">
                   {historyEvents.map((e, i) => <div className="status-hist-i t-meta" key={"h" + i}>· {e.title || e.event_id}</div>)}
@@ -622,7 +622,7 @@ export default function Story() {
               )}
             </StatusSection>
 
-            <StatusSection title="时间线" count={timelineShown.length || null}>
+            <StatusSection title="Timeline" count={timelineShown.length || null}>
               {timelineShown.length ? (
                 <div className="status-tl">
                   {timelineShown.map((e, i) => (
@@ -637,15 +637,15 @@ export default function Story() {
               )}
             </StatusSection>
 
-            <StatusSection title="地图">
+            <StatusSection title="Map">
               {/* 引擎暂无地图数据,先用场景位置/出口拼一张文字地图(YOR-95 待真地图字段) */}
               {scene.location || (scene.exits || []).length ? (
                 <div className="status-map">
-                  <div className="status-map-here t-kai">{scene.location || "未定地点"}</div>
+                  <div className="status-map-here t-kai">{scene.location || "Unknown location"}</div>
                   {(scene.exits || []).length > 0 && (
-                    <div className="status-map-exits t-meta">通向:{scene.exits.join(" / ")}</div>
+                    <div className="status-map-exits t-meta">Leads to: {scene.exits.join(" / ")}</div>
                   )}
-                  <div className="status-empty t-meta">完整世界地图待引擎提供</div>
+                  <div className="status-empty t-meta">Full world map coming soon</div>
                 </div>
               ) : (
                 EMPTY
@@ -653,13 +653,13 @@ export default function Story() {
             </StatusSection>
 
             {dev && (
-              <StatusSection title="玩家仪表盘 · dev">
+              <StatusSection title="Player dashboard · dev">
                 <div className="status-kv">
                   <div><span className="status-k">turn</span>{(state && state.turn_count) || storyTurns.length}</div>
-                  <div><span className="status-k">clock</span>{(state && state.clock_minutes) || 0} 分</div>
-                  {state && state.main_resolved != null && <div><span className="status-k">主线</span>{state.main_resolved ? "已结案" : "进行中"}</div>}
+                  <div><span className="status-k">clock</span>{(state && state.clock_minutes) || 0} min</div>
+                  {state && state.main_resolved != null && <div><span className="status-k">Main plot</span>{state.main_resolved ? "Resolved" : "In progress"}</div>}
                   {storyTurns.length > 0 && storyTurns[storyTurns.length - 1].data.reasoning && (
-                    <div><span className="status-k">自检</span>{JSON.stringify(storyTurns[storyTurns.length - 1].data.reasoning).slice(0, 160)}</div>
+                    <div><span className="status-k">Self-check</span>{JSON.stringify(storyTurns[storyTurns.length - 1].data.reasoning).slice(0, 160)}</div>
                   )}
                 </div>
               </StatusSection>
@@ -673,9 +673,9 @@ export default function Story() {
         <div className="story-log" onClick={(e) => e.target.classList.contains("story-log") && setLogOpen(false)}>
           <div className="story-log-panel">
             <div className="story-log-head">
-              <span className="t-kai">故事记录</span>
-              <span className="t-meta">{storyTurns.length} 回合</span>
-              <button className="story-log-x" onClick={() => setLogOpen(false)} aria-label="关闭">
+              <span className="t-kai">Story log</span>
+              <span className="t-meta">{storyTurns.length} {storyTurns.length === 1 ? "turn" : "turns"}</span>
+              <button className="story-log-x" onClick={() => setLogOpen(false)} aria-label="Close">
                 ×
               </button>
             </div>
@@ -686,7 +686,7 @@ export default function Story() {
                   if (t.kind === "player") {
                     return (
                       <div className="story-log-me" key={i}>
-                        <span className="story-log-me-tag t-meta">你</span>
+                        <span className="story-log-me-tag t-meta">You</span>
                         {t.text}
                       </div>
                     );
@@ -699,7 +699,7 @@ export default function Story() {
                       {d.narration && <Narration text={d.narration} />}
                       <Dialogue messages={d.messages} />
                       {(d.triggered_events || []).length > 0 && (
-                        <div className="story-log-ev t-meta">触发事件:{d.triggered_events.join("、")}</div>
+                        <div className="story-log-ev t-meta">Triggered events: {d.triggered_events.join(", ")}</div>
                       )}
                     </div>
                   );

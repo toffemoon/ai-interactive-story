@@ -16,9 +16,9 @@ export default function Stepper({
   footerClassName = "",
   backButtonProps = {},
   nextButtonProps = {},
-  backButtonText = "上一步",
-  nextButtonText = "下一步",
-  completeText = "完成",
+  backButtonText = "Back",
+  nextButtonText = "Next",
+  completeText = "Done",
   disableStepIndicators = false,
   renderStepIndicator,
   ...rest

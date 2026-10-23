@@ -21,7 +21,7 @@ JUMP_MAX_ADVANCE = 60 * 1440  # 跟 story.py 一致:单轮时间跳跃上限(60 
 # ── 工具 ──────────────────────────────────────────────────────────
 def _valid_char_keys(fixture: dict) -> set[str]:
     """合法的角色标识(character_id + name + 旁白),用于校验关系/发言归属。"""
-    keys = {"narrator", "旁白"}
+    keys = {"narrator", "旁白", "Narrator"}
     for c in fixture.get("characters", []):
         d = c.get("data", {})
         if d.get("character_id"):

@@ -84,7 +84,7 @@ export default function AppShell({ children }) {
           isFixed
           hoverExpand
           position="left"
-          brandText="沐言"
+          brandText="Muyan"
           items={navItems}
           displaySocials={false}
           displayItemNumbering

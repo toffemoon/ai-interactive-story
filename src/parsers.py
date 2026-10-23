@@ -255,7 +255,7 @@ def parse_character(text: str) -> CharacterCard:
     if not name:
         # h1 是占位 / 缺失:frontmatter tags 末项常是角色名,再不行用 ip
         tags = _split_list(fm.get("tags", ""))
-        name = tags[-1] if tags else (_clean(fm.get("ip", "")) or "角色")
+        name = tags[-1] if tags else (_clean(fm.get("ip", "")) or "Character")
 
     data = CharacterData(name=name)
     data.tags = _split_list(fm.get("tags", ""))
@@ -275,13 +275,13 @@ def parse_character(text: str) -> CharacterCard:
 
     if (sec := _find(secs, "身份", "description")):
         data.description = sec.text
-    if (sec := _find(secs, "性格", "personality")):
+    if (sec := _find(secs, "性格", "personality", "Personality")):
         data.personality = sec.text
-    if (sec := _find(secs, "开场白", "first_mes")):
+    if (sec := _find(secs, "开场白", "first_mes", "Opening Line")):
         data.first_mes = sec.text
-    if not data.look and (sec := _find(secs, "外貌", "形象")):
+    if not data.look and (sec := _find(secs, "外貌", "形象", "Appearance")):
         data.look = sec.text.split("\n", 1)[0]
-    if (sec := _find(secs, "当前情境")):
+    if (sec := _find(secs, "当前情境", "Scenario")):
         data.scenario = sec.text
 
     if (sec := _find(secs, "知识边界")):
@@ -305,7 +305,7 @@ def parse_player(text: str) -> PlayerCard:
     fm, body = split_frontmatter(text)
     secs = split_sections(body)
     h1 = next((s for s in secs if s.level == 1), None)
-    card = PlayerCard(name=_title_first_token(h1.title) if h1 else fm.get("ip", "玩家") or "玩家")
+    card = PlayerCard(name=_title_first_token(h1.title) if h1 else fm.get("ip", "Player") or "Player")
 
     def sec_text(*n: str) -> str:
         s = _find(secs, *n)
@@ -316,10 +316,10 @@ def parse_player(text: str) -> PlayerCard:
         return bullets(s.lines) if s else []
 
     card.role = sec_text("身份", "role")
-    card.background = sec_text("背景", "background")
-    card.goals = sec_bullets("目标", "goals")
-    card.abilities = sec_bullets("能力", "abilities")
-    card.constraints = sec_bullets("限制", "禁忌", "constraints")
+    card.background = sec_text("背景", "background", "Background")
+    card.goals = sec_bullets("目标", "goals", "Goals")
+    card.abilities = sec_bullets("能力", "abilities", "Abilities")
+    card.constraints = sec_bullets("限制", "禁忌", "constraints", "Constraints")
     card.known_facts = sec_bullets("开局已知", "known_facts")
     card.unknown = sec_bullets("开局不知道", "unknown")
     opening = sec_bullets("开局场景", "时间锚点", "opening")
@@ -368,7 +368,7 @@ def parse_settingcard(text: str) -> SettingCard:
     secs = split_sections(body)
     h1 = next((s for s in secs if s.level == 1), None)
     card = SettingCard(
-        name=_title_first_token(h1.title) if h1 else _clean(fm.get("ip", "")) or "设定",
+        name=_title_first_token(h1.title) if h1 else _clean(fm.get("ip", "")) or "Setting",
         category=_clean(fm.get("类别", "")),
         scene_type=_clean(fm.get("场景类型", "")),
         ip=_clean(fm.get("ip", "")),
@@ -462,7 +462,7 @@ def parse_storybook(text: str) -> StoryBook:
     fm, body = split_frontmatter(text)
     secs = split_sections(body)
     h1 = next((s for s in secs if s.level == 1), None)
-    book = StoryBook(title=_title_first_token(h1.title) if h1 else _clean(fm.get("ip", "")) or "故事书")
+    book = StoryBook(title=_title_first_token(h1.title) if h1 else _clean(fm.get("ip", "")) or "Story Book")
 
     # 把标号段归组(顶层 1..9 / A..E),其 `###` 子段也收进来
     by_num: dict[str, list[Section]] = {}
@@ -600,5 +600,5 @@ def parse_card(text: str):
     """按 frontmatter type 自动路由到对应解析器。无法识别时抛 ValueError。"""
     kind = detect_kind(text)
     if kind not in PARSERS:
-        raise ValueError(f"无法识别卡种(frontmatter type={kind!r});支持:{list(PARSERS)}")
+        raise ValueError(f"Unrecognized card type (frontmatter type={kind!r}); supported: {list(PARSERS)}")
     return PARSERS[kind](text)

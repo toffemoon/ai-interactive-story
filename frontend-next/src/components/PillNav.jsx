@@ -10,7 +10,7 @@ import "./PillNav.css";
 export default function PillNav({
   items = [],
   activeHref,
-  brandText = "沐",
+  brandText = "M",
   className = "",
   ease = "power3.easeOut",
   forcePills = false,

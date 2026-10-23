@@ -86,27 +86,27 @@ class DeepSeekAdapter:
     def format_main(self, b: ContextBundle) -> list[dict]:
         system = b.skeleton
         if b.summary:
-            system += "\n\n# 早前剧情摘要(更久之前发生的事,已压缩)\n" + b.summary
+            system += "\n\n# Earlier story summary (what happened further back, compressed)\n" + b.summary
         if b.recall_block:
-            system += "\n\n# 检索到的相关旧资料(向量召回,供参考,不要照抄)\n" + b.recall_block
+            system += "\n\n# Retrieved older material (vector recall; for reference only, don't copy it verbatim)\n" + b.recall_block
         if b.recap:
             system += (
-                "\n\n# 最近剧情(最近若干轮的实际经过,供你延续上下文与口吻)\n" + b.recap +
-                "\n\n注意:以上是历史参考。最后一轮是你刚生成的——本轮绝不要重复它的叙述或台词;"
-                "即便玩家这轮的意图和上一轮相同,也要让剧情往前走一步,给出新动作/新事实/新转折。"
+                "\n\n# Recent story (what actually happened over the last few turns; use it to keep continuity and voice)\n" + b.recap +
+                "\n\nNote: the above is history for reference. The last turn is the one you just generated — never repeat its narration or lines this turn; "
+                "even if the player's intent is the same as last turn, move the story one step forward with a new action / new fact / new twist."
             )
         if b.anchor:
-            system += "\n\n# 主线锚点(始终牢记,别被支线噪音带偏)\n" + b.anchor
+            system += "\n\n# Main plot anchor (always keep it in mind; don't get pulled off course by side-plot noise)\n" + b.anchor
         if b.esc_text:
             system += (
-                "\n\n# 该主动恶化登场的事件(故事内时间到点 / 主线停滞过久——让世界或相关角色主动把它推给玩家,"
-                "别等玩家来碰;玩家本轮正面处理了就把它推进或在 timeline 标 resolved)\n" + b.esc_text
+                "\n\n# Events that should escalate on their own (their in-story time is due / the main plot has stalled too long — have the world or the relevant characters push them onto the player; "
+                "don't wait for the player to touch them; if the player deals with one head-on this turn, advance it or mark it resolved in timeline)\n" + b.esc_text
             )
         if b.clock_line:
-            system += "\n\n# 故事内时钟\n" + b.clock_line
+            system += "\n\n# In-story clock\n" + b.clock_line
         if b.operator_inject:  # 后台运营者实时下达,最高优先
-            system += ("\n\n# 后台注入(运营者/作者实时下达,最高优先级,本回合自然采纳并落实;"
-                       "这是台前看不到的导演指令或补充内容,别把这段原样念给玩家)\n" + b.operator_inject)
+            system += ("\n\n# Backstage injection (issued live by the operator/author — highest priority; adopt and carry it out naturally this turn. "
+                       "These are director instructions or extra content the player can't see; never read this section out to the player)\n" + b.operator_inject)
         if b.abstain_note:  # 放最后:具体事实查询的认忘指令,最高显著位(模型最后读到)
             system += "\n\n" + b.abstain_note
         return [{"role": "system", "content": system}, {"role": "user", "content": b.action_prompt}]

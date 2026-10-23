@@ -20,10 +20,10 @@ import "./Mine.css";
 // 我的 · 个人中心。继承 ReconProfile;补 收藏 / 我创建的 / 账号设置 / 卡库竖卡分页(YOR-67)/
 // 存档跨设备(YOR-22)/ 占位卡过滤(YOR-16)。登录相关端点对 guest 优雅降级。
 const TABS = [
-  { key: "profile", label: "档案" },
-  { key: "saves", label: "存档" },
-  { key: "favorites", label: "收藏" },
-  { key: "created", label: "我创建的" },
+  { key: "profile", label: "Profile" },
+  { key: "saves", label: "Saves" },
+  { key: "favorites", label: "Favorites" },
+  { key: "created", label: "Created" },
 ];
 const PAGE = 8;
 const FAV_KEY = "ais_favorites_v1";
@@ -116,7 +116,7 @@ export default function Mine() {
         if (connected && window.location.hash.includes("codex=connected")) {
           const next = saveLocalProxySettings({ ...loadLocalProxySettings(), source: "local_proxy" });
           setProxySettings(next);
-          setProxyStatus("Codex 已连接并启用");
+          setProxyStatus("Codex connected and enabled");
         }
       })
       .catch(() => alive && setCodexConnection({ phase: "missing" }));
@@ -170,13 +170,13 @@ export default function Mine() {
   async function deleteCard(m) {
     const nm = (m.raw && m.raw.name) || m.id;
     if (!nm) return;
-    if (!window.confirm(`确定删除「${m.title}」?删除后无法恢复。`)) return;
+    if (!window.confirm(`Delete "${m.title}"? This can't be undone.`)) return;
     try {
       await delJSON(`/api/library/characters/${encodeURIComponent(nm)}`);
       setCreated((rows) => rows.filter((r) => r.name !== nm));
       setDetail(null);
     } catch (e) {
-      alert("删除失败:" + (e.message || "请稍后再试"));
+      alert("Failed to delete: " + (e.message || "please try again later"));
     }
   }
 
@@ -232,13 +232,13 @@ export default function Mine() {
   function selectModelSource(source) {
     const next = saveLocalProxySettings({ ...proxySettings, source });
     setProxySettings(next);
-    setProxyStatus(source === "local_proxy" ? "已选择 Codex 本机反代" : "已选择 DeepSeek");
+    setProxyStatus(source === "local_proxy" ? "Local Codex proxy selected" : "DeepSeek selected");
   }
 
   function saveProxySettings() {
     const next = saveLocalProxySettings(proxySettings);
     setProxySettings(next);
-    setProxyStatus("本机反代设置已保存");
+    setProxyStatus("Local proxy settings saved");
   }
 
   async function refreshCodexConnection() {
@@ -265,12 +265,12 @@ export default function Mine() {
     link.click();
     link.remove();
     setCodexConnection({ phase: "installing" });
-    setProxyStatus("连接助手已下载，运行后会自动完成安装和登录");
+    setProxyStatus("Connector downloaded. Run it to finish setup and sign-in automatically.");
   }
 
   function wakeCodexConnector() {
     window.location.href = "aistory-codex://connect";
-    setProxyStatus("正在启动已安装的连接助手");
+    setProxyStatus("Launching the installed connector…");
     setTimeout(refreshCodexConnection, 3000);
   }
 
@@ -285,7 +285,7 @@ export default function Mine() {
         const next = saveLocalProxySettings({ ...proxySettings, source: "local_proxy" });
         setProxySettings(next);
         await refreshCodexConnection();
-        setProxyStatus("Codex 已连接并启用");
+        setProxyStatus("Codex connected and enabled");
         return;
       }
       if (flow === "browser" && login.auth_url) {
@@ -311,49 +311,49 @@ export default function Mine() {
           const next = saveLocalProxySettings({ ...proxySettings, source: "local_proxy" });
           setProxySettings(next);
           setCodexConnection({ phase: "connected", account: status.account });
-          setProxyStatus("Codex 已连接并启用");
+          setProxyStatus("Codex connected and enabled");
           return;
         }
         if (status.status === "failed" || status.status === "cancelled") {
-          throw new Error(status.error || "Codex 登录没有完成");
+          throw new Error(status.error || "Codex sign-in didn't complete");
         }
       }
       if (codexLoginRun.current === runId) {
         await cancelLocalProxyLogin(login.login_id).catch(() => {});
-        throw new Error("登录等待超时，请重试或使用设备码");
+        throw new Error("Sign-in timed out. Retry or use a device code.");
       }
     } catch (error) {
       if (authWindow && !authWindow.closed) authWindow.close();
       if (codexLoginRun.current === runId) {
         setCodexConnection((current) => ({ ...current, phase: "login_required", error: error.message }));
-        setProxyStatus(error.message || "Codex 登录失败");
+        setProxyStatus(error.message || "Codex sign-in failed");
       }
     }
   }
 
-  const displayName = (me && (me.display_name || me.username)) || "游客";
+  const displayName = (me && (me.display_name || me.username)) || "Guest";
   const loggedIn = !!(enabled && user);
   const codexPhase = codexConnection.phase;
   const codexLabel = {
-    checking: "正在检测本机连接",
-    missing: "尚未连接",
-    installing: "等待连接助手启动",
-    login_required: "等待 ChatGPT 登录",
-    login_pending: "正在连接 ChatGPT",
-    connected: "Codex 已连接",
-  }[codexPhase] || "Codex 连接异常";
+    checking: "Checking local connection…",
+    missing: "Not connected",
+    installing: "Waiting for the connector to start",
+    login_required: "Waiting for ChatGPT sign-in",
+    login_pending: "Connecting to ChatGPT…",
+    connected: "Codex connected",
+  }[codexPhase] || "Codex connection error";
   const codexDetail = codexPhase === "connected"
     ? [
         CODEX_PLAN_LABELS[codexConnection.account && codexConnection.account.plan_type] || null,
         codexConnection.health && codexConnection.health.model,
       ]
-        .filter(Boolean).join(" · ") || "可以开始游玩"
+        .filter(Boolean).join(" · ") || "Ready to play"
     : codexConnection.error || "";
 
   return (
     <div className="page mine">
       <div className="mine-head">
-        <h1 className="t-display">我的</h1>
+        <h1 className="t-display">Me</h1>
       </div>
 
       <div className="mine-tabs">
@@ -382,37 +382,37 @@ export default function Mine() {
               className="mine-avatar"
               style={me && me.avatar ? { backgroundImage: `url("${me.avatar}")` } : undefined}
               onClick={() => (loggedIn ? fileRef.current && fileRef.current.click() : navigate("/login"))}
-              title={loggedIn ? "更换头像" : "登录后可换头像"}
+              title={loggedIn ? "Change avatar" : "Sign in to change your avatar"}
             >
               {!(me && me.avatar) && avatarChar(displayName)}
-              <span className="mine-avatar-edit t-meta">换</span>
+              <span className="mine-avatar-edit t-meta">Edit</span>
             </button>
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={uploadAvatar} />
             <div className="mine-profile-main">
               <div className="mine-name t-h1">{displayName}</div>
-              <div className="mine-role t-meta">{loggedIn ? "账户 · " + (me.role || "user") : "未登录 · 游客模式"}</div>
+              <div className="mine-role t-meta">{loggedIn ? "Account · " + (me.role || "user") : "Not signed in · Guest mode"}</div>
             </div>
           </div>
 
           <div className="mine-account">
-            <h2 className="t-h3 mine-sec-title">账号设置</h2>
+            <h2 className="t-h3 mine-sec-title">Account settings</h2>
             {loggedIn ? (
               <>
                 <div className="mine-account-row">
-                  <Input value={nameEdit} onChange={(e) => setNameEdit(e.target.value)} placeholder="改个昵称(1-24 字)" />
+                  <Input value={nameEdit} onChange={(e) => setNameEdit(e.target.value)} placeholder="New nickname (1–24 characters)" />
                   <Button variant="line" disabled={saving || !nameEdit.trim()} onClick={saveName}>
-                    {saving ? "保存中…" : "保存昵称"}
+                    {saving ? "Saving…" : "Save nickname"}
                   </Button>
                 </div>
                 <Button variant="line" onClick={() => logout().then(() => navigate("/login"))}>
-                  退出登录
+                  Sign out
                 </Button>
               </>
             ) : (
               <div className="mine-guest">
-                <p className="t-ui mine-sub">登录后可设置头像、昵称,存档跨设备同步。</p>
+                <p className="t-ui mine-sub">Sign in to set an avatar and nickname, and sync your saves across devices.</p>
                 <Button variant="primary" onClick={() => navigate("/login")}>
-                  去登录
+                  Sign in
                 </Button>
               </div>
             )}
@@ -420,8 +420,8 @@ export default function Mine() {
 
           {loggedIn && me && me.local_proxy_enabled && (
             <div className="mine-model">
-              <h2 className="t-h3 mine-sec-title">模型来源</h2>
-              <div className="mine-model-segment" aria-label="模型来源">
+              <h2 className="t-h3 mine-sec-title">Model source</h2>
+              <div className="mine-model-segment" aria-label="Model source">
                 <button
                   className={proxySettings.source === "deepseek" ? "is-on" : ""}
                   onClick={() => selectModelSource("deepseek")}
@@ -432,7 +432,7 @@ export default function Mine() {
                   className={proxySettings.source === "local_proxy" ? "is-on" : ""}
                   onClick={() => selectModelSource("local_proxy")}
                 >
-                  Codex 本机
+                  Local Codex
                 </button>
               </div>
               {proxySettings.source === "local_proxy" && (
@@ -448,50 +448,50 @@ export default function Mine() {
                   <div className="mine-codex-actions">
                     {(codexPhase === "missing" || codexPhase === "installing") && (
                       <Button variant="primary" onClick={downloadCodexConnector}>
-                        {codexPhase === "installing" ? "重新下载安装器" : "一键安装并连接"}
+                        {codexPhase === "installing" ? "Re-download installer" : "Install & connect"}
                       </Button>
                     )}
                     {codexPhase === "missing" && (
-                      <Button variant="line" onClick={wakeCodexConnector}>启动已安装助手</Button>
+                      <Button variant="line" onClick={wakeCodexConnector}>Launch installed connector</Button>
                     )}
                     {codexPhase === "login_required" && (
-                      <Button variant="primary" onClick={() => beginCodexLogin("browser")}>连接 ChatGPT</Button>
+                      <Button variant="primary" onClick={() => beginCodexLogin("browser")}>Connect ChatGPT</Button>
                     )}
                     <Button
                       variant="line"
                       disabled={codexPhase === "checking" || codexPhase === "login_pending"}
                       onClick={refreshCodexConnection}
                     >
-                      重新检测
+                      Re-check
                     </Button>
                   </div>
 
                   {codexConnection.oauthUrl && (
                     <a className="mine-codex-link t-ui-sm" href={codexConnection.oauthUrl} target="_blank" rel="noreferrer">
-                      打开 ChatGPT 登录页
+                      Open ChatGPT sign-in page
                     </a>
                   )}
                   {codexPhase === "login_required" && codexConnection.health && (
                     <button className="mine-codex-device t-meta" onClick={() => beginCodexLogin("device")}>
-                      改用设备码登录
+                      Use a device code instead
                     </button>
                   )}
                   {codexConnection.userCode && (
                     <div className="mine-codex-code">
-                      <span className="t-meta">设备码</span>
+                      <span className="t-meta">Device code</span>
                       <strong className="t-mono">{codexConnection.userCode}</strong>
                     </div>
                   )}
 
                   <details className="mine-model-advanced">
-                    <summary className="t-meta">高级设置</summary>
+                    <summary className="t-meta">Advanced settings</summary>
                     <div className="mine-model-fields">
                       <label>
                         <span className="t-meta">API Base URL</span>
                         <Input
                           value={proxySettings.endpoint}
                           onChange={(e) => setProxySettings((s) => ({ ...s, endpoint: e.target.value }))}
-                          placeholder="http://127.0.0.1:端口/v1"
+                          placeholder="http://127.0.0.1:PORT/v1"
                           spellCheck={false}
                         />
                       </label>
@@ -505,16 +505,16 @@ export default function Mine() {
                         />
                       </label>
                       <label>
-                        <span className="t-meta">API Key（可选）</span>
+                        <span className="t-meta">API Key (optional)</span>
                         <Input
                           type="password"
                           value={proxySettings.apiKey}
                           onChange={(e) => setProxySettings((s) => ({ ...s, apiKey: e.target.value }))}
-                          placeholder="仅保留到本次浏览器会话"
+                          placeholder="Kept for this browser session only"
                           autoComplete="off"
                         />
                       </label>
-                      <Button variant="line" onClick={saveProxySettings}>保存高级设置</Button>
+                      <Button variant="line" onClick={saveProxySettings}>Save advanced settings</Button>
                     </div>
                   </details>
                 </div>
@@ -528,36 +528,36 @@ export default function Mine() {
       {/* 存档(跨设备 · 占位过滤) */}
       {tab === "saves" && (
         <section className="mine-section">
-          <h2 className="t-h3 mine-sec-title">进行中 / 历史存档</h2>
+          <h2 className="t-h3 mine-sec-title">In progress / Saved games</h2>
           {game && (
             <button className="mine-save mine-save--cur" onClick={() => navigate("/play")}>
               <span className="mine-save-dot" aria-hidden="true" />
               <span className="mine-save-tx">
-                <span className="t-ui-sm">{game.title || "当前故事"}</span>
-                <span className="t-meta">本机进行中 · 点继续</span>
+                <span className="t-ui-sm">{game.title || "Current story"}</span>
+                <span className="t-meta">In progress on this device · tap to continue</span>
               </span>
-              <span className="t-meta">继续 →</span>
+              <span className="t-meta">Continue →</span>
             </button>
           )}
           {!loggedIn ? (
-            <p className="t-ui mine-sub">登录后可看跨设备同步的存档列表。当前仅显示本机进行中的故事。</p>
+            <p className="t-ui mine-sub">Sign in to see saves synced across devices. For now, only the story in progress on this device is shown.</p>
           ) : saves === null ? (
-            <p className="t-ui mine-sub">读取存档中…</p>
+            <p className="t-ui mine-sub">Loading saves…</p>
           ) : savesErr ? (
-            <p className="t-ui mine-sub">存档加载失败,可能是网络抖动。本机进行中的故事不受影响。</p>
+            <p className="t-ui mine-sub">Failed to load saves, possibly a network hiccup. The story in progress on this device is not affected.</p>
           ) : saves.length ? (
             <div className="mine-saves">
               {saves.map((s) => (
                 <div className="mine-save" key={s.id}>
                   <span className="mine-save-tx">
-                    <span className="t-ui-sm">{s.story || s.player || "未命名存档"}</span>
-                    <span className="t-meta">第 {s.turns} 回合{s.updated_at ? " · " + String(s.updated_at).slice(0, 16) : ""}</span>
+                    <span className="t-ui-sm">{s.story || s.player || "Untitled save"}</span>
+                    <span className="t-meta">Turn {s.turns}{s.updated_at ? " · " + String(s.updated_at).slice(0, 16) : ""}</span>
                   </span>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="t-ui mine-sub">还没有进行中的故事。去探索取一本书开局。</p>
+            <p className="t-ui mine-sub">No stories in progress yet. Pick a book in Explore to start.</p>
           )}
         </section>
       )}
@@ -565,11 +565,11 @@ export default function Mine() {
       {/* 收藏 */}
       {tab === "favorites" && (
         <section className="mine-section">
-          <h2 className="t-h3 mine-sec-title">我的收藏</h2>
+          <h2 className="t-h3 mine-sec-title">My favorites</h2>
           {favModels.length ? (
             <CardShelf models={favModels} onOpen={openCard} />
           ) : (
-            <p className="t-ui mine-sub">还没有收藏。在探索 / 故事详情点收藏,故事和角色会出现在这里。</p>
+            <p className="t-ui mine-sub">No favorites yet. Tap Save in Explore or on a story page, and those stories and characters will show up here.</p>
           )}
         </section>
       )}
@@ -577,24 +577,24 @@ export default function Mine() {
       {/* 我创建的(卡库竖卡分页 YOR-67) */}
       {tab === "created" && (
         <section className="mine-section">
-          <h2 className="t-h3 mine-sec-title">我创建的卡</h2>
+          <h2 className="t-h3 mine-sec-title">Cards I created</h2>
           {createdModels.length ? (
             <>
               <CardShelf models={createdShown.map((m) => (favIdSet.has(m.kind + ":" + m.id) ? { ...m, fav: true } : m))} onOpen={openCard} />
               {createdPageCount > 1 && (
                 <div className="mine-pager">
                   <Button variant="line" disabled={createdPage <= 1} onClick={() => setCreatedPage((p) => Math.max(1, p - 1))}>
-                    上一页
+                    Previous
                   </Button>
                   <span className="t-ui-sm mine-pager-info">{createdPage} / {createdPageCount}</span>
                   <Button variant="line" disabled={createdPage >= createdPageCount} onClick={() => setCreatedPage((p) => Math.min(createdPageCount, p + 1))}>
-                    下一页
+                    Next
                   </Button>
                 </div>
               )}
             </>
           ) : (
-            <p className="t-ui mine-sub">卡库还空着。去创作造一张角色卡,这里就有了。</p>
+            <p className="t-ui mine-sub">Your Card Library is empty. Build a Character Card in Create and it will show up here.</p>
           )}
         </section>
       )}

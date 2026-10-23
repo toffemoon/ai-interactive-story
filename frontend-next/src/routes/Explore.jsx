@@ -10,14 +10,14 @@ import "./Explore.css";
 const FAV_KEY = "ais_favorites_v1";
 
 const TRACKS = [
-  { key: "all", label: "全部" },
-  { key: "story", label: "完整故事" },
-  { key: "character", label: "角色卡" },
+  { key: "all", label: "All" },
+  { key: "story", label: "Stories" },
+  { key: "character", label: "Characters" },
 ];
 
 const LIVE_SORTS = [
-  { key: "composite", label: "综合" },
-  { key: "latest", label: "最新" },
+  { key: "composite", label: "Featured" },
+  { key: "latest", label: "Latest" },
 ];
 
 const PAGE_SIZE = 12;
@@ -25,7 +25,7 @@ const SKELETON_COUNT = 8;
 
 function ShowcaseTabs({ items, value, onChange, reducedMotion }) {
   return (
-    <div className="showcase4-tabs" role="group" aria-label="内容类型">
+    <div className="showcase4-tabs" role="group" aria-label="Content type">
       {items.map((item) => {
         const active = value === item.key;
         return (
@@ -89,7 +89,7 @@ export default function Explore() {
   const [loadErr, setLoadErr] = useState(false);
   const [track, setTrack] = useState("all");
   const [q, setQ] = useState("");
-  const [genre, setGenre] = useState("全部");
+  const [genre, setGenre] = useState("全部"); // i18n: kept, logic literal ("all genres" sentinel, never displayed)
   const [sort, setSort] = useState("composite");
   const [page, setPage] = useState(1);
   const [detail, setDetail] = useState(null);
@@ -184,13 +184,13 @@ export default function Explore() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 12)
       .map(([tag]) => tag);
-    return ["全部", ...top];
+    return ["全部", ...top]; // i18n: kept, logic literal
   }, [trackModels]);
 
   const filtered = useMemo(() => {
     const search = deferredQ.trim().toLowerCase();
     let models = trackModels.filter((model) => {
-      const inGenre = genre === "全部" || (model.tags || []).includes(genre);
+      const inGenre = genre === "全部" || (model.tags || []).includes(genre); // i18n: kept, logic literal
       const inSearch =
         !search ||
         [model.title, model.blurb, model.meta?.author, (model.tags || []).join(" ")]
@@ -268,73 +268,73 @@ export default function Explore() {
   }
 
   const totalCount = storyModels.length + charModels.length;
-  const filtering = track !== "all" || q.trim() !== "" || genre !== "全部";
+  const filtering = track !== "all" || q.trim() !== "" || genre !== "全部"; // i18n: kept, logic literal
 
   return (
     <>
       <div className="page explore">
-        <h1 className="explore-status-sr">探索</h1>
-        <section className="explore-showcase-tools" aria-label="探索筛选">
-          <span className="showcase4-filter-label">筛选</span>
+        <h1 className="explore-status-sr">Explore</h1>
+        <section className="explore-showcase-tools" aria-label="Explore filters">
+          <span className="showcase4-filter-label">Filter</span>
           <ShowcaseTabs
             items={TRACKS}
             value={track}
             reducedMotion={reducedMotion}
             onChange={(nextTrack) => {
               setTrack(nextTrack);
-              setGenre("全部");
+              setGenre("全部"); // i18n: kept, logic literal
             }}
           />
           <SearchField
             className="explore-showcase-search"
-            aria-label="搜索故事或角色"
-            placeholder="搜索名字、简介、作者或标签"
+            aria-label="Search stories or characters"
+            placeholder="Search by name, description, author, or tag"
             value={q}
             onChange={(event) => setQ(event.target.value)}
             onClear={() => setQ("")}
           />
           <label className="showcase-select-wrap">
-            <span className="explore-status-sr">题材</span>
-            <select value={genre} onChange={(event) => setGenre(event.target.value)} aria-label="题材筛选">
+            <span className="explore-status-sr">Genre</span>
+            <select value={genre} onChange={(event) => setGenre(event.target.value)} aria-label="Filter by genre">
               {genreOptions.map((item) => (
-                <option value={item} key={item}>{item === "全部" ? "所有题材" : item}</option>
+                <option value={item} key={item}>{item === "全部" /* i18n: kept, logic literal */ ? "All genres" : item}</option>
               ))}
             </select>
           </label>
           <label className="showcase-select-wrap">
-            <span className="explore-status-sr">排序</span>
-            <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="排序方式">
+            <span className="explore-status-sr">Sort</span>
+            <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Sort by">
               {LIVE_SORTS.map((item) => <option value={item.key} key={item.key}>{item.label}</option>)}
             </select>
           </label>
           <div className="explore-showcase-count t-ui-sm" aria-live="polite" aria-atomic="true">
             {loading ? (
-              "正在整理"
+              "Loading…"
             ) : filtering ? (
-              <>匹配 <AnimatedNumber value={filtered.length} reducedMotion={reducedMotion} /> / {totalCount}</>
+              <><AnimatedNumber value={filtered.length} reducedMotion={reducedMotion} /> of {totalCount} match</>
             ) : (
-              <>共 <AnimatedNumber value={totalCount} reducedMotion={reducedMotion} /> 个</>
+              <><AnimatedNumber value={totalCount} reducedMotion={reducedMotion} /> {totalCount === 1 ? "item" : "items"}</>
             )}
           </div>
         </section>
 
         <section ref={resultsRef} className="explore-showcase-results" aria-busy={loading || searchPending}>
           <span className="explore-status-sr" role="status" aria-live="polite">
-            {loading ? "正在加载探索内容" : searchPending ? "正在筛选" : `显示 ${shown.length} 条内容`}
+            {loading ? "Loading Explore content" : searchPending ? "Filtering" : `Showing ${shown.length} ${shown.length === 1 ? "item" : "items"}`}
           </span>
 
           {loading ? (
             <ShowcaseSkeleton />
           ) : loadErr && !totalCount ? (
             <div className="explore-empty">
-              <h2 className="t-h2">内容加载失败</h2>
-              <p className="t-ui">没能从服务器取到故事和角色。</p>
-              <Button variant="primary" onClick={refresh}>重试</Button>
+              <h2 className="t-h2">Failed to load</h2>
+              <p className="t-ui">Couldn't fetch stories and characters from the server.</p>
+              <Button variant="primary" onClick={refresh}>Retry</Button>
             </div>
           ) : !filtered.length ? (
             <div className="explore-empty">
-              <h2 className="t-h2">{totalCount ? "没有匹配的内容" : "这里还没有故事"}</h2>
-              <p className="t-ui">{totalCount ? "换个关键词或题材试试。" : "先从创作一张角色卡开始。"}</p>
+              <h2 className="t-h2">{totalCount ? "No matches" : "No stories here yet"}</h2>
+              <p className="t-ui">{totalCount ? "Try a different keyword or genre." : "Start by creating a Character Card."}</p>
             </div>
           ) : (
             <>
@@ -352,21 +352,21 @@ export default function Explore() {
                     type="button"
                     className="showcase4-page-button"
                     disabled={currentPage <= 1}
-                    aria-label="上一页"
-                    title="上一页"
+                    aria-label="Previous page"
+                    title="Previous page"
                     onClick={() => changePage(Math.max(1, currentPage - 1))}
                   >
                     <span aria-hidden="true">←</span>
                   </button>
-                  <span className="showcase4-page-indicator t-ui-sm" aria-label={`第 ${currentPage} 页,共 ${pageCount} 页`}>
+                  <span className="showcase4-page-indicator t-ui-sm" aria-label={`Page ${currentPage} of ${pageCount}`}>
                     {currentPage} / {pageCount}
                   </span>
                   <button
                     type="button"
                     className="showcase4-page-button"
                     disabled={currentPage >= pageCount}
-                    aria-label="下一页"
-                    title="下一页"
+                    aria-label="Next page"
+                    title="Next page"
                     onClick={() => changePage(Math.min(pageCount, currentPage + 1))}
                   >
                     <span aria-hidden="true">→</span>
@@ -400,7 +400,7 @@ export default function Explore() {
               exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.985 }}
               transition={{ duration: reducedMotion ? 0 : 0.26, ease: [0.22, 1, 0.36, 1] }}
             >
-              <button ref={dialogCloseRef} className="explore-modal-x" onClick={() => setDetail(null)} aria-label="关闭" title="关闭">
+              <button ref={dialogCloseRef} className="explore-modal-x" onClick={() => setDetail(null)} aria-label="Close" title="Close">
                 ×
               </button>
               <div className={`explore-modal-layout${detail.cover ? " has-cover" : ""}`}>
@@ -425,7 +425,7 @@ export default function Explore() {
                     chatWith(detail);
                   }}
                 >
-                  和 TA 纯聊
+                  Chat with them
                 </Button>
               </div>
             </motion.div>
