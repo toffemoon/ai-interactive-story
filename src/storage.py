@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
+from urllib.parse import quote
 
 from psycopg.types.json import Jsonb
 
@@ -295,6 +296,73 @@ def list_presets(user_id: str | None = None, legacy_all: bool = False) -> list[d
             )
         return [{"name": r["name"], "data": r["data"], "official": r["user_id"] is None}
                 for r in cur.fetchall()]
+
+
+# 探索页/首页的轻量列表只取卡面字段;世界书、故事书、整套卡留在库里,进详情页再按名取(get_preset)。
+# 官方预设的内嵌 data-URI 封面不回传,换成可缓存的 /api/presets/{name}/cover 链接;
+# 私有预设的仍内嵌(<img> 请求带不上登录头,链接取不到私有预设)。
+_SUMMARY_COLS = """
+    name, user_id,
+    coalesce(data->>'name', name) as dname,
+    case when user_id is null and coalesce(data->>'cover', '') like 'data:%%' then '' else coalesce(data->>'cover', '') end as cover,
+    case when user_id is null and coalesce(data->>'cover', '') like 'data:%%' then md5(data->>'cover') end as cover_md5,
+    coalesce(nullif(data->>'synopsis', ''), data->'story'->>'premise', '') as synopsis,
+    coalesce(data->>'author', '') as author,
+    coalesce(data->'tags', '[]'::jsonb) as tags,
+    (select coalesce(jsonb_agg(coalesce(c->'data'->>'name', c->>'name')), '[]'::jsonb)
+       from jsonb_array_elements(case when jsonb_typeof(data->'characters') = 'array'
+                                      then data->'characters' else '[]'::jsonb end) c) as char_names
+"""
+
+
+def list_preset_summaries(user_id: str | None = None, legacy_all: bool = False) -> list[dict[str, Any]]:
+    """list_presets 的卡面版:同样的可见范围与排序,data 里只有 name/cover/synopsis/author/tags/
+    character_count/character_names,并带 summary=True 让前端知道要再取详情。"""
+    pool = get_pool()
+    with pool.connection() as conn, conn.cursor() as cur:
+        if legacy_all:
+            cur.execute(f"select {_SUMMARY_COLS} from presets order by updated_at desc", ())
+        elif user_id is None:
+            cur.execute(f"select {_SUMMARY_COLS} from presets where user_id is null order by updated_at desc", ())
+        else:
+            cur.execute(
+                f"select {_SUMMARY_COLS} from presets where user_id is null or user_id = %s::uuid "
+                "order by (user_id is null), updated_at desc",
+                (user_id,),
+            )
+        out = []
+        for r in cur.fetchall():
+            cover = r["cover"]
+            if r["cover_md5"]:
+                cover = f"/api/presets/{quote(r['name'], safe='')}/cover?v={r['cover_md5'][:12]}"
+            names = [n for n in (r["char_names"] or []) if n]
+            out.append({"name": r["name"], "official": r["user_id"] is None, "data": {
+                "name": r["dname"], "cover": cover, "synopsis": r["synopsis"], "author": r["author"],
+                "tags": r["tags"] or [], "character_count": len(names), "character_names": names, "summary": True,
+            }})
+        return out
+
+
+def get_preset(key: str, user_id: str | None = None, legacy_all: bool = False) -> dict[str, Any] | None:
+    """按库名(slug)或展示名取一条完整预设;可见范围同 list_presets,同名时私有优先于官方。"""
+    name_key = slug(key, "preset")
+    pool = get_pool()
+    with pool.connection() as conn, conn.cursor() as cur:
+        match = "(name = %s or data->>'name' = %s)"
+        if legacy_all:
+            cur.execute(f"select name, data, user_id from presets where {match} order by updated_at desc limit 1",
+                        (name_key, key))
+        elif user_id is None:
+            cur.execute(f"select name, data, user_id from presets where user_id is null and {match} limit 1",
+                        (name_key, key))
+        else:
+            cur.execute(
+                f"select name, data, user_id from presets where (user_id is null or user_id = %s::uuid) and {match} "
+                "order by (user_id is null), updated_at desc limit 1",
+                (user_id, name_key, key),
+            )
+        r = cur.fetchone()
+    return None if r is None else {"name": r["name"], "data": r["data"], "official": r["user_id"] is None}
 
 
 def delete_preset(name: str, user_id: str | None = None,
