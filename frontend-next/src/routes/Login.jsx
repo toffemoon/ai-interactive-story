@@ -3,8 +3,16 @@ import { useNavigate } from "../lib/transitionNav";
 import { authApi } from "../lib/api";
 import { useAuth } from "../state/auth";
 import { Button } from "../components/ui";
-import { L } from "../lib/i18n";
+import { applyLanguageChoice } from "../components/LanguageGate";
+import { L, LANG } from "../lib/i18n";
 import "./Login.css";
+
+// 登录页(2026-10-24 改版,画布方案 02-A):左半屏书店图 + 标语逐词升起、句号处盖「沐言」印章;右半屏表单。
+// 表单逻辑(登录 / 注册 / 找回密码 / 本地游客)与改版前一致,只换了结构与样式。
+const SEAL = "/brand/seal-192.png";
+const TAGLINE = L(["Stories,", "alive"], ["故事，", "活过来"]);
+const WORD_DELAY = 0.16;
+const STAMP_AT = 0.3 + (TAGLINE.length - 1) * WORD_DELAY + 0.85;
 
 export default function Login() {
   const { onAuthed, enabled } = useAuth();
@@ -97,73 +105,150 @@ export default function Login() {
     if (e.key === "Enter" && !(e.nativeEvent || e).isComposing) submit();
   };
 
+  const head = {
+    login: [L("Welcome back", "欢迎回来"), L("Sign in to pick up your saves on any device.", "登录后,存档在任何设备上都能接着玩。")],
+    register: [L("Create your account", "创建账号"), L("Sign up with your email to keep your stories.", "用邮箱注册,保存你的故事。")],
+    reset: [L("Reset your password", "重置密码"), L("We'll email you a verification code.", "我们会给你的邮箱发一个验证码。")],
+  }[tab];
+
+  const codeRow = (
+    <label className="login-field">
+      <span>{L("Email verification code", "邮箱验证码")}</span>
+      <div className="login-coderow">
+        {/* 数字键盘 + 系统验证码自动填充(YOR-158) */}
+        <input className="login-input" inputMode="numeric" pattern="[0-9]*" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={onEnter} />
+        <button type="button" className="login-codebtn" disabled={sending} onClick={sendCode}>
+          {sending ? "…" : L("Send code", "发送验证码")}
+        </button>
+      </div>
+    </label>
+  );
+  const emailField = (
+    <label className="login-field">
+      <span>{L("Email", "邮箱")}</span>
+      <input className="login-input" type="email" autoCapitalize="none" spellCheck={false} autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter} />
+    </label>
+  );
+
   return (
     <div className="login">
-      <div className="login-card">
-        <h1 className="login-title">{L("Narrative Engine", "叙事引擎")}</h1>
-        <div className="login-en">NARRATIVE ENGINE · SIGN IN</div>
-
-        <div className="login-tabs">
-          <button className={tab === "login" ? "on" : ""} onClick={() => go("login")}>
-            {L("Sign in · Welcome back", "登录 · 回到故事")}
-          </button>
-          <button className={tab === "register" ? "on" : ""} onClick={() => go("register")}>
-            {L("Sign up · New here", "注册 · 初次到来")}
-          </button>
+      <section className="login-hero" aria-label={L("Narrative Engine", "叙事引擎")}>
+        <img className="login-hero-bg" src="/brand/login-bg.jpg" alt="" />
+        <div className="login-hero-shade" aria-hidden="true" />
+        <img className="login-hero-seal" src={SEAL} alt="" />
+        <div className="login-hero-copy">
+          <p className="login-tagline">
+            <span className="login-sr">{TAGLINE.join(" ")}</span>
+            {TAGLINE.map((w, i) => {
+              const word = (
+                <span className="login-mask" aria-hidden="true">
+                  <span className="login-word" style={{ animationDelay: `${(0.3 + i * WORD_DELAY).toFixed(2)}s` }}>{w}</span>
+                </span>
+              );
+              if (i < TAGLINE.length - 1) return <span key={i}>{word}</span>;
+              // 最后一个词和印章绑在一起不断行,窄屏上印章不会单独掉到下一行
+              return (
+                <span className="login-last" key={i}>
+                  {word}
+                  <span className="login-stamp" aria-hidden="true">
+                    <span className="login-ink" style={{ animationDelay: `${STAMP_AT.toFixed(2)}s` }} />
+                    <img className="login-stamp-seal" src={SEAL} alt="" style={{ animationDelay: `${STAMP_AT.toFixed(2)}s` }} />
+                  </span>
+                </span>
+              );
+            })}
+          </p>
+          <div className="login-rule" aria-hidden="true" style={{ animationDelay: `${(STAMP_AT + 0.35).toFixed(2)}s` }} />
+          <p className="login-eyebrow" style={{ animationDelay: `${(STAMP_AT + 0.35).toFixed(2)}s` }}>{L("Narrative Engine", "叙事引擎")}</p>
         </div>
+      </section>
 
-        {tab === "login" && (
-          <>
-            {/* 手机键盘会自动首字母大写/纠错,把用户名悄悄改错 → 登录必败(YOR-158) */}
-            <input className="login-input" placeholder={L("Email or username", "邮箱或用户名")} autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" value={identifier} onChange={(e) => setIdentifier(e.target.value)} onKeyDown={onEnter} />
-            <input className="login-input" type="password" placeholder={L("Password", "密码")} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter} />
-            <button type="button" className="login-alt" onClick={() => go("reset")}>{L("Forgot password?", "忘记密码?")}</button>
-          </>
-        )}
+      <section className="login-panel">
+        <div className="login-form">
+          <div className="login-lang" role="group" aria-label={L("Language", "语言")}>
+            <button type="button" lang="en" aria-pressed={LANG === "en"} className={LANG === "en" ? "on" : ""} onClick={() => LANG !== "en" && applyLanguageChoice("en", false)}>English</button>
+            <span aria-hidden="true">·</span>
+            <button type="button" lang="zh" aria-pressed={LANG === "zh"} className={LANG === "zh" ? "on" : ""} onClick={() => LANG !== "zh" && applyLanguageChoice("zh", false)}>中文</button>
+          </div>
 
-        {tab === "register" && (
-          <>
-            <input className="login-input" type="email" placeholder={L("Email", "邮箱")} autoCapitalize="none" spellCheck={false} autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter} />
-            <div className="login-coderow">
-              {/* 数字键盘 + 系统验证码自动填充(YOR-158) */}
-              <input className="login-input" placeholder={L("Email verification code", "邮箱验证码")} inputMode="numeric" pattern="[0-9]*" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={onEnter} />
-              <button className="login-codebtn" disabled={sending} onClick={sendCode}>
-                {sending ? "…" : L("Send code", "发送验证码")}
+          <div className="login-head">
+            <h1>{head[0]}</h1>
+            <p>{head[1]}</p>
+          </div>
+
+          {tab !== "reset" && (
+            <div className="login-seg" role="tablist" aria-label={L("Account", "账号")}>
+              <button type="button" role="tab" aria-selected={tab === "login"} className={tab === "login" ? "on" : ""} onClick={() => go("login")}>
+                {L("Sign in", "登录")}
+              </button>
+              <button type="button" role="tab" aria-selected={tab === "register"} className={tab === "register" ? "on" : ""} onClick={() => go("register")}>
+                {L("Sign up", "注册")}
               </button>
             </div>
-            <input className="login-input" placeholder={L("Username (optional)", "用户名(可选)")} autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} onKeyDown={onEnter} />
-            <input className="login-input" type="password" placeholder={L("Password (at least 6 characters)", "密码(至少 6 位)")} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter} />
-          </>
-        )}
+          )}
 
-        {tab === "reset" && (
-          <>
-            {/* 找回密码:邮箱验证码(purpose=reset)+ 新密码,复用注册的输入范式(YOR-158) */}
-            <input className="login-input" type="email" placeholder={L("Email", "邮箱")} autoCapitalize="none" spellCheck={false} autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter} />
-            <div className="login-coderow">
-              <input className="login-input" placeholder={L("Email verification code", "邮箱验证码")} inputMode="numeric" pattern="[0-9]*" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={onEnter} />
-              <button className="login-codebtn" disabled={sending} onClick={sendCode}>
-                {sending ? "…" : L("Send code", "发送验证码")}
+          {tab === "login" && (
+            <>
+              <label className="login-field">
+                <span>{L("Email or username", "邮箱或用户名")}</span>
+                {/* 手机键盘会自动首字母大写/纠错,把用户名悄悄改错 → 登录必败(YOR-158) */}
+                <input className="login-input" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" value={identifier} onChange={(e) => setIdentifier(e.target.value)} onKeyDown={onEnter} />
+              </label>
+              <div className="login-field">
+                <span className="login-field-row">
+                  <label htmlFor="login-password">{L("Password", "密码")}</label>
+                  <button type="button" className="login-link" onClick={() => go("reset")}>{L("Forgot password?", "忘记密码?")}</button>
+                </span>
+                <input id="login-password" className="login-input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter} />
+              </div>
+            </>
+          )}
+
+          {tab === "register" && (
+            <>
+              {emailField}
+              {codeRow}
+              <label className="login-field">
+                <span>{L("Username (optional)", "用户名(可选)")}</span>
+                <input className="login-input" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} onKeyDown={onEnter} />
+              </label>
+              <label className="login-field">
+                <span>{L("Password (at least 6 characters)", "密码(至少 6 位)")}</span>
+                <input className="login-input" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter} />
+              </label>
+            </>
+          )}
+
+          {tab === "reset" && (
+            <>
+              {/* 找回密码:邮箱验证码(purpose=reset)+ 新密码,复用注册的输入范式(YOR-158) */}
+              {emailField}
+              {codeRow}
+              <label className="login-field">
+                <span>{L("New password (at least 6 characters)", "新密码(至少 6 位)")}</span>
+                <input className="login-input" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter} />
+              </label>
+              <button type="button" className="login-link login-back" onClick={() => go("login")}>{L("← Back to sign in", "← 返回登录")}</button>
+            </>
+          )}
+
+          {hint && <div className="login-hint">{hint}</div>}
+          {err && <div className="login-err" role="alert">{err}</div>}
+
+          <Button variant="primary" full className="login-go" onClick={submit} disabled={busy}>
+            {busy ? "…" : tab === "login" ? L("Enter", "进入") : tab === "register" ? L("Sign up & enter", "注册并进入") : L("Reset password", "重置密码")}
+          </Button>
+
+          {!enabled && (
+            <>
+              <div className="login-or" aria-hidden="true"><span />{L("or", "或")}<span /></div>
+              <button type="button" className="login-guest" onClick={() => navigate("/home")}>
+                {L("Continue as guest", "以游客身份进入")}
               </button>
-            </div>
-            <input className="login-input" type="password" placeholder={L("New password (at least 6 characters)", "新密码(至少 6 位)")} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={onEnter} />
-            <button type="button" className="login-alt" onClick={() => go("login")}>{L("← Back to sign in", "← 返回登录")}</button>
-          </>
-        )}
-
-        {hint && <div className="login-hint">{hint}</div>}
-        {err && <div className="login-err">{err}</div>}
-
-        <Button variant="primary" full className="login-go" onClick={submit} disabled={busy}>
-          {busy ? "…" : tab === "login" ? L("Enter", "进入") : tab === "register" ? L("Sign up & enter", "注册并进入") : L("Reset password", "重置密码")}
-        </Button>
-
-        {!enabled && (
-          <button className="login-guest" onClick={() => navigate("/home")}>
-            {L("Accounts not enabled locally · Continue as guest →", "本地未开账号 · 以游客身份进入 →")}
-          </button>
-        )}
-      </div>
+            </>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
