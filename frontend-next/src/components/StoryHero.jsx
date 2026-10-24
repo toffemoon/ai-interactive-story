@@ -4,8 +4,39 @@ import CardCarousel from "./CardCarousel";
 import { L } from "../lib/i18n";
 import "../routes/StoryDetail.css";
 
+// 角色卡 → CardModel(取公开层多字段,不进剧透层)。故事详情页的「登场角色」也用这一份。
+export function toCastModels(d) {
+  return (d.characters || []).map((c, i) => {
+    const cd = (c && c.data) || c || {};
+    const sec = (label, v) => (v && String(v).trim() ? (label ? label + " · " + v : String(v)) : "");
+    const intro =
+      [
+        sec("", cd.anchor),
+        sec(L("Looks", "外貌"), cd.look),
+        sec(L("Personality", "性格"), cd.personality),
+        sec(L("Conflict", "矛盾"), cd.tension),
+        sec("", cd.description || cd.persona),
+        sec(L("Scenario", "情境"), cd.scenario),
+        (cd.known_public || []).length ? L("Known · " + cd.known_public.join("; "), "已知 · " + cd.known_public.join(";")) : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n") || L("This character has no intro yet. You'll learn more once the story begins.", "这个角色还没写简介,入局后逐渐揭晓。");
+    return {
+      id: (cd.name || "char") + "#" + i,
+      kind: "character",
+      title: cd.name || L("Character", "角色"),
+      cover: cd.image || cd.avatar || "",
+      blurb: intro,
+      badge: { label: L("Character", "角色"), tone: "gilt" },
+      tags: (cd.tags || []).slice(0, 3),
+      meta: {},
+      raw: c,
+    };
+  });
+}
+
 // 故事详情页「门面」共享组件:大封面 + 标题/标签/元信息 + 简介 + 作者的话 + 角色卡曲面轮播。
-// StoryDetail 路由 与 创作「预览成详情页」都用它 —— 单一来源,预览保证跟真页一模一样。
+// 创作「预览成详情页」用它(故事详情路由 2026-10-25 改成 C 幕间版面,不再用这个组件)。
 //   - preset:{ name, data:{ name, cover, synopsis, author, author_note, tags, characters, story } } 形状。
 //   - onOpenChar(model):点居中角色卡时回调(由用处弹角色详情,见 CharDetailModal)。
 export default function StoryHero({ preset, onOpenChar }) {
@@ -16,38 +47,7 @@ export default function StoryHero({ preset, onOpenChar }) {
   const author = d.author || "";
   const authorNote = d.author_note || "";
 
-  // 角色卡 → CardModel(取公开层多字段,不进剧透层)。
-  const charModels = useMemo(
-    () =>
-      (d.characters || []).map((c, i) => {
-        const cd = (c && c.data) || c || {};
-        const sec = (label, v) => (v && String(v).trim() ? (label ? label + " · " + v : String(v)) : "");
-        const intro =
-          [
-            sec("", cd.anchor),
-            sec(L("Looks", "外貌"), cd.look),
-            sec(L("Personality", "性格"), cd.personality),
-            sec(L("Conflict", "矛盾"), cd.tension),
-            sec("", cd.description || cd.persona),
-            sec(L("Scenario", "情境"), cd.scenario),
-            (cd.known_public || []).length ? L("Known · " + cd.known_public.join("; "), "已知 · " + cd.known_public.join(";")) : "",
-          ]
-            .filter(Boolean)
-            .join("\n\n") || L("This character has no intro yet. You'll learn more once the story begins.", "这个角色还没写简介,入局后逐渐揭晓。");
-        return {
-          id: (cd.name || "char") + "#" + i,
-          kind: "character",
-          title: cd.name || L("Character", "角色"),
-          cover: cd.image || cd.avatar || "",
-          blurb: intro,
-          badge: { label: L("Character", "角色"), tone: "gilt" },
-          tags: (cd.tags || []).slice(0, 3),
-          meta: {},
-          raw: c,
-        };
-      }),
-    [preset]
-  );
+  const charModels = useMemo(() => toCastModels(d), [preset]);
 
   const [charActive, setCharActive] = useState(0);
   const [charFlip, setCharFlip] = useState(false); // 居中角色卡翻面看简介(切卡时复位)
