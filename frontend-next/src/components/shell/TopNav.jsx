@@ -23,7 +23,8 @@ export default function TopNav({ variant = "overlay" }) {
         </a>
         <nav className="topnav-pills" aria-label={L("Main", "主导航")}>
           {NAV.map((item) => {
-            const active = loc.pathname.startsWith(item.to);
+            // 故事详情是从探索点进来的,胶囊仍亮「探索」
+            const active = loc.pathname.startsWith(item.to) || (item.key === "explore" && loc.pathname.startsWith("/story/"));
             return (
               <a
                 key={item.key}
