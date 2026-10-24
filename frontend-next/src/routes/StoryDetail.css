@@ -436,6 +436,10 @@
     padding: 13px 24px;
     font-size: var(--fs-ui);
   }
+  /* 手机宽度下英文角色名较长,去掉句尾「to begin / 进入」给名字让位,免得被截成一个字母 */
+  .detail-enter-info .detail-enter-label:last-child {
+    display: none;
+  }
 }
 
 /* 角色「查看详情」弹层(细节②);出现时:遮罩淡入 + 卡片上浮放大(yufei 06-25) */
@@ -582,4 +586,69 @@
 }
 .detail-charmodal-adapt:hover {
   background: color-mix(in srgb, var(--accent-2) 12%, transparent);
+}
+
+/* 自创角色登记卡(按故事创建规则整理 + 调整说明,确认后入局) */
+.detail-reg {
+  margin-top: var(--sp-4);
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.detail-reg-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+}
+.detail-reg-tag {
+  color: var(--accent);
+  letter-spacing: 0.08em;
+}
+.detail-reg-name {
+  font-size: 20px;
+}
+.detail-reg-rows {
+  margin: 0;
+  display: grid;
+  gap: var(--sp-2);
+}
+.detail-reg-row {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: var(--sp-3);
+}
+.detail-reg-row dt {
+  color: var(--muted);
+}
+.detail-reg-row dd {
+  margin: 0;
+}
+.detail-reg-adj ul {
+  margin: var(--sp-2) 0 0;
+  padding-left: 18px;
+}
+.detail-reg-adj p {
+  margin: var(--sp-2) 0 0;
+}
+.detail-reg-why {
+  color: var(--muted);
+}
+.detail-reg-edit {
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+}
+@media (max-width: 600px) {
+  .detail-reg-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
 }

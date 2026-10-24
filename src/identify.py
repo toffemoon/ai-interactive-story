@@ -351,6 +351,74 @@ def identify_player(text: str, hint: str = "") -> PlayerCard:
     ))
 
 
+_REGISTER_SYSTEM_EN = """You are the registrar for an interactive story. The player describes the character they want to play. The story has creation rules that every player character must satisfy (setting, era, region, power limits, what may and may not be invented).
+Turn the description into a player card that satisfies ALL the rules:
+- Keep everything the player asked for that the rules allow. Where something breaks a rule, change it as little as possible to make it fit (lower the power, move them into the allowed region, pick a date inside the allowed window, turn an invented relationship to a canon character into an allowed one, and so on).
+- Record every change in "adjustments": what the player wrote, what you set instead, and why (cite the rule or the canon fact). If nothing needed changing, return an empty list.
+- Fill "opening" with a concrete starting point: the date or story phase from the allowed window, the place, and the situation the character is in.
+- "known_facts" = what this character knows at the start; "unknown" = things this character does not know (the character never knows the future, even if the player does).
+Output JSON:
+{
+  "name": "character name",
+  "role": "identity/role in the story (include pathway and Sequence if they are a Beyonder, otherwise say they are an ordinary person)",
+  "background": "background summary",
+  "goals": ["goal"],
+  "abilities": ["ability/resource"],
+  "constraints": ["limitation/weakness"],
+  "known_facts": ["fact the character knows at the start"],
+  "unknown": ["what the character does not know"],
+  "opening": "starting point: when, where, what situation",
+  "adjustments": [{"what": "what the player wrote", "to": "what it became", "why": "reason"}]
+}
+Language: write every value in English, using the official English names given in the rules. Output only the JSON."""
+
+_REGISTER_SYSTEM_ZH = """你是互动故事的入场登记员。玩家会描述他想扮演的角色。这个故事有一套创建规则,所有玩家角色都必须满足(世界观、年代、区域、能力上限、能编什么不能编什么)。
+把描述整理成一张满足全部规则的玩家卡:
+- 规则允许的部分尽量保留玩家的意愿;违反规则的地方做最小的调整让它合规(降低能力、挪进允许的区域、把时间放进允许的窗口、把编造的与原作角色的关系改成允许的关系,等等)。
+- 每一处调整都写进 "adjustments":玩家原来写了什么、改成了什么、为什么(引用规则或原作事实)。不需要调整就给空列表。
+- "opening" 写一个具体的开局:允许窗口内的时间或剧情阶段、地点、角色所处的处境。
+- "known_facts" = 角色开局知道的事;"unknown" = 角色不知道的事(角色永远不知道未来,即使玩家知道)。
+输出 JSON:
+{
+  "name": "角色名",
+  "role": "在故事中的身份(是非凡者就写途径和序列,否则写普通人)",
+  "background": "背景摘要",
+  "goals": ["目标"],
+  "abilities": ["能力/资源"],
+  "constraints": ["限制/弱点"],
+  "known_facts": ["角色开局知道的事实"],
+  "unknown": ["角色不知道的事"],
+  "opening": "开局:何时、何地、什么处境",
+  "adjustments": [{"what": "玩家原来写的", "to": "改成了什么", "why": "原因"}]
+}
+只输出 JSON。"""
+
+
+def register_player(text: str, rules: str) -> tuple[PlayerCard, list[dict]]:
+    """按故事的创建规则登记自创角色:返回 (合规的玩家卡, 调整清单)。JSON 不合法时容错解析 + 重试(对齐 identify_player)。"""
+    last_err: Exception | None = None
+    system = L(_REGISTER_SYSTEM_EN, _REGISTER_SYSTEM_ZH) + L("\n\nCreation rules for this story:\n", "\n\n本故事的创建规则:\n") + rules.strip()
+    for _ in range(3):
+        raw = chat_messages(
+            [{"role": "system", "content": system}, {"role": "user", "content": text.strip()}],
+            json_mode=True,
+            max_tokens=2048,
+        )
+        try:
+            obj = _loads_tolerant(raw)
+            adjustments = [
+                {"what": str(a.get("what", "")), "to": str(a.get("to", "")), "why": str(a.get("why", ""))}
+                for a in (obj.pop("adjustments", None) or []) if isinstance(a, dict)
+            ]
+            return PlayerCard(**obj), adjustments
+        except Exception as e:  # JSON 不合法 / 字段缺失:重试
+            last_err = e
+    raise ValueError(L(
+        f"Character registration failed (invalid JSON after retries): {last_err}",
+        f"角色登记失败(JSON 不合法,已重试):{last_err}",
+    ))
+
+
 _STORY_SYSTEM_EN = """You are an interactive story-book parser. What the user gives you may be a complete outline, or just a few scattered ideas / setting fragments (it may be written in Chinese or any other language).
 Parse it and complete it into structured JSON. Missing fields may be reasonably inferred from the existing material, but anything you inferred (that the source does not state explicitly)
 must be listed with a one-line note in needs_confirm so the author can go back and confirm it.

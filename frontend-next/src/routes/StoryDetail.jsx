@@ -23,6 +23,55 @@ function normRole(x) {
   return { name: d.name || x.name || "", persona: d.persona || "", description: d.description || "" };
 }
 
+// 自创角色登记卡:按故事创建规则整理出的玩家卡 + 「调整了什么、为什么」,玩家确认后入局。
+function RegistrationCard({ reg, onEdit }) {
+  const c = reg.card || {};
+  const rows = [
+    [L("Role", "身份"), c.role],
+    [L("Starting point", "开局"), c.opening],
+    [L("Background", "背景"), c.background],
+    [L("Goals", "目标"), (c.goals || []).join("; ")],
+    [L("Abilities", "能力"), (c.abilities || []).join("; ")],
+    [L("Limits", "限制"), (c.constraints || []).join("; ")],
+    [L("Knows at the start", "开局知道"), (c.known_facts || []).join("; ")],
+  ].filter(([, v]) => v);
+  const adj = reg.adjustments || [];
+  return (
+    <div className="detail-reg" role="group" aria-label={L("Registration card", "登记卡")}>
+      <div className="detail-reg-head">
+        <span className="detail-reg-tag t-meta">{L("Registration card", "登记卡")}</span>
+        <span className="detail-reg-name t-kai">{c.name}</span>
+      </div>
+      <dl className="detail-reg-rows">
+        {rows.map(([k, v]) => (
+          <div className="detail-reg-row" key={k}>
+            <dt className="t-meta">{k}</dt>
+            <dd className="t-ui-sm">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="detail-reg-adj">
+        <div className="t-meta">{L("What we adjusted to fit the story", "为了合乎故事做的调整")}</div>
+        {adj.length ? (
+          <ul>
+            {adj.map((a, i) => (
+              <li key={i} className="t-ui-sm">
+                {a.what} → <b>{a.to}</b>
+                {a.why ? <span className="detail-reg-why"> — {a.why}</span> : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="t-ui-sm">{L("Nothing — your character fits as described.", "无需调整,你的角色本身就合乎故事。")}</p>
+        )}
+      </div>
+      <button type="button" className="detail-reg-edit t-ui-sm" onClick={onEdit}>
+        {L("Edit description", "修改描述")}
+      </button>
+    </div>
+  );
+}
+
 export default function StoryDetail() {
   const { name } = useParams();
   const loc = useLocation();
@@ -86,6 +135,7 @@ export default function StoryDetail() {
   const roleCards = useMemo(() => {
     const src = (d.playables && d.playables.length ? d.playables : d.characters) || [];
     const cards = src.map(normRole).filter((c) => c.name);
+    if (d.allow_observer === false) return cards; // 预设可关掉「以旁观者开始」(如诡秘:只能扮演书中角色或自创)
     return [...cards, { name: L("Start as an observer", "以旁观者开始"), persona: L("Enter the story as an observer, without playing a specific role", "不扮演特定角色,以观察者视角进入故事"), spectator: true }];
   }, [preset]);
 
@@ -98,6 +148,9 @@ export default function StoryDetail() {
   const [customText, setCustomText] = useState("");
   const [identifying, setIdentifying] = useState(false);
   const [err, setErr] = useState("");
+  // 预设带创建规则(creation_rules)时,自创角色先按规则登记、给玩家看登记卡确认,再入局。
+  const rules = d.creation_rules || "";
+  const [registration, setRegistration] = useState(null); // {card, adjustments}
 
   const selected = castMode === "custom" ? null : roleCards[selIdx] || roleCards[0];
   const enterRole = selected && !selected.spectator ? selected : null;
@@ -122,9 +175,14 @@ export default function StoryDetail() {
   // 现场描述 → identify_player 识别成演出卡 → 入局。
   async function startCustom() {
     if (!customText.trim() || identifying) return;
+    if (registration) return enterStory(registration.card);
     setErr("");
     setIdentifying(true);
     try {
+      if (rules) {
+        setRegistration(await postJSON("/api/register_player", { text: customText, rules }));
+        return; // 登记卡出来后,玩家确认再点一次入局
+      }
       const card = await postJSON("/api/identify_player", { text: customText });
       enterStory(card);
     } catch (e) {
@@ -226,7 +284,10 @@ export default function StoryDetail() {
               <textarea
                 className="detail-custom-text t-ui"
                 value={customText}
-                onChange={(e) => setCustomText(e.target.value)}
+                onChange={(e) => {
+                  setCustomText(e.target.value);
+                  setRegistration(null);
+                }}
                 placeholder={L("Describe who you'll play: background, goals, abilities, limits, what you know at the start… AI will turn it into a role card.", "写下你要扮演的身份:背景、目标、能力、限制、开局已知…… AI 会识别成演出卡。")}
               />
               <div className="detail-custom-row">
@@ -235,6 +296,7 @@ export default function StoryDetail() {
                   <input type="file" accept=".txt,.md,.docx" onChange={pickFile} hidden />
                 </label>
               </div>
+              {registration && <RegistrationCard reg={registration} onEdit={() => setRegistration(null)} />}
             </div>
           )}
           {err && <div className="detail-err t-ui-sm">{err}</div>}
@@ -249,7 +311,9 @@ export default function StoryDetail() {
           <span className="detail-enter-label t-meta">{L("Enter as", "即将以")}</span>
           <span className="detail-enter-role t-kai">
             {castMode === "custom"
-              ? customText.trim()
+              ? registration
+                ? registration.card.name
+                : customText.trim()
                 ? L("Custom role", "自定义角色")
                 : L("(describe your role first)", "（先写下身份）")
               : enterRole
@@ -260,7 +324,13 @@ export default function StoryDetail() {
         </div>
         {castMode === "custom" ? (
           <Button className="detail-enter-go" variant="primary" disabled={identifying || !customText.trim()} onClick={startCustom}>
-            {identifying ? L("Identifying…", "识别中…") : L("Enter the story", "涟漪入局")}
+            {identifying
+              ? rules
+                ? L("Checking against the story…", "按故事规则核对中…")
+                : L("Identifying…", "识别中…")
+              : rules && !registration
+              ? L("Register character", "登记角色")
+              : L("Enter the story", "涟漪入局")}
           </Button>
         ) : (
           <Button className="detail-enter-go" variant="primary" onClick={() => enterStory(enterRole)}>
