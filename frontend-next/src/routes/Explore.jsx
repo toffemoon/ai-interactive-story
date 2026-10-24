@@ -1,8 +1,8 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useNavigate } from "../lib/transitionNav";
-import { SearchField, Button, Badge, Tag } from "../components/ui";
-import ShowcaseGrid from "../components/explore/ShowcaseGrid";
+import { Button, Badge, Tag } from "../components/ui";
+import TopNav from "../components/shell/TopNav";
 import { getJSON } from "../lib/api";
 import { toCardModel, toCardModels } from "../lib/cardModel";
 import { L, isZh } from "../lib/i18n";
@@ -21,63 +21,80 @@ const LIVE_SORTS = [
   { key: "latest", label: L("Latest", "最新") },
 ];
 
-const PAGE_SIZE = 12;
-const SKELETON_COUNT = 8;
+const STAR = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
+    <path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" />
+  </svg>
+);
 
-function ShowcaseTabs({ items, value, onChange, reducedMotion }) {
+// 推荐位挑一本:当前语言的官方故事里排第一的(中文站挑中文书名,英文站挑英文书名);没有就取第一本。
+const hasCjk = (s) => /[\u3400-\u9fff]/.test(s || "");
+function pickFeatured(stories) {
+  const official = stories.filter((m) => m.raw && m.raw.official);
+  const pool = official.length ? official : stories;
+  return pool.find((m) => hasCjk(m.title) === isZh) || pool[0] || null;
+}
+
+function favLabel(model, fav) {
+  return fav ? L(`Remove ${model.title} from favorites`, `取消收藏 ${model.title}`) : L(`Add ${model.title} to favorites`, `收藏 ${model.title}`);
+}
+
+function StoryCard({ model, fav, onOpen, onFav }) {
+  const tag = (model.tags || [])[0] || L("Story", "故事");
+  const [broken, setBroken] = useState(false); // 封面地址失效就退回书脊字
   return (
-    <div className="showcase4-tabs" role="group" aria-label={L("Content type", "内容类型")}>
-      {items.map((item) => {
-        const active = value === item.key;
-        return (
-          <button
-            key={item.key}
-            type="button"
-            className={active ? "is-active" : ""}
-            aria-pressed={active}
-            onClick={() => onChange(item.key)}
-          >
-            {active ? (
-              <motion.span
-                className="showcase4-tabs-active"
-                layoutId="explore-showcase4-tab"
-                transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 400, damping: 32 }}
-              />
-            ) : null}
-            <span>{item.label}</span>
-          </button>
-        );
-      })}
-    </div>
+    <article className="cx-story">
+      <button type="button" className="cx-story-hit" onClick={() => onOpen(model)}>
+        {model.cover && !broken ? (
+          <img src={model.cover} alt="" loading="lazy" decoding="async" onError={() => setBroken(true)} />
+        ) : (
+          <span className="cx-story-spine" aria-hidden="true">{hasCjk(model.title) ? model.title.slice(0, 2) : model.title.charAt(0)}</span>
+        )}
+        <span className="cx-shade" aria-hidden="true" />
+        <span className="cx-card-text">
+          <span className="cx-card-name">{model.title}</span>
+          <span className="cx-card-tag">{tag}</span>
+        </span>
+      </button>
+      <button type="button" className={"cx-fav" + (fav ? " is-on" : "")} aria-pressed={fav} aria-label={favLabel(model, fav)} onClick={() => onFav(model)}>
+        {STAR}
+      </button>
+    </article>
   );
 }
 
-function AnimatedNumber({ value, reducedMotion }) {
+function CharCard({ model, fav, onOpen, onFav }) {
+  const tag = (model.tags || [])[0] || L("Character", "角色");
+  const [broken, setBroken] = useState(false);
   return (
-    <AnimatePresence initial={false} mode="popLayout">
-      <motion.b
-        key={value}
-        initial={reducedMotion ? false : { opacity: 0, y: 5 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={reducedMotion ? { opacity: 1 } : { opacity: 0, y: -5 }}
-        transition={{ duration: reducedMotion ? 0 : 0.18 }}
-      >
-        {value}
-      </motion.b>
-    </AnimatePresence>
+    <article className="cx-char">
+      <button type="button" className="cx-char-hit" onClick={() => onOpen(model)}>
+        {model.cover && !broken ? (
+          <img src={model.cover} alt="" loading="lazy" decoding="async" onError={() => setBroken(true)} />
+        ) : (
+          <span className="cx-char-glyph" aria-hidden="true">{model.title.charAt(0)}</span>
+        )}
+        <span className="cx-shade" aria-hidden="true" />
+        <span className="cx-card-text">
+          <span className="cx-card-name cx-card-name--char">{model.title}</span>
+          <span className="cx-card-tag">{tag}</span>
+        </span>
+      </button>
+      <button type="button" className={"cx-fav" + (fav ? " is-on" : "")} aria-pressed={fav} aria-label={favLabel(model, fav)} onClick={() => onFav(model)}>
+        {STAR}
+      </button>
+    </article>
   );
 }
 
-function ShowcaseSkeleton() {
+function RowSkeleton({ kind }) {
   return (
-    <div className="showcase4-skeleton" aria-hidden="true">
-      {Array.from({ length: SKELETON_COUNT }, (_, index) => (
-        <div className="showcase4-skeleton-card" key={index}>
-          <span />
-          <b />
-          <i />
-        </div>
-      ))}
+    <div className="cx-row-scroll" aria-hidden="true">
+      <div className="cx-row-track">
+        {Array.from({ length: 5 }, (_, i) => (
+          <div key={i} className={(kind === "story" ? "cx-story" : "cx-char") + " cx-skel"} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -86,17 +103,16 @@ export default function Explore() {
   const navigate = useNavigate();
   const [presets, setPresets] = useState([]);
   const [chars, setChars] = useState([]);
+  const [badCover, setBadCover] = useState(""); // 弹层封面地址失效就不占位
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState(false);
   const [track, setTrack] = useState("all");
   const [q, setQ] = useState("");
   const [genre, setGenre] = useState("全部"); // i18n: kept, logic literal ("all genres" sentinel, never displayed)
   const [sort, setSort] = useState("composite");
-  const [page, setPage] = useState(1);
   const [detail, setDetail] = useState(null);
   const deferredQ = useDeferredValue(q);
   const reducedMotion = Boolean(useReducedMotion());
-  const resultsRef = useRef(null);
   const dialogRef = useRef(null);
   const dialogCloseRef = useRef(null);
 
@@ -210,25 +226,7 @@ export default function Explore() {
     return models;
   }, [trackModels, deferredQ, genre, sort]);
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount);
-  const shown = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const searchPending = q !== deferredQ;
-
-  useEffect(() => {
-    setPage(1);
-  }, [track, q, genre, sort]);
-
-  function changePage(nextPage) {
-    setPage(nextPage);
-    requestAnimationFrame(() => {
-      resultsRef.current?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
-    });
-  }
-
-  function goStory(model) {
-    navigate(`/story/${encodeURIComponent(model.id)}`, { state: { preset: model.raw } });
-  }
 
   function chatWith(model) {
     try {
@@ -270,121 +268,165 @@ export default function Explore() {
 
   const totalCount = storyModels.length + charModels.length;
   const filtering = track !== "all" || q.trim() !== "" || genre !== "全部"; // i18n: kept, logic literal
+  const featured = useMemo(() => pickFeatured(storyModels), [storyModels]);
+  const featuredData = (featured && featured.raw && featured.raw.data) || {};
+  const featuredCast = (featuredData.character_names || []).slice(0, 4).join(isZh ? "、" : ", ");
+  const shownStories = filtered.filter((m) => m.kind === "story");
+  const shownChars = filtered.filter((m) => m.kind === "character");
 
-  return (
-    <>
-      <div className="page explore">
-        <h1 className="explore-status-sr">{L("Explore", "探索")}</h1>
-        <section className="explore-showcase-tools" aria-label={L("Explore filters", "探索筛选")}>
-          <span className="showcase4-filter-label">{L("Filter", "筛选")}</span>
-          <ShowcaseTabs
-            items={TRACKS}
-            value={track}
-            reducedMotion={reducedMotion}
-            onChange={(nextTrack) => {
-              setTrack(nextTrack);
-              setGenre("全部"); // i18n: kept, logic literal
-            }}
-          />
-          <SearchField
-            className="explore-showcase-search"
-            aria-label={L("Search stories or characters", "搜索故事或角色")}
-            placeholder={L("Search by name, description, author, or tag", "搜索名字、简介、作者或标签")}
-            value={q}
-            onChange={(event) => setQ(event.target.value)}
-            onClear={() => setQ("")}
-          />
-          <label className="showcase-select-wrap">
-            <span className="explore-status-sr">{L("Genre", "题材")}</span>
-            <select value={genre} onChange={(event) => setGenre(event.target.value)} aria-label={L("Filter by genre", "题材筛选")}>
-              {genreOptions.map((item) => (
-                <option value={item} key={item}>{item === "全部" /* i18n: kept, logic literal */ ? L("All genres", "所有题材") : item}</option>
-              ))}
-            </select>
-          </label>
-          <label className="showcase-select-wrap">
-            <span className="explore-status-sr">{L("Sort", "排序")}</span>
-            <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label={L("Sort by", "排序方式")}>
-              {LIVE_SORTS.map((item) => <option value={item.key} key={item.key}>{item.label}</option>)}
-            </select>
-          </label>
-          <div className="explore-showcase-count t-ui-sm" aria-live="polite" aria-atomic="true">
-            {loading ? (
-              L("Loading…", "正在整理")
-            ) : filtering ? (
-              isZh ? (
-                <>匹配 <AnimatedNumber value={filtered.length} reducedMotion={reducedMotion} /> / {totalCount}</>
+  // focus = "role":从「开始游玩」进来,详情页直接滚到「你来扮演谁」
+  function goStory(model, focus) {
+    navigate(`/story/${encodeURIComponent(model.id)}`, { state: { preset: model.raw, focus } });
+  }
+
+  const row = (kind, title, items, more) => (
+    <section className="cx-row" aria-labelledby={"cx-row-" + kind}>
+      <div className="cx-row-head">
+        <h2 id={"cx-row-" + kind}>
+          {title}
+          {filtering && !loading ? <span className="cx-row-count">{items.length}</span> : null}
+        </h2>
+        {more ? (
+          <button type="button" className="cx-row-more" onClick={more}>
+            {kind === "story" ? L("All stories", "全部故事") : L("All characters", "全部角色")}
+          </button>
+        ) : null}
+      </div>
+      {loading ? (
+        <RowSkeleton kind={kind} />
+      ) : (
+        <div className={filtering ? "cx-grid" : "cx-row-scroll"}>
+          <div className={filtering ? "cx-grid-track cx-grid-track--" + kind : "cx-row-track"}>
+            {items.map((m) =>
+              kind === "story" ? (
+                <StoryCard key={m.id} model={m} fav={isFavorite(m)} onOpen={openModel} onFav={toggleFavorite} />
               ) : (
-                <><AnimatedNumber value={filtered.length} reducedMotion={reducedMotion} /> of {totalCount} match</>
-              )
-            ) : (
-              isZh ? (
-                <>共 <AnimatedNumber value={totalCount} reducedMotion={reducedMotion} /> 个</>
-              ) : (
-                <><AnimatedNumber value={totalCount} reducedMotion={reducedMotion} /> {totalCount === 1 ? "item" : "items"}</>
+                <CharCard key={m.id} model={m} fav={isFavorite(m)} onOpen={openModel} onFav={toggleFavorite} />
               )
             )}
           </div>
+        </div>
+      )}
+    </section>
+  );
+
+  return (
+    <>
+      <div className="page cx">
+        {/* 页头大图:书店夜景 + 糖沐,导航叠在上面,左侧是推荐的一本故事(画布「C 幕间 · 探索」) */}
+        <section className="cx-hero" aria-labelledby="cx-hero-title">
+          <img className="cx-hero-bg" src="/home/background.png" alt="" />
+          <div className="cx-hero-shade" aria-hidden="true" />
+          <img className="cx-hero-art" src="/home/tangmu02.webp" alt="" />
+          <div className="cx-hero-fade" aria-hidden="true" />
+          <TopNav variant="overlay" />
+          <div className="cx-hero-body">
+            <div className="cx-feature">
+              {featured ? (
+                <>
+                  {(featured.tags || [])[0] ? <p className="cx-feature-tag">{featured.tags[0]}</p> : null}
+                  <h1 id="cx-hero-title" className={"cx-feature-title" + (featured.title.length > 18 ? " is-long" : "")}>
+                    {featured.title}
+                  </h1>
+                  {featuredData.synopsis ? <p className="cx-feature-blurb">{featuredData.synopsis}</p> : null}
+                  {featuredCast ? (
+                    <p className="cx-feature-cast">
+                      <span>{L("Cast", "登场角色")}</span>
+                      {featuredCast}
+                    </p>
+                  ) : null}
+                  <div className="cx-feature-actions">
+                    <button type="button" className="cx-btn cx-btn--primary" onClick={() => goStory(featured, "role")}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l12-7.5z" /></svg>
+                      {L("Play", "开始游玩")}
+                    </button>
+                    <button type="button" className="cx-btn cx-btn--soft" onClick={() => goStory(featured)}>
+                      {L("Story details", "故事详情")}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <h1 id="cx-hero-title" className="cx-feature-title">{L("Explore", "探索")}</h1>
+              )}
+            </div>
+          </div>
         </section>
 
-        <section ref={resultsRef} className="explore-showcase-results" aria-busy={loading || searchPending}>
+        <main className="cx-main">
+          <div className="cx-tools">
+            <div className="cx-tabs" role="group" aria-label={L("Content type", "内容类型")}>
+              {TRACKS.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  aria-pressed={track === t.key}
+                  className={track === t.key ? "is-on" : ""}
+                  onClick={() => {
+                    setTrack(t.key);
+                    setGenre("全部"); // i18n: kept, logic literal
+                  }}
+                >
+                  {t.key === "all" && !loading ? (isZh ? `全部 ${totalCount}` : `All ${totalCount}`) : t.label}
+                </button>
+              ))}
+            </div>
+            <span className="cx-tools-gap" />
+            <label className="cx-search">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
+              <span className="explore-status-sr">{L("Search", "搜索")}</span>
+              <input
+                type="search"
+                placeholder={L("Search names, tags, authors", "搜索名字、简介、作者或标签")}
+                value={q}
+                onChange={(event) => setQ(event.target.value)}
+              />
+            </label>
+            <label className="cx-select">
+              <span className="explore-status-sr">{L("Genre", "题材")}</span>
+              <select value={genre} onChange={(event) => setGenre(event.target.value)}>
+                {genreOptions.map((item) => (
+                  <option value={item} key={item}>{item === "全部" /* i18n: kept, logic literal */ ? L("All genres", "全部题材") : item}</option>
+                ))}
+              </select>
+            </label>
+            <label className="cx-select">
+              <span className="explore-status-sr">{L("Sort", "排序")}</span>
+              <select value={sort} onChange={(event) => setSort(event.target.value)}>
+                {LIVE_SORTS.map((item) => <option value={item.key} key={item.key}>{item.label}</option>)}
+              </select>
+            </label>
+          </div>
+
           <span className="explore-status-sr" role="status" aria-live="polite">
-            {loading ? L("Loading Explore content", "正在加载探索内容") : searchPending ? L("Filtering", "正在筛选") : L(`Showing ${shown.length} ${shown.length === 1 ? "item" : "items"}`, `显示 ${shown.length} 条内容`)}
+            {loading
+              ? L("Loading Explore content", "正在加载探索内容")
+              : searchPending
+              ? L("Filtering", "正在筛选")
+              : L(`Showing ${filtered.length} ${filtered.length === 1 ? "item" : "items"}`, `显示 ${filtered.length} 条内容`)}
           </span>
 
-          {loading ? (
-            <ShowcaseSkeleton />
-          ) : loadErr && !totalCount ? (
-            <div className="explore-empty">
-              <h2 className="t-h2">{L("Failed to load", "内容加载失败")}</h2>
-              <p className="t-ui">{L("Couldn't fetch stories and characters from the server.", "没能从服务器取到故事和角色。")}</p>
+          {!loading && loadErr && !totalCount ? (
+            <div className="cx-empty">
+              <h2>{L("Failed to load", "内容加载失败")}</h2>
+              <p>{L("Couldn't fetch stories and characters from the server.", "没能从服务器取到故事和角色。")}</p>
               <Button variant="primary" onClick={refresh}>{L("Retry", "重试")}</Button>
             </div>
-          ) : !filtered.length ? (
-            <div className="explore-empty">
-              <h2 className="t-h2">{totalCount ? L("No matches", "没有匹配的内容") : L("No stories here yet", "这里还没有故事")}</h2>
-              <p className="t-ui">{totalCount ? L("Try a different keyword or genre.", "换个关键词或题材试试。") : L("Start by creating a Character Card.", "先从创作一张角色卡开始。")}</p>
+          ) : !loading && !filtered.length ? (
+            <div className="cx-empty">
+              <h2>{totalCount ? L("No matches", "没有匹配的内容") : L("No stories here yet", "这里还没有故事")}</h2>
+              <p>{totalCount ? L("Try a different keyword or genre.", "换个关键词或题材试试。") : L("Start by creating a Character Card.", "先从创作一张角色卡开始。")}</p>
             </div>
           ) : (
             <>
-              <ShowcaseGrid
-                models={shown}
-                isFavorite={isFavorite}
-                onOpen={openModel}
-                onToggleFavorite={toggleFavorite}
-                reducedMotion={reducedMotion}
-              />
-
-              {pageCount > 1 ? (
-                <div className="showcase4-pager">
-                  <button
-                    type="button"
-                    className="showcase4-page-button"
-                    disabled={currentPage <= 1}
-                    aria-label={L("Previous page", "上一页")}
-                    title={L("Previous page", "上一页")}
-                    onClick={() => changePage(Math.max(1, currentPage - 1))}
-                  >
-                    <span aria-hidden="true">←</span>
-                  </button>
-                  <span className="showcase4-page-indicator t-ui-sm" aria-label={L(`Page ${currentPage} of ${pageCount}`, `第 ${currentPage} 页,共 ${pageCount} 页`)}>
-                    {currentPage} / {pageCount}
-                  </span>
-                  <button
-                    type="button"
-                    className="showcase4-page-button"
-                    disabled={currentPage >= pageCount}
-                    aria-label={L("Next page", "下一页")}
-                    title={L("Next page", "下一页")}
-                    onClick={() => changePage(Math.min(pageCount, currentPage + 1))}
-                  >
-                    <span aria-hidden="true">→</span>
-                  </button>
-                </div>
-              ) : null}
+              {track !== "character" && (loading || shownStories.length > 0)
+                ? row("story", L("Stories", "故事"), shownStories, track === "all" && !filtering ? () => setTrack("story") : null)
+                : null}
+              {track !== "story" && (loading || shownChars.length > 0)
+                ? row("character", L("Characters", "角色"), shownChars, track === "all" && !filtering ? () => setTrack("character") : null)
+                : null}
             </>
           )}
-        </section>
+        </main>
       </div>
 
       <AnimatePresence>
@@ -412,8 +454,10 @@ export default function Explore() {
               <button ref={dialogCloseRef} className="explore-modal-x" onClick={() => setDetail(null)} aria-label={L("Close", "关闭")} title={L("Close", "关闭")}>
                 ×
               </button>
-              <div className={`explore-modal-layout${detail.cover ? " has-cover" : ""}`}>
-                {detail.cover ? <img className="explore-modal-cover" src={detail.cover} alt="" decoding="async" /> : null}
+              <div className={`explore-modal-layout${detail.cover && detail.cover !== badCover ? " has-cover" : ""}`}>
+                {detail.cover && detail.cover !== badCover ? (
+                  <img className="explore-modal-cover" src={detail.cover} alt="" decoding="async" onError={() => setBadCover(detail.cover)} />
+                ) : null}
                 <div className="explore-modal-copy">
                   <Badge tone={detail.badge.tone}>{detail.badge.label}</Badge>
                   <h2 id="explore-dialog-title" className="t-h1 explore-modal-title">{detail.title}</h2>

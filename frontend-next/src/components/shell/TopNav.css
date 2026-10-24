@@ -1,0 +1,134 @@
+/* C 幕间顶部导航(画布 C 首页 / 探索 / 故事详情 / 论坛 等共用) */
+.topnav {
+  position: relative;
+  z-index: 5;
+  color: var(--fg);
+}
+.topnav--bar {
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.topnav-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 20px 48px;
+  display: flex;
+  align-items: center;
+  gap: 16px 32px;
+}
+.topnav--bar .topnav-inner {
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+.topnav-brand {
+  flex: none;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #ffffff;
+  text-decoration: none;
+  font-size: 19px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+.topnav-brand img {
+  width: 32px;
+  height: 32px;
+}
+.topnav-pills {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--r-pill);
+  background: rgba(14, 19, 32, 0.74);
+}
+.topnav--bar .topnav-pills {
+  background: var(--panel);
+}
+.topnav-pills a {
+  flex: none;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  border-radius: var(--r-pill);
+  color: #d5dbe8;
+  font-size: 15px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.topnav-pills a:hover {
+  color: #ffffff;
+}
+.topnav-pills a.is-on {
+  background: #f3f5fa;
+  color: #0e1320;
+  font-weight: 700;
+}
+.topnav-gap {
+  flex: 1 1 24px;
+}
+.topnav-account {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(14, 19, 32, 0.74);
+  color: var(--fg);
+}
+.topnav--bar .topnav-account {
+  background: var(--panel);
+}
+.topnav-account:hover {
+  color: #ffffff;
+}
+
+/* 平板:收紧边距 */
+@media (max-width: 960px) {
+  .topnav-inner {
+    padding: 16px 24px;
+    gap: 12px 20px;
+  }
+  .topnav-pills a {
+    padding: 0 14px;
+  }
+}
+/* 手机:品牌与账户一行,胶囊另起一行横向滑动(不换行、不挤小) */
+@media (max-width: 720px) {
+  .topnav-inner {
+    padding: 10px 16px 8px;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+  .topnav-brand {
+    order: 1;
+  }
+  .topnav-gap {
+    order: 2;
+  }
+  .topnav-account {
+    order: 3;
+  }
+  .topnav-pills {
+    order: 4;
+    flex: 1 1 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .topnav-pills::-webkit-scrollbar {
+    display: none;
+  }
+  .topnav-pills a {
+    flex: 1 0 auto;
+    justify-content: center;
+    padding: 0 14px;
+    font-size: 14px;
+  }
+}
