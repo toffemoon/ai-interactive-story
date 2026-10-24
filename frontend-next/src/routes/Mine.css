@@ -1,355 +1,551 @@
-/* 我的 · 个人中心(YOR-64 子树)。子分区 tab + 各区块。吃语义 token。 */
-.mine-head {
-  margin-bottom: var(--sp-4);
+/* 我的 · C 幕间(2026-10-25,画布「C 幕间 · 我的」)。主题 = c(lib/cRoutes.js)。
+   顶栏 TopNav(bar);个人卡(书店夜景压暗 + 头像 + 名字);胶囊页签;资料 = 一行一项、行间细线、不加外框。 */
+.page.mine {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
 }
-.mine-sub {
-  color: var(--muted);
-  max-width: 52ch;
+.mine .topnav--bar {
+  border-bottom-color: rgba(243, 245, 250, 0.08);
 }
-
-/* 子分区 tab */
-.mine-tabs {
-  position: relative; /* 红线指示条的定位上下文(子按钮 offsetLeft/Top 相对它) */
+.mine-main {
+  max-width: 1280px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 32px 48px 56px;
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2);
-  border-bottom: 1px solid var(--line);
-  margin-bottom: var(--sp-5);
-}
-.mine-tab {
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--muted);
-  font-family: var(--font-kai);
-  font-size: var(--fs-ui);
-  padding: 8px 4px;
-  margin-right: var(--sp-3);
-  cursor: pointer;
-  transition: color var(--dur-fast) var(--ease-out);
-}
-.mine-tab:hover {
-  color: var(--fg);
-}
-.mine-tab.is-on {
-  color: var(--fg);
-}
-/* 滑动红线:切 tab 时平移到当前项(替代生硬的下划线瞬切) */
-.mine-tab-underline {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 2px;
-  background: var(--accent);
-  border-radius: 1px;
-  transition: transform var(--dur-mid) var(--ease-out), width var(--dur-mid) var(--ease-out);
-  pointer-events: none;
-  will-change: transform, width;
+  flex-direction: column;
+  gap: 28px;
 }
 
-.mine-section {
-  animation: mine-in 0.24s var(--ease-out) both;
-}
-@keyframes mine-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-.mine-sec-title {
-  margin-bottom: var(--sp-4);
-}
-
-/* 档案 */
-.mine-profile {
+/* 个人卡 */
+.mine-hero {
+  position: relative;
+  min-height: 220px;
+  overflow: hidden;
+  border-radius: 20px;
+  background: var(--panel);
   display: flex;
   align-items: center;
-  gap: var(--sp-5);
-  margin-bottom: var(--sp-6);
+}
+.mine-hero-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.4;
+}
+.mine-hero-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(14, 19, 32, 0.95) 0%, rgba(14, 19, 32, 0.75) 45%, rgba(14, 19, 32, 0.35) 100%);
+}
+.mine-hero-body {
+  position: relative;
+  box-sizing: border-box;
+  padding: 36px 40px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 20px 28px;
 }
 .mine-avatar {
   position: relative;
-  width: 88px;
-  height: 88px;
   flex: none;
-  border-radius: var(--r-pill);
-  border: 1px solid var(--line);
-  background-color: var(--spine-character);
+  width: 96px;
+  height: 96px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #2a3550;
   background-size: cover;
   background-position: center;
-  display: grid;
-  place-items: center;
-  font-family: var(--font-kai);
-  font-size: 34px;
-  color: var(--on-accent);
+  color: var(--fg);
+  font: inherit;
+  font-size: 40px;
+  font-weight: 900;
   cursor: pointer;
-  overflow: hidden;
 }
 .mine-avatar-edit {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 3px 0;
-  background: color-mix(in srgb, var(--ink) 55%, transparent);
-  color: #fff;
+  padding: 4px 0 6px;
+  background: rgba(14, 19, 32, 0.72);
+  font-size: 12px;
+  font-weight: 400;
   opacity: 0;
   transition: opacity var(--dur-fast) var(--ease-out);
 }
-.mine-avatar:hover .mine-avatar-edit {
+.mine-avatar:hover .mine-avatar-edit,
+.mine-avatar:focus-visible .mine-avatar-edit {
   opacity: 1;
 }
-/* 触屏没有 hover,「换」提示条常显,否则用户不知道头像可换(YOR-165) */
-@media (hover: none) {
-  .mine-avatar-edit {
-    opacity: 1;
-  }
-}
-.mine-name {
-  color: var(--fg);
-}
-.mine-role {
-  color: var(--muted);
-  margin-top: var(--sp-1);
-}
-
-/* 账号设置 */
-.mine-account {
-  max-width: 480px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-3);
-  padding-top: var(--sp-5);
-  border-top: 1px solid var(--line);
-}
-.mine-account-row {
-  display: flex;
-  gap: var(--sp-3);
-}
-.mine-account-row .input {
-  flex: 1;
-}
-.mine-guest {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--sp-3);
-}
-
-/* 模型来源(仅 operator 授权账户可见) */
-.mine-model {
-  max-width: 480px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--sp-3);
-  margin-top: var(--sp-5);
-  padding-top: var(--sp-5);
-  border-top: 1px solid var(--line);
-}
-.mine-model .mine-sec-title {
-  margin-bottom: 0;
-}
-.mine-model-segment {
-  display: inline-grid;
-  grid-template-columns: repeat(2, minmax(104px, 1fr));
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  overflow: hidden;
-}
-.mine-model-segment button {
-  min-height: 36px;
-  padding: 7px 13px;
-  border: 0;
-  border-right: 1px solid var(--line);
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  cursor: pointer;
-}
-.mine-model-segment button:last-child {
-  border-right: 0;
-}
-.mine-model-segment button.is-on {
-  background: var(--accent-2);
-  color: var(--on-accent);
-}
-.mine-codex-connect {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-3);
-}
-.mine-codex-state {
-  width: 100%;
-  min-height: 48px;
-  display: grid;
-  grid-template-columns: 10px minmax(0, 1fr);
-  align-items: center;
-  gap: var(--sp-3);
-  padding: 10px 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-.mine-codex-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: var(--r-pill);
-  background: var(--muted);
-}
-.mine-codex-state.is-connected .mine-codex-dot {
-  background: #2f8f5b;
-}
-.mine-codex-state.is-login_required .mine-codex-dot,
-.mine-codex-state.is-login_pending .mine-codex-dot {
-  background: #b47a19;
-}
-.mine-codex-state.is-missing .mine-codex-dot {
-  background: #b55252;
-}
-.mine-codex-state-copy {
+.mine-hero-tx {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
 }
-.mine-codex-state-copy strong,
-.mine-codex-state-copy span {
+.mine-hero-tx h1 {
+  margin: 0;
+  font-size: 40px;
+  font-weight: 900;
+  line-height: 1.1;
   overflow-wrap: anywhere;
+}
+.mine-hero-tx p {
+  margin: 0;
+  font-size: 15px;
+  color: #c3cbdb;
+}
+
+/* 页签 */
+.mine-tabs {
+  align-self: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--r-pill);
+  background: var(--panel);
+}
+.mine-tabs button {
+  min-height: 44px;
+  padding: 0 22px;
+  border: none;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: #c3cbdb;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+.mine-tabs button:hover {
+  color: #ffffff;
+}
+.mine-tabs button.is-on {
+  background: #2a3550;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+/* 资料:一行一项 */
+.mine-rows {
+  max-width: 880px;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid rgba(243, 245, 250, 0.1);
+}
+.mine-row {
+  padding: 22px 4px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 32px;
+  border-bottom: 1px solid rgba(243, 245, 250, 0.1);
+}
+.mine-row--block {
+  flex-direction: column;
+  align-items: stretch;
+}
+.mine-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 32px;
+}
+.mine-row-tx {
+  flex: 1 1 360px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mine-row-tx h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+}
+.mine-row-tx p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #c3cbdb;
+}
+.mine-acct {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.mine-name-form {
+  display: flex;
+  gap: 10px;
+}
+.mine-field {
+  display: flex;
+  min-width: 0;
+}
+.mine-field input {
+  width: 100%;
+  min-width: 200px;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  border: 1px solid rgba(243, 245, 250, 0.16);
+  border-radius: 10px;
+  background: rgba(243, 245, 250, 0.06);
+  color: var(--fg);
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+}
+.mine-field input::placeholder {
+  color: var(--muted);
+}
+.mine-field input:focus {
+  border-color: var(--accent);
+}
+.mine-field--labeled {
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #a9b3c7;
+}
+.mine-btn {
+  flex: none;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 20px;
+  border: none;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mine-btn--go {
+  padding: 0 24px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+}
+.mine-btn--go:hover:not(:disabled) {
+  filter: brightness(1.07);
+}
+.mine-btn--soft {
+  background: rgba(243, 245, 250, 0.12);
+  color: var(--fg);
+}
+.mine-btn--soft:hover:not(:disabled) {
+  background: rgba(243, 245, 250, 0.2);
+}
+.mine-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+/* 分段选择(语言 / 模型来源):选中 = 白底深字 */
+.mine-seg {
+  flex: none;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--r-pill);
+  background: var(--panel);
+}
+.mine-seg button {
+  min-width: 96px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: none;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: #c3cbdb;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+.mine-seg button.is-on {
+  background: #f3f5fa;
+  color: #0e1320;
+  font-weight: 700;
+}
+.mine-status {
+  margin: 0;
+  font-size: 13px;
+  color: #a9b3c7;
+}
+
+/* 本机 Codex 连接 */
+.mine-codex {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mine-codex-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mine-codex-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #a9b3c7;
+}
+.mine-codex-state.is-connected .mine-codex-dot {
+  background: #8fd3b0;
+}
+.mine-codex-state.is-missing .mine-codex-dot,
+.mine-codex-state.is-login_required .mine-codex-dot {
+  background: var(--accent);
+}
+.mine-codex-state-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  color: #a9b3c7;
+}
+.mine-codex-state-copy strong {
+  font-size: 15px;
+  color: var(--fg);
 }
 .mine-codex-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-2);
+  gap: 10px;
 }
 .mine-codex-link {
+  font-size: 14px;
   color: var(--accent-2);
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 .mine-codex-device {
   align-self: flex-start;
+  min-height: 40px;
   padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  border: none;
+  background: none;
+  color: var(--accent-2);
+  font: inherit;
+  font-size: 13px;
   cursor: pointer;
 }
 .mine-codex-code {
-  display: inline-flex;
+  display: flex;
   align-items: baseline;
-  gap: var(--sp-2);
-  padding: 8px 0;
+  gap: 10px;
+  font-size: 13px;
+  color: #a9b3c7;
 }
 .mine-codex-code strong {
+  font-family: var(--font-mono, monospace);
   font-size: 18px;
-  letter-spacing: 0;
+  letter-spacing: 0.08em;
+  color: var(--fg);
 }
-.mine-model-advanced {
-  width: 100%;
-  padding-top: var(--sp-2);
-  border-top: 1px solid var(--line);
-}
-.mine-model-advanced summary {
-  width: fit-content;
+.mine-advanced summary {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  color: #c3cbdb;
   cursor: pointer;
 }
-.mine-model-advanced[open] summary {
-  margin-bottom: var(--sp-3);
-}
-.mine-model-fields {
-  width: 100%;
+.mine-advanced-fields {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-3);
+  align-items: flex-start;
+  gap: 12px;
+  padding-top: 8px;
 }
-.mine-model-fields label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
-}
-.mine-model-fields .input {
-  width: 100%;
-}
-.mine-model-fields .btn {
-  align-self: flex-start;
-}
-.mine-model-status {
-  color: var(--accent-2);
+.mine-advanced-fields .mine-field {
+  width: min(420px, 100%);
 }
 
 /* 存档 */
-.mine-saves {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-}
 .mine-save {
+  min-height: 68px;
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
-  width: 100%;
-  padding: 12px 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--panel);
+  gap: 12px;
+  padding: 10px 4px;
+  border: none;
+  border-bottom: 1px solid rgba(243, 245, 250, 0.1);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
   text-align: left;
 }
 .mine-save--cur {
   cursor: pointer;
-  border-color: color-mix(in srgb, var(--accent-2) 45%, var(--line));
-  margin-bottom: var(--sp-4);
 }
 .mine-save--cur:hover {
-  border-color: var(--accent-2);
+  background: rgba(243, 245, 250, 0.05);
 }
 .mine-save-dot {
+  flex: none;
   width: 8px;
   height: 8px;
-  flex: none;
-  border-radius: var(--r-pill);
-  background: var(--accent-2);
+  border-radius: 50%;
+  background: var(--accent);
 }
 .mine-save-tx {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
-.mine-save-tx .t-ui-sm {
-  color: var(--fg);
+.mine-save-name {
+  font-size: 16px;
+  font-weight: 700;
 }
-.mine-save-tx .t-meta {
-  color: var(--muted);
+.mine-save-meta {
+  font-size: 13px;
+  color: #a9b3c7;
 }
-.mine-save > .t-meta {
+.mine-save-go {
   flex: none;
+  font-size: 14px;
   color: var(--accent-2);
 }
+.mine-note {
+  margin: 0;
+  padding: 18px 4px;
+  max-width: 640px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #a9b3c7;
+}
 
-/* 分页 */
+/* 收藏 / 我创建的:卡片网格 */
+.mine-sets {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+.mine-set {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.mine-set h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 900;
+}
+.mine-set h2 span {
+  margin-left: 8px;
+  font-size: 14px;
+  font-weight: 400;
+  color: #a9b3c7;
+}
+.mine-grid {
+  display: grid;
+  gap: 20px;
+}
+.mine-grid--story {
+  grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
+}
+.mine-grid--character {
+  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+}
+.mine-grid .cx-story,
+.mine-grid .cx-char {
+  width: auto;
+  height: auto;
+}
+.mine-grid .cx-story {
+  aspect-ratio: 8 / 5;
+}
+.mine-grid .cx-char {
+  aspect-ratio: 50 / 66;
+}
 .mine-pager {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: var(--sp-4);
-  margin-top: var(--sp-5);
+  gap: 14px;
 }
 .mine-pager-info {
-  color: var(--muted);
-  min-width: 48px;
-  text-align: center;
+  font-size: 14px;
+  color: #a9b3c7;
+}
+.mine-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 
+/* ———— 响应式 ———— */
+@media (max-width: 960px) {
+  .mine-main {
+    padding: 24px 24px 48px;
+  }
+}
 @media (max-width: 720px) {
-  .mine-account-row {
-    flex-direction: column;
+  .mine-main {
+    padding: 16px 16px 40px;
+    gap: 20px;
+  }
+  .mine-hero {
+    min-height: 0;
+  }
+  .mine-hero-body {
+    padding: 24px 20px;
+    gap: 16px;
+  }
+  .mine-avatar {
+    width: 72px;
+    height: 72px;
+    font-size: 30px;
+  }
+  .mine-hero-tx h1 {
+    font-size: 30px;
+  }
+  .mine-tabs {
+    align-self: stretch;
+  }
+  .mine-tabs button {
+    flex: 1 1 0;
+    padding: 0 10px;
+  }
+  .mine-row {
+    padding: 18px 2px;
+  }
+  .mine-row-tx {
+    flex-basis: 100%;
+  }
+  .mine-name-form {
+    flex: 1 1 100%;
+  }
+  .mine-field input {
+    min-width: 0;
+    font-size: 16px; /* ≥16px 防 iOS 聚焦缩放 */
+  }
+  .mine-name-form .mine-field {
+    flex: 1 1 auto;
+  }
+  .mine-seg {
+    flex: 1 1 100%;
+  }
+  .mine-seg button {
+    flex: 1 1 0;
+    min-width: 0;
   }
 }

@@ -1,0 +1,1 @@
+import{j as u}from"./index-DANFMIaO.js";function i({variant:t="primary",size:n="md",full:o=!1,className:s="",type:r="button",children:a,...e}){const l=["btn","btn--"+t,"btn--"+n,o?"btn--full":"",s].filter(Boolean).join(" ");return u.jsx("button",{type:r,className:l,...e,children:a})}export{i as B};
