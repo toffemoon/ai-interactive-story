@@ -338,7 +338,7 @@ export default function Mine() {
       <main className="mine-main">
         {/* 个人卡:书店夜景压暗 + 头像 + 名字 + 状态 */}
         <section className="mine-hero" aria-labelledby="mine-name">
-          <img className="mine-hero-bg" src="/home/background.png" alt="" />
+          <img className="mine-hero-bg" src="/home/background.webp" alt="" />
           <div className="mine-hero-shade" aria-hidden="true" />
           <div className="mine-hero-body">
             <button

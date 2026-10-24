@@ -258,7 +258,7 @@ export default function Explore() {
       <div className="page cx">
         {/* 页头大图:书店夜景 + 糖沐,导航叠在上面,左侧是推荐的一本故事(画布「C 幕间 · 探索」) */}
         <section className="cx-hero" aria-labelledby="cx-hero-title">
-          <img className="cx-hero-bg" src="/home/background.png" alt="" />
+          <img className="cx-hero-bg" src="/home/background.webp" alt="" />
           <div className="cx-hero-shade" aria-hidden="true" />
           <img className="cx-hero-art" src="/home/tangmu02.webp" alt="" />
           <div className="cx-hero-fade" aria-hidden="true" />
