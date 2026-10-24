@@ -18,6 +18,7 @@ Run (from the repo root):
   python scripts/import_lotm.py publish   [--content DIR] [--owner ACCOUNT]   save the presets (needs DATABASE_URL in .env):
                                                      official by default, or private to one account with --owner
   python scripts/import_lotm.py unpublish [--content DIR] [--owner ACCOUNT]   delete them again
+  Without DATABASE_URL but with a Supabase secret key, add  --rest https://<project>.supabase.co --keyfile FILE
 """
 import argparse
 import json
@@ -183,12 +184,76 @@ def estimate_prompt(payload: dict) -> dict:
     return out
 
 
+def _secret_key(keyfile: str | None) -> str:
+    """Supabase secret key(sb_secret_…):优先读 --keyfile 里以 sb_secret_ 开头的那一行,否则读环境变量。从不打印。"""
+    if keyfile:
+        for line in Path(keyfile).read_text(encoding="utf-8").splitlines():
+            line = line.strip().split("=", 1)[-1].strip().strip("'\"")
+            if line.startswith("sb_secret_"):
+                return line
+        sys.exit(f"no sb_secret_ key found in {keyfile}")
+    key = os.environ.get("SUPABASE_SECRET_KEY", "")
+    if not key:
+        sys.exit("give --keyfile or set SUPABASE_SECRET_KEY")
+    return key
+
+
+def publish_rest(args, payloads: list[dict]) -> None:
+    """手上只有 Supabase API key、没有 DATABASE_URL 时:经 Supabase REST(PostgREST)写 presets 表。
+    语义与 storage.save_preset / delete_preset 一致:按 slug 名 + user_id(官方 = null)覆盖或删除。"""
+    import urllib.parse
+    import urllib.request
+    from datetime import datetime, timezone
+
+    from src.storage import slug
+
+    key = _secret_key(args.keyfile)
+    base = args.rest.rstrip("/") + "/rest/v1/"
+
+    def call(method: str, path: str, body=None):
+        req = urllib.request.Request(
+            base + path, method=method,
+            data=None if body is None else json.dumps(body, ensure_ascii=False).encode("utf-8"),
+            headers={"apikey": key, "Authorization": "Bearer " + key, "Content-Type": "application/json",
+                     "Prefer": "return=representation"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            raw = r.read()
+            return json.loads(raw) if raw else None
+
+    q = urllib.parse.quote
+    owner = None
+    if args.owner:
+        rows = call("GET", f"users?select=id&or=(email.eq.{q(args.owner)},username.eq.{q(args.owner)})&limit=1")
+        if not rows:
+            sys.exit(f"no account matches {args.owner!r}; nothing written")
+        owner = rows[0]["id"]
+    who = f"user_id=eq.{owner}" if owner else "user_id=is.null"
+    scope = f"private to {args.owner}" if owner else "official"
+    for pl in payloads:
+        name_key = slug(pl["name"], "preset")
+        found = call("GET", f"presets?select=id&name=eq.{q(name_key)}&{who}")
+        if args.mode == "publish":
+            if found:
+                call("PATCH", f"presets?id=eq.{found[0]['id']}",
+                     {"data": pl, "updated_at": datetime.now(timezone.utc).isoformat()})
+                print(f"  updated ({scope}): {pl['name']!r} -> {name_key}")
+            else:
+                call("POST", "presets", {"name": name_key, "data": pl, "user_id": owner})
+                print(f"  published ({scope}): {pl['name']!r} -> {name_key}")
+        else:
+            gone = call("DELETE", f"presets?name=eq.{q(name_key)}&{who}") or []
+            print(f"  deleted ({scope}): {pl['name']!r} -> {len(gone)} row(s)")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("mode", choices=["check", "publish", "unpublish"])
     ap.add_argument("--content", default=None)
     ap.add_argument("--owner", default=None,
                     help="publish privately to this account (email, username or user id) instead of as official presets")
+    ap.add_argument("--rest", default=None, metavar="https://<project>.supabase.co",
+                    help="write through Supabase REST with a secret key instead of DATABASE_URL")
+    ap.add_argument("--keyfile", default=None, help="file holding the sb_secret_ key (used with --rest)")
     args = ap.parse_args()
     content = _content_dir(args.content)
     payloads, errors, warnings = assemble(content)
@@ -216,6 +281,8 @@ def main():
 
     if errors:
         sys.exit("refusing to write: fix the errors above first")
+    if args.rest:
+        return publish_rest(args, payloads)
     from dotenv import load_dotenv
     load_dotenv(ROOT / ".env", override=True)
     if not os.environ.get("DATABASE_URL"):
