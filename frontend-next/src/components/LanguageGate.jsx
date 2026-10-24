@@ -44,7 +44,19 @@ export default function LanguageGate() {
   }, [ready, signedIn, acct, chosen]);
 
   // 账户已有语言时不弹(上面的 effect 会直接采用它)。
-  if (!ready || chosen || LANGS.includes(acct)) return null;
+  const visible = ready && !chosen && !LANGS.includes(acct);
+
+  // 中文半屏要预览中文站的宋 / 楷:选语言前 i18n.js 还没加载中文字体,这里补上(同一个 link id,不会重复)。
+  useEffect(() => {
+    if (!visible || document.getElementById("ais-zh-fonts")) return;
+    const css = document.createElement("link");
+    css.id = "ais-zh-fonts";
+    css.rel = "stylesheet";
+    css.href = "https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=LXGW+WenKai+TC:wght@400&display=swap";
+    document.head.append(css);
+  }, [visible]);
+
+  if (!visible) return null;
 
   const pick = async (lang) => {
     if (busy) return;
@@ -52,26 +64,28 @@ export default function LanguageGate() {
     await applyLanguageChoice(lang, signedIn);
   };
 
+  // 2026-10-24 改版(画布方案 01-B):左右分屏,每半屏就是该语言界面的样子(英文系统无衬线,中文宋 / 楷)。
   return (
-    <div className="lang-gate" role="dialog" aria-modal="true" aria-labelledby="lang-gate-title">
-      <div className="lang-gate-card">
-        <h1 id="lang-gate-title" className="lang-gate-title">
-          <span lang="en">Choose your language</span>
-          <span lang="zh">选择语言</span>
-        </h1>
-        <p className="lang-gate-sub">
-          <span lang="en">Stories and AI replies will use this language. You can change it later in Me.</span>
-          <span lang="zh">界面和 AI 回复都会使用这个语言,之后可以在「我的」里修改。</span>
-        </p>
-        <div className="lang-gate-options">
-          <button type="button" className="lang-gate-btn" lang="en" disabled={busy} onClick={() => pick("en")}>
-            English
-          </button>
-          <button type="button" className="lang-gate-btn" lang="zh" disabled={busy} onClick={() => pick("zh")}>
-            中文
-          </button>
-        </div>
-      </div>
+    <div className="lang-gate" role="dialog" aria-modal="true" aria-label="Choose your language / 选择语言">
+      <img className="lang-gate-seal" src="/brand/seal-192.png" alt="" />
+      <section className="lang-gate-half lang-gate-en" lang="en">
+        <span className="lang-gate-eyebrow">Narrative Engine</span>
+        <h2 className="lang-gate-name">English</h2>
+        <p className="lang-gate-desc">Stories, characters and AI replies — all in English.</p>
+        <p className="lang-gate-sample" aria-hidden="true">Explore · Chat · Create · Me</p>
+        <button type="button" className="lang-gate-go" disabled={busy} onClick={() => pick("en")}>
+          Continue in English <span aria-hidden="true">→</span>
+        </button>
+      </section>
+      <section className="lang-gate-half lang-gate-zh" lang="zh">
+        <span className="lang-gate-eyebrow">沐言 · 叙事引擎</span>
+        <h2 className="lang-gate-name">中文</h2>
+        <p className="lang-gate-desc">故事、角色与 AI 回复,都使用中文。</p>
+        <p className="lang-gate-sample" aria-hidden="true">探索 · 纯聊 · 创作 · 我的</p>
+        <button type="button" className="lang-gate-go" disabled={busy} onClick={() => pick("zh")}>
+          使用中文继续 <span aria-hidden="true">→</span>
+        </button>
+      </section>
     </div>
   );
 }

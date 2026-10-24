@@ -1,69 +1,144 @@
-/* 开局语言选择:全屏遮罩,盖在路由(含登录页)之上;Preloader 是 300。 */
+/* 开局语言选择(2026-10-24 改版,画布方案 01-B):全屏左右分屏,盖在路由(含登录页)之上;Preloader 是 300。
+   窄屏上下堆叠。英文半屏用系统无衬线,中文半屏用中文站的宋 / 楷。 */
 .lang-gate {
   position: fixed;
   inset: 0;
   z-index: 400;
-  display: grid;
-  place-items: center;
-  padding: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  overflow-y: auto;
   background: #221c16;
-  color: #f3ead9;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC",
-    "Microsoft YaHei", sans-serif;
 }
 
-.lang-gate-card {
-  width: min(420px, 100%);
-  text-align: center;
+.lang-gate-seal {
+  position: absolute;
+  left: 50%;
+  top: 40px;
+  transform: translateX(-50%);
+  width: 56px;
+  height: 56px;
+  z-index: 1;
 }
 
-.lang-gate-title {
-  margin: 0 0 12px;
+.lang-gate-half {
+  flex: 1 1 380px;
+  min-height: 50vh;
+  box-sizing: border-box;
+  padding: 64px clamp(24px, 6vw, 88px);
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 24px;
+  justify-content: center;
+  gap: 22px;
+}
+
+.lang-gate-en {
+  background: #ffffff;
+  color: #1f1f1e;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.lang-gate-zh {
+  background: #221c16;
+  color: #ece3d2;
+  font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
+}
+
+.lang-gate-eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: #6b6b68;
+}
+.lang-gate-zh .lang-gate-eyebrow {
+  font-size: 13px;
+  letter-spacing: 0.3em;
+  color: #b3a890;
+}
+
+.lang-gate-name {
+  margin: 0;
+  font-size: 64px;
+  font-weight: 700;
+  line-height: 1;
+}
+.lang-gate-zh .lang-gate-name {
   font-weight: 600;
-  line-height: 1.3;
 }
 
-.lang-gate-sub {
-  margin: 0 0 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.lang-gate-desc {
+  margin: 0;
+  max-width: 360px;
+  font-size: 17px;
+  line-height: 1.6;
+  color: #4a4a47;
+}
+.lang-gate-zh .lang-gate-desc {
+  line-height: 1.8;
+  color: #d6ccb8;
+}
+
+.lang-gate-sample {
+  margin: 0;
   font-size: 14px;
-  line-height: 1.5;
-  opacity: 0.72;
+  letter-spacing: 0.04em;
+  color: #9a9893;
+}
+.lang-gate-zh .lang-gate-sample {
+  font-family: "LXGW WenKai TC", "LXGW WenKai", "Kaiti SC", "STKaiti", serif;
+  font-size: 16px;
+  letter-spacing: 0.12em;
+  color: #a59a85;
 }
 
-.lang-gate-options {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.lang-gate-btn {
-  min-height: 56px;
-  border: 1px solid rgba(243, 234, 217, 0.35);
-  border-radius: 12px;
-  background: transparent;
-  color: inherit;
+.lang-gate-go {
+  align-self: flex-start;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 26px;
+  border: none;
+  border-radius: 10px;
+  background: #8f3c32;
+  color: #ffffff;
   font: inherit;
-  font-size: 18px;
-  font-weight: 500;
+  font-size: 16px;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: transform 0.15s ease, filter 0.15s ease;
 }
-
-.lang-gate-btn:hover,
-.lang-gate-btn:focus-visible {
-  background: rgba(243, 234, 217, 0.1);
-  border-color: rgba(243, 234, 217, 0.7);
+.lang-gate-zh .lang-gate-go {
+  background: #d15a40;
+  color: #211710;
+}
+.lang-gate-go:hover,
+.lang-gate-go:focus-visible {
+  filter: brightness(1.08);
+  transform: translateX(2px);
   outline: none;
 }
-
-.lang-gate-btn:disabled {
-  opacity: 0.5;
+.lang-gate-go:focus-visible {
+  box-shadow: 0 0 0 3px rgba(199, 154, 78, 0.6);
+}
+.lang-gate-go:disabled {
+  opacity: 0.6;
   cursor: default;
+  transform: none;
+}
+
+@media (max-width: 760px) {
+  .lang-gate-seal {
+    top: 20px;
+    width: 44px;
+    height: 44px;
+  }
+  .lang-gate-half {
+    min-height: 0;
+    padding: 72px 24px 40px;
+  }
+  .lang-gate-zh {
+    padding-top: 40px;
+  }
+  .lang-gate-name {
+    font-size: 48px;
+  }
 }
