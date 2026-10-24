@@ -6,6 +6,7 @@ import ResumeBar from "./ResumeBar";
 import StaggeredMenu from "../StaggeredMenu";
 import PillNav from "../PillNav";
 import { L } from "../../lib/i18n";
+import { isCRoute } from "../../lib/cRoutes";
 import "./shell.css";
 
 const NAV_ICONS = {
@@ -66,6 +67,16 @@ export default function AppShell({ children }) {
 
   if (immersive) {
     return <main className="shell-main shell-main--immersive">{children}</main>;
+  }
+
+  // C 幕间改版过的页面:页面自带顶部导航(TopNav),这里不再挂侧栏 / 手机 Pill Nav,也不留顶部 52px。
+  if (isCRoute(loc.pathname)) {
+    return (
+      <div className="shell shell--c">
+        <main className="shell-main shell-main--c">{children}</main>
+        <ResumeBar />
+      </div>
+    );
   }
 
   return (

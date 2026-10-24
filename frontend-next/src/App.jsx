@@ -6,6 +6,7 @@ import AppShell from "./components/shell/AppShell";
 import Preloader from "./components/preloader";
 import LanguageGate from "./components/LanguageGate";
 import { L, hasChosenLang } from "./lib/i18n";
+import { isCRoute } from "./lib/cRoutes";
 import "./App.css";
 
 const Login = lazy(() => import("./routes/Login"));
@@ -20,9 +21,6 @@ const Home = lazy(() => import("./routes/Home"));
 const Styleguide = lazy(() => import("./routes/Styleguide"));
 const NavTest = lazy(() => import("./routes/NavTest"));
 
-// 已按设计画布「C 幕间」改版的页面(2026-10-25 起逐批上线):这些路由用 c 主题,其余维持纸 / 台。
-const C_ROUTES = ["/login"];
-const isCRoute = (path) => C_ROUTES.some((p) => path === p || path.startsWith(p + "/"));
 
 function RouteFallback() {
   return <div className="route-loading" role="status" aria-label={L("Loading page", "正在加载页面")} />;

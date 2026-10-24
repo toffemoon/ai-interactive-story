@@ -58,6 +58,11 @@ html[data-theme="paper"] .shell-pillnav {
   width: 100%;
   min-width: 0;
 }
+/* C 幕间页:无侧栏、无顶部留白,底色铺满(页面自带 TopNav) */
+.shell-main--c {
+  padding-top: 0;
+  background: var(--bg);
+}
 .shell-main--immersive {
   min-height: 100%;
   padding-top: 0;
