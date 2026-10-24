@@ -6,7 +6,7 @@ the novel, so it lives OUTSIDE this public repo, in a private folder (default: .
 repo, or --content DIR / env LOTM_CONTENT_DIR). Only this importer is committed. Deterministic: no LLM parsing.
 
 Content folder layout (all UTF-8 JSON unless noted):
-  presets.json            [{key, name, cast, players, story, rules, synopsis, author, tags, cover, mode}]
+  presets.json            [{key, name, cast, players, story, rules, synopsis, author, tags, cover, mode, exclude_cast?}]
   world.json              WorldBook shared by every preset
   cast-pN.json            [CharacterData]   NPC cards for that phase
   players-pN.json         [PlayerCard]      playable book characters for that phase
@@ -15,8 +15,9 @@ Content folder layout (all UTF-8 JSON unless noted):
 
 Run (from the repo root):
   python scripts/import_lotm.py check     [--content DIR]   validate, assemble, estimate per-turn prompt size; no DB, no LLM
-  python scripts/import_lotm.py publish   [--content DIR]   save the presets as official (needs DATABASE_URL in .env)
-  python scripts/import_lotm.py unpublish [--content DIR]   delete those official presets
+  python scripts/import_lotm.py publish   [--content DIR] [--owner ACCOUNT]   save the presets (needs DATABASE_URL in .env):
+                                                     official by default, or private to one account with --owner
+  python scripts/import_lotm.py unpublish [--content DIR] [--owner ACCOUNT]   delete them again
 """
 import argparse
 import json
@@ -79,7 +80,9 @@ def assemble(content: Path) -> tuple[list[dict], list[str], list[str]]:
     payloads = []
     for meta in _read_json(content / "presets.json"):
         tag = meta["key"]
-        cast = [CharacterCard(data=CharacterData(**_move_secret(c))) for c in _read_json(content / meta["cast"])]
+        skip = set(meta.get("exclude_cast", []))  # 某预设用不到的卡(如无剧透版不需要塔罗会成员),少注入也少剧透
+        cast = [CharacterCard(data=CharacterData(**_move_secret(c)))
+                for c in _read_json(content / meta["cast"]) if c.get("name") not in skip]
         players = [PlayerCard(**p) for p in _read_json(content / meta["players"])]
         story = StoryBook(**_read_json(content / meta["story"]))
         rules = (content / meta["rules"]).read_text(encoding="utf-8").strip()
@@ -173,6 +176,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("mode", choices=["check", "publish", "unpublish"])
     ap.add_argument("--content", default=None)
+    ap.add_argument("--owner", default=None,
+                    help="publish privately to this account (email, username or user id) instead of as official presets")
     args = ap.parse_args()
     content = _content_dir(args.content)
     payloads, errors, warnings = assemble(content)
@@ -206,12 +211,19 @@ def main():
         sys.exit("DATABASE_URL is not set (put it in .env); nothing written")
     from src import storage
 
+    owner = None
+    if args.owner:  # 只给某个账号(如体验玩家)看:存成该账号的私有预设
+        from src.auth import find_user_id
+        owner = find_user_id(args.owner)
+        if not owner:
+            sys.exit(f"no account matches {args.owner!r}; nothing written")
+    scope = f"private to {args.owner}" if owner else "official"
     for pl in payloads:
         if args.mode == "publish":
-            key = storage.save_preset(pl["name"], pl)  # 不带 user_id = 官方公共预设(同名覆盖,可重复跑)
-            print(f"  published: {pl['name']!r} -> {key}")
+            key = storage.save_preset(pl["name"], pl, user_id=owner)  # 不带 user_id = 官方公共预设;同名覆盖,可重复跑
+            print(f"  published ({scope}): {pl['name']!r} -> {key}")
         else:
-            print(f"  deleted: {pl['name']!r} -> {storage.delete_preset(pl['name'])}")
+            print(f"  deleted ({scope}): {pl['name']!r} -> {storage.delete_preset(pl['name'], user_id=owner)}")
 
 
 if __name__ == "__main__":
