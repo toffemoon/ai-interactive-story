@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "../lib/transitionNav";
-import { Button, Input, CardShelf } from "../components/ui";
+import TopNav from "../components/shell/TopNav";
+import { StoryCard, CharCard } from "../components/CCard";
 import CharDetailModal from "../components/CharDetailModal";
 import { getJSON, postJSON, delJSON } from "../lib/api";
 import { toCardModels } from "../lib/cardModel";
@@ -21,11 +22,12 @@ import "./Mine.css";
 
 // 我的 · 个人中心。继承 ReconProfile;补 收藏 / 我创建的 / 账号设置 / 卡库竖卡分页(YOR-67)/
 // 存档跨设备(YOR-22)/ 占位卡过滤(YOR-16)。登录相关端点对 guest 优雅降级。
+// 2026-10-25 C 幕间改版(画布「C 幕间 · 我的」):顶栏 TopNav,个人卡 + 胶囊页签 + 一行一项的设置;收藏 / 我创建的用探索同款卡。
 const TABS = [
-  { key: "profile", label: L("Profile", "档案") },
+  { key: "profile", label: L("Profile", "资料") },
   { key: "saves", label: L("Saves", "存档") },
   { key: "favorites", label: L("Favorites", "收藏") },
-  { key: "created", label: L("Created", "我创建的") },
+  { key: "created", label: L("Created", "创作") },
 ];
 const PAGE = 8;
 const FAV_KEY = "ais_favorites_v1";
@@ -68,37 +70,6 @@ export default function Mine() {
   });
   const fileRef = useRef(null);
   const codexLoginRun = useRef(0);
-  // 子分区红线指示条:测量当前 tab 的位置/宽度,用 transform 平移过去(不再硬切 border-color)。
-  const tabRefs = useRef([]);
-  const [bar, setBar] = useState({ x: 0, y: 0, w: 0 });
-  const measureBar = useCallback(() => {
-    const i = TABS.findIndex((t) => t.key === tab);
-    const el = tabRefs.current[i];
-    if (!el) return;
-    setBar({ x: el.offsetLeft, y: el.offsetTop + el.offsetHeight - 2, w: el.offsetWidth });
-  }, [tab]);
-  useLayoutEffect(() => {
-    measureBar();
-  }, [measureBar]);
-  // 首帧 offsetWidth 常为 0(楷书字体未加载完 / 布局未定)→ rAF + 字体就绪后各重测一次,
-  // 否则红线初载宽度=0、要切 tab 才出现。
-  useEffect(() => {
-    let alive = true;
-    const remeasure = () => alive && measureBar();
-    const raf = requestAnimationFrame(remeasure);
-    if (typeof document !== "undefined" && document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(remeasure);
-    }
-    return () => {
-      alive = false;
-      cancelAnimationFrame(raf);
-    };
-  }, [measureBar]);
-  useEffect(() => {
-    window.addEventListener("resize", measureBar);
-    return () => window.removeEventListener("resize", measureBar);
-  }, [measureBar]);
-
   useEffect(() => setMe(user), [user]);
 
   useEffect(() => {
@@ -159,8 +130,6 @@ export default function Mine() {
     const cm = toCardModels("character", favs.characters || []);
     return [...sm, ...cm].map((m) => ({ ...m, fav: true })); // 收藏 tab 全点亮书签(YOR-171)
   }, [favs]);
-  // 「我创建的」里已收藏的也点亮(同一份 ais_favorites_v1,按归一化 id 判)
-  const favIdSet = useMemo(() => new Set(favModels.map((m) => m.kind + ":" + m.id)), [favModels]);
 
   // 卡片「详情」去向:故事卡 → 详情页(带 preset);角色卡 → 详情弹层。与探索页同一套(YOR-193 修死按钮)。
   const openCard = (m) =>
@@ -352,277 +321,325 @@ export default function Mine() {
         .filter(Boolean).join(" · ") || L("Ready to play", "可以开始游玩")
     : codexConnection.error || "";
 
+  const avatar = me && me.avatar;
+  const favStories = favModels.filter((m) => m.kind === "story");
+  const favChars = favModels.filter((m) => m.kind === "character");
+  const cardGrid = (models, kind) => (
+    <div className={"mine-grid mine-grid--" + kind}>
+      {models.map((m) =>
+        kind === "story" ? <StoryCard key={m.kind + ":" + m.id} model={m} onOpen={openCard} /> : <CharCard key={m.kind + ":" + m.id} model={m} onOpen={openCard} />
+      )}
+    </div>
+  );
+
   return (
     <div className="page mine">
-      <div className="mine-head">
-        <h1 className="t-display">{L("Me", "我的")}</h1>
-      </div>
-
-      <div className="mine-tabs">
-        {TABS.map((t, i) => (
-          <button
-            key={t.key}
-            ref={(el) => (tabRefs.current[i] = el)}
-            className={"mine-tab" + (tab === t.key ? " is-on" : "")}
-            onClick={() => setTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-        <span
-          className="mine-tab-underline"
-          style={{ transform: `translate(${bar.x}px, ${bar.y}px)`, width: bar.w + "px" }}
-          aria-hidden="true"
-        />
-      </div>
-
-      {/* 档案 + 账号设置 */}
-      {tab === "profile" && (
-        <section className="mine-section">
-          <div className="mine-profile">
+      <TopNav variant="bar" />
+      <main className="mine-main">
+        {/* 个人卡:书店夜景压暗 + 头像 + 名字 + 状态 */}
+        <section className="mine-hero" aria-labelledby="mine-name">
+          <img className="mine-hero-bg" src="/home/background.png" alt="" />
+          <div className="mine-hero-shade" aria-hidden="true" />
+          <div className="mine-hero-body">
             <button
+              type="button"
               className="mine-avatar"
-              style={me && me.avatar ? { backgroundImage: `url("${me.avatar}")` } : undefined}
+              style={avatar ? { backgroundImage: `url("${avatar}")` } : undefined}
               onClick={() => (loggedIn ? fileRef.current && fileRef.current.click() : navigate("/login"))}
+              aria-label={loggedIn ? L("Change avatar", "更换头像") : L("Sign in to change your avatar", "登录后可换头像")}
               title={loggedIn ? L("Change avatar", "更换头像") : L("Sign in to change your avatar", "登录后可换头像")}
             >
-              {!(me && me.avatar) && avatarChar(displayName)}
-              <span className="mine-avatar-edit t-meta">{L("Edit", "换")}</span>
+              {!avatar && <span aria-hidden="true">{avatarChar(displayName)}</span>}
+              {loggedIn && (
+                <span className="mine-avatar-edit" aria-hidden="true">
+                  {L("Change", "换")}
+                </span>
+              )}
             </button>
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={uploadAvatar} />
-            <div className="mine-profile-main">
-              <div className="mine-name t-h1">{displayName}</div>
-              <div className="mine-role t-meta">{loggedIn ? L("Account · ", "账户 · ") + (me.role || "user") : L("Not signed in · Guest mode", "未登录 · 游客模式")}</div>
+            <div className="mine-hero-tx">
+              <h1 id="mine-name">{displayName}</h1>
+              <p>{loggedIn ? L("Signed in · ", "已登录 · ") + (me.role || "user") : L("Not signed in. You're in guest mode.", "还没登录,现在是游客模式")}</p>
             </div>
           </div>
+        </section>
 
-          <div className="mine-account">
-            <h2 className="t-h3 mine-sec-title">{L("Account settings", "账号设置")}</h2>
-            {loggedIn ? (
-              <>
-                <div className="mine-account-row">
-                  <Input value={nameEdit} onChange={(e) => setNameEdit(e.target.value)} placeholder={L("New nickname (1–24 characters)", "改个昵称(1-24 字)")} />
-                  <Button variant="line" disabled={saving || !nameEdit.trim()} onClick={saveName}>
-                    {saving ? L("Saving…", "保存中…") : L("Save nickname", "保存昵称")}
-                  </Button>
+        <div className="mine-tabs" role="tablist" aria-label={L("Me", "我的")}>
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              id={"mine-tab-" + t.key}
+              aria-selected={tab === t.key}
+              aria-controls="mine-panel"
+              className={tab === t.key ? "is-on" : ""}
+              onClick={() => setTab(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div id="mine-panel" role="tabpanel" aria-labelledby={"mine-tab-" + tab} className="mine-panel">
+          {/* 资料:账号 / 语言 / 模型来源,一行一项、行间细线 */}
+          {tab === "profile" && (
+            <div className="mine-rows">
+              <section className="mine-row" aria-labelledby="mine-acct-h">
+                <div className="mine-row-tx">
+                  <h2 id="mine-acct-h">{L("Account", "账号")}</h2>
+                  <p>
+                    {loggedIn
+                      ? L("Change your nickname, or sign out on this device.", "改个昵称,或在这台设备上退出登录。")
+                      : L("Sign in to set an avatar and nickname, and sync your saves across devices.", "登录后可以设置头像和昵称,存档也能在不同设备间同步。")}
+                  </p>
                 </div>
-                <Button variant="line" onClick={() => logout().then(() => navigate("/login"))}>
-                  {L("Sign out", "退出登录")}
-                </Button>
-              </>
-            ) : (
-              <div className="mine-guest">
-                <p className="t-ui mine-sub">{L("Sign in to set an avatar and nickname, and sync your saves across devices.", "登录后可设置头像、昵称,存档跨设备同步。")}</p>
-                <Button variant="primary" onClick={() => navigate("/login")}>
-                  {L("Sign in", "去登录")}
-                </Button>
-              </div>
-            )}
-          </div>
+                {loggedIn ? (
+                  <div className="mine-row-ctl mine-acct">
+                    <form
+                      className="mine-name-form"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        saveName();
+                      }}
+                    >
+                      <label className="mine-field">
+                        <span className="sr-only">{L("New nickname", "新昵称")}</span>
+                        <input value={nameEdit} onChange={(e) => setNameEdit(e.target.value)} placeholder={L("New nickname (1–24 characters)", "改个昵称(1-24 字)")} />
+                      </label>
+                      <button type="submit" className="mine-btn mine-btn--soft" disabled={saving || !nameEdit.trim()}>
+                        {saving ? L("Saving…", "保存中…") : L("Save nickname", "保存昵称")}
+                      </button>
+                    </form>
+                    <button type="button" className="mine-btn mine-btn--soft" onClick={() => logout().then(() => navigate("/login"))}>
+                      {L("Sign out", "退出登录")}
+                    </button>
+                  </div>
+                ) : (
+                  <button type="button" className="mine-btn mine-btn--go" onClick={() => navigate("/login")}>
+                    {L("Sign in", "登录")}
+                  </button>
+                )}
+              </section>
 
-          {/* 语言切换(2026-10-23 中英双语):游客也可见;已登录同时存进账户,随后整页 reload */}
-          <div className="mine-model">
-            <h2 className="t-h3 mine-sec-title">{L("Language", "语言")}</h2>
-            <div className="mine-model-segment" role="group" aria-label={L("Language", "语言")}>
-              <button
-                lang="en"
-                className={LANG === "en" ? "is-on" : ""}
-                aria-pressed={LANG === "en"}
-                onClick={() => LANG !== "en" && applyLanguageChoice("en", loggedIn)}
-              >
-                English
-              </button>
-              <button
-                lang="zh"
-                className={LANG === "zh" ? "is-on" : ""}
-                aria-pressed={LANG === "zh"}
-                onClick={() => LANG !== "zh" && applyLanguageChoice("zh", loggedIn)}
-              >
-                中文
-              </button>
+              {/* 语言切换(2026-10-23 中英双语):游客也可见;已登录同时存进账户,随后整页 reload */}
+              <section className="mine-row" aria-labelledby="mine-lang-h">
+                <div className="mine-row-tx">
+                  <h2 id="mine-lang-h">{L("Language", "语言")}</h2>
+                  <p>{L("Stories and AI replies use this language.", "故事和 AI 回复都会用这个语言。")}</p>
+                </div>
+                <div className="mine-seg" role="group" aria-labelledby="mine-lang-h">
+                  <button type="button" lang="zh" aria-pressed={LANG === "zh"} className={LANG === "zh" ? "is-on" : ""} onClick={() => LANG !== "zh" && applyLanguageChoice("zh", loggedIn)}>
+                    中文
+                  </button>
+                  <button type="button" lang="en" aria-pressed={LANG === "en"} className={LANG === "en" ? "is-on" : ""} onClick={() => LANG !== "en" && applyLanguageChoice("en", loggedIn)}>
+                    English
+                  </button>
+                </div>
+              </section>
+
+              {loggedIn && me && me.local_proxy_enabled && (
+                <section className="mine-row mine-row--block" aria-labelledby="mine-model-h">
+                  <div className="mine-row-head">
+                    <div className="mine-row-tx">
+                      <h2 id="mine-model-h">{L("Model source", "模型来源")}</h2>
+                      <p>{L("Which model writes your story turns.", "由哪个模型来写故事回合。")}</p>
+                    </div>
+                    <div className="mine-seg" role="group" aria-labelledby="mine-model-h">
+                      <button type="button" aria-pressed={proxySettings.source === "deepseek"} className={proxySettings.source === "deepseek" ? "is-on" : ""} onClick={() => selectModelSource("deepseek")}>
+                        DeepSeek
+                      </button>
+                      <button type="button" aria-pressed={proxySettings.source === "local_proxy"} className={proxySettings.source === "local_proxy" ? "is-on" : ""} onClick={() => selectModelSource("local_proxy")}>
+                        {L("Local Codex", "Codex 本机")}
+                      </button>
+                    </div>
+                  </div>
+                  {proxySettings.source === "local_proxy" && (
+                    <div className="mine-codex">
+                      <div className={`mine-codex-state is-${codexPhase}`}>
+                        <span className="mine-codex-dot" aria-hidden="true" />
+                        <span className="mine-codex-state-copy">
+                          <strong>{codexLabel}</strong>
+                          {codexDetail && <span>{codexDetail}</span>}
+                        </span>
+                      </div>
+                      <div className="mine-codex-actions">
+                        {(codexPhase === "missing" || codexPhase === "installing") && (
+                          <button type="button" className="mine-btn mine-btn--go" onClick={downloadCodexConnector}>
+                            {codexPhase === "installing" ? L("Re-download installer", "重新下载安装器") : L("Install & connect", "一键安装并连接")}
+                          </button>
+                        )}
+                        {codexPhase === "missing" && (
+                          <button type="button" className="mine-btn mine-btn--soft" onClick={wakeCodexConnector}>
+                            {L("Launch installed connector", "启动已安装助手")}
+                          </button>
+                        )}
+                        {codexPhase === "login_required" && (
+                          <button type="button" className="mine-btn mine-btn--go" onClick={() => beginCodexLogin("browser")}>
+                            {L("Connect ChatGPT", "连接 ChatGPT")}
+                          </button>
+                        )}
+                        <button type="button" className="mine-btn mine-btn--soft" disabled={codexPhase === "checking" || codexPhase === "login_pending"} onClick={refreshCodexConnection}>
+                          {L("Re-check", "重新检测")}
+                        </button>
+                      </div>
+                      {codexConnection.oauthUrl && (
+                        <a className="mine-codex-link" href={codexConnection.oauthUrl} target="_blank" rel="noreferrer">
+                          {L("Open ChatGPT sign-in page", "打开 ChatGPT 登录页")}
+                        </a>
+                      )}
+                      {codexPhase === "login_required" && codexConnection.health && (
+                        <button type="button" className="mine-codex-device" onClick={() => beginCodexLogin("device")}>
+                          {L("Use a device code instead", "改用设备码登录")}
+                        </button>
+                      )}
+                      {codexConnection.userCode && (
+                        <div className="mine-codex-code">
+                          <span>{L("Device code", "设备码")}</span>
+                          <strong>{codexConnection.userCode}</strong>
+                        </div>
+                      )}
+                      <details className="mine-advanced">
+                        <summary>{L("Advanced settings", "高级设置")}</summary>
+                        <div className="mine-advanced-fields">
+                          <label className="mine-field mine-field--labeled">
+                            <span>API Base URL</span>
+                            <input
+                              value={proxySettings.endpoint}
+                              onChange={(e) => setProxySettings((s) => ({ ...s, endpoint: e.target.value }))}
+                              placeholder={L("http://127.0.0.1:PORT/v1", "http://127.0.0.1:端口/v1")}
+                              spellCheck={false}
+                            />
+                          </label>
+                          <label className="mine-field mine-field--labeled">
+                            <span>Model</span>
+                            <input value={proxySettings.model} onChange={(e) => setProxySettings((s) => ({ ...s, model: e.target.value }))} placeholder="codex" spellCheck={false} />
+                          </label>
+                          <label className="mine-field mine-field--labeled">
+                            <span>{L("API Key (optional)", "API Key(可选)")}</span>
+                            <input
+                              type="password"
+                              value={proxySettings.apiKey}
+                              onChange={(e) => setProxySettings((s) => ({ ...s, apiKey: e.target.value }))}
+                              placeholder={L("Kept for this browser session only", "仅保留到本次浏览器会话")}
+                              autoComplete="off"
+                            />
+                          </label>
+                          <button type="button" className="mine-btn mine-btn--soft" onClick={saveProxySettings}>
+                            {L("Save advanced settings", "保存高级设置")}
+                          </button>
+                        </div>
+                      </details>
+                    </div>
+                  )}
+                  {proxyStatus && (
+                    <p className="mine-status" role="status">
+                      {proxyStatus}
+                    </p>
+                  )}
+                </section>
+              )}
             </div>
-          </div>
+          )}
 
-          {loggedIn && me && me.local_proxy_enabled && (
-            <div className="mine-model">
-              <h2 className="t-h3 mine-sec-title">{L("Model source", "模型来源")}</h2>
-              <div className="mine-model-segment" aria-label={L("Model source", "模型来源")}>
-                <button
-                  className={proxySettings.source === "deepseek" ? "is-on" : ""}
-                  onClick={() => selectModelSource("deepseek")}
-                >
-                  DeepSeek
+          {/* 存档(跨设备 · 占位过滤) */}
+          {tab === "saves" && (
+            <div className="mine-rows">
+              {game && (
+                <button type="button" className="mine-save mine-save--cur" onClick={() => navigate("/play")}>
+                  <span className="mine-save-dot" aria-hidden="true" />
+                  <span className="mine-save-tx">
+                    <span className="mine-save-name">{game.title || L("Current story", "当前故事")}</span>
+                    <span className="mine-save-meta">{L("In progress on this device", "本机进行中")}</span>
+                  </span>
+                  <span className="mine-save-go">{L("Continue →", "继续 →")}</span>
                 </button>
-                <button
-                  className={proxySettings.source === "local_proxy" ? "is-on" : ""}
-                  onClick={() => selectModelSource("local_proxy")}
-                >
-                  {L("Local Codex", "Codex 本机")}
-                </button>
-              </div>
-              {proxySettings.source === "local_proxy" && (
-                <div className="mine-codex-connect">
-                  <div className={`mine-codex-state is-${codexPhase}`}>
-                    <span className="mine-codex-dot" aria-hidden="true" />
-                    <span className="mine-codex-state-copy">
-                      <strong className="t-ui-sm">{codexLabel}</strong>
-                      {codexDetail && <span className="t-meta">{codexDetail}</span>}
+              )}
+              {!loggedIn ? (
+                <p className="mine-note">{L("Sign in to see saves synced across devices. For now, only the story in progress on this device is shown.", "登录后可看跨设备同步的存档列表。当前仅显示本机进行中的故事。")}</p>
+              ) : saves === null ? (
+                <p className="mine-note" role="status">
+                  {L("Loading saves…", "读取存档中…")}
+                </p>
+              ) : savesErr ? (
+                <p className="mine-note">{L("Failed to load saves, possibly a network hiccup. The story in progress on this device is not affected.", "存档加载失败,可能是网络抖动。本机进行中的故事不受影响。")}</p>
+              ) : saves.length ? (
+                saves.map((s) => (
+                  <div className="mine-save" key={s.id}>
+                    <span className="mine-save-tx">
+                      <span className="mine-save-name">{s.story || s.player || L("Untitled save", "未命名存档")}</span>
+                      <span className="mine-save-meta">
+                        {isZh ? <>第 {s.turns} 回合</> : <>Turn {s.turns}</>}
+                        {s.updated_at ? " · " + String(s.updated_at).slice(0, 16) : ""}
+                      </span>
                     </span>
                   </div>
+                ))
+              ) : (
+                <p className="mine-note">{L("No stories in progress yet. Pick a book in Explore to start.", "还没有进行中的故事。去探索取一本书开局。")}</p>
+              )}
+            </div>
+          )}
 
-                  <div className="mine-codex-actions">
-                    {(codexPhase === "missing" || codexPhase === "installing") && (
-                      <Button variant="primary" onClick={downloadCodexConnector}>
-                        {codexPhase === "installing" ? L("Re-download installer", "重新下载安装器") : L("Install & connect", "一键安装并连接")}
-                      </Button>
-                    )}
-                    {codexPhase === "missing" && (
-                      <Button variant="line" onClick={wakeCodexConnector}>{L("Launch installed connector", "启动已安装助手")}</Button>
-                    )}
-                    {codexPhase === "login_required" && (
-                      <Button variant="primary" onClick={() => beginCodexLogin("browser")}>{L("Connect ChatGPT", "连接 ChatGPT")}</Button>
-                    )}
-                    <Button
-                      variant="line"
-                      disabled={codexPhase === "checking" || codexPhase === "login_pending"}
-                      onClick={refreshCodexConnection}
-                    >
-                      {L("Re-check", "重新检测")}
-                    </Button>
-                  </div>
+          {/* 收藏:故事一组、角色一组 */}
+          {tab === "favorites" &&
+            (favModels.length ? (
+              <div className="mine-sets">
+                {favStories.length > 0 && (
+                  <section className="mine-set" aria-labelledby="mine-fav-stories">
+                    <h2 id="mine-fav-stories">
+                      {L("Stories", "故事")} <span>{favStories.length}</span>
+                    </h2>
+                    {cardGrid(favStories, "story")}
+                  </section>
+                )}
+                {favChars.length > 0 && (
+                  <section className="mine-set" aria-labelledby="mine-fav-chars">
+                    <h2 id="mine-fav-chars">
+                      {L("Characters", "角色")} <span>{favChars.length}</span>
+                    </h2>
+                    {cardGrid(favChars, "character")}
+                  </section>
+                )}
+              </div>
+            ) : (
+              <p className="mine-note">{L("No favorites yet. Tap the star in Explore or Save on a story page, and those stories and characters will show up here.", "还没有收藏。在探索点星标、在故事详情点收藏,故事和角色会出现在这里。")}</p>
+            ))}
 
-                  {codexConnection.oauthUrl && (
-                    <a className="mine-codex-link t-ui-sm" href={codexConnection.oauthUrl} target="_blank" rel="noreferrer">
-                      {L("Open ChatGPT sign-in page", "打开 ChatGPT 登录页")}
-                    </a>
-                  )}
-                  {codexPhase === "login_required" && codexConnection.health && (
-                    <button className="mine-codex-device t-meta" onClick={() => beginCodexLogin("device")}>
-                      {L("Use a device code instead", "改用设备码登录")}
+          {/* 创作:我创建的角色卡(分页) */}
+          {tab === "created" &&
+            (createdModels.length ? (
+              <div className="mine-sets">
+                <section className="mine-set" aria-labelledby="mine-created-h">
+                  <h2 id="mine-created-h">
+                    {L("Cards I created", "我创建的卡")} <span>{createdModels.length}</span>
+                  </h2>
+                  {cardGrid(createdShown, "character")}
+                </section>
+                {createdPageCount > 1 && (
+                  <div className="mine-pager">
+                    <button type="button" className="mine-btn mine-btn--soft" disabled={createdPage <= 1} onClick={() => setCreatedPage((p) => Math.max(1, p - 1))}>
+                      {L("Previous", "上一页")}
                     </button>
-                  )}
-                  {codexConnection.userCode && (
-                    <div className="mine-codex-code">
-                      <span className="t-meta">{L("Device code", "设备码")}</span>
-                      <strong className="t-mono">{codexConnection.userCode}</strong>
-                    </div>
-                  )}
-
-                  <details className="mine-model-advanced">
-                    <summary className="t-meta">{L("Advanced settings", "高级设置")}</summary>
-                    <div className="mine-model-fields">
-                      <label>
-                        <span className="t-meta">API Base URL</span>
-                        <Input
-                          value={proxySettings.endpoint}
-                          onChange={(e) => setProxySettings((s) => ({ ...s, endpoint: e.target.value }))}
-                          placeholder={L("http://127.0.0.1:PORT/v1", "http://127.0.0.1:端口/v1")}
-                          spellCheck={false}
-                        />
-                      </label>
-                      <label>
-                        <span className="t-meta">Model</span>
-                        <Input
-                          value={proxySettings.model}
-                          onChange={(e) => setProxySettings((s) => ({ ...s, model: e.target.value }))}
-                          placeholder="codex"
-                          spellCheck={false}
-                        />
-                      </label>
-                      <label>
-                        <span className="t-meta">{L("API Key (optional)", "API Key（可选）")}</span>
-                        <Input
-                          type="password"
-                          value={proxySettings.apiKey}
-                          onChange={(e) => setProxySettings((s) => ({ ...s, apiKey: e.target.value }))}
-                          placeholder={L("Kept for this browser session only", "仅保留到本次浏览器会话")}
-                          autoComplete="off"
-                        />
-                      </label>
-                      <Button variant="line" onClick={saveProxySettings}>{L("Save advanced settings", "保存高级设置")}</Button>
-                    </div>
-                  </details>
-                </div>
-              )}
-              {proxyStatus && <span className="mine-model-status t-meta">{proxyStatus}</span>}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* 存档(跨设备 · 占位过滤) */}
-      {tab === "saves" && (
-        <section className="mine-section">
-          <h2 className="t-h3 mine-sec-title">{L("In progress / Saved games", "进行中 / 历史存档")}</h2>
-          {game && (
-            <button className="mine-save mine-save--cur" onClick={() => navigate("/play")}>
-              <span className="mine-save-dot" aria-hidden="true" />
-              <span className="mine-save-tx">
-                <span className="t-ui-sm">{game.title || L("Current story", "当前故事")}</span>
-                <span className="t-meta">{L("In progress on this device · tap to continue", "本机进行中 · 点继续")}</span>
-              </span>
-              <span className="t-meta">{L("Continue →", "继续 →")}</span>
-            </button>
-          )}
-          {!loggedIn ? (
-            <p className="t-ui mine-sub">{L("Sign in to see saves synced across devices. For now, only the story in progress on this device is shown.", "登录后可看跨设备同步的存档列表。当前仅显示本机进行中的故事。")}</p>
-          ) : saves === null ? (
-            <p className="t-ui mine-sub">{L("Loading saves…", "读取存档中…")}</p>
-          ) : savesErr ? (
-            <p className="t-ui mine-sub">{L("Failed to load saves, possibly a network hiccup. The story in progress on this device is not affected.", "存档加载失败,可能是网络抖动。本机进行中的故事不受影响。")}</p>
-          ) : saves.length ? (
-            <div className="mine-saves">
-              {saves.map((s) => (
-                <div className="mine-save" key={s.id}>
-                  <span className="mine-save-tx">
-                    <span className="t-ui-sm">{s.story || s.player || L("Untitled save", "未命名存档")}</span>
-                    <span className="t-meta">{isZh ? <>第 {s.turns} 回合</> : <>Turn {s.turns}</>}{s.updated_at ? " · " + String(s.updated_at).slice(0, 16) : ""}</span>
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="t-ui mine-sub">{L("No stories in progress yet. Pick a book in Explore to start.", "还没有进行中的故事。去探索取一本书开局。")}</p>
-          )}
-        </section>
-      )}
-
-      {/* 收藏 */}
-      {tab === "favorites" && (
-        <section className="mine-section">
-          <h2 className="t-h3 mine-sec-title">{L("My favorites", "我的收藏")}</h2>
-          {favModels.length ? (
-            <CardShelf models={favModels} onOpen={openCard} />
-          ) : (
-            <p className="t-ui mine-sub">{L("No favorites yet. Tap Save in Explore or on a story page, and those stories and characters will show up here.", "还没有收藏。在探索 / 故事详情点收藏,故事和角色会出现在这里。")}</p>
-          )}
-        </section>
-      )}
-
-      {/* 我创建的(卡库竖卡分页 YOR-67) */}
-      {tab === "created" && (
-        <section className="mine-section">
-          <h2 className="t-h3 mine-sec-title">{L("Cards I created", "我创建的卡")}</h2>
-          {createdModels.length ? (
-            <>
-              <CardShelf models={createdShown.map((m) => (favIdSet.has(m.kind + ":" + m.id) ? { ...m, fav: true } : m))} onOpen={openCard} />
-              {createdPageCount > 1 && (
-                <div className="mine-pager">
-                  <Button variant="line" disabled={createdPage <= 1} onClick={() => setCreatedPage((p) => Math.max(1, p - 1))}>
-                    {L("Previous", "上一页")}
-                  </Button>
-                  <span className="t-ui-sm mine-pager-info">{createdPage} / {createdPageCount}</span>
-                  <Button variant="line" disabled={createdPage >= createdPageCount} onClick={() => setCreatedPage((p) => Math.min(createdPageCount, p + 1))}>
-                    {L("Next", "下一页")}
-                  </Button>
-                </div>
-              )}
-            </>
-          ) : (
-            <p className="t-ui mine-sub">{L("Your Card Library is empty. Build a Character Card in Create and it will show up here.", "卡库还空着。去创作造一张角色卡,这里就有了。")}</p>
-          )}
-        </section>
-      )}
+                    <span className="mine-pager-info">
+                      {createdPage} / {createdPageCount}
+                    </span>
+                    <button type="button" className="mine-btn mine-btn--soft" disabled={createdPage >= createdPageCount} onClick={() => setCreatedPage((p) => Math.min(createdPageCount, p + 1))}>
+                      {L("Next", "下一页")}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="mine-empty">
+                <p className="mine-note">{L("Your Card Library is empty. Build a Character Card in Create and it will show up here.", "卡库还空着。去创作造一张角色卡,这里就有了。")}</p>
+                <button type="button" className="mine-btn mine-btn--go" onClick={() => navigate("/create")}>
+                  {L("Go to Create", "去创作")}
+                </button>
+              </div>
+            ))}
+        </div>
+      </main>
 
       {detail && (
         <CharDetailModal
