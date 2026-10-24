@@ -54,6 +54,12 @@ def _words(s: str) -> int:
 
 
 SECRET_RE = re.compile(r"\s*SECRET\b.*$", re.S)
+# 故事详情页(StoryHero)会把这些字段翻给玩家看
+SHOWN_FIELDS = ("anchor", "look", "personality", "tension", "description", "scenario")
+# spoiler_free 预设的展示字段里不该出现的剧情秘密字眼
+SPOILER_TERMS = re.compile(
+    r"gray fog|grey fog|above the fog|Tarot|\bthe Fool\b|Zhou Mingrui|another world|transmigr|shot himself|"
+    r"incantation|companion|eyes behind|True Creator|crucif|possess", re.I)
 
 
 def _move_secret(c: dict) -> dict:
@@ -91,9 +97,14 @@ def assemble(content: Path) -> tuple[list[dict], list[str], list[str]]:
         if len(set(names)) != len(names):
             errors.append(f"[{tag}] duplicate cast names: {names}")
         for c in cast:
-            for field in ("description", "anchor", "tension", "look", "personality", "scenario"):
-                if "SECRET" in getattr(c.data, field):  # 这些字段详情页会展示,秘密只能在 speech_rules
+            for field in SHOWN_FIELDS:
+                v = getattr(c.data, field)
+                if "SECRET" in v:  # 这些字段详情页会展示,秘密只能在 speech_rules
                     errors.append(f"[{tag}] {c.data.name}.{field} still contains a SECRET line (shown to players)")
+                if meta.get("spoiler_free"):  # 给没读过书的玩家的预设:展示字段里不许出现剧情秘密的字眼
+                    hit = SPOILER_TERMS.search(v)
+                    if hit:
+                        errors.append(f"[{tag}] {c.data.name}.{field} mentions {hit.group(0)!r} (spoiler-free preset)")
             if re.search(r"[(（].*(phase|阶段)", c.data.name, re.I):
                 errors.append(f"[{tag}] card name must be the plain name: {c.data.name!r}")
             for field, cap in CARD_CAPS.items():
