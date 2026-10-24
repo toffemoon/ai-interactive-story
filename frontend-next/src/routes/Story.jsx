@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useNavigate } from "../lib/transitionNav";
-import { Button } from "../components/ui";
 import { streamTurn, postJSON, getJSON, extractStream } from "../lib/api";
 import {
   loadLocalProxySettings,
@@ -42,35 +41,43 @@ function Narration({ text }) {
   );
 }
 
+// 名牌颜色:按名字固定取一个(同一角色每回合同色)。字一律深色。店里两位按画布定色。
+const PLATES = ["#f0883e", "#9dbcff", "#e3b16a", "#8fd3b0", "#f5a3c7", "#c3a6ff"];
+const PLATE_OF = { 糖沐: "#f0883e", 太妃月: "#9dbcff" };
+function plateColor(name) {
+  if (PLATE_OF[name]) return PLATE_OF[name];
+  let h = 0;
+  for (const ch of name || "") h = (h * 31 + ch.codePointAt(0)) >>> 0;
+  return PLATES[h % PLATES.length];
+}
+
+// 一条台词:引号外的动作描写偏灰,引号内的对白亮白,同一段里连着读(画布 C 幕间 · 游玩)。
+function Speech({ text }) {
+  return splitSpeech(text).map((seg, k) => (
+    <span key={k} className={seg.q ? "dlg-q" : "dlg-a"}>
+      {k > 0 && !isZh ? " " : ""}
+      {seg.s}
+    </span>
+  ));
+}
+
 function Dialogue({ messages }) {
   return (
     <div className="story-dialogue">
-      {(messages || []).map((mm, i) => (
-        <div className="dlg" key={i}>
-          <span className="dlg-name t-kai">{mm.name || mm.character_id || "?"}</span>
-          <div className="dlg-text">
-            {splitSpeech(mm.text).map((seg, k) => (
-              <p key={k} className={seg.q ? "dlg-q" : "dlg-a"}>
-                {seg.s}
-              </p>
-            ))}
+      {(messages || []).map((mm, i) => {
+        const name = mm.name || mm.character_id || "?";
+        return (
+          <div className="dlg" key={i}>
+            <span className="dlg-name" style={{ background: plateColor(name) }}>
+              {name}
+            </span>
+            <p className="dlg-text">
+              <Speech text={mm.text} />
+            </p>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
-  );
-}
-
-// 状态栏单栏目:默认收起,点标题展开(native details,真机点击稳)。
-function StatusSection({ title, count, children, open }) {
-  return (
-    <details className="status-sec" open={open}>
-      <summary className="status-sec-head">
-        <span className="status-sec-title t-kai">{title}</span>
-        {count != null && <span className="status-sec-count t-meta">{count}</span>}
-      </summary>
-      <div className="status-sec-body">{children}</div>
-    </details>
   );
 }
 
@@ -92,8 +99,10 @@ export default function Story() {
   const [modelSource, setModelSource] = useState(() => loadLocalProxySettings().source);
   const [canUndo, setCanUndo] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
-  // 右状态栏:默认收起(抽屉),点「世界状态」从右侧平移出来,叙事区常驻满宽 → 中间正文位置固定(细节 8)。
-  const [statusOpen, setStatusOpen] = useState(false);
+  // 世界状态:桌面默认展开在右侧(画布),手机是抽屉、默认收起。
+  const [statusOpen, setStatusOpen] = useState(
+    () => typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(min-width: 961px)").matches
+  );
   const [dev, setDev] = useState(() => {
     try {
       return localStorage.getItem("ais_dev") === "1";
@@ -101,6 +110,23 @@ export default function Story() {
       return false;
     }
   });
+  // 阅读方式(画布「C 幕间 · 游玩」第二版):全文 = 左侧整页叙事流(默认);对白框 = 底部对白框一句一句读。按设备记住。
+  const [readMode, setReadMode] = useState(() => {
+    try {
+      return localStorage.getItem("ais_play_mode") === "box" ? "box" : "full";
+    } catch (e) {
+      return "full";
+    }
+  });
+  function pickReadMode(m) {
+    setReadMode(m);
+    try {
+      localStorage.setItem("ais_play_mode", m);
+    } catch (e) {}
+  }
+  const [openSec, setOpenSec] = useState(""); // 世界状态里展开的栏目(一次一个)
+  const [beat, setBeat] = useState(0); // 对白框:读到最后一回合的第几句
+  const inputRef = useRef(null);
   // 卡组(本局):从 game 取一份可改副本,卡组栏「移除」即改这里 → 影响后续回合 body(不新增端点)。
   const [deck, setDeck] = useState(() =>
     game
@@ -368,6 +394,18 @@ export default function Story() {
   );
   const memWrites = useMemo(() => storyTurns.flatMap((t) => t.data.memory_write || []), [storyTurns]);
   const triggeredAll = useMemo(() => storyTurns.flatMap((t) => t.data.triggered_events || []), [storyTurns]);
+  const lastStory = storyTurns.length ? storyTurns[storyTurns.length - 1] : null;
+  // 对白框的「句」= 最后一回合的叙事段落 + 每条台词。换了一回合(新回合 / 重写 / 撤回 / 续玩还原)就回到第一句。
+  const beats = useMemo(() => {
+    if (!lastStory) return [];
+    const d = lastStory.data || {};
+    const out = (d.narration || "").split(/\n+/).filter(Boolean).map((p) => ({ text: p }));
+    for (const mm of d.messages || []) out.push({ name: mm.name || mm.character_id || "?", text: mm.text || "" });
+    return out;
+  }, [lastStory]);
+  useEffect(() => {
+    setBeat(0);
+  }, [lastStory]);
 
   // YOR-42:未选故事直接进 /play → 不自动开教学局,引导回探索。
   if (!game) return <Navigate to="/explore" replace />;
@@ -384,316 +422,467 @@ export default function Story() {
   const memShort = memWrites.filter((m) => (m.importance || 0) < 4);
   const historyEvents = timeline.filter((e) => e.status === "resolved");
 
-  return (
-    <div className={"story" + (dev ? " is-dev" : "") + (statusOpen ? " status-open" : "")}>
-      {/* 顶栏:离开(保留进行中故事)/ 标题 / token / 撤回·重生成·记录·dev */}
-      <header className="story-top">
-        <button className="story-back" onClick={() => navigate("/explore", { transition: "contract" })}>
-          {L("← Leave", "← 离开")}
+  // 舞台:故事封面(没有就用书店夜景)+ 有立绘的角色站在中间(目前只有糖沐有立绘)。
+  const backdrop = game.cover || "/home/background.png";
+  const castNames = ((deck && deck.characters) || []).map((c) => (c.data && c.data.name) || c.name);
+  const art = castNames.includes("糖沐") ? "/home/tangmu01.webp" : null;
+  const roundNow = storyTurns.length || (loading ? 1 : 0);
+  const subtitle = [isZh ? `第 ${roundNow} 回合` : `Turn ${roundNow}`, scene.location, scene.time].filter(Boolean).join(isZh ? "　" : " · ");
+  const cur = beats.length ? beats[Math.min(beat, beats.length - 1)] : null;
+  const atLastBeat = !beats.length || beat >= beats.length - 1;
+
+  function pickChoice(c) {
+    setInput(c.label);
+    if (inputRef.current) inputRef.current.focus();
+  }
+
+  // 世界状态的栏目:一行小按钮,点哪个展开哪个(画布)。场景放在上面的地点 / 时间 / 在场里。
+  const sections = [
+    {
+      key: "player",
+      title: L("Player", "玩家"),
+      body:
+        ps.location || ps.status || (ps.active_goals || []).length || (ps.known_facts || []).length || (ps.inventory || []).length ? (
+          <div className="status-kv">
+            {ps.location && <div><span className="status-k">{L("Location", "位置")}</span>{ps.location}</div>}
+            {ps.status && <div><span className="status-k">{L("Status", "状态")}</span>{ps.status}</div>}
+            {(ps.active_goals || []).length > 0 && <div><span className="status-k">{L("Goals", "目标")}</span>{ps.active_goals.join(L("; ", "；"))}</div>}
+            {(ps.known_facts || []).length > 0 && <div><span className="status-k">{L("Known", "已知")}</span>{ps.known_facts.join(L("; ", "；"))}</div>}
+            {(ps.inventory || []).length > 0 && <div><span className="status-k">{L("Items", "物品")}</span>{ps.inventory.join(L(", ", "、"))}</div>}
+          </div>
+        ) : (
+          EMPTY
+        ),
+    },
+    {
+      key: "rels",
+      title: L("Relationships", "关系"),
+      count: rels.length,
+      body: rels.length ? (
+        <div className="status-rels">
+          {rels.map((r, i) => (
+            <div className="status-rel" key={i}>
+              <span className="status-rel-nm">{r.character_id}</span>
+              <span className="status-rel-v">{isZh ? <>信任 {r.trust} · 张力 {r.tension} · 好感 {r.affection}</> : <>Trust {r.trust} · Tension {r.tension} · Affection {r.affection}</>}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        EMPTY
+      ),
+    },
+    {
+      key: "mem",
+      title: L("Memory cards", "记忆卡"),
+      count: memWrites.length,
+      body: memWrites.length ? (
+        <div className="status-mem">
+          {memLong.length > 0 && (
+            <div className="status-mem-grp">
+              <div className="status-k">{L("Long-term", "长期")}</div>
+              {memLong.slice(-8).map((m, i) => <div className="status-mem-i" key={i}>· {m.text}</div>)}
+            </div>
+          )}
+          {memShort.length > 0 && (
+            <div className="status-mem-grp">
+              <div className="status-k">{L("Short-term", "短期")}</div>
+              {memShort.slice(-8).map((m, i) => <div className="status-mem-i" key={i}>· {m.text}</div>)}
+            </div>
+          )}
+        </div>
+      ) : (
+        EMPTY
+      ),
+    },
+    {
+      key: "tokens",
+      title: L("Token usage", "Token 用量"),
+      body:
+        tokenTotal > 0 ? (
+          <div className="status-kv">
+            <div><span className="status-k">{L("This run", "本局累计")}</span>{tokenTotal}</div>
+            {usageBlock.total_tokens != null && <div><span className="status-k">{L("Last turn", "上一轮")}</span>{usageBlock.total_tokens}</div>}
+            {usageBlock.calls != null && <div><span className="status-k">{L("Calls", "调用")}</span>{usageBlock.calls}</div>}
+          </div>
+        ) : (
+          EMPTY
+        ),
+    },
+    {
+      key: "history",
+      title: L("History", "历史"),
+      count: historyEvents.length || triggeredAll.length,
+      body:
+        historyEvents.length || triggeredAll.length ? (
+          <div className="status-hist">
+            {historyEvents.map((e, i) => <div className="status-hist-i" key={"h" + i}>· {e.title || e.event_id}</div>)}
+            {triggeredAll.slice(-8).map((e, i) => <div className="status-hist-i" key={"t" + i}>· {e}</div>)}
+          </div>
+        ) : (
+          EMPTY
+        ),
+    },
+    {
+      key: "timeline",
+      title: L("Timeline", "时间线"),
+      count: timelineShown.length,
+      body: timelineShown.length ? (
+        <div className="status-tl">
+          {timelineShown.map((e, i) => (
+            <div className="status-tl-i" key={i}>
+              <span className={"status-tl-dot status-tl-" + e.status} />
+              <span>{e.title || e.event_id}{e.due_hint ? ` · ${e.due_hint}` : ""}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        EMPTY
+      ),
+    },
+    {
+      key: "map",
+      title: L("Map", "地图"),
+      // 引擎暂无地图数据,先用场景位置/出口拼一张文字地图(YOR-95 待真地图字段)
+      body:
+        scene.location || (scene.exits || []).length ? (
+          <div className="status-map">
+            <div className="status-map-here">{scene.location || L("Unknown location", "未定地点")}</div>
+            {(scene.exits || []).length > 0 && <div className="status-map-exits">{L("Leads to: ", "通向:")}{scene.exits.join(" / ")}</div>}
+            <div className="status-empty">{L("Full world map coming soon", "完整世界地图待引擎提供")}</div>
+          </div>
+        ) : (
+          EMPTY
+        ),
+    },
+  ];
+  if (dev) {
+    sections.push(
+      {
+        key: "dash",
+        title: L("Dashboard · dev", "仪表盘 · dev"),
+        body: (
+          <div className="status-kv">
+            <div><span className="status-k">turn</span>{(state && state.turn_count) || storyTurns.length}</div>
+            <div><span className="status-k">clock</span>{(state && state.clock_minutes) || 0} {L("min", "分")}</div>
+            {state && state.main_resolved != null && <div><span className="status-k">{L("Main plot", "主线")}</span>{state.main_resolved ? L("Resolved", "已结案") : L("In progress", "进行中")}</div>}
+            {lastStory && lastStory.data.reasoning && (
+              <div><span className="status-k">{L("Self-check", "自检")}</span>{JSON.stringify(lastStory.data.reasoning).slice(0, 160)}</div>
+            )}
+          </div>
+        ),
+      },
+      {
+        // 卡组栏(作者视图):移除随本局生效,编辑 / 上传归创作端
+        key: "deck",
+        title: L("Deck · dev", "卡组 · dev"),
+        count: (deck.characters || []).length,
+        body: (
+          <div className="status-deck">
+            <div className="status-empty">{L("Author view · removals apply to this run; edit/upload in Create", "作者视图 · 移除随本局生效;编辑/上传归创作端")}</div>
+            {(deck.characters || []).map((c, i) => {
+              const nm = (c.data && c.data.name) || c.name || L("Character", "角色");
+              return (
+                <div className="status-deck-i" key={i}>
+                  <span>{nm}</span>
+                  <button type="button" onClick={() => removeFromDeck(nm)} title={L("Remove from this run", "移出本局")}>
+                    {L("Remove", "移除")}
+                  </button>
+                </div>
+              );
+            })}
+            {deck.world && <div className="status-deck-i"><span>{L("World Book", "世界书")}</span></div>}
+            {deck.story && <div className="status-deck-i"><span>{L("Story Book", "故事书")}</span></div>}
+          </div>
+        ),
+      }
+    );
+  }
+  const secOpen = sections.find((x) => x.key === openSec);
+
+  const choiceList = (box) =>
+    choices.length > 0 && !loading && (!box || atLastBeat) ? (
+      <section className={box ? "play-box-choices" : "play-next"} aria-labelledby="play-next-h">
+        <h2 id="play-next-h" className={box ? "sr-only" : undefined}>
+          {L("What next", "接下来")}
+        </h2>
+        {choices.map((c, i) => (
+          <button key={c.id || i} type="button" className="play-choice" onClick={() => pickChoice(c)} title={L("Fills the box below; edit it or send as is", "填入下方输入框,可改可直接发送")}>
+            {!box && (
+              <span className="play-choice-no" aria-hidden="true">
+                {i + 1}
+              </span>
+            )}
+            <span className="play-choice-text">
+              <span className="play-choice-label">{c.label}</span>
+              {c.description && <span className="play-choice-hint">{c.description}</span>}
+            </span>
+          </button>
+        ))}
+      </section>
+    ) : null;
+
+  const composer = (
+    <form
+      className="play-composer"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (input.trim() && !loading) runTurn({ text: input });
+      }}
+    >
+      {localProxyAllowed && (
+        <div className="play-model">
+          <span>{L("Model", "模型")}</span>
+          <div className="play-model-seg" role="group" aria-label={L("Model source", "模型来源")}>
+            <button type="button" aria-pressed={modelSource === "deepseek"} className={modelSource === "deepseek" ? "is-on" : ""} onClick={() => selectModelSource("deepseek")} disabled={loading}>
+              DeepSeek
+            </button>
+            <button type="button" aria-pressed={modelSource === "local_proxy"} className={modelSource === "local_proxy" ? "is-on" : ""} onClick={() => selectModelSource("local_proxy")} disabled={loading}>
+              {L("Local Codex", "Codex 本机")}
+            </button>
+          </div>
+          <button type="button" className="play-model-settings" onClick={() => navigate("/mine")} disabled={loading}>
+            {L("Settings", "设置")}
+          </button>
+        </div>
+      )}
+      <div className="play-composer-row">
+        <label className="play-input">
+          <span className="sr-only">{L("Your action or line", "你的行动或台词")}</span>
+          <textarea
+            ref={inputRef}
+            rows={1}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing) {
+                e.preventDefault();
+                // 对齐发送按钮的守卫:空输入按 Enter 不发空回合(否则会烧一轮 token 且无玩家气泡,YOR-182)。
+                if (!input.trim() || loading) return;
+                runTurn({ text: input });
+              }
+            }}
+            placeholder={readMode === "box" ? L("Or write your own line", "或者自己写一句行动或台词") : L("Write your action or line", "写下你的行动或台词")}
+            disabled={loading}
+          />
+        </label>
+        <button type="submit" className="play-send" disabled={loading || !input.trim()}>
+          {L("Send", "发送")}
         </button>
-        <div className="story-title t-kai">{game.title || L("Current story", "当前故事")}</div>
-        <div className="story-top-right">
-          {tokenTotal > 0 && <span className="t-mono story-usage">token {tokenTotal}</span>}
-          <button className="story-toolbtn" disabled={!canUndo || loading} onClick={undoLast} title={L("Undo last turn", "撤回上一轮")} aria-label={L("Undo last turn", "撤回上一轮")}>
-            <span className="tb-ic" aria-hidden="true">↩</span>
-            <span className="tb-tx">{L("Undo", "撤回")}</span>
+      </div>
+      {readMode === "full" && (
+        <p className="play-composer-hint">
+          {L("Tapping a choice fills the box so you can edit it first. Enter sends, Shift + Enter adds a line.", "点选项会填进输入框,可以改了再发。Enter 发送,Shift + Enter 换行。")}
+        </p>
+      )}
+    </form>
+  );
+
+  const errorLine = error ? (
+    <p className="play-error" role="alert">
+      {error}
+    </p>
+  ) : null;
+
+  return (
+    <div className={"story play play--" + readMode + (statusOpen ? " status-open" : "") + (dev ? " is-dev" : "")}>
+      <img
+        className="play-bg"
+        src={backdrop}
+        alt=""
+        onError={(e) => {
+          if (!e.currentTarget.src.endsWith("/home/background.png")) e.currentTarget.src = "/home/background.png";
+        }}
+      />
+      <div className="play-shade" aria-hidden="true" />
+      {art && <img className="play-art" src={art} alt="" />}
+
+      {/* 顶栏:离开 / 书名 + 回合·地点·时间 / 阅读方式 / 撤回·重写·记录·世界状态·dev */}
+      <header className="play-top">
+        <div className="play-top-left">
+          <button type="button" className="play-pill play-back" onClick={() => navigate("/explore", { transition: "contract" })}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 5l-7 7 7 7" />
+            </svg>
+            {L("Leave", "离开")}
           </button>
-          <button className="story-toolbtn" disabled={!storyTurns.length || loading} onClick={rerollLast} title={L("Regenerate last turn", "重生成上一轮")} aria-label={L("Regenerate last turn", "重生成上一轮")}>
-            <span className="tb-ic" aria-hidden="true">↻</span>
-            <span className="tb-tx">{L("Reroll", "重生成")}</span>
-          </button>
-          <button className="story-toolbtn" disabled={!turns.length} onClick={() => setLogOpen(true)} title={L("Story log", "故事记录")} aria-label={L("Story log", "故事记录")}>
-            <span className="tb-ic" aria-hidden="true">☰</span>
-            <span className="tb-tx">{L("Log", "记录")}</span>
-          </button>
-          <button className={"story-statusbtn" + (statusOpen ? " is-on" : "")} onClick={() => setStatusOpen((v) => !v)} title={L("World status (collapsible)", "世界状态(可收起)")}>
-            {statusOpen ? L("Hide status", "收起状态") : L("World status", "世界状态")}
-          </button>
-          <button className={"story-toolbtn story-devbtn" + (dev ? " is-on" : "")} onClick={toggleDev} title={L("Player dashboard / developer view", "玩家仪表盘 / 开发者视图")}>
-            dev
-          </button>
+          <div className="play-heading">
+            <h1>{game.title || L("Current story", "当前故事")}</h1>
+            <span>{subtitle}</span>
+          </div>
+        </div>
+        <div className="play-top-right">
+          <div className="play-mode" role="group" aria-label={L("Reading mode", "阅读方式")}>
+            <button type="button" aria-pressed={readMode === "full"} className={readMode === "full" ? "is-on" : ""} onClick={() => pickReadMode("full")}>
+              {L("Full text", "全文")}
+            </button>
+            <button type="button" aria-pressed={readMode === "box"} className={readMode === "box" ? "is-on" : ""} onClick={() => pickReadMode("box")}>
+              {L("Dialogue box", "对白框")}
+            </button>
+          </div>
+          <div className="play-tools" role="toolbar" aria-label={L("This turn", "本回合")}>
+            <button type="button" className="play-pill" disabled={!canUndo || loading} onClick={undoLast} title={L("Undo last turn", "撤回上一轮")}>
+              {L("Undo", "撤回")}
+            </button>
+            <button type="button" className="play-pill" disabled={!storyTurns.length || loading} onClick={rerollLast} title={L("Regenerate last turn", "重新生成上一轮")}>
+              {L("Rewrite", "重写")}
+            </button>
+            <button type="button" className="play-pill" disabled={!turns.length} onClick={() => setLogOpen(true)} title={L("Story log", "故事记录")}>
+              {L("Log", "记录")}
+            </button>
+            <button type="button" className={"play-pill" + (statusOpen ? " is-on" : "")} aria-pressed={statusOpen} onClick={() => setStatusOpen((v) => !v)}>
+              {L("World status", "世界状态")}
+            </button>
+            <button type="button" className={"play-pill play-dev" + (dev ? " is-on" : "")} aria-pressed={dev} onClick={toggleDev} title={L("Player dashboard / developer view", "玩家仪表盘 / 开发者视图")}>
+              dev
+            </button>
+          </div>
         </div>
       </header>
 
-      <div className="story-body">
-        {/* 左:卡组栏(仅作者/dev 视图;玩家不见) */}
-        {dev && (
-          <aside className="story-deck">
-            <div className="story-deck-h t-kai">{L("Deck", "卡组栏")}</div>
-            <div className="story-deck-note t-meta">{L("Author view · removals apply to this run; edit/upload in Create", "作者视图 · 移除随本局生效;编辑/上传归创作端")}</div>
-            <div className="story-deck-list">
-              {(deck.characters || []).map((c, i) => {
-                const nm = (c.data && c.data.name) || c.name || L("Character", "角色");
-                return (
-                  <div className="story-deck-card" key={i}>
-                    <span className="story-deck-card-name t-ui-sm">{nm}</span>
-                    <button className="story-deck-x" onClick={() => removeFromDeck(nm)} title={L("Remove from this run", "移出本局")}>
-                      {L("Remove", "移除")}
+      <div className="play-body">
+        {readMode === "full" ? (
+          /* 全文:左侧一整页,叙事 + 名牌台词 + 接下来,底部输入 */
+          <main className="play-panel">
+            <div className="play-feed" ref={feedRef}>
+              {(() => {
+                let n = 0;
+                return turns.map((t, i) =>
+                  t.kind === "player" ? (
+                    <p className="play-me" key={i}>
+                      <span className="play-me-tag">{L("You", "你")}</span>
+                      {t.text}
+                    </p>
+                  ) : (
+                    <div className="play-turn" key={i}>
+                      <p className="play-round">{isZh ? `第 ${++n} 回合` : `Turn ${++n}`}</p>
+                      <Narration text={t.data.narration} />
+                      <Dialogue messages={t.data.messages} />
+                    </div>
+                  )
+                );
+              })()}
+
+              {streaming && (streaming.narration || (streaming.messages && streaming.messages.length)) ? (
+                <div className="play-turn is-streaming">
+                  <Narration text={streaming.narration} />
+                  <Dialogue messages={streaming.messages} />
+                </div>
+              ) : loading ? (
+                <p className="play-pending" role="status">
+                  {pendingLabel || L("Thinking…", "推演中…")}
+                </p>
+              ) : null}
+
+              {/* 选项并入叙事流、随内容滚动(细节③) */}
+              {choiceList(false)}
+              {errorLine}
+            </div>
+            {composer}
+          </main>
+        ) : (
+          /* 对白框:底部一句一句读(最后一回合),读到最后一句出选项 */
+          <div className="play-stage">
+            {choiceList(true)}
+            <section className="play-box" aria-label={L("Dialogue", "对白")}>
+              {loading ? (
+                <p className="play-box-text play-box-pending" role="status">
+                  {pendingLabel || L("Thinking…", "推演中…")}
+                </p>
+              ) : cur ? (
+                <>
+                  {cur.name && (
+                    <span className="play-box-name" style={{ background: plateColor(cur.name) }}>
+                      {cur.name}
+                    </span>
+                  )}
+                  <p className="play-box-text" aria-live="polite">
+                    {cur.name ? <Speech text={cur.text} /> : cur.text}
+                  </p>
+                  <div className="play-box-pager">
+                    <button type="button" disabled={beat === 0} onClick={() => setBeat((b) => Math.max(0, b - 1))} aria-label={L("Previous line", "上一句")}>
+                      ‹
+                    </button>
+                    <span>{isZh ? `本回合 ${Math.min(beat, beats.length - 1) + 1} / ${beats.length}` : `Line ${Math.min(beat, beats.length - 1) + 1} of ${beats.length}`}</span>
+                    <button type="button" className="play-box-next" disabled={atLastBeat} onClick={() => setBeat((b) => Math.min(beats.length - 1, b + 1))}>
+                      {L("Next", "下一句")} →
                     </button>
                   </div>
-                );
-              })}
-              {deck.world && <div className="story-deck-card"><span className="t-ui-sm">{L("World Book", "世界书")}</span></div>}
-              {deck.story && <div className="story-deck-card"><span className="t-ui-sm">{L("Story Book", "故事书")}</span></div>}
-              {!(deck.characters || []).length && !deck.world && !deck.story && (
-                <div className="status-empty t-meta">{L("No deck for this run", "本局无卡组")}</div>
+                </>
+              ) : (
+                <p className="play-box-text play-box-pending">{L("The story is about to begin…", "故事马上开始……")}</p>
               )}
-            </div>
-          </aside>
+              {errorLine}
+              {composer}
+            </section>
+          </div>
         )}
 
-        {/* 中:叙事区 */}
-        <main className="story-stage">
-          <div className="story-scene-head">
-            <span className="story-round t-meta">{isZh ? <>第 {storyTurns.length || (loading ? 1 : 0)} 回合</> : <>Turn {storyTurns.length || (loading ? 1 : 0)}</>}</span>
-            {scene.location && <span className="story-scene-loc t-kai">{scene.location}</span>}
-            {scene.time && <span className="story-scene-time t-meta">{scene.time}</span>}
-          </div>
-
-          <div className="story-feed" ref={feedRef}>
-            {turns.map((t, i) =>
-              t.kind === "player" ? (
-                <div className="story-player" key={i}>
-                  <span className="story-player-bubble">{t.text}</span>
-                </div>
-              ) : (
-                <div className="story-turn" key={i}>
-                  <Narration text={t.data.narration} />
-                  <Dialogue messages={t.data.messages} />
-                </div>
-              )
-            )}
-
-            {streaming && (streaming.narration || (streaming.messages && streaming.messages.length)) ? (
-              <div className="story-turn is-streaming">
-                <Narration text={streaming.narration} />
-                <Dialogue messages={streaming.messages} />
+        {/* 世界状态:桌面在右侧,手机是抽屉 */}
+        {statusOpen && (
+          <>
+            <div className="play-world-scrim" onClick={() => setStatusOpen(false)} aria-hidden="true" />
+            <aside className="play-world" aria-labelledby="play-world-h">
+              <div className="play-world-head">
+                <h2 id="play-world-h">{L("World status", "世界状态")}</h2>
+                <button type="button" onClick={() => setStatusOpen(false)} aria-label={L("Hide world status", "收起世界状态")}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6L6 18" />
+                  </svg>
+                </button>
               </div>
-            ) : loading ? (
-              <div className="story-pending t-ui-sm">{pendingLabel || L("Thinking…", "推演中…")}</div>
-            ) : null}
-
-            {/* 选项并入叙事流、随内容滚动(细节③:不再单独固定底栏占空间) */}
-            {choices.length > 0 && !loading && (
-              <div className="story-choices">
-                <span className="story-choices-hint t-meta">{L("What next? (Tap one to fill the box below, then edit it or send as is)", "接下来,你可以——(点一个填进下方输入框,可改可直接发送)")}</span>
-                {choices.map((c, i) => (
-                  <button
-                    key={c.id || i}
-                    className="story-choice"
-                    onClick={() => setInput(c.label)}
-                    title={L("Fills the box below; edit it or send as is", "填入下方输入框,可改可直接执行")}
-                  >
-                    <span className="story-choice-label t-ui">{c.label}</span>
-                    {c.description && <span className="story-choice-desc t-meta">{c.description}</span>}
-                    {/* 选项后果预览留位(YOR-21,待引擎 emit consequence) */}
+              <dl className="play-world-kv">
+                <dt>{L("Place", "地点")}</dt>
+                <dd>{scene.location || "—"}</dd>
+                <dt>{L("Time", "时间")}</dt>
+                <dd>{scene.time || "—"}</dd>
+                {(scene.present_characters || []).length > 0 && (
+                  <>
+                    <dt>{L("Present", "在场")}</dt>
+                    <dd>{scene.present_characters.join(L(", ", "、"))}</dd>
+                  </>
+                )}
+                {scene.atmosphere && (
+                  <>
+                    <dt>{L("Mood", "氛围")}</dt>
+                    <dd>{scene.atmosphere}</dd>
+                  </>
+                )}
+                {(scene.exits || []).length > 0 && (
+                  <>
+                    <dt>{L("Exits", "出口")}</dt>
+                    <dd>{scene.exits.join(L(", ", "、"))}</dd>
+                  </>
+                )}
+              </dl>
+              <div className="play-world-secs">
+                {sections.map((x) => (
+                  <button key={x.key} type="button" aria-expanded={openSec === x.key} className={openSec === x.key ? "is-on" : ""} onClick={() => setOpenSec((k) => (k === x.key ? "" : x.key))}>
+                    {x.title}
+                    {x.count ? <span className="play-world-count">{x.count}</span> : null}
                   </button>
                 ))}
               </div>
-            )}
-
-            {error && <div className="story-error t-ui-sm">{error}</div>}
-          </div>
-
-          <div className="story-composer">
-            {localProxyAllowed && (
-              <div className="story-model-bar">
-                <span className="t-meta">{L("Model", "模型")}</span>
-                <div className="story-model-segment" aria-label={L("Model source", "模型来源")}>
-                  <button
-                    className={modelSource === "deepseek" ? "is-on" : ""}
-                    onClick={() => selectModelSource("deepseek")}
-                    disabled={loading}
-                  >
-                    DeepSeek
-                  </button>
-                  <button
-                    className={modelSource === "local_proxy" ? "is-on" : ""}
-                    onClick={() => selectModelSource("local_proxy")}
-                    disabled={loading}
-                  >
-                    {L("Local Codex", "Codex 本机")}
-                  </button>
+              {secOpen && (
+                <div className="play-world-body" role="region" aria-label={secOpen.title}>
+                  {secOpen.body}
                 </div>
-                <button className="story-model-settings" onClick={() => navigate("/mine")} disabled={loading}>
-                  {L("Settings", "设置")}
-                </button>
-              </div>
-            )}
-            <textarea
-              rows={2}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing) {
-                  e.preventDefault();
-                  // 对齐发送按钮的守卫:空输入按 Enter 不发空回合(否则会烧一轮 token 且无玩家气泡,YOR-182)。
-                  if (!input.trim() || loading) return;
-                  runTurn({ text: input });
-                }
-              }}
-              placeholder={L("Write your action or line… (Enter to send, Shift+Enter for a new line; choices are only suggestions)", "写下你的行动或台词…（Enter 发送,Shift+Enter 换行;选项只是建议）")}
-              disabled={loading}
-            />
-            <Button variant="primary" onClick={() => runTurn({ text: input })} disabled={loading || !input.trim()}>
-              {L("Send", "发送")}
-            </Button>
-          </div>
-        </main>
-
-        {/* 右:世界状态(8 栏目,默认收起;移动端为抽屉) */}
-        <aside className="story-status">
-          <div className="story-status-h">
-            <span className="t-kai">{L("World status", "世界状态")}</span>
-            <button className="story-status-x" onClick={() => setStatusOpen(false)} aria-label={L("Close", "收起")}>
-              ×
-            </button>
-          </div>
-          <div className="story-status-list">
-            <StatusSection title={L("Scene", "场景")} open>
-              {scene.location || scene.time || scene.atmosphere || (scene.present_characters || []).length ? (
-                <div className="status-kv">
-                  {scene.location && <div><span className="status-k">{L("Location", "地点")}</span>{scene.location}</div>}
-                  {scene.time && <div><span className="status-k">{L("Time", "时间")}</span>{scene.time}</div>}
-                  {scene.atmosphere && <div><span className="status-k">{L("Mood", "氛围")}</span>{scene.atmosphere}</div>}
-                  {(scene.present_characters || []).length > 0 && (
-                    <div><span className="status-k">{L("Present", "在场")}</span>{scene.present_characters.join(L(", ", "、"))}</div>
-                  )}
-                  {(scene.exits || []).length > 0 && <div><span className="status-k">{L("Exits", "出口")}</span>{scene.exits.join(L(", ", "、"))}</div>}
-                </div>
-              ) : (
-                EMPTY
               )}
-            </StatusSection>
-
-            <StatusSection title={L("Player", "玩家")}>
-              {ps.location || ps.status || (ps.active_goals || []).length || (ps.known_facts || []).length || (ps.inventory || []).length ? (
-                <div className="status-kv">
-                  {ps.location && <div><span className="status-k">{L("Location", "位置")}</span>{ps.location}</div>}
-                  {ps.status && <div><span className="status-k">{L("Status", "状态")}</span>{ps.status}</div>}
-                  {(ps.active_goals || []).length > 0 && <div><span className="status-k">{L("Goals", "目标")}</span>{ps.active_goals.join(L("; ", "；"))}</div>}
-                  {(ps.known_facts || []).length > 0 && <div><span className="status-k">{L("Known", "已知")}</span>{ps.known_facts.join(L("; ", "；"))}</div>}
-                  {(ps.inventory || []).length > 0 && <div><span className="status-k">{L("Items", "物品")}</span>{ps.inventory.join(L(", ", "、"))}</div>}
-                </div>
-              ) : (
-                EMPTY
-              )}
-            </StatusSection>
-
-            <StatusSection title={L("Relationships", "关系")} count={rels.length || null}>
-              {rels.length ? (
-                <div className="status-rels">
-                  {rels.map((r, i) => (
-                    <div className="status-rel" key={i}>
-                      <span className="status-rel-nm t-ui-sm">{r.character_id}</span>
-                      <span className="status-rel-v t-meta">{isZh ? <>信任 {r.trust} · 张力 {r.tension} · 好感 {r.affection}</> : <>Trust {r.trust} · Tension {r.tension} · Affection {r.affection}</>}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                EMPTY
-              )}
-            </StatusSection>
-
-            <StatusSection title={L("Memory cards", "记忆卡")} count={memWrites.length || null}>
-              {memWrites.length ? (
-                <div className="status-mem">
-                  {memLong.length > 0 && (
-                    <div className="status-mem-grp">
-                      <div className="status-k">{L("Long-term", "长期")}</div>
-                      {memLong.slice(-8).map((m, i) => <div className="status-mem-i t-meta" key={i}>· {m.text}</div>)}
-                    </div>
-                  )}
-                  {memShort.length > 0 && (
-                    <div className="status-mem-grp">
-                      <div className="status-k">{L("Short-term", "短期")}</div>
-                      {memShort.slice(-8).map((m, i) => <div className="status-mem-i t-meta" key={i}>· {m.text}</div>)}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                EMPTY
-              )}
-            </StatusSection>
-
-            <StatusSection title={L("Token usage", "Token 用量")}>
-              {tokenTotal > 0 ? (
-                <div className="status-kv">
-                  <div><span className="status-k">{L("This run", "本局累计")}</span>{tokenTotal}</div>
-                  {usageBlock.total_tokens != null && <div><span className="status-k">{L("Last turn", "上一轮")}</span>{usageBlock.total_tokens}</div>}
-                  {usageBlock.calls != null && <div><span className="status-k">{L("Calls", "调用")}</span>{usageBlock.calls}</div>}
-                </div>
-              ) : (
-                EMPTY
-              )}
-            </StatusSection>
-
-            <StatusSection title={L("History", "历史书")} count={(historyEvents.length || triggeredAll.length) || null}>
-              {historyEvents.length || triggeredAll.length ? (
-                <div className="status-hist">
-                  {historyEvents.map((e, i) => <div className="status-hist-i t-meta" key={"h" + i}>· {e.title || e.event_id}</div>)}
-                  {triggeredAll.slice(-8).map((e, i) => <div className="status-hist-i t-meta" key={"t" + i}>· {e}</div>)}
-                </div>
-              ) : (
-                EMPTY
-              )}
-            </StatusSection>
-
-            <StatusSection title={L("Timeline", "时间线")} count={timelineShown.length || null}>
-              {timelineShown.length ? (
-                <div className="status-tl">
-                  {timelineShown.map((e, i) => (
-                    <div className="status-tl-i" key={i}>
-                      <span className={"status-tl-dot status-tl-" + e.status} />
-                      <span className="t-meta">{e.title || e.event_id}{e.due_hint ? ` · ${e.due_hint}` : ""}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                EMPTY
-              )}
-            </StatusSection>
-
-            <StatusSection title={L("Map", "地图")}>
-              {/* 引擎暂无地图数据,先用场景位置/出口拼一张文字地图(YOR-95 待真地图字段) */}
-              {scene.location || (scene.exits || []).length ? (
-                <div className="status-map">
-                  <div className="status-map-here t-kai">{scene.location || L("Unknown location", "未定地点")}</div>
-                  {(scene.exits || []).length > 0 && (
-                    <div className="status-map-exits t-meta">{L("Leads to: ", "通向:")}{scene.exits.join(" / ")}</div>
-                  )}
-                  <div className="status-empty t-meta">{L("Full world map coming soon", "完整世界地图待引擎提供")}</div>
-                </div>
-              ) : (
-                EMPTY
-              )}
-            </StatusSection>
-
-            {dev && (
-              <StatusSection title={L("Player dashboard · dev", "玩家仪表盘 · dev")}>
-                <div className="status-kv">
-                  <div><span className="status-k">turn</span>{(state && state.turn_count) || storyTurns.length}</div>
-                  <div><span className="status-k">clock</span>{(state && state.clock_minutes) || 0} {L("min", "分")}</div>
-                  {state && state.main_resolved != null && <div><span className="status-k">{L("Main plot", "主线")}</span>{state.main_resolved ? L("Resolved", "已结案") : L("In progress", "进行中")}</div>}
-                  {storyTurns.length > 0 && storyTurns[storyTurns.length - 1].data.reasoning && (
-                    <div><span className="status-k">{L("Self-check", "自检")}</span>{JSON.stringify(storyTurns[storyTurns.length - 1].data.reasoning).slice(0, 160)}</div>
-                  )}
-                </div>
-              </StatusSection>
-            )}
-          </div>
-        </aside>
+            </aside>
+          </>
+        )}
       </div>
 
       {/* 故事记录抽屉(全量回看) */}
       {logOpen && (
         <div className="story-log" onClick={(e) => e.target.classList.contains("story-log") && setLogOpen(false)}>
-          <div className="story-log-panel">
+          <div className="story-log-panel" role="dialog" aria-modal="true" aria-labelledby="story-log-h">
             <div className="story-log-head">
-              <span className="t-kai">{L("Story log", "故事记录")}</span>
-              <span className="t-meta">{storyTurns.length} {L(storyTurns.length === 1 ? "turn" : "turns", "回合")}</span>
-              <button className="story-log-x" onClick={() => setLogOpen(false)} aria-label={L("Close", "关闭")}>
-                ×
+              <h2 id="story-log-h">{L("Story log", "故事记录")}</h2>
+              <span>{storyTurns.length} {L(storyTurns.length === 1 ? "turn" : "turns", "回合")}</span>
+              <button type="button" className="story-log-x" onClick={() => setLogOpen(false)} aria-label={L("Close", "关闭")}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
               </button>
             </div>
             <div className="story-log-body">
@@ -702,21 +891,21 @@ export default function Story() {
                 return turns.map((t, i) => {
                   if (t.kind === "player") {
                     return (
-                      <div className="story-log-me" key={i}>
-                        <span className="story-log-me-tag t-meta">{L("You", "你")}</span>
+                      <p className="play-me" key={i}>
+                        <span className="play-me-tag">{L("You", "你")}</span>
                         {t.text}
-                      </div>
+                      </p>
                     );
                   }
                   n++;
                   const d = t.data || {};
                   return (
-                    <div className="story-log-turn" key={i}>
-                      <div className="story-log-rd t-meta">ROUND {String(n).padStart(2, "0")}</div>
+                    <div className="play-turn" key={i}>
+                      <p className="play-round">{isZh ? `第 ${n} 回合` : `Turn ${n}`}</p>
                       {d.narration && <Narration text={d.narration} />}
                       <Dialogue messages={d.messages} />
                       {(d.triggered_events || []).length > 0 && (
-                        <div className="story-log-ev t-meta">{L("Triggered events: ", "触发事件:")}{d.triggered_events.join(L(", ", "、"))}</div>
+                        <p className="story-log-ev">{L("Triggered events: ", "触发事件:")}{d.triggered_events.join(L(", ", "、"))}</p>
                       )}
                     </div>
                   );
