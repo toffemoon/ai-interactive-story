@@ -20,6 +20,10 @@ const Home = lazy(() => import("./routes/Home"));
 const Styleguide = lazy(() => import("./routes/Styleguide"));
 const NavTest = lazy(() => import("./routes/NavTest"));
 
+// 已按设计画布「C 幕间」改版的页面(2026-10-25 起逐批上线):这些路由用 c 主题,其余维持纸 / 台。
+const C_ROUTES = ["/login"];
+const isCRoute = (path) => C_ROUTES.some((p) => path === p || path.startsWith(p + "/"));
+
 function RouteFallback() {
   return <div className="route-loading" role="status" aria-label={L("Loading page", "正在加载页面")} />;
 }
@@ -73,10 +77,10 @@ export default function App() {
   const { ready, enabled, user } = useAuth();
   const loc = useLocation();
 
-  // 主题:当前故事 + 立绘主页 = 台(暖夜沉浸),其余 = 纸。
+  // 主题:C 幕间改版过的页 = c;当前故事 + 立绘主页 = 台(暖夜沉浸),其余 = 纸。
   useEffect(() => {
     const stage = loc.pathname.startsWith("/play") || loc.pathname.startsWith("/home") || loc.pathname.startsWith("/test");
-    document.documentElement.dataset.theme = stage ? "stage" : "paper";
+    document.documentElement.dataset.theme = isCRoute(loc.pathname) ? "c" : stage ? "stage" : "paper";
   }, [loc.pathname]);
 
   // 登录后默认落「立绘主页(家)」/home(原落 /explore,本批方案 A 翻案;探索退进菜单 + 首页主按钮直达)。
@@ -90,7 +94,7 @@ export default function App() {
       position="fixed"
       duration={1200}
       zIndex={300}
-      bgColor="#221c16"
+      bgColor="#0e1320"
       loadingText={L("Muyan", "沐言")}
       respectReducedMotion
     >
