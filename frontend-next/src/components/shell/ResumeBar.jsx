@@ -45,12 +45,12 @@ export default function ResumeBar() {
   }, [game, onExplore]);
 
   if (!game) return null;
-  const atHome = loc.pathname === "/home";
-  if (loc.pathname !== "/explore" && !atHome) return null;
+  // 首页(C 幕间)对白框里自带「继续故事」,浮条只留在探索页。
+  if (loc.pathname !== "/explore") return null;
 
   return (
     <button
-      className={"resume-bar" + (atHome ? " resume-bar--home" : "") + (retracted ? " is-retracted" : "")}
+      className={"resume-bar" + (retracted ? " is-retracted" : "")}
       onClick={() => navigate("/play")}
       aria-label={L("Continue the current story", "继续游玩当前故事")}
     >
