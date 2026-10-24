@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Button } from "../components/ui";
+import TopNav from "../components/shell/TopNav";
 import { useNavigate } from "../lib/transitionNav";
 import { postJSON, getJSON } from "../lib/api";
 import { useAuth } from "../state/auth";
@@ -9,6 +9,7 @@ import "./Chat.css";
 // 纯聊 · 微信式一对一(契约固定只 reskin:/api/chat 照搬)。
 // 决策:去掉写死默认联系人(糖沐/萍狗);联系人由用户从卡库加。
 // 微信式:左联系人列表 / 中气泡对话(无右常驻档案栏)/ 右上「···」抽出角色档案(YOR-60/61/63/59)。
+// 2026-10-25 C 幕间改版(画布「C 幕间 · 纯聊」):顶部 TopNav,左联系人 / 右会话,会话头「角色资料」「新对话」两颗实心按钮。
 const OPEN_HINTS = L(
   [
     "the first light of morning", "a rain that just stopped", "an evening after the crowds have gone", "a lamp still on late at night",
@@ -22,6 +23,13 @@ const OPEN_HINTS = L(
 
 function avatarChar(name) {
   return (name || "?").trim().charAt(0) || "?";
+}
+
+// 会话头名字旁的一个标签(画布里的「便利店」):取卡上第一个 tag,没有就不显示。
+function cardTag(entry) {
+  const c = entry && entry.card;
+  const d = (c && c.data) || c || {};
+  return (d.tags || [])[0] || "";
 }
 
 // 纯聊场景设定:告诉角色「这是在手机上用网络聊天软件文字聊天」(类微信)。
@@ -286,161 +294,211 @@ export default function Chat() {
     setMobileView("chat");
   }
 
+  const activeTag = active ? cardTag(active) : "";
+  const typingName = activeName;
+
   return (
-    <div className={"chat" + (mobileView === "chat" ? " m-chat" : " m-list")}>
-      {/* 左:联系人 */}
-      <aside className="chat-contacts">
-        <div className="chat-contacts-h">
-          <span className="t-kai">{L("Chat", "纯聊")}</span>
-          <button className="chat-add" onClick={openAdd}>{L("+ Add contact", "+ 添加联系人")}</button>
-        </div>
-        <div className="chat-contacts-list">
+    <div className={"page chat" + (mobileView === "chat" ? " m-chat" : " m-list")}>
+      <TopNav variant="bar" />
+      <div className="chat-body">
+        {/* 左:联系人 */}
+        <section className="chat-contacts" aria-labelledby="chat-contacts-h">
+          <div className="chat-contacts-h">
+            <h1 id="chat-contacts-h">{L("Chat", "纯聊")}</h1>
+            <button type="button" className="chat-pill" onClick={openAdd}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              {L("Add contact", "添加联系人")}
+            </button>
+          </div>
           {roster.length ? (
-            roster.map((r) => {
-              const last = (byKey[r.name] || []).filter((m) => m.text !== "……").slice(-1)[0];
-              return (
-                <button
-                  key={r.name}
-                  className={"chat-contact" + (r.name === activeName ? " is-on" : "")}
-                  onClick={() => pick(r.name)}
-                >
-                  <span className="chat-avatar" style={r.avatar ? { backgroundImage: `url("${r.avatar}")` } : undefined}>
-                    {!r.avatar && avatarChar(r.name)}
-                  </span>
-                  <span className="chat-contact-tx">
-                    <span className="chat-contact-name t-ui-sm">{r.name}</span>
-                    <span className="chat-contact-last t-meta">{last ? last.text : r.persona || L("Say hi", "打个招呼吧")}</span>
-                  </span>
-                </button>
-              );
-            })
-          ) : (
-            <div className="chat-contacts-empty t-ui">
-              {L("No contacts yet.", "还没有联系人。")}
-              <br />
-              {L('Tap "Add contact" to pick a character from your Card Library.', "点「添加联系人」从卡库挑一个角色开聊。")}
-            </div>
-          )}
-        </div>
-      </aside>
-
-      {/* 中:会话 */}
-      <main className="chat-conv">
-        {active ? (
-          <>
-            <header className="chat-conv-h">
-              <button className="chat-back" onClick={() => setMobileView("list")} aria-label={L("Back to contacts", "返回联系人")}>
-                ‹
-              </button>
-              <span className="chat-conv-name t-kai">{activeName}</span>
-              <div className="chat-conv-tools">
-                <button className="chat-iconbtn" onClick={newChat} disabled={busy} title={busy ? L("Wait for the reply to finish", "等回复完再新建") : L("New chat", "新建对话")}>⟳</button>
-                <button className="chat-iconbtn" onClick={() => setProfileOpen((v) => !v)} title={L("Character profile", "角色档案")}>···</button>
-              </div>
-            </header>
-
-            <div className="chat-feed" ref={feedRef}>
-              {messages.map((m, i) => {
-                const prev = messages[i - 1];
-                const showTime = m.t && (i === 0 || !prev || !prev.t || m.t - prev.t > TIME_GAP);
+            <ul className="chat-contacts-list">
+              {roster.map((r) => {
+                const last = (byKey[r.name] || []).filter((m) => m.text !== "……").slice(-1)[0];
+                const on = r.name === activeName;
                 return (
-                  <div key={i} className="chat-msg-wrap">
-                    {showTime && <div className="chat-time t-meta">{fmtTime(m.t)}</div>}
-                    <div className={"chat-bubble-row" + (m.who === "me" ? " is-me" : "")}>
-                      {m.who !== "me" && (
-                        <span
-                          className={"chat-avatar sm" + (active.avatar ? " is-photo" : "")}
-                          style={active.avatar ? { backgroundImage: `url("${active.avatar}")` } : undefined}
-                          onClick={() => active.avatar && setLightbox(active.avatar)}
-                          title={active.avatar ? L("View full size", "看大图") : undefined}
-                        >
-                          {!active.avatar && avatarChar(activeName)}
-                        </span>
-                      )}
-                      <span className={"chat-bubble t-ui" + (m.text === "……" ? " chat-typing" : "")}>
-                        {m.text === "……" ? L("Typing…", "对方正在输入…") : m.text}
+                  <li key={r.name}>
+                    <button type="button" className={"chat-contact" + (on ? " is-on" : "")} aria-current={on ? "true" : undefined} onClick={() => pick(r.name)}>
+                      <span className="chat-avatar" style={r.avatar ? { backgroundImage: `url("${r.avatar}")` } : undefined} aria-hidden="true">
+                        {!r.avatar && avatarChar(r.name)}
                       </span>
-                    </div>
-                  </div>
+                      <span className="chat-contact-tx">
+                        <span className="chat-contact-name">{r.name}</span>
+                        <span className="chat-contact-last">{last ? last.text : r.persona || L("Say hi", "打个招呼吧")}</span>
+                      </span>
+                    </button>
+                  </li>
                 );
               })}
-              {busy && messages.length > 0 && messages[messages.length - 1].who === "me" && (
-                <div className="chat-bubble-row">
-                  <span className="chat-avatar sm">{avatarChar(activeName)}</span>
-                  <span className="chat-bubble t-ui chat-typing">{L("Typing…", "对方正在输入…")}</span>
+            </ul>
+          ) : (
+            <p className="chat-contacts-empty">
+              {L("No contacts yet.", "还没有联系人。")} {L('Tap "Add contact" to pick a character from your Card Library.', "点「添加联系人」从卡库挑一个角色开聊。")}
+            </p>
+          )}
+        </section>
+
+        {/* 右:会话 */}
+        <section className="chat-conv" aria-labelledby={active ? "chat-conv-h" : undefined}>
+          {active ? (
+            <>
+              <span className="chat-conv-glyph" aria-hidden="true">
+                {avatarChar(activeName)}
+              </span>
+              <header className="chat-conv-head">
+                <div className="chat-conv-title">
+                  <button type="button" className="chat-back" onClick={() => setMobileView("list")} aria-label={L("Back to contacts", "返回联系人")}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M15 5l-7 7 7 7" />
+                    </svg>
+                  </button>
+                  <h2 id="chat-conv-h">{activeName}</h2>
+                  {activeTag && <span className="chat-conv-tag">{activeTag}</span>}
+                </div>
+                <div className="chat-conv-tools">
+                  <button type="button" className="chat-pill" aria-expanded={profileOpen} onClick={() => setProfileOpen((v) => !v)}>
+                    {L("Profile", "角色资料")}
+                  </button>
+                  <button type="button" className="chat-pill" onClick={newChat} disabled={busy} title={busy ? L("Wait for the reply to finish", "等回复完再新建") : L("Start a new chat", "新建对话")}>
+                    {L("New chat", "新对话")}
+                  </button>
+                </div>
+              </header>
+
+              <div className="chat-feed" ref={feedRef} aria-live="polite">
+                {messages.map((m, i) => {
+                  const prev = messages[i - 1];
+                  const showTime = m.t && (i === 0 || !prev || !prev.t || m.t - prev.t > TIME_GAP);
+                  const typing = m.text === "……";
+                  return (
+                    <div key={i} className="chat-msg-wrap">
+                      {showTime && <p className="chat-time">{fmtTime(m.t)}</p>}
+                      {typing ? (
+                        <p className="chat-typing">
+                          <span className="chat-typing-dots" aria-hidden="true">
+                            <span />
+                            <span />
+                            <span />
+                          </span>
+                          {L(`${typingName} is typing`, `${typingName} 正在输入`)}
+                        </p>
+                      ) : m.who === "me" ? (
+                        <p className="chat-bubble chat-bubble--me">{m.text}</p>
+                      ) : (
+                        <div className="chat-bubble-row">
+                          <span
+                            className={"chat-avatar sm" + (active.avatar ? " is-photo" : "")}
+                            style={active.avatar ? { backgroundImage: `url("${active.avatar}")` } : undefined}
+                            onClick={() => active.avatar && setLightbox(active.avatar)}
+                            title={active.avatar ? L("View full size", "看大图") : undefined}
+                            aria-hidden="true"
+                          >
+                            {!active.avatar && avatarChar(activeName)}
+                          </span>
+                          <p className="chat-bubble">{m.text}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {busy && messages.length > 0 && messages[messages.length - 1].who === "me" && (
+                  <p className="chat-typing">
+                    <span className="chat-typing-dots" aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                    </span>
+                    {L(`${typingName} is typing`, `${typingName} 正在输入`)}
+                  </p>
+                )}
+              </div>
+
+              <form
+                className="chat-composer"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  send();
+                }}
+              >
+                <label className="chat-input">
+                  <span className="sr-only">{L("Message", "消息")}</span>
+                  <input
+                    value={input}
+                    disabled={busy}
+                    placeholder={busy ? L("Waiting for a reply…", "对方正在回复…") : L("Say something…", "说点什么…")}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
+                        e.preventDefault();
+                        send();
+                      }
+                    }}
+                  />
+                </label>
+                <button type="submit" className="chat-send" disabled={busy || !input.trim()}>
+                  {L("Send", "发送")}
+                </button>
+              </form>
+
+              {/* 角色资料抽屉(非常驻) */}
+              {profileOpen && (
+                <div className="chat-profile" onClick={() => setProfileOpen(false)}>
+                  <div className="chat-profile-card" role="dialog" aria-modal="true" aria-labelledby="chat-profile-h" onClick={(e) => e.stopPropagation()}>
+                    <button type="button" className="chat-profile-x" onClick={() => setProfileOpen(false)} aria-label={L("Close", "收起")}>
+                      ×
+                    </button>
+                    {/* 顶部放立绘 / 布偶动画,而非头像(细节⑨) */}
+                    <div className="chat-profile-art">
+                      {active.anim ? (
+                        <video src={active.anim} autoPlay loop muted playsInline />
+                      ) : active.image ? (
+                        <img src={active.image} alt={activeName} />
+                      ) : (
+                        <span className="chat-profile-art-ph">{avatarChar(activeName)}</span>
+                      )}
+                    </div>
+                    <h2 id="chat-profile-h" className="chat-profile-name">
+                      {activeName}
+                    </h2>
+                    {active.persona && <p className="chat-profile-line">{active.persona}</p>}
+                    {active.description && <p className="chat-profile-desc">{active.description}</p>}
+                  </div>
                 </div>
               )}
-            </div>
 
-            <div className="chat-composer">
-              <input
-                value={input}
-                disabled={busy}
-                placeholder={busy ? L("Waiting for a reply…", "对方正在回复…") : L("Say something…", "说点什么…")}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
-                    e.preventDefault();
-                    send();
-                  }
-                }}
-              />
-              <Button variant="primary" onClick={send} disabled={busy || !input.trim()}>
-                {L("Send", "发送")}
-              </Button>
-            </div>
-
-            {/* 角色档案抽屉(右上 ··· 抽出,可收回;非常驻) */}
-            {profileOpen && (
-              <div className="chat-profile" onClick={() => setProfileOpen(false)}>
-                <div className="chat-profile-card" onClick={(e) => e.stopPropagation()}>
-                  <button className="chat-profile-x" onClick={() => setProfileOpen(false)} aria-label={L("Close", "收起")}>×</button>
-                  {/* 顶部放立绘 / 布偶动画,而非头像(细节⑨) */}
-                  <div className="chat-profile-art">
-                    {active.anim ? (
-                      <video src={active.anim} autoPlay loop muted playsInline />
-                    ) : active.image ? (
-                      <img src={active.image} alt={activeName} />
-                    ) : (
-                      <span className="chat-profile-art-ph t-kai">{avatarChar(activeName)}</span>
-                    )}
-                  </div>
-                  <h2 className="t-h2 chat-profile-name">{activeName}</h2>
-                  {active.persona && <p className="t-ui chat-profile-line">{active.persona}</p>}
-                  {active.description && <p className="t-ui-sm chat-profile-desc">{active.description}</p>}
+              {/* 头像放大照片(周围压暗,细节⑩) */}
+              {lightbox && (
+                <div className="chat-lightbox" onClick={() => setLightbox(null)}>
+                  <img src={lightbox} alt="" onClick={(e) => e.stopPropagation()} />
                 </div>
-              </div>
-            )}
+              )}
+            </>
+          ) : (
+            <div className="chat-blank">
+              <p>{L("Pick a contact to start chatting.", "选一个联系人开始聊天。")}</p>
+              <button type="button" className="chat-send chat-send--wide" onClick={openAdd}>
+                {L("Add a contact from your Card Library", "从卡库添加联系人")}
+              </button>
+            </div>
+          )}
+        </section>
+      </div>
 
-            {/* 头像放大照片(周围压暗,细节⑩) */}
-            {lightbox && (
-              <div className="chat-lightbox" onClick={() => setLightbox(null)}>
-                <img src={lightbox} alt="" onClick={(e) => e.stopPropagation()} />
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="chat-blank t-ui">
-            <p>{L("Pick a contact to start chatting.", "选一个联系人开始聊天。")}</p>
-            <Button variant="primary" onClick={openAdd}>{L("Add a contact from Card Library", "从卡库添加联系人")}</Button>
-          </div>
-        )}
-      </main>
-
-      {/* 添加联系人 modal(从卡库) */}
+      {/* 添加联系人(从卡库) */}
       {addModal && (
         <div className="chat-modal" onClick={() => setAddModal(null)}>
-          <div className="chat-modal-card" onClick={(e) => e.stopPropagation()}>
-            <button className="chat-modal-x" onClick={() => setAddModal(null)} aria-label={L("Close", "关闭")}>×</button>
-            <h2 className="t-h2">{L("Add a contact from Card Library", "从卡库添加联系人")}</h2>
+          <div className="chat-modal-card" role="dialog" aria-modal="true" aria-labelledby="chat-add-h" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="chat-modal-x" onClick={() => setAddModal(null)} aria-label={L("Close", "关闭")}>
+              ×
+            </button>
+            <h2 id="chat-add-h">{L("Add a contact from your Card Library", "从卡库添加联系人")}</h2>
             {/* 卡库线性增长,平铺翻不动:前端过滤,范式同创作页「补素材」搜索(YOR-169) */}
             {addModal.items.length > 0 && (
-              <input
-                className="chat-modal-search"
-                value={addQ}
-                onChange={(e) => setAddQ(e.target.value)}
-                placeholder={L("Search characters: name / bio…", "搜角色:名字 / 简介…")}
-              />
+              <label className="chat-modal-search">
+                <span className="sr-only">{L("Search characters", "搜角色")}</span>
+                <input value={addQ} onChange={(e) => setAddQ(e.target.value)} placeholder={L("Search characters: name / bio…", "搜角色:名字 / 简介…")} />
+              </label>
             )}
             <div className="chat-modal-list">
               {(() => {
@@ -454,15 +512,26 @@ export default function Chat() {
                 if (!list.length) {
                   // YOR-194:空库/读库失败给可点出路(去创作/重试),不再死胡同;仅搜索无匹配时保持纯文字。
                   if (addModal.items.length) {
-                    return <p className="t-ui">{L(`No characters match "${addQ.trim()}".`, `没有匹配「${addQ.trim()}」的角色卡。`)}</p>;
+                    return <p className="chat-modal-note">{L(`No characters match "${addQ.trim()}".`, `没有匹配「${addQ.trim()}」的角色卡。`)}</p>;
                   }
                   return (
                     <div className="chat-modal-empty">
-                      <p className="t-ui">{addModal.err ? L("Failed to load the Card Library: ", "读库失败:") + addModal.err : L("No characters in your Card Library yet.", "卡库里还没有角色卡。")}</p>
+                      <p className="chat-modal-note">{addModal.err ? L("Failed to load the Card Library: ", "读库失败:") + addModal.err : L("No characters in your Card Library yet.", "卡库里还没有角色卡。")}</p>
                       {addModal.err ? (
-                        <Button variant="line" onClick={openAdd}>{L("Retry", "重试")}</Button>
+                        <button type="button" className="chat-pill" onClick={openAdd}>
+                          {L("Retry", "重试")}
+                        </button>
                       ) : (
-                        <Button variant="primary" onClick={() => { setAddModal(null); navigate("/create"); }}>{L("Create one →", "去创作一张 →")}</Button>
+                        <button
+                          type="button"
+                          className="chat-send chat-send--wide"
+                          onClick={() => {
+                            setAddModal(null);
+                            navigate("/create");
+                          }}
+                        >
+                          {L("Create one →", "去创作一张 →")}
+                        </button>
                       )}
                     </div>
                   );
@@ -472,15 +541,15 @@ export default function Chat() {
                   const nm = raw.name || it.name || L("Untitled", "未命名");
                   const inRoster = roster.some((r) => r.name === nm);
                   return (
-                    <button className="chat-modal-item" key={i} disabled={inRoster} onClick={() => rosterAdd(it)}>
-                      <span className="chat-avatar sm" style={(raw.avatar || raw.image) ? { backgroundImage: `url("${raw.avatar || raw.image}")` } : undefined}>
+                    <button type="button" className="chat-modal-item" key={i} disabled={inRoster} onClick={() => rosterAdd(it)}>
+                      <span className="chat-avatar sm" style={raw.avatar || raw.image ? { backgroundImage: `url("${raw.avatar || raw.image}")` } : undefined} aria-hidden="true">
                         {!(raw.avatar || raw.image) && avatarChar(nm)}
                       </span>
                       <span className="chat-modal-item-tx">
-                        <span className="t-ui-sm">{nm}</span>
-                        <span className="t-meta">{(raw.persona || raw.description || "").slice(0, 36)}</span>
+                        <span className="chat-modal-item-name">{nm}</span>
+                        <span className="chat-modal-item-sub">{(raw.persona || raw.description || "").slice(0, 36)}</span>
                       </span>
-                      <span className="t-meta">{inRoster ? L("Added", "已添加") : L("Add →", "添加 →")}</span>
+                      <span className="chat-modal-item-go">{inRoster ? L("Added", "已添加") : L("Add →", "添加 →")}</span>
                     </button>
                   );
                 });
