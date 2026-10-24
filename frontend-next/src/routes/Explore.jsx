@@ -112,7 +112,7 @@ export default function Explore() {
     setLoadErr(false);
     setLoading(true);
     const [presetResult, charResult] = await Promise.allSettled([
-      getJSON("/api/presets"),
+      getJSON("/api/presets?summary=1"), // 只要卡面字段;完整内容进详情页再取
       getJSON("/api/library/characters"),
     ]);
     const presetOk = presetResult.status === "fulfilled" && Array.isArray(presetResult.value);

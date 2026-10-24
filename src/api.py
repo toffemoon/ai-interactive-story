@@ -6,6 +6,7 @@
 """
 
 import asyncio
+import base64
 import hashlib
 import json
 import logging
@@ -17,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from psycopg import OperationalError
@@ -147,7 +148,7 @@ class ChatReq(BaseModel):
 
 
 class StoryTurnReq(BaseModel):
-    characters: list[CharacterCard]
+    characters: list[CharacterCard] = []  # 空 = 沿用本会话已落盘的卡组(见 _resolve_deck)
     session_id: str
     user: str = ""
     selected_choice: str = ""
@@ -822,14 +823,34 @@ def _fallback_turn_dict(req: StoryTurnReq, e: Exception) -> dict:
     }
 
 
+def _resolve_deck(req: StoryTurnReq) -> StoryTurnReq:
+    """前端只在开局和卡组变化时上传整套卡(诡秘一套约 125KB,浏览器不压缩上传体);其余回合 characters 留空,
+    这里沿用本会话上一轮落盘的卡组 —— story_turn 每轮都把实际用的卡组写进 data["artifacts"],reroll 用的也是它。
+    会话里还没有卡组(新会话 / 数据丢失)时回 409 deck_required,前端带全量重发一次。"""
+    if req.characters:
+        return req
+    art = (storage.load_session(req.session_id) or {}).get("artifacts") or {}
+    if not art.get("characters"):
+        raise HTTPException(409, "deck_required")
+    try:
+        return req.model_copy(update={
+            "characters": [CharacterCard(**c) for c in art["characters"]],
+            "world": WorldBook(**art["world"]) if art.get("world") else None,
+            "story": StoryBook(**art["story"]) if art.get("story") else None,
+            "player": PlayerCard(**art["player"]) if art.get("player") else None,
+        })
+    except Exception:
+        log.exception("卡组快照解析失败,要求前端重传 (session=%s)", req.session_id)
+        raise HTTPException(409, "deck_required")
+
+
 @app.post("/api/story_turn")
 async def api_story_turn(req: StoryTurnReq, request: Request,
                          user: dict | None = Depends(current_user_dep)):
     """v2 故事回合(异步):多角色 + 世界书 + 故事书 + 玩家卡 + 状态/选项/记忆。非流式,作降级路径。"""
-    if not req.characters:
-        raise HTTPException(400, L("At least one character card is required", "至少需要一个角色卡"))
     # 归属闸(AUTH_ENABLED=0 时 no-op):无主→认领给当前用户;他人有主→拒。放 try 之前,401/403 不被保底吞。
     await asyncio.to_thread(auth.authorize_session, req.session_id, user)
+    req = await asyncio.to_thread(_resolve_deck, req)  # 归属闸之后再读会话卡组
     # Phase 0 成本闸:全局熔断 + 限流 + 预扣(COST_GUARD_ENABLED=0 时全程 no-op)。
     res = await asyncio.to_thread(costguard.preflight, costguard.client_ip(request))
     try:
@@ -861,10 +882,9 @@ async def api_story_turn_stream(req: StoryTurnReq, request: Request,
     - done :{"type":"done","turn":{...完整 StoryTurn...}} 服务端解析/落库后的权威结果(messages/choices/state/usage)。
     - error:{"type":"error","turn":{...保底...}} story_turn 抛异常时的端点级保底。
     """
-    if not req.characters:
-        raise HTTPException(400, L("At least one character card is required", "至少需要一个角色卡"))
-    # 归属闸 + Phase 0 成本闸:开流前先过(401/403/503/429 在这里抛,不进 SSE 流);两个门控关时 no-op。
+    # 归属闸 + Phase 0 成本闸:开流前先过(401/403/409/503/429 在这里抛,不进 SSE 流);两个门控关时 no-op。
     await asyncio.to_thread(auth.authorize_session, req.session_id, user)
+    req = await asyncio.to_thread(_resolve_deck, req)  # 归属闸之后再读会话卡组
     res = await asyncio.to_thread(costguard.preflight, costguard.client_ip(request))
 
     async def event_stream():
@@ -1191,10 +1211,41 @@ class PresetReq(BaseModel):
 
 
 @app.get("/api/presets")
-def api_list_presets(user: dict | None = Depends(current_user_dep)):
-    """列出故事预设:AUTH 开时 = 官方公共预设 + 当前用户私有(各带 official 标记);关时 = 旧全局。"""
+def api_list_presets(summary: bool = False, user: dict | None = Depends(current_user_dep)):
+    """列出故事预设:AUTH 开时 = 官方公共预设 + 当前用户私有(各带 official 标记);关时 = 旧全局。
+    summary=1 只回卡面字段(探索页/首页用),完整内容进详情页再取 /api/presets/{name}。"""
     uid, legacy = _read_scope(user)
+    if summary:
+        return storage.list_preset_summaries(user_id=uid, legacy_all=legacy)
     return storage.list_presets(user_id=uid, legacy_all=legacy)
+
+
+_DATA_URI = re.compile(r"^data:(image/[\w.+-]+);base64,(.*)$", re.S)
+
+
+@app.get("/api/presets/{name}/cover")
+def api_preset_cover(name: str):
+    """官方预设内嵌 data-URI 封面的图片版(摘要列表里的链接)。链接带内容 hash,可长缓存;不需要登录。"""
+    p = storage.get_preset(name)  # 只查官方:<img> 请求带不上登录头
+    m = _DATA_URI.match(((p or {}).get("data") or {}).get("cover") or "")
+    if not m:
+        raise HTTPException(404, L("No embedded cover", "没有内嵌封面"))
+    try:
+        body = base64.b64decode(m.group(2), validate=False)
+    except Exception:
+        raise HTTPException(404, L("Cover could not be decoded", "封面解码失败"))
+    return Response(content=body, media_type=m.group(1),
+                    headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+@app.get("/api/presets/{name}")
+def api_get_preset(name: str, user: dict | None = Depends(current_user_dep)):
+    """按库名或展示名取一条完整预设(详情页 / 开局用),可见范围同列表。"""
+    uid, legacy = _read_scope(user)
+    p = storage.get_preset(name, user_id=uid, legacy_all=legacy)
+    if not p:
+        raise HTTPException(404, L("Story not found", "没有找到这个故事"))
+    return p
 
 
 @app.post("/api/presets")

@@ -72,13 +72,16 @@ function RegistrationCard({ reg, onEdit }) {
   );
 }
 
+// 完整预设才有 characters 数组;探索页摘要(summary=1)只有卡面字段,进详情页要再取一次。
+const isFullPreset = (p) => !!(p && p.data && Array.isArray(p.data.characters));
+
 export default function StoryDetail() {
   const { name } = useParams();
   const loc = useLocation();
   const navigate = useNavigate();
   const { startGame } = useGame();
 
-  // 优先用导航带来的 preset(从探索点进来);刷新/直链时按 name 回 /api/presets 找。
+  // 优先用导航带来的 preset(从探索点进来,可能只是摘要);不完整时按名回 /api/presets/{name} 取。
   const [preset, setPreset] = useState(() => (loc.state && loc.state.preset) || null);
   const [notFound, setNotFound] = useState(false);
 
@@ -92,15 +95,12 @@ export default function StoryDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name]);
 
+  // 探索页带来的是摘要(只有卡面字段);刷新/直链时什么都没有。两种情况都按名取这一本的完整内容。
   useEffect(() => {
-    if (preset) return;
-    getJSON("/api/presets")
-      .then((rows) => {
-        const list = Array.isArray(rows) ? rows : [];
-        const hit = list.find((p) => (p.data && p.data.name) === name || p.name === name);
-        if (hit) setPreset(hit);
-        else setNotFound(true);
-      })
+    if (isFullPreset(preset)) return;
+    const key = (preset && preset.name) || name;
+    getJSON(`/api/presets/${encodeURIComponent(key)}`)
+      .then((hit) => (hit && hit.data ? setPreset(hit) : setNotFound(true)))
       .catch(() => setNotFound(true));
   }, [preset, name]);
 
@@ -219,7 +219,7 @@ export default function StoryDetail() {
       </div>
     );
   }
-  if (!preset) {
+  if (!isFullPreset(preset)) {
     return (
       <div className="page">
         <div className="detail-loading t-ui">{L("Loading story…", "载入故事中…")}</div>

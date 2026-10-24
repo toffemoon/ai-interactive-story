@@ -90,7 +90,9 @@ export async function postJSON(url, body) {
   });
   if (!r.ok) {
     const err = await r.json().catch(() => ({ detail: r.statusText }));
-    throw new Error(err.detail || L("Request failed", "请求失败"));
+    const e = new Error(err.detail || L("Request failed", "请求失败"));
+    e.status = r.status; // 调用方按状态码分流(如回合 409 deck_required → 带全量卡组重发)
+    throw e;
   }
   return r.json();
 }
@@ -190,7 +192,11 @@ export async function streamTurn(body, { onDelta }) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!r.ok || !r.body) throw new Error(L("Streaming endpoint unavailable", "流式端点不可用"));
+  if (!r.ok || !r.body) {
+    const e = new Error(L("Streaming endpoint unavailable", "流式端点不可用"));
+    e.status = r.status;
+    throw e;
+  }
   const reader = r.body.getReader();
   const dec = new TextDecoder();
   let buf = "";

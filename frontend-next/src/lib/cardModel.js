@@ -23,7 +23,8 @@ function clip(s, n = 90) {
 // 故事预设:/api/presets 的一行 { name, official, data:{ name, synopsis, author, cover, tags, characters, world, story, player } }
 function fromStory(p) {
   const d = (p && p.data) || {};
-  const nch = (d.characters || []).length;
+  // 摘要列表(/api/presets?summary=1)只带 character_count;完整预设才有 characters 数组
+  const nch = typeof d.character_count === "number" ? d.character_count : (d.characters || []).length;
   return {
     id: d.name || p.name || "story",
     kind: "story",

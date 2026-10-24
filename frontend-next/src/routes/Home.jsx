@@ -207,19 +207,18 @@ export default function Home({ testMode = false }) {
   }, [obIntro]);
 
   // 拉默认糖沐卡(《新人入店》characters 里 name 含「糖沐」)。
+  // 先拿摘要列表(带角色名单)定位是哪本,再只取那一本的完整内容,不再整表下载所有预设。
   useEffect(() => {
-    getJSON("/api/presets")
+    const isTangmu = (n) => (n || "").includes("糖沐") || (n || "").includes("Tangmu"); // i18n: kept, logic literal (matches backend preset name)
+    getJSON("/api/presets?summary=1")
       .then((rows) => {
         const list = Array.isArray(rows) ? rows : [];
-        let t = null;
-        for (const p of list) {
-          const chars = (p.data && p.data.characters) || [];
-          const hit = chars.find((c) => cardName(c).includes("糖沐") || cardName(c).includes("Tangmu")); // i18n: kept, logic literal (matches backend preset name)
-          if (hit) {
-            t = hit;
-            break;
-          }
-        }
+        const p = list.find((x) => ((x.data && x.data.character_names) || []).some(isTangmu));
+        return p ? getJSON(`/api/presets/${encodeURIComponent(p.name)}`) : null;
+      })
+      .then((full) => {
+        const chars = (full && full.data && full.data.characters) || [];
+        const t = chars.find((c) => isTangmu(cardName(c))) || null;
         setTangmuCard(t || FALLBACK_TANGMU);
         if (!restoredRef.current) setCard((cur) => cur || t || FALLBACK_TANGMU); // 没恢复出卡才用糖沐(取不到走兜底)
       })

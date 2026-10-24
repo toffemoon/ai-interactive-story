@@ -107,6 +107,9 @@ export default function Story() {
       ? { characters: game.characters || [], world: game.world || null, story: game.story || null, player: game.player || null }
       : null
   );
+  // 服务器已持有的卡组:回合成功后记下当时的 deck 对象。之后同一个 deck 就不再随回合上传整套卡
+  // (诡秘一套约 125KB),服务端沿用会话里落盘的那份;deck 一变(卡组栏移除角色)或刷新页面就重新全量上传。
+  const deckSentRef = useRef(null);
   const feedRef = useRef(null);
   const openedRef = useRef(false);
   const syncedRef = useRef(0); // 已同步到前端的服务器回合数(续玩还原 + tail after 用)
@@ -173,18 +176,31 @@ export default function Story() {
           },
         });
       } else {
+        const send = async (b) => {
+          try {
+            return await streamTurn(b, {
+              onDelta: (t) => {
+                raw += t;
+                setStreaming(extractStream(raw));
+              },
+            });
+          } catch (streamErr) {
+            if (streamErr.status === 409) throw streamErr; // 服务器没有这局的卡组:交给下面全量重发
+            return await postJSON("/api/story_turn", b);
+          }
+        };
+        const lite = deckSentRef.current === deck;
+        const liteBody = { mode: body.mode, session_id: body.session_id, user: body.user, selected_choice: body.selected_choice };
         try {
-          finalTurn = await streamTurn(body, {
-            onDelta: (t) => {
-              raw += t;
-              setStreaming(extractStream(raw));
-            },
-          });
-        } catch (streamErr) {
-          finalTurn = await postJSON("/api/story_turn", body);
+          finalTurn = await send(lite ? liteBody : body);
+        } catch (e) {
+          if (!(lite && e.status === 409)) throw e;
+          raw = "";
+          finalTurn = await send(body);
         }
       }
       if (!finalTurn) throw new Error(L("No turn result received", "没有拿到回合结果"));
+      deckSentRef.current = deck; // 本轮成功:服务器已落盘这套卡组
       setStreaming(null);
       setTurns((xs) => [...xs, { kind: "story", data: finalTurn }]);
       setChoices(finalTurn.choices || []);
