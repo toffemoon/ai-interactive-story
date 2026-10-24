@@ -248,7 +248,16 @@ export default function StoryDetail() {
         {/* 选主角三选一:选作者卡 / 上传 / 现场描述(横轴滚动 · 对齐边缘,细节③) */}
         <section className="detail-block">
           <h2 className="t-h3 detail-sec">{L("Choose who you'll play", "选择你扮演谁")}</h2>
-          <p className="detail-hint t-meta">{L("Drag or scroll the card you want to the center (centered = selected)", "拖动 / 滚轮把想扮演的那张转到中间(居中即选中)")}</p>
+          <p className="detail-hint t-meta">
+            {L("Drag or scroll the card you want to the center (centered = selected)", "拖动 / 滚轮把想扮演的那张转到中间(居中即选中)")}
+            {/* 「自定义角色」排在轮播最后一张,可扮演角色一多(诡秘有 7 个)它就离中间太远、透明不可点,
+                玩家根本看不到这个选项 —— 给一个常驻入口直接跳过去。 */}
+            {castMode !== "custom" && (
+              <button type="button" className="detail-custom-jump" onClick={() => setCastMode("custom")}>
+                {L("Or create your own role →", "或者自创角色 →")}
+              </button>
+            )}
+          </p>
           <CardCarousel
             items={roleItems}
             activeIndex={castMode === "custom" ? roleItems.length - 1 : selIdx}
