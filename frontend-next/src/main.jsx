@@ -1,3 +1,4 @@
+import "./lib/i18n"; // 最先求值:定 <html lang>、中文字体(其余模块的 L() 也依赖它)
 import { createRoot } from "react-dom/client";
 import { HashRouter } from "react-router-dom";
 import "./styles/base.css";

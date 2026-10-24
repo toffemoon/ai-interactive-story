@@ -4,6 +4,8 @@ import { getLastPoint, consumeSuppressReveal } from "./lib/transitionNav";
 import { useAuth } from "./state/auth";
 import AppShell from "./components/shell/AppShell";
 import Preloader from "./components/preloader";
+import LanguageGate from "./components/LanguageGate";
+import { L, hasChosenLang } from "./lib/i18n";
 import "./App.css";
 
 const Login = lazy(() => import("./routes/Login"));
@@ -19,7 +21,7 @@ const Styleguide = lazy(() => import("./routes/Styleguide"));
 const NavTest = lazy(() => import("./routes/NavTest"));
 
 function RouteFallback() {
-  return <div className="route-loading" role="status" aria-label="Loading page" />;
+  return <div className="route-loading" role="status" aria-label={L("Loading page", "正在加载页面")} />;
 }
 
 // AUTH 关时(本地 dev)= 游客直通,不拦;AUTH 开且未登录 = 去登录。
@@ -89,10 +91,11 @@ export default function App() {
       duration={1200}
       zIndex={300}
       bgColor="#221c16"
-      loadingText="Muyan"
+      loadingText={L("Muyan", "沐言")}
       respectReducedMotion
     >
-      {ready && (
+      {/* 没选语言前不渲染路由:否则各页会先按默认英文把卡片 / 对话写进 localStorage,选中文后还残留英文 */}
+      {ready && hasChosenLang() && (
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="/" element={<Navigate to={home} replace />} />
@@ -123,6 +126,8 @@ export default function App() {
           </Routes>
         </Suspense>
       )}
+      {/* 开局语言选择:没选过(本机或账户)就盖住全屏 */}
+      <LanguageGate />
     </Preloader>
   );
 }

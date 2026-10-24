@@ -50,9 +50,10 @@
   --r-card: 13px; /* 书本卡圆角,来自 卡片-翻转手感.html */
   --r-pill: 999px;
 
-  --font-serif: "Noto Serif SC", "Songti SC", "SimSun", serif;
-  --font-kai: "LXGW WenKai TC", "LXGW WenKai", "Kaiti SC", "STKaiti", serif;
-  --font-sans: "Aptos", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  /* 2026-10-23 双语:英文全站统一用系统无衬线(宋/楷对英文不合适);中文见下方 html[lang="zh"] 恢复原字体。 */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-serif: var(--font-sans);
+  --font-kai: var(--font-sans);
   --font-mono: "Cascadia Mono", ui-monospace, Consolas, monospace;
 
   --fs-meta: 12px;
@@ -127,4 +128,11 @@
   --shadow-card: 0 16px 34px -18px rgba(0, 0, 0, 0.6);
   --shadow-pop: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
   --scrim: rgba(10, 8, 5, 0.6);
+}
+
+/* 中文站恢复原字体:宋 = 叙事 / display,楷 = 引文 / 书名(Google Fonts 由 lib/i18n.js 只在中文下注入)。 */
+html[lang="zh"] {
+  --font-serif: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --font-kai: "LXGW WenKai TC", "LXGW WenKai", "Kaiti SC", "STKaiti", serif;
+  --font-sans: "Aptos", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
 }

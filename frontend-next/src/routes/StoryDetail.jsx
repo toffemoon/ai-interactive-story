@@ -9,6 +9,7 @@ import CharDetailModal from "../components/CharDetailModal";
 import { getJSON, postJSON, uploadFile } from "../lib/api";
 import { toCardModel } from "../lib/cardModel";
 import { useGame } from "../state/game";
+import { L } from "../lib/i18n";
 import "./StoryDetail.css";
 
 // 故事详情 / 选主角三选一 / 涟漪入局(继承 frontend/views/ReconStoryDetail 的契约与流程,做减法)。
@@ -78,14 +79,14 @@ export default function StoryDetail() {
   }
 
   const d = (preset && preset.data) || {};
-  const bookName = d.name || (preset && preset.name) || "Untitled story";
+  const bookName = d.name || (preset && preset.name) || L("Untitled story", "未命名故事");
   // 「门面」(封面/标题/简介/作者的话 + 角色卡轮播)抽到 StoryHero 共享组件,创作「预览成详情页」复用同一套。
 
   // 选主角候选:playables 优先,空则 characters;末尾补「以旁观者开始」。
   const roleCards = useMemo(() => {
     const src = (d.playables && d.playables.length ? d.playables : d.characters) || [];
     const cards = src.map(normRole).filter((c) => c.name);
-    return [...cards, { name: "Start as an observer", persona: "Enter the story as an observer, without playing a specific role", spectator: true }];
+    return [...cards, { name: L("Start as an observer", "以旁观者开始"), persona: L("Enter the story as an observer, without playing a specific role", "不扮演特定角色,以观察者视角进入故事"), spectator: true }];
   }, [preset]);
 
   // 扮演选择 = roleCards + 末尾「自定义角色」,做成轮播(居中卡 = 选中;居中自定义卡 = 进自定义模式)。
@@ -127,7 +128,7 @@ export default function StoryDetail() {
       const card = await postJSON("/api/identify_player", { text: customText });
       enterStory(card);
     } catch (e) {
-      setErr("Couldn't identify your role: " + e.message);
+      setErr(L("Couldn't identify your role: ", "识别失败:") + e.message);
     } finally {
       setIdentifying(false);
     }
@@ -143,7 +144,7 @@ export default function StoryDetail() {
       setCustomText(text);
       setCastMode("custom");
     } catch (e) {
-      setErr("Upload failed: " + e.message);
+      setErr(L("Upload failed: ", "上传失败:") + e.message);
     }
   }
 
@@ -151,10 +152,10 @@ export default function StoryDetail() {
     return (
       <div className="page">
         <div className="detail-missing">
-          <h2 className="t-h1">Story not found</h2>
-          <p className="t-ui">The author may have taken it down, or the link is no longer valid.</p>
+          <h2 className="t-h1">{L("Story not found", "没找到这个故事")}</h2>
+          <p className="t-ui">{L("The author may have taken it down, or the link is no longer valid.", "它可能已被作者下架,或链接失效了。")}</p>
           <Button variant="primary" onClick={() => navigate("/explore", { transition: "contract" })}>
-            Back to Explore
+            {L("Back to Explore", "回到探索")}
           </Button>
         </div>
       </div>
@@ -163,7 +164,7 @@ export default function StoryDetail() {
   if (!preset) {
     return (
       <div className="page">
-        <div className="detail-loading t-ui">Loading story…</div>
+        <div className="detail-loading t-ui">{L("Loading story…", "载入故事中…")}</div>
       </div>
     );
   }
@@ -173,11 +174,11 @@ export default function StoryDetail() {
       <div className="page detail">
         <div className="detail-topbar">
           <button className="detail-back t-ui-sm" onClick={() => navigate("/explore", { transition: "contract" })}>
-            ← Back to shelf
+            {L("← Back to shelf", "← 放回书架")}
           </button>
           {/* 详情页收藏入口(YOR-171):和探索卡背同一份数据,书架书签同步点亮 */}
           <button className={"detail-fav t-ui-sm" + (isFaved ? " is-on" : "")} onClick={toggleFav} aria-pressed={isFaved}>
-            {isFaved ? "Saved" : "Save"}
+            {isFaved ? L("Saved", "已收藏") : L("Save", "收藏")}
           </button>
         </div>
 
@@ -188,8 +189,8 @@ export default function StoryDetail() {
 
         {/* 选主角三选一:选作者卡 / 上传 / 现场描述(横轴滚动 · 对齐边缘,细节③) */}
         <section className="detail-block">
-          <h2 className="t-h3 detail-sec">Choose who you'll play</h2>
-          <p className="detail-hint t-meta">Drag or scroll the card you want to the center (centered = selected)</p>
+          <h2 className="t-h3 detail-sec">{L("Choose who you'll play", "选择你扮演谁")}</h2>
+          <p className="detail-hint t-meta">{L("Drag or scroll the card you want to the center (centered = selected)", "拖动 / 滚轮把想扮演的那张转到中间(居中即选中)")}</p>
           <CardCarousel
             items={roleItems}
             activeIndex={castMode === "custom" ? roleItems.length - 1 : selIdx}
@@ -200,21 +201,21 @@ export default function StoryDetail() {
                 setCastMode("list");
               }
             }}
-            ariaLabel="Choose your role"
+            ariaLabel={L("Choose your role", "扮演角色选择")}
             renderItem={(it, { active }) =>
               it.custom ? (
                 <div className={"cc-role cc-role--custom" + (active && castMode === "custom" ? " is-on" : "")}>
-                  <div className="cc-role-tag t-meta">Freeform</div>
-                  <div className="cc-role-name t-kai">Custom role</div>
-                  <div className="cc-role-line t-ui-sm">Describe who you want to play, and AI turns it into a role card</div>
-                  <div className="cc-role-tick t-meta">{active && castMode === "custom" ? "Editing" : "Center to customize"}</div>
+                  <div className="cc-role-tag t-meta">{L("Freeform", "自由出演")}</div>
+                  <div className="cc-role-name t-kai">{L("Custom role", "自定义角色")}</div>
+                  <div className="cc-role-line t-ui-sm">{L("Describe who you want to play, and AI turns it into a role card", "写下你想扮演的身份,AI 识别成演出卡")}</div>
+                  <div className="cc-role-tick t-meta">{active && castMode === "custom" ? L("Editing", "编辑中") : L("Center to customize", "转到中间自定义")}</div>
                 </div>
               ) : (
                 <div className={"cc-role" + (active && castMode === "list" ? " is-on" : "")}>
-                  <div className="cc-role-tag t-meta">{it.spectator ? "Observer" : "Playable"}</div>
+                  <div className="cc-role-tag t-meta">{it.spectator ? L("Observer", "旁观") : L("Playable", "可扮演")}</div>
                   <div className="cc-role-name t-kai">{it.name}</div>
-                  <div className="cc-role-line t-ui-sm">{it.persona || (it.spectator ? "Observer's view" : "Playable")}</div>
-                  <div className="cc-role-tick t-meta">{active && castMode === "list" ? "Selected" : "Playable"}</div>
+                  <div className="cc-role-line t-ui-sm">{it.persona || (it.spectator ? L("Observer's view", "观察者视角") : L("Playable", "可扮演"))}</div>
+                  <div className="cc-role-tick t-meta">{active && castMode === "list" ? L("Selected", "已选择") : L("Playable", "可扮演")}</div>
                 </div>
               )
             }
@@ -226,11 +227,11 @@ export default function StoryDetail() {
                 className="detail-custom-text t-ui"
                 value={customText}
                 onChange={(e) => setCustomText(e.target.value)}
-                placeholder="Describe who you'll play: background, goals, abilities, limits, what you know at the start… AI will turn it into a role card."
+                placeholder={L("Describe who you'll play: background, goals, abilities, limits, what you know at the start… AI will turn it into a role card.", "写下你要扮演的身份:背景、目标、能力、限制、开局已知…… AI 会识别成演出卡。")}
               />
               <div className="detail-custom-row">
                 <label className="detail-upload t-ui-sm">
-                  Upload .txt / .md / .docx
+                  {L("Upload .txt / .md / .docx", "上传 .txt / .md / .docx")}
                   <input type="file" accept=".txt,.md,.docx" onChange={pickFile} hidden />
                 </label>
               </div>
@@ -245,25 +246,25 @@ export default function StoryDetail() {
       {/* 涟漪入局:固定底部(YOR-48) */}
       <div className="detail-enterbar">
         <div className="detail-enter-info">
-          <span className="detail-enter-label t-meta">Enter as</span>
+          <span className="detail-enter-label t-meta">{L("Enter as", "即将以")}</span>
           <span className="detail-enter-role t-kai">
             {castMode === "custom"
               ? customText.trim()
-                ? "Custom role"
-                : "(describe your role first)"
+                ? L("Custom role", "自定义角色")
+                : L("(describe your role first)", "（先写下身份）")
               : enterRole
               ? enterRole.name
-              : "Observer"}
+              : L("Observer", "旁观者")}
           </span>
-          <span className="detail-enter-label t-meta">to begin</span>
+          <span className="detail-enter-label t-meta">{L("to begin", "进入")}</span>
         </div>
         {castMode === "custom" ? (
           <Button className="detail-enter-go" variant="primary" disabled={identifying || !customText.trim()} onClick={startCustom}>
-            {identifying ? "Identifying…" : "Enter the story"}
+            {identifying ? L("Identifying…", "识别中…") : L("Enter the story", "涟漪入局")}
           </Button>
         ) : (
           <Button className="detail-enter-go" variant="primary" onClick={() => enterStory(enterRole)}>
-            Enter the story
+            {L("Enter the story", "涟漪入局")}
           </Button>
         )}
       </div>

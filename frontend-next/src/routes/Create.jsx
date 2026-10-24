@@ -16,6 +16,7 @@ import StaggeredText from "../components/staggered-text"; // R1 观感:空板标
 import BlurHighlight from "../components/react-bits/blur-highlight"; // R1 观感:机制说明行高亮「触发词」
 import CountUp from "../components/react-bits/count-up"; // R2 观感:完整度数字 spring 滚动
 import ShinyText from "../components/react-bits/shiny-text"; // R2 观感:鎏金扫光(只上 toast 转瞬场合)
+import { L, isZh } from "../lib/i18n";
 import "./Create.css";
 
 // 角色卡的用户上传图(头像/立绘)单独保住,别被 AI 重建 draft 覆盖掉。
@@ -56,18 +57,18 @@ const KINDS = [
   // ph 是输入框 placeholder,手机端短一句即可(C3:原来一长串字段名在窄屏会被截断)。
   // opening 是空台子的助手开场白,和 ph 同一套按类分句的范式(YOR-174)。
   // sub 是卡种一句话定位(P1a 一眼懂层):新建菜单/空板/落卡菜单/聚焦卡头四处消费,只此一处定义。
-  { zh: "Character", k: "characters", sub: "A character the AI plays", ph: "Describe this character: identity, personality, background", opening: "Describe the character you want to create: identity, personality, background. Once there's enough detail, a full character card will be generated." },
-  { zh: "Player Card", k: "players", sub: "The lead you play", ph: "Describe the lead you'll play", opening: "Describe the lead you'll play: identity, backstory, and goal for this playthrough." },
-  { zh: "Lore Card · World Book", k: "worlds", sub: "The world's rulebook; entries appear on trigger words", ph: "Describe this world's rules and setting", opening: "Describe this world: core rules, key locations, factions." },
-  { zh: "Story Book", k: "stories", sub: "The script: opening, beats, ending", ph: "Describe this story's premise and conflict", opening: "Describe this story: premise, core conflict, rough direction." },
+  { zh: L("Character", "角色卡"), k: "characters", sub: L("A character the AI plays", "AI 扮演的人物"), ph: L("Describe this character: identity, personality, background", "描述这个角色:身份、性格、背景"), opening: L("Describe the character you want to create: identity, personality, background. Once there's enough detail, a full character card will be generated.", "描述你要创建的角色:身份、性格、背景。信息足够后会生成完整角色卡。") },
+  { zh: L("Player Card", "演出卡"), k: "players", sub: L("The lead you play", "你扮演的主角"), ph: L("Describe the lead you'll play", "描述你要扮演的主角"), opening: L("Describe the lead you'll play: identity, backstory, and goal for this playthrough.", "描述你要扮演的主角:身份、来历、这一局的目标。") },
+  { zh: L("Lore Card · World Book", "设定卡 · 世界书"), k: "worlds", sub: L("The world's rulebook; entries appear on trigger words", "世界的规则手册,聊到触发词才出场"), ph: L("Describe this world's rules and setting", "描述这个世界的规则与设定"), opening: L("Describe this world: core rules, key locations, factions.", "描述这个世界:核心规则、关键地点、势力。") },
+  { zh: L("Story Book", "故事书"), k: "stories", sub: L("The script: opening, beats, ending", "这一局的剧本:开场、节拍、结局"), ph: L("Describe this story's premise and conflict", "描述这个故事的前提与冲突"), opening: L("Describe this story: premise, core conflict, rough direction.", "描述这个故事:前提、核心冲突、大致走向。") },
 ];
 const OPENINGS = Object.fromEntries(KINDS.map((t) => [t.k, t.opening]));
 // 空台引子(桌面 reskin):点一下把句子放进输入框(不代发,用户过目再发),降低冷启动门槛。
 const SUGGESTS = {
-  characters: ["A silver-haired girl working at a bookshop on rainy nights", "A lying con artist with a soft heart", "A butler robot from the future who can't lie"],
-  players: ["A modern med student who just got transported to another world", "A swordsman of the fallen dynasty living under a false name", "The only co-pilot still awake on a starship"],
-  worlds: ["A coastal town after spiritual energy returns", "Nine islands floating on a sea of clouds", "A hidden market at the end of the subway line"],
-  stories: ["A farewell in a locked room on a snowy night", "The world resets in three days, and only you remember", "An old life-for-a-life pact signed in a teahouse"],
+  characters: L(["A silver-haired girl working at a bookshop on rainy nights", "A lying con artist with a soft heart", "A butler robot from the future who can't lie"], ["雨夜书店里打工的银发少女", "满口谎话却心软的江湖骗子", "不会说谎的未来管家机器人"]),
+  players: L(["A modern med student who just got transported to another world", "A swordsman of the fallen dynasty living under a false name", "The only co-pilot still awake on a starship"], ["刚穿越过来的现代医学生", "隐姓埋名的前朝剑客", "星舰上唯一清醒的副驾驶"]),
+  worlds: L(["A coastal town after spiritual energy returns", "Nine islands floating on a sea of clouds", "A hidden market at the end of the subway line"], ["灵气复苏后的沿海小城", "漂浮在云海上的九座岛", "地下铁尽头的隐秘市集"]),
+  stories: L(["A farewell in a locked room on a snowy night", "The world resets in three days, and only you remember", "An old life-for-a-life pact signed in a teahouse"], ["雪夜密室里的一场告别", "世界三天后重启,只有你记得", "茶馆里一纸换命的旧约"]),
 };
 const IDENTIFY_EP = {
   characters: "/api/identify",
@@ -76,16 +77,16 @@ const IDENTIFY_EP = {
   players: "/api/identify_player",
 };
 const LABELS = {
-  description: "Summary", personality: "Personality", scenario: "Scenario", first_mes: "Opening line",
-  mes_example: "Example dialogue", speech_rules: "Speech rules", appearance: "Appearance", look: "Appearance",
-  persona: "Persona", goals: "Goals", secret: "Hidden truth", background: "Background", voice: "Verbal tics",
-  premise: "Premise", title: "Title", entries: "Entries", role: "Role", tags: "Tags",
-  content: "Content", comment: "Entry", keys: "Keywords", source: "Source",
-  timeline: "Timeline", events: "Beats (trigger events)", main: "Main plot", main_plot: "Main plot", anchor: "Anchor", tension: "Conflict",
+  description: L("Summary", "简述"), personality: L("Personality", "性格"), scenario: L("Scenario", "情境设定"), first_mes: L("Opening line", "开场白"),
+  mes_example: L("Example dialogue", "对话示例"), speech_rules: L("Speech rules", "说话规则"), appearance: L("Appearance", "外貌"), look: L("Appearance", "外貌"),
+  persona: L("Persona", "人设"), goals: L("Goals", "目标"), secret: L("Hidden truth", "隐藏真相"), background: L("Background", "背景"), voice: L("Verbal tics", "口癖"),
+  premise: L("Premise", "前提"), title: L("Title", "标题"), entries: L("Entries", "条目"), role: L("Role", "身份"), tags: L("Tags", "标签"),
+  content: L("Content", "内容"), comment: L("Entry", "条目"), keys: L("Keywords", "关键词"), source: L("Source", "来源"),
+  timeline: L("Timeline", "时间线"), events: L("Beats (trigger events)", "节拍(触发事件)"), main: L("Main plot", "主线"), main_plot: L("Main plot", "主线"), anchor: L("Anchor", "锚点"), tension: L("Conflict", "矛盾"),
   // P1b 演出卡起手骨架的键(src/models.py PlayerCard),别裸奔英文
-  opening: "Act One", abilities: "Can do", constraints: "Can't do", known_facts: "Known at start", unknown: "Unknown at start",
+  opening: L("Act One", "开局第一幕"), abilities: L("Can do", "能做什么"), constraints: L("Can't do", "做不到什么"), known_facts: L("Known at start", "开局已知"), unknown: L("Unknown at start", "开局未知"),
   // C5 补:引擎新骨架带的键,别再裸奔英文
-  known_public: "Public facts", known_hidden: "Hidden facts", versions: "Versions", relationships: "Relationships",
+  known_public: L("Public facts", "公开设定"), known_hidden: L("Hidden facts", "隐藏设定"), versions: L("Versions", "多版本"), relationships: L("Relationships", "关系"),
 };
 const STORE_KEY = "ais_create_desks_v1";
 const KI_KEY = "ais_create_ki_v1"; // 记住当前卡种 tab(YOR-200)
@@ -111,23 +112,23 @@ function fmtVal(v) {
   if (typeof v === "number" || typeof v === "boolean") return String(v);
   if (Array.isArray(v)) {
     if (!v.length) return "";
-    if (v.every((x) => typeof x === "string" || typeof x === "number")) return v.join(", ");
+    if (v.every((x) => typeof x === "string" || typeof x === "number")) return v.join(L(", ", "、"));
     const lines = v.slice(0, 8).map((x, i) => {
       if (x && typeof x === "object") {
         const label =
-          x.comment || (Array.isArray(x.keys) ? x.keys.join("/") : x.keys) || x.name || x.title || `Entry ${i + 1}`;
+          x.comment || (Array.isArray(x.keys) ? x.keys.join("/") : x.keys) || x.name || x.title || L(`Entry ${i + 1}`, `条目${i + 1}`);
         const body = x.content || x.description || x.summary || "";
-        return body ? `${label}: ${body}` : String(label);
+        return body ? L(`${label}: ${body}`, `${label}:${body}`) : String(label);
       }
       return String(x);
     });
-    if (v.length > 8) lines.push(`…(${v.length} total)`);
+    if (v.length > 8) lines.push(L(`…(${v.length} total)`, `…(共 ${v.length} 条)`));
     return lines.join("\n");
   }
   if (typeof v === "object") {
     return Object.entries(v)
-      .map(([k, val]) => `${LABELS[k] || k}: ${typeof val === "string" ? val : Array.isArray(val) ? val.join(", ") : JSON.stringify(val)}`)
-      .join("; ");
+      .map(([k, val]) => L(`${LABELS[k] || k}: ${typeof val === "string" ? val : Array.isArray(val) ? val.join(", ") : JSON.stringify(val)}`, `${LABELS[k] || k}:${typeof val === "string" ? val : Array.isArray(val) ? val.join("、") : JSON.stringify(val)}`))
+      .join(L("; ", "；"));
   }
   return String(v);
 }
@@ -140,7 +141,7 @@ function worldEntries(card) {
 
 function blankDesk(kk) {
   return {
-    messages: [{ who: "ai", text: OPENINGS[kk] || "Pick a card type, then describe what you want to create." }],
+    messages: [{ who: "ai", text: OPENINGS[kk] || L("Pick a card type, then describe what you want to create.", "选择卡种后,描述你要创建的内容。") }],
     draft: {},
     filled: [],
     input: "",
@@ -160,7 +161,7 @@ function wrapCard(data) {
 function mergeWorldBooks(worldBooks) {
   if (!worldBooks.length) return null;
   return {
-    name: "Combined World Book",
+    name: L("Combined World Book", "世界书合集"),
     entries: worldBooks.flatMap((w, wi) =>
       (w.entries || []).map((e, ei) => ({ ...e, entry_id: e.entry_id || `world-${wi}-${ei}`, source: e.source || "world" }))
     ),
@@ -724,7 +725,7 @@ export default function Create() {
     } catch (e) {
       if (!quotaWarnedRef.current) {
         quotaWarnedRef.current = true;
-        flash("Draft too large to autosave (usually the portrait images); a refresh may lose it. Use fewer images, or publish / save to the Card Library soon.");
+        flash(L("Draft too large to autosave (usually the portrait images); a refresh may lose it. Use fewer images, or publish / save to the Card Library soon.", "草稿太大(多为立绘图片)没能自动保存,刷新可能丢失;先少放几张图,或尽快发布 / 收进卡库。"));
       }
     }
   }, [desks]);
@@ -790,25 +791,25 @@ export default function Create() {
     if (!r || !r.text) return;
     const cur = Array.isArray(desks[kind].refs) ? desks[kind].refs : [];
     if (cur.some((x) => x.label === r.label)) {
-      flash(`"${r.label}" is already attached`);
+      flash(L(`"${r.label}" is already attached`, "「" + r.label + "」已经挂着了"));
       return;
     }
     if (cur.length >= 4) {
-      flash("Up to 4 references at a time (remove one to add another)");
+      flash(L("Up to 4 references at a time (remove one to add another)", "最多同时引用 4 个(再挂先摘一个)"));
       return;
     }
     patch(kind, { refs: [...cur, r] });
     setRefPanel(null);
-    flash(`Referencing "${r.label}" — the AI will consult it every turn. Remove it anytime.`);
+    flash(L(`Referencing "${r.label}" — the AI will consult it every turn. Remove it anytime.`, "已引用「" + r.label + "」——之后每轮 AI 都会参考,随时可摘"));
   }
   function removeRef(label) {
     patch(kind, (d0) => ({ refs: (Array.isArray(d0.refs) ? d0.refs : []).filter((x) => x.label !== label) }));
   }
   function refFromCard(kk, card) {
     const c = stripBid((card && card.data) || card || {}); // H0:视图 id 不进 prompt
-    const nm = c.name || c.title || "Untitled";
-    const zh = (KINDS.find((t) => t.k === kk) || {}).zh || "Card";
-    return makeRef("card", zh + " · " + nm, cardToRefText(kk, c));
+    const nm = c.name || c.title || L("Untitled", "未命名");
+    const zh = (KINDS.find((t) => t.k === kk) || {}).zh || L("Card", "卡");
+    return makeRef("card", zh + L(" · ", "·") + nm, cardToRefText(kk, c));
   }
   async function openRefPanel(tab = "desk", kk = kind) {
     if (tab === "lib") {
@@ -817,7 +818,7 @@ export default function Create() {
         const items = await getJSON("/api/library/" + kk);
         setRefPanel((p) => (p && p.tab === "lib" ? { ...p, kk, items: Array.isArray(items) ? items : [], loading: false } : p));
       } catch (e) {
-        setRefPanel((p) => (p && p.tab === "lib" ? { ...p, loading: false, err: "Failed to load library: " + e.message } : p));
+        setRefPanel((p) => (p && p.tab === "lib" ? { ...p, loading: false, err: L("Failed to load library: ", "读库失败:") + e.message } : p));
       }
     } else {
       setRefPanel({ tab, kk, items: [], loading: false });
@@ -851,7 +852,7 @@ export default function Create() {
   }
   function boardSub(card) {
     const c = (card && card.data) || card || {};
-    if ((c.entries || []).length) return c.entries.length + (c.entries.length === 1 ? " entry" : " entries");
+    if ((c.entries || []).length) return c.entries.length + L(c.entries.length === 1 ? " entry" : " entries", " 条条目");
     return String(c.description || c.premise || c.background || c.personality || "").slice(0, 56);
   }
   function selectCard(bc) {
@@ -1029,14 +1030,14 @@ export default function Create() {
   function discardDraft(kk) {
     const d = desks[kk];
     const has = Object.keys(d.draft || {}).length > 0;
-    if (!window.confirm(has ? "Discard this draft and its brainstorming chat? This can't be undone." : "Close this in-progress card? Its chat will be cleared too.")) return;
+    if (!window.confirm(has ? L("Discard this draft and its brainstorming chat? This can't be undone.", "丢弃这张草稿和这轮构思对话?丢了就找不回。") : L("Close this in-progress card? Its chat will be cleared too.", "收起这张构思中的卡?对话一并清空。"))) return;
     setDesks((ds) => ({
       ...ds,
       [kk]: { ...blankDesk(kk), seed: ds[kk].seed || "", built: ds[kk].built },
     }));
     setBoardSel((s) => (s && s.id === "d:" + kk ? null : s));
     setBoardFocus((s) => (s && s.id === "d:" + kk ? null : s));
-    flash("Discarded");
+    flash(L("Discarded", "已收起"));
   }
   function quizAnswerOf(qu) {
     return (quizFree[qu.id] || "").trim() || quizAns[qu.id] || "";
@@ -1045,7 +1046,7 @@ export default function Create() {
     const lines = (desk.questions || [])
       .map((qu) => {
         const a = quizAnswerOf(qu);
-        return a ? `${qu.label} — ${a}` : null;
+        return a ? L(`${qu.label} — ${a}`, `${qu.label} —— ${a}`) : null;
       })
       .filter(Boolean);
     if (!lines.length) return;
@@ -1059,10 +1060,10 @@ export default function Create() {
     setBpNote("");
     patch(kind, { phase: "drafting" });
     sendText(
-      "Start writing the card from this blueprint. Fill everything we've settled into the fields in one go — no more follow-up questions:\n" +
+      L("Start writing the card from this blueprint. Fill everything we've settled into the fields in one go — no more follow-up questions:\n", "就按这份蓝图开始写卡,把已经聊清的内容一次填进字段,别再反问:\n") +
         bp.map((b) => "- " + b).join("\n") +
-        (note ? `\nAlso keep this in mind while writing (user's note, takes priority): ${note}` : ""),
-      { phaseOverride: "drafting", display: `Blueprint approved — start writing${note ? ` — ${note}` : ""}` }
+        (note ? L(`\nAlso keep this in mind while writing (user's note, takes priority): ${note}`, `\n落笔时额外注意(用户附言,优先遵守):${note}`) : ""),
+      { phaseOverride: "drafting", display: L(`Blueprint approved — start writing${note ? ` — ${note}` : ""}`, `批准蓝图,开始落笔${note ? ` —— ${note}` : ""}`) }
     );
   }
 
@@ -1100,7 +1101,7 @@ export default function Create() {
       if (r.phase === "understand") {
         // 构思轮:不动 draft(后端已回传 prev);存完整度/问题/蓝图;拿到蓝图即切待批态。
         patch(kk, (d0) => ({
-          messages: [...d0.messages, { who: "ai", text: r.reply || "(Didn't catch that — try rephrasing.)" }],
+          messages: [...d0.messages, { who: "ai", text: r.reply || L("(Didn't catch that — try rephrasing.)", "(这轮没接住——换个说法再说一次)") }],
           comp: r.completeness || 0,
           questions: r.questions || [],
           blueprint: r.blueprint || [],
@@ -1116,7 +1117,7 @@ export default function Create() {
               )
             : d0.filled;
           return {
-            messages: [...d0.messages, { who: "ai", text: ask || "(Didn't catch that — try rephrasing, or break it into shorter pieces.)" }],
+            messages: [...d0.messages, { who: "ai", text: ask || L("(Didn't catch that — try rephrasing, or break it into shorter pieces.)", "(这轮没接住——换个说法,或把内容分短一点再说一次)") }],
             draft: nextDraft,
             filled: changed,
             phase: "drafting",
@@ -1124,7 +1125,7 @@ export default function Create() {
         });
       }
     } catch (e) {
-      patch(kk, (d0) => ({ messages: [...d0.messages, { who: "ai", text: "(Card build error: " + e.message + ")" }] }));
+      patch(kk, (d0) => ({ messages: [...d0.messages, { who: "ai", text: L("(Card build error: ", "(建卡出错:") + e.message + ")" }] }));
     } finally {
       setBusy(false);
     }
@@ -1138,12 +1139,12 @@ export default function Create() {
   function sendFieldDirective(f, mode, extra = "") {
     const base =
       mode === "fill"
-        ? `Fill in "${f.k}" (${f.k0}) now: based on the existing setup, write this section and put it in the ${f.k0} field. Don't ask questions or just explain; write the content this turn. Try not to touch other fields.`
-        : `Rewrite "${f.k}" (${f.k0}) now to be more specific and vivid, and write it back to the ${f.k0} field. Don't ask questions; finish the rewrite this turn. Try not to touch other fields.`;
+        ? L(`Fill in "${f.k}" (${f.k0}) now: based on the existing setup, write this section and put it in the ${f.k0} field. Don't ask questions or just explain; write the content this turn. Try not to touch other fields.`, `请直接补写「${f.k}」(${f.k0}):按已有设定写出这一块的内容并填进 ${f.k0} 字段。不要反问、不要只解释,这一轮就把内容写出来。尽量别动其他字段。`)
+        : L(`Rewrite "${f.k}" (${f.k0}) now to be more specific and vivid, and write it back to the ${f.k0} field. Don't ask questions; finish the rewrite this turn. Try not to touch other fields.`, `请直接把「${f.k}」(${f.k0})改写得更具体、更立体,写回 ${f.k0} 字段。不要反问,这一轮就改完。尽量别动其他字段。`);
     const ex = (extra || "").trim();
-    const icon = mode === "fill" ? "✦ Fill in" : "⟳ Rewrite";
-    return sendText(ex ? base + `\nUser's requirements for this section (take priority): ${ex}` : base, {
-      display: `${icon} "${f.k}"${ex ? ` — ${ex}` : ""}`,
+    const icon = mode === "fill" ? L("✦ Fill in", "✦ 补写") : L("⟳ Rewrite", "⟳ 改写");
+    return sendText(ex ? base + L(`\nUser's requirements for this section (take priority): ${ex}`, `\n用户对这一块的要求(优先遵守):${ex}`) : base, {
+      display: L(`${icon} "${f.k}"${ex ? ` — ${ex}` : ""}`, `${icon}「${f.k}」${ex ? ` —— ${ex}` : ""}`),
     });
   }
   // F3:点 ✦/⟳ 先展开指示行(可空回车=默认);再点同一颗收起。
@@ -1167,20 +1168,20 @@ export default function Create() {
   // D2 共享:把 identify 的返回铺上画布(上传/粘贴两路共用)。identify 副作用=后端已自动收进卡库,文案如实。
   function applyIdentified(out, kk) {
     const draft = kk === "characters" ? out.data || out : out;
-    const nm = draft.name || draft.title || "Untitled";
+    const nm = draft.name || draft.title || L("Untitled", "未命名");
     patch(kk, (d0) => ({
       draft: { ...draft, ...pickPics(d0.draft) }, // 保住已上传的头像/立绘
       filled: Object.keys(draft),
       // E5 快速通道:已带内容,直通 drafting,清构思残留
       phase: "drafting", comp: 0, questions: [], blueprint: [],
-      messages: [...d0.messages, { who: "ai", text: `"${nm}" was parsed onto the canvas and saved to your Card Library (private).` }],
+      messages: [...d0.messages, { who: "ai", text: L(`"${nm}" was parsed onto the canvas and saved to your Card Library (private).`, "《" + nm + "》已解析并铺上画布,同时已存入卡库(私密)。") }],
     }));
     return nm;
   }
   // 导入会整卡替换画布草稿:有未收草稿先确认(镜像 removeBuilt 的破坏性确认范式)。
   function confirmReplaceDraft() {
     if (!hasDraft) return true;
-    return window.confirm(`The canvas already has a draft "${draftName}". Importing will replace it (cards already on a station or in your Card Library are unaffected). Continue?`);
+    return window.confirm(L(`The canvas already has a draft "${draftName}". Importing will replace it (cards already on a station or in your Card Library are unaffected). Continue?`, "画布上已有草稿《" + draftName + "》,导入会替换它(已收进本台 / 卡库的不受影响)。继续?"));
   }
 
   // D4 改编:把一张已有卡 fork 成指定台的草稿。名字加「·改」——/api/library/save 按名 upsert,
@@ -1190,26 +1191,26 @@ export default function Create() {
     if (card && card.data && typeof card.data === "object" && !Array.isArray(card.data)) card = card.data; // chara_card_v2 信封再剥一层
     card = stripBid(card); // H0:板上身份不跟着改编稿走(收进本台时另发新 id)
     if (!card || !Object.keys(card).length) {
-      flash("Couldn't read this card's content");
+      flash(L("Couldn't read this card's content", "这张卡读不出内容"));
       return false;
     }
     const tgt = desks[kk];
     const tgtHas = Object.keys((tgt && tgt.draft) || {}).length > 0;
     if (tgtHas) {
-      const tn = tgt.draft.name || (tgt.draft.data && tgt.draft.data.name) || tgt.draft.title || "Untitled";
-      if (!window.confirm(`The ${KINDS.find((t) => t.k === kk).zh} station already has a draft "${tn}". Adapting will replace it. Continue?`)) return false;
+      const tn = tgt.draft.name || (tgt.draft.data && tgt.draft.data.name) || tgt.draft.title || L("Untitled", "未命名");
+      if (!window.confirm(L(`The ${KINDS.find((t) => t.k === kk).zh} station already has a draft "${tn}". Adapting will replace it. Continue?`, `「${KINDS.find((t) => t.k === kk).zh}」台上已有草稿《${tn}》,改编会替换它。继续?`))) return false;
     }
     const useTitle = "title" in card && !("name" in card);
-    const base = card[useTitle ? "title" : "name"] || "Untitled";
-    const nm = /(·改| \(adapted\))$/.test(base) ? base : base + " (adapted)"; // i18n: legacy "·改" suffix still recognised
+    const base = card[useTitle ? "title" : "name"] || L("Untitled", "未命名");
+    const nm = /(·改| \(adapted\))$/.test(base) ? base : base + L(" (adapted)", "·改"); // i18n: legacy "·改" suffix still recognised
     patch(kk, (d0) => ({
       draft: { ...card, [useTitle ? "title" : "name"]: nm },
       filled: Object.keys(card),
       tpl: undefined,
       phase: "drafting", comp: 0, questions: [], blueprint: [], // E5 快速通道
-      messages: [...d0.messages, { who: "ai", text: `Created adaptation "${nm}". The original card is kept; this one saves under the new name.` }],
+      messages: [...d0.messages, { who: "ai", text: L(`Created adaptation "${nm}". The original card is kept; this one saves under the new name.`, "已创建改编稿《" + nm + "》。原卡保留,保存时按新名字另存。") }],
     }));
-    flash(`Created adaptation "${nm}"`);
+    flash(L(`Created adaptation "${nm}"`, "已创建改编稿《" + nm + "》"));
     return true;
   }
 
@@ -1223,15 +1224,15 @@ export default function Create() {
     if (!confirmReplaceDraft()) return; // 上传曾是「替换先确认」范式唯一漏网入口(与粘贴/酒馆/改编对齐)
     const kk = kind;
     setBusy(true);
-    patch(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text: `(Uploaded "${file.name}")` }] }));
+    patch(kk, (d0) => ({ messages: [...d0.messages, { who: "你", text: L(`(Uploaded "${file.name}")`, "(上传了《" + file.name + "》)") }] }));
     try {
       const text = await uploadFile(file);
       const out = await postJSON(IDENTIFY_EP[kk], { text, ...(hint ? { hint } : {}) });
       applyIdentified(out, kk);
-      flash("Parsed and saved to library");
+      flash(L("Parsed and saved to library", "已解析并收入卡库"));
     } catch (e) {
-      patch(kk, (d0) => ({ messages: [...d0.messages, { who: "ai", text: "(Parse failed: " + e.message + ")" }] }));
-      flash("Parse failed");
+      patch(kk, (d0) => ({ messages: [...d0.messages, { who: "ai", text: L("(Parse failed: ", "(解析失败:") + e.message + ")" }] }));
+      flash(L("Parse failed", "解析失败"));
     } finally {
       setBusy(false);
     }
@@ -1249,9 +1250,9 @@ export default function Create() {
       const out = await postJSON(IDENTIFY_EP[kk], { text: t, ...(hint ? { hint } : {}) });
       const nm = applyIdentified(out, kk);
       setImportOpen(null);
-      flash(`Parsed "${nm}" and saved to library`);
+      flash(L(`Parsed "${nm}" and saved to library`, "已解析《" + nm + "》并收入卡库"));
     } catch (e) {
-      setImportOpen((m) => (m ? { ...m, err: "Parse failed: " + e.message } : m));
+      setImportOpen((m) => (m ? { ...m, err: L("Parse failed: ", "解析失败:") + e.message } : m));
     } finally {
       setBusy(false);
     }
@@ -1266,16 +1267,17 @@ export default function Create() {
       const isJson = /\.json$/i.test(file.name);
       const parsed = isJson ? parseJsonCard(await file.text()) : parsePngCard(await file.arrayBuffer());
       if (!confirmReplaceDraft()) return;
-      const nm = parsed.draft.name || "Untitled";
+      const nm = parsed.draft.name || L("Untitled", "未命名");
       const droppedNote = parsed.dropped.length
-        ? " Skipped " + parsed.dropped.length + " unsupported Tavern-specific field" + (parsed.dropped.length === 1 ? "" : "s") + ": " +
-          parsed.dropped.slice(0, 6).join(", ") + (parsed.dropped.length > 6 ? "…" : "") + "."
+        ? L(" Skipped " + parsed.dropped.length + " unsupported Tavern-specific field" + (parsed.dropped.length === 1 ? "" : "s") + ": " +
+          parsed.dropped.slice(0, 6).join(", ") + (parsed.dropped.length > 6 ? "…" : "") + ".", "有 " + parsed.dropped.length + " 个酒馆特有字段暂不支持,已略过:" +
+          parsed.dropped.slice(0, 6).join("、") + (parsed.dropped.length > 6 ? "…" : "") + "。")
         : "";
       patch(kind, (d0) => ({
         draft: { ...parsed.draft, ...pickPics(d0.draft) },
         filled: Object.keys(parsed.draft),
         phase: "drafting", comp: 0, questions: [], blueprint: [], // E5 快速通道
-        messages: [...d0.messages, { who: "ai", text: `"${nm}" imported from the Tavern card (parsed locally: not saved to the library, no quota used).` + droppedNote }],
+        messages: [...d0.messages, { who: "ai", text: L(`"${nm}" imported from the Tavern card (parsed locally: not saved to the library, no quota used).`, "《" + nm + "》已从酒馆卡导入(本地解析,不入库、不消耗额度)。") + droppedNote }],
       }));
       // PNG 本体顺手压成立绘(draft.image 空着才填,不覆盖用户已传的)
       if (!isJson) {
@@ -1285,13 +1287,13 @@ export default function Create() {
         } catch (e) {}
       }
       // 卡自带世界书 → 桥到 D1 参考资料(截 6000),AI 每轮可参考
-      if (parsed.bookText && window.confirm("This card comes with World Book entries (" + parsed.bookText.length + " chars). Attach them as source notes so the AI consults them every turn? (You can clear them anytime.)")) {
+      if (parsed.bookText && window.confirm(L("This card comes with World Book entries (" + parsed.bookText.length + " chars). Attach them as source notes so the AI consults them every turn? (You can clear them anytime.)", "这张卡自带世界书条目(" + parsed.bookText.length + " 字)。挂为「参考资料」让 AI 每轮参考?(可随时清除)"))) {
         patch(kind, { seed: parsed.bookText.slice(0, 6000) });
       }
       setImportOpen(null);
-      flash(`Imported "${nm}" (local, not saved to library)`);
+      flash(L(`Imported "${nm}" (local, not saved to library)`, "已导入《" + nm + "》(本地,未入库)"));
     } catch (e) {
-      setImportOpen((m) => (m ? { ...m, err: "Import failed: " + e.message } : { step: "pick", text: "", err: "Import failed: " + e.message }));
+      setImportOpen((m) => (m ? { ...m, err: L("Import failed: ", "导入失败:") + e.message } : { step: "pick", text: "", err: L("Import failed: ", "导入失败:") + e.message }));
     }
   }
 
@@ -1305,15 +1307,15 @@ export default function Create() {
     try {
       const dataUrl = await fileToCompressedDataURL(file, { maxW: 800, maxH: 1100, quality: 0.82 });
       setPub((p) => ({ ...p, cover: dataUrl }));
-      flash("Cover set");
+      flash(L("Cover set", "封面已设置"));
     } catch (e) {
-      flash("Couldn't process the cover: " + e.message);
+      flash(L("Couldn't process the cover: ", "封面处理失败:") + e.message);
     }
   }
 
   // 真正收进本台(复用):把当前 draft 放进 built、台子重置、提示。
   function collectToDesk(cardDraft) {
-    const nm = cardDraft.name || cardDraft.title || "Untitled";
+    const nm = cardDraft.name || cardDraft.title || L("Untitled", "未命名");
     setDesks((ds) => ({
       ...ds,
       [kind]: {
@@ -1321,11 +1323,11 @@ export default function Create() {
         // D1:参考资料跨卡保留(一份资料常连造多张卡);tpl 不带 = 自然清(模板是单卡的事)。
         seed: ds[kind].seed || "",
         built: [...ds[kind].built, withBid(cardDraft)],
-        messages: [{ who: "ai", text: `"${nm}" added to this station (card #${ds[kind].built.length + 1}).` }],
+        messages: [{ who: "ai", text: L(`"${nm}" added to this station (card #${ds[kind].built.length + 1}).`, "《" + nm + "》已收进本台(第 " + (ds[kind].built.length + 1) + " 张)。") }],
       },
     }));
     setCardExpanded(false);
-    flash("Added to station (" + nm + ")");
+    flash(L("Added to station (" + nm + ")", "已收进本台(" + nm + ")"));
     burstDone();
   }
   // R1 完成拍:收进本台/收入卡库/发布成功=朱砂+鎏金定向爆发(走全局 ClickSpark 画布的 ais:spark 入口)。
@@ -1350,7 +1352,7 @@ export default function Create() {
   function nextCard() {
     const cur = desks[kind];
     if (!cur.draft || !Object.keys(cur.draft).length) {
-      flash("The draft is still empty. Chat one up first.");
+      flash(L("The draft is still empty. Chat one up first.", "草稿还空着,先聊出一张再收"));
       return;
     }
     // 角色卡:先弹「完善角色卡」(上传头像/立绘 + 角色介绍),确认后再收;其它卡直接收。
@@ -1374,8 +1376,8 @@ export default function Create() {
         {
           role: "user",
           content:
-            "Based on the existing setup, write a third-person character introduction for this character (appearance, personality, backstory, current situation; under 150 words) and put it in the description field." +
-            (ex ? `\nUser's requirements for this introduction (take priority): ${ex}` : ""),
+            L("Based on the existing setup, write a third-person character introduction for this character (appearance, personality, backstory, current situation; under 150 words) and put it in the description field.", "请根据已有设定,为这个角色写一段第三人称的「角色介绍」(外貌、性格、来历、当前处境,200 字以内),写进 description 字段。") +
+            (ex ? L(`\nUser's requirements for this introduction (take priority): ${ex}`, `\n用户对这段介绍的要求(优先遵守):${ex}`) : ""),
         },
       ];
       const refsPayload = (Array.isArray(cur.refs) ? cur.refs : []).map((x) => ({ label: x.label, text: x.text }));
@@ -1398,9 +1400,9 @@ export default function Create() {
       } else if (r.reply) {
         patch(kind, (d0) => ({ draft: { ...d0.draft, description: r.reply } }));
       }
-      flash("Character intro generated");
+      flash(L("Character intro generated", "角色介绍已生成"));
     } catch (e) {
-      flash("Generation failed: " + e.message);
+      flash(L("Generation failed: ", "生成失败:") + e.message);
     } finally {
       setGenBusy(false);
       setBusy(false);
@@ -1411,11 +1413,11 @@ export default function Create() {
     // H0:显式传台 + 按 _bid 定位——闭包旧 kind/下标前移那族误删从根上消失;找不到卡=如实提示不盲删。
     const c = (desks[kk] && desks[kk].built ? desks[kk].built : []).find((x) => x && x._bid === bid);
     if (!c) {
-      flash("This card is gone (it may have been removed)");
+      flash(L("This card is gone (it may have been removed)", "这张卡不在了(可能已被移除)"));
       return;
     }
-    const nm = c.name || c.title || "this card";
-    if (!window.confirm("Remove " + nm + "? Its chat history was already cleared, so it can't be recovered once removed. Continue?")) return;
+    const nm = c.name || c.title || L("this card", "这张卡");
+    if (!window.confirm(L("Remove " + nm + "? Its chat history was already cleared, so it can't be recovered once removed. Continue?", "移除《" + nm + "》?它聊出来的对话已经清空,移除后找不回。确定?"))) return;
     setDesks((ds) => ({ ...ds, [kk]: { ...ds[kk], built: (ds[kk].built || []).filter((x) => !x || x._bid !== bid) } }));
     setBoardPos((p) => {
       if (!p["b:" + bid]) return p;
@@ -1424,7 +1426,7 @@ export default function Create() {
     });
     setBoardSel((s) => (s && s.id === "b:" + bid ? null : s));
     setBoardFocus((s) => (s && s.id === "b:" + bid ? null : s));
-    flash("Removed from station");
+    flash(L("Removed from station", "已从本台移除"));
   }
   // 取一张卡的可读字段(查看本台已建用)。
   function cardFields(card) {
@@ -1440,17 +1442,17 @@ export default function Create() {
     if (savingRef.current) return; // 防重入:同步锁,同一 tick 连点也只发一次 save(YOR-183)
     const d = desks[kind].draft || {};
     if (!Object.keys(d).length) {
-      flash("Nothing to save yet. Chat a bit first.");
+      flash(L("Nothing to save yet. Chat a bit first.", "还没有可入库的卡,先聊几句"));
       return;
     }
     savingRef.current = true;
     setSavingCard(true);
     try {
       await postJSON("/api/library/save", { kind, data: kind === "characters" ? { data: d } : d });
-      flash("Saved to library · Private");
+      flash(L("Saved to library · Private", "已收入卡库 · 私密"));
       burstDone();
     } catch (e) {
-      flash("Save failed: " + e.message);
+      flash(L("Save failed: ", "入库失败:") + e.message);
     } finally {
       savingRef.current = false;
       setSavingCard(false);
@@ -1460,7 +1462,7 @@ export default function Create() {
   function saveCard() {
     const d = desk.draft || {};
     if (!Object.keys(d).length) {
-      flash("Nothing to save yet. Chat a bit first.");
+      flash(L("Nothing to save yet. Chat a bit first.", "还没有可入库的卡,先聊几句"));
       return;
     }
     if (kind === "characters") {
@@ -1491,11 +1493,11 @@ export default function Create() {
   function exportCard(card, kk = kind) {
     const c = stripBid((card && card.data) || card || {});
     if (!Object.keys(c).length) {
-      flash("Nothing to export yet");
+      flash(L("Nothing to export yet", "还没有可导出的内容"));
       return;
     }
     const obj = kk === "characters" ? wrapCard(c) : c;
-    const nm = c.name || c.title || "Untitled";
+    const nm = c.name || c.title || L("Untitled", "未命名");
     const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -1505,7 +1507,7 @@ export default function Create() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    flash(`Exported "${nm}.json"`);
+    flash(L(`Exported "${nm}.json"`, "已导出《" + nm + "》.json"));
   }
 
   // D4 故事级拆回:/api/presets 列表已含完整卡组 data,选一条把四类卡追加回各台 built
@@ -1515,7 +1517,7 @@ export default function Create() {
       const items = await getJSON("/api/presets");
       setPresetsModal({ items: Array.isArray(items) ? items : [] });
     } catch (e) {
-      flash("Failed to load stories: " + e.message);
+      flash(L("Failed to load stories: ", "读故事列表失败:") + e.message);
     }
   }
   function unpackPreset(p) {
@@ -1532,7 +1534,7 @@ export default function Create() {
       stories: { ...ds.stories, built: [...ds.stories.built, ...stories.map(withBid)] },
     }));
     setPresetsModal(null);
-    flash(`Unpacked "${p.name}" into the four stations (characters ×${chars.length}, players ×${players.length}, worlds ×${worlds.length}, stories ×${stories.length}). Publishing will create a new preset.`);
+    flash(L(`Unpacked "${p.name}" into the four stations (characters ×${chars.length}, players ×${players.length}, worlds ×${worlds.length}, stories ×${stories.length}). Publishing will create a new preset.`, `已把《${p.name}》拆回四台(角色×${chars.length} 演出×${players.length} 世界×${worlds.length} 故事×${stories.length});发布会生成新预设`));
   }
 
   // 素材复用:列我的库 → 搜索/挑一张推进对应台子的 built。
@@ -1543,27 +1545,27 @@ export default function Create() {
       const items = await getJSON("/api/library/" + kind);
       setLibModal({ items: Array.isArray(items) ? items : [] });
     } catch (e) {
-      flash("Failed to load library: " + e.message);
+      flash(L("Failed to load library: ", "读库失败:") + e.message);
     }
   }
   function libName(it) {
     const raw = (it && it.data && it.data.data) || (it && it.data) || {};
-    return raw.name || raw.title || it.name || "Untitled";
+    return raw.name || raw.title || it.name || L("Untitled", "未命名");
   }
   function libDesc(it) {
     const raw = (it && it.data && it.data.data) || (it && it.data) || {};
-    return raw.persona || raw.description || raw.premise || ((raw.entries || []).length ? `${raw.entries.length} ${raw.entries.length === 1 ? "entry" : "entries"}` : "");
+    return raw.persona || raw.description || raw.premise || ((raw.entries || []).length ? L(`${raw.entries.length} ${raw.entries.length === 1 ? "entry" : "entries"}`, `${raw.entries.length} 条条目`) : "");
   }
   function libAdd(item) {
     const raw = item && item.data ? item.data : item;
     const card = kind === "characters" ? raw.data || raw : raw;
     if (!card || !Object.keys(card).length) {
-      flash("Couldn't read this card's content");
+      flash(L("Couldn't read this card's content", "这张卡读不出内容"));
       return;
     }
     setDesks((ds) => ({ ...ds, [kind]: { ...ds[kind], built: [...ds[kind].built, withBid(card)] } }));
     setLibModal(null);
-    flash("Added to this project");
+    flash(L("Added to this project", "已加入本次创作"));
   }
 
   const deskCards = (k) => {
@@ -1578,7 +1580,7 @@ export default function Create() {
     const chars = deskCards("characters"), worlds = deskCards("worlds"), stories = deskCards("stories"), players = deskCards("players");
     const st = stories.length ? stories[stories.length - 1] : null;
     const tags = [...new Set([...chars.flatMap((c) => c.tags || []), ...((st || {}).tags || [])])].filter(Boolean).slice(0, 5);
-    const nm = pub.name.trim() || (draftName !== "Untitled" ? draftName : "Untitled story");
+    const nm = pub.name.trim() || (draftName !== L("Untitled", "未命名") ? draftName : L("Untitled story", "未命名故事"));
     return {
       name: nm,
       data: {
@@ -1604,10 +1606,10 @@ export default function Create() {
       Object.keys(c || {}).some((k) => /secret|隐藏|真相/i.test(k) && c[k] && String(c[k]).trim()); // i18n: kept, logic literal (card key names)
     const chars = deskCards("characters"), worlds = deskCards("worlds"), stories = deskCards("stories"), players = deskCards("players");
     return {
-      chars: chars.map((c) => ({ name: c.name || c.title || "Untitled", secret: hasSecret(c) })),
+      chars: chars.map((c) => ({ name: c.name || c.title || L("Untitled", "未命名"), secret: hasSecret(c) })),
       worlds: worlds.length,
-      players: players.map((p) => p.name || p.title || "Protagonist"),
-      story: stories.length ? stories[stories.length - 1].name || stories[stories.length - 1].title || "This story" : null,
+      players: players.map((p) => p.name || p.title || L("Protagonist", "主角")),
+      story: stories.length ? stories[stories.length - 1].name || stories[stories.length - 1].title || L("This story", "本故事") : null,
       // publish 只取 stories[last],故事书台多建的会被静默丢——如实披露被丢的张数,别让清单口径误导(YOR-192 复核②)。
       storyExtra: Math.max(0, stories.length - 1),
       anySecret: chars.some(hasSecret),
@@ -1619,11 +1621,11 @@ export default function Create() {
     if (busy) return;
     const chars = deskCards("characters"), worlds = deskCards("worlds"), stories = deskCards("stories"), players = deskCards("players");
     if (!chars.length) {
-      flash("You need at least one character card to publish");
+      flash(L("You need at least one character card to publish", "至少要一张角色卡才能发布"));
       return;
     }
     if (!pub.name.trim()) {
-      flash("Give this story a name");
+      flash(L("Give this story a name", "给这个故事起个名字"));
       return;
     }
     const st = stories.length ? stories[stories.length - 1] : null;
@@ -1657,15 +1659,15 @@ export default function Create() {
       setPub({ name: "", synopsis: "", cover: "", authorNote: "" });
       setPreviewOpen(false);
       setPreviewChar(null);
-      flash("Published to Explore · Public. Stations cleared — ready for your next story.", "/story/" + encodeURIComponent(pub.name.trim())); // 台子清空(YOR-191)+ 直链去看看(YOR-170)
+      flash(L("Published to Explore · Public. Stations cleared — ready for your next story.", "已发布到探索 · 公开;台子已清空,可以开始下一个故事了"), "/story/" + encodeURIComponent(pub.name.trim())); // 台子清空(YOR-191)+ 直链去看看(YOR-170)
     } catch (e) {
-      flash("Publish failed: " + e.message);
+      flash(L("Publish failed: ", "发布失败:") + e.message);
     } finally {
       setBusy(false);
     }
   }
 
-  const draftName = desk.draft.name || (desk.draft.data && desk.draft.data.name) || desk.draft.title || "Untitled";
+  const draftName = desk.draft.name || (desk.draft.data && desk.draft.data.name) || desk.draft.title || L("Untitled", "未命名");
   // 按钮可用性(细节④:不可用置灰、可用才亮)。
   const hasDraft = Object.keys(desk.draft || {}).length > 0;
   const hasChars = deskCards("characters").length > 0;
@@ -1750,9 +1752,15 @@ export default function Create() {
     // R2:模板名鎏金扫光(toast 转瞬场合,不常驻)
     flash(
       t.skeleton ? (
-        <>Applied the "<ShinyText text={t.name} speed={1.4} color="var(--accent-3)" shineColor="#ffe9c2" />" template. Long-press an empty field to have the AI fill it in.</>
+        L(
+          <>Applied the "<ShinyText text={t.name} speed={1.4} color="var(--accent-3)" shineColor="#ffe9c2" />" template. Long-press an empty field to have the AI fill it in.</>,
+          <>已应用「<ShinyText text={t.name} speed={1.4} color="var(--accent-3)" shineColor="#ffe9c2" />」模板——长按空字段可让 AI 补写</>
+        )
       ) : (
-        <>The opener for "<ShinyText text={t.name} speed={1.4} color="var(--accent-3)" shineColor="#ffe9c2" />" is in the input box</>
+        L(
+          <>The opener for "<ShinyText text={t.name} speed={1.4} color="var(--accent-3)" shineColor="#ffe9c2" />" is in the input box</>,
+          <>「<ShinyText text={t.name} speed={1.4} color="var(--accent-3)" shineColor="#ffe9c2" />」的开场指令已放进输入框</>
+        )
       ),
     );
     requestAnimationFrame(() => dockInputRef.current && dockInputRef.current.focus());
@@ -1767,17 +1775,17 @@ export default function Create() {
     const t = seedText.trim().slice(0, 6000);
     patch(kind, { seed: t });
     setSeedOpen(false);
-    flash(t ? "Source notes attached. The AI will consult them every turn." : "Source notes cleared");
+    flash(t ? L("Source notes attached. The AI will consult them every turn.", "参考资料已挂上——AI 之后每一轮都会参考它") : L("Source notes cleared", "参考资料已清空"));
   }
   function clearSeed() {
     patch(kind, { seed: "" });
     setSeedOpen(false);
-    flash("Source notes removed");
+    flash(L("Source notes removed", "参考资料已清除"));
   }
   // 徽章字数:<1000 显示整数字,否则 x.xk
   function seedLenLabel(s) {
     const n = (s || "").length;
-    return n < 1000 ? `${n} chars` : `${(n / 1000).toFixed(1)}k chars`;
+    return n < 1000 ? L(`${n} chars`, `${n}字`) : L(`${(n / 1000).toFixed(1)}k chars`, `${(n / 1000).toFixed(1)}k字`);
   }
 
   // —— C1 就地手改:手改直接写 draft(draft 即共享真相,AI 下轮基于改后内容继续长) ——
@@ -1815,8 +1823,8 @@ export default function Create() {
   // 键名 ∈ src/models.py(WorldEntry: comment/keys/content/visibility;StoryEvent: event_id/title/trigger_keywords/summary)。
   // 标题/内容=受控直写;触发词=uncontrolled+onBlur 提交(受控+实时 split 会吃掉刚敲的分隔符)。
   const ENTRY_SPECS = {
-    entries: { zh: "Entry", titleKey: "comment", keysKey: "keys", bodyKey: "content", canHide: true },
-    events: { zh: "Beat", titleKey: "title", keysKey: "trigger_keywords", bodyKey: "summary", canHide: false },
+    entries: { zh: L("Entry", "条目"), titleKey: "comment", keysKey: "keys", bodyKey: "content", canHide: true },
+    events: { zh: L("Beat", "节拍"), titleKey: "title", keysKey: "trigger_keywords", bodyKey: "summary", canHide: false },
   };
   function blankEntryOf(fieldKey) {
     return fieldKey === "events"
@@ -1837,22 +1845,23 @@ export default function Create() {
     const spec = ENTRY_SPECS[fieldKey];
     const cur = (desk.draft[fieldKey] || [])[idx] || {};
     const has = (cur[spec.bodyKey] || "").trim() || (cur[spec.titleKey] || "").trim();
-    if (has && !window.confirm(`Delete ${spec.zh.toLowerCase()} "${cur[spec.titleKey] || "Untitled"}"?`)) return;
+    if (has && !window.confirm(L(`Delete ${spec.zh.toLowerCase()} "${cur[spec.titleKey] || "Untitled"}"?`, `删掉${spec.zh}「${cur[spec.titleKey] || "未命名"}」?`))) return;
     patch(kind, (d0) => {
       const arr = [...(((d0.draft || {})[fieldKey]) || [])];
       arr.splice(idx, 1);
       return { draft: { ...d0.draft, [fieldKey]: arr } };
     });
   }
-  const splitKeys = (s) => s.split(/[、,，;；\n]+/).map((x) => x.trim()).filter(Boolean); // i18n: CJK separators kept for legacy keys; no whitespace split so "Black Tower" stays one keyword
+  // 中文沿用原行为(空白也分词);英文不按空白拆,"Black Tower" 保持一个关键词。
+  const splitKeys = (s) => s.split(isZh ? /[、,，;；\s]+/ : /[、,，;；\n]+/).map((x) => x.trim()).filter(Boolean);
   // 复杂字段(对象/数组)不就地改:预填一句定向指令、光标带到命令条,聊着改。
   function chatAboutField(f) {
-    patch(kind, { input: `Change the "${f.k}" section: ` });
+    patch(kind, { input: L(`Change the "${f.k}" section: `, `把「${f.k}」这部分改一下:`) });
     requestAnimationFrame(() => dockInputRef.current && dockInputRef.current.focus());
   }
   function startNameEdit() {
     setEditingKey("__name");
-    setEditVal(draftName === "Untitled" ? "" : draftName);
+    setEditVal(draftName === L("Untitled", "未命名") ? "" : draftName);
   }
   // 编辑框通用键位:⌘/Ctrl+Enter 或 Enter(单行语义的名字)提交,Esc 取消。
   function editKeys(e, single = false) {
@@ -1871,7 +1880,7 @@ export default function Create() {
   // 预览 = 编辑(故事名/简介/作者的话/封面)+ 看真详情页 + 就地发布(取消独立发布弹窗)。
   function openPreview() {
     setMoreOpen(false);
-    setPub((p) => ({ ...p, name: p.name || (draftName !== "Untitled" ? draftName : "") }));
+    setPub((p) => ({ ...p, name: p.name || (draftName !== L("Untitled", "未命名") ? draftName : "") }));
     setPreviewOpen(true);
   }
   function closePreview() {
@@ -1886,7 +1895,7 @@ export default function Create() {
         <>
           <header className="ct-top">
             <div className="ct-toprow">
-              <span className="ct-title t-h2">Create</span>
+              <span className="ct-title t-h2">{L("Create", "创作")}</span>
             </div>
             <div className="ct-tabs">
               {KINDS.map((t, i) => {
@@ -1908,31 +1917,31 @@ export default function Create() {
                 className="ct-draft-thumb"
                 style={portrait ? { backgroundImage: `url("${portrait}")` } : avatar ? { backgroundImage: `url("${avatar}")` } : undefined}
               >
-                {!portrait && !avatar && (draftName === "Untitled" ? "✎" : draftName.slice(0, 1))}
+                {!portrait && !avatar && (draftName === L("Untitled", "未命名") ? L("✎", "草") : draftName.slice(0, 1))}
               </span>
               <span className="ct-draft-tx">
                 <span className="ct-draft-name t-kai">{draftName}</span>
                 <span className="ct-draft-sub t-meta">
                   {KINDS[ki].zh}
-                  {desk.built.length > 0 ? ` · ${desk.built.length} on station` : ""}
-                  {fields.length ? ` · ${fields.length} ${fields.length === 1 ? "field" : "fields"} filled` : " · empty"}
+                  {desk.built.length > 0 ? L(` · ${desk.built.length} on station`, ` · 本台 ${desk.built.length}`) : ""}
+                  {fields.length ? L(` · ${fields.length} ${fields.length === 1 ? "field" : "fields"} filled`, ` · 已填 ${fields.length} 项`) : L(" · empty", " · 还空着")}
                 </span>
               </span>
-              <span className="ct-draft-chev t-meta">{cardExpanded ? "Collapse ⌃" : "Show all ⌄"}</span>
+              <span className="ct-draft-chev t-meta">{cardExpanded ? L("Collapse ⌃", "收起 ⌃") : L("Show all ⌄", "看全部 ⌄")}</span>
             </button>
             {cardExpanded && (
               <div className="ct-draft-body">
-                {portrait && <div className="ct-draft-cover" style={{ backgroundImage: `url("${portrait}")` }} aria-label="Portrait" />}
+                {portrait && <div className="ct-draft-cover" style={{ backgroundImage: `url("${portrait}")` }} aria-label={L("Portrait", "立绘")} />}
                 <div className="create-card-fields">
                   {fields.length ? (
                     fields.map((f, i) => (
                       <div className={"create-field" + (f.fresh ? " is-fresh" : "")} key={i}>
                         <span className="create-field-k t-meta">{f.k}</span>
-                        <span className="create-field-v t-ui-sm">{f.hidden ? "(Hidden truth, not visible to players) " + f.v : f.v}</span>
+                        <span className="create-field-v t-ui-sm">{f.hidden ? L("(Hidden truth, not visible to players) ", "(隐藏真相,玩家不可见)") + f.v : f.v}</span>
                       </div>
                     ))
                   ) : (
-                    <div className="create-field-empty t-meta">No fields yet. Chat below to get started.</div>
+                    <div className="create-field-empty t-meta">{L("No fields yet. Chat below to get started.", "还没有字段。下面聊几句。")}</div>
                   )}
                 </div>
               </div>
@@ -1943,10 +1952,10 @@ export default function Create() {
           <div className="ct-chat" ref={chatRef}>
             {/* E6:完整度火候线进手机对话流(布局不动,只是流内多一行) */}
             {phase !== "drafting" && (
-              <div className="create-comp" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={desk.comp || 0} aria-label="Card completeness">
+              <div className="create-comp" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={desk.comp || 0} aria-label={L("Card completeness", "这张卡的完整度")}>
                 <span className="create-comp-label t-meta">
-                  Completeness {desk.comp || 0}
-                  <span className="create-comp-hint">{(desk.comp || 0) >= COMP_THRESHOLD ? " · Ready to write" : ` · Writing starts at ${COMP_THRESHOLD}`}</span>
+                  {L("Completeness", "完整度")} {desk.comp || 0}
+                  <span className="create-comp-hint">{(desk.comp || 0) >= COMP_THRESHOLD ? L(" · Ready to write", " · 过线,可以落笔") : L(` · Writing starts at ${COMP_THRESHOLD}`, ` · 过 ${COMP_THRESHOLD} 才落笔`)}</span>
                 </span>
                 <span className="create-comp-line" aria-hidden="true">
                   <span className="create-comp-fill" style={{ width: `${Math.min(100, desk.comp || 0)}%` }} />
@@ -1956,7 +1965,7 @@ export default function Create() {
             )}
             {desk.messages.map((m, i) => (
               <div key={i} className={"create-msg" + (m.who === "你" ? " is-me" : "")}>
-                <span className="create-msg-who t-meta">{m.who === "你" ? "You" : "Assistant"}</span>
+                <span className="create-msg-who t-meta">{m.who === "你" ? L("You", "你") : L("Assistant", "助手")}</span>
                 <p className="create-msg-text t-ui">{m.show || m.text}</p>
               </div>
             ))}
@@ -1974,7 +1983,7 @@ export default function Create() {
                         </button>
                       ))}
                       {qu.allow_free !== false && (
-                        <input className="create-quiz-free t-ui-sm" placeholder="Other: write your own…" value={quizFree[qu.id] || ""}
+                        <input className="create-quiz-free t-ui-sm" placeholder={L("Other: write your own…", "其他,自己写……")} value={quizFree[qu.id] || ""}
                           onChange={(e) => { const v = e.target.value; setQuizFree((f) => ({ ...f, [qu.id]: v })); if (v) setQuizAns((a) => ({ ...a, [qu.id]: undefined })); }} />
                       )}
                     </div>
@@ -1982,35 +1991,35 @@ export default function Create() {
                 ))}
                 <div className="create-quiz-foot">
                   <Button variant="primary" disabled={!(desk.questions || []).some((qu) => quizAnswerOf(qu))} onClick={submitQuiz}>
-                    Submit answers
+                    {L("Submit answers", "就按这些答")}
                   </Button>
                 </div>
               </div>
             )}
             {phase === "blueprint" && (desk.blueprint || []).length > 0 && !busy && (
               <div className="create-bp">
-                <div className="create-bp-h t-kai">Blueprint · How this card will be written</div>
+                <div className="create-bp-h t-kai">{L("Blueprint · How this card will be written", "蓝图 · 这张卡打算这么写")}</div>
                 {desk.blueprint.map((b, i) => (
-                  <div className="create-bp-item t-ui" key={i}>— {b}</div>
+                  <div className="create-bp-item t-ui" key={i}>{L("—", "——")} {b}</div>
                 ))}
                 <input
                   className="create-ask-line t-ui-sm"
                   value={bpNote}
                   disabled={busy}
-                  placeholder="Any last request before writing (optional)"
+                  placeholder={L("Any last request before writing (optional)", "落笔前补一句要求(可空)")}
                   onChange={(e) => setBpNote(e.target.value)}
-                  aria-label="Note before writing"
+                  aria-label={L("Note before writing", "落笔附言")}
                 />
                 <div className="create-bp-foot">
-                  <Button variant="primary" onClick={approveBlueprint}>Approve and write</Button>
-                  <button className="create-blank-link" onClick={() => patch(kind, { phase: "understand" })}>Keep chatting</button>
+                  <Button variant="primary" onClick={approveBlueprint}>{L("Approve and write", "批准,开始写")}</Button>
+                  <button className="create-blank-link" onClick={() => patch(kind, { phase: "understand" })}>{L("Keep chatting", "再聊聊")}</button>
                 </div>
               </div>
             )}
             {busy && (
               <div className="create-msg">
-                <span className="create-msg-who t-meta">Assistant</span>
-                <p className="create-msg-text t-ui create-msg-typing">Thinking…</p>
+                <span className="create-msg-who t-meta">{L("Assistant", "助手")}</span>
+                <p className="create-msg-text t-ui create-msg-typing">{L("Thinking…", "正在想……")}</p>
               </div>
             )}
           </div>
@@ -2020,33 +2029,33 @@ export default function Create() {
             {moreOpen && (
               <div className="ct-more" role="menu">
                 <button onClick={() => { setMoreOpen(false); setBuiltView(true); }} disabled={!desk.built.length}>
-                  View built cards ({desk.built.length})
+                  {L(<>View built cards ({desk.built.length})</>, <>查看本台已建({desk.built.length})</>)}
                 </button>
-                <button onClick={openLib}>Add from Card Library</button>
+                <button onClick={openLib}>{L("Add from Card Library", "从卡库补素材")}</button>
                 {/* D6 手机最小入口:只加两项,弹窗与桌面共用;.ct 布局不动 */}
                 <button onClick={() => { setMoreOpen(false); setImportOpen({ step: "pick", text: "", err: "" }); }}>
-                  Import existing content
+                  {L("Import existing content", "导入已有内容")}
                 </button>
                 <button onClick={() => { setMoreOpen(false); openSeed(); }}>
-                  {desk.seed ? `Source notes · ${seedLenLabel(desk.seed)} (view / clear)` : "Attach source notes"}
+                  {desk.seed ? L(`Source notes · ${seedLenLabel(desk.seed)} (view / clear)`, `参考资料 · ${seedLenLabel(desk.seed)}(查看 / 清除)`) : L("Attach source notes", "挂参考资料")}
                 </button>
                 {/* F6 手机最小入口:引用面板(弹窗与桌面共用);纸签行在 composer 上方 */}
                 <button onClick={() => { setMoreOpen(false); openRefPanel("desk"); }}>
-                  {deskRefs.length ? `Reference cards / prompts · ${deskRefs.length} attached` : "Reference cards / prompts"}
+                  {deskRefs.length ? L(`Reference cards / prompts · ${deskRefs.length} attached`, `引用卡 / 提示词 · 已挂 ${deskRefs.length}`) : L("Reference cards / prompts", "引用卡 / 提示词")}
                 </button>
-                <button className="ct-more-pub" onClick={openPreview} disabled={!hasChars}>Preview & publish to Explore · Public</button>
+                <button className="ct-more-pub" onClick={openPreview} disabled={!hasChars}>{L("Preview & publish to Explore · Public", "预览并发布到探索 · 公开")}</button>
                 {/* 禁用原因触屏可见(桌面版的 title 手机看不到,同 YOR-173 范式) */}
-                {!hasChars && <span className="ct-more-note t-meta">You need at least one character card. Chat one up, or add one from your Card Library.</span>}
+                {!hasChars && <span className="ct-more-note t-meta">{L("You need at least one character card. Chat one up, or add one from your Card Library.", "至少要一张角色卡——先聊一张,或从卡库补一张")}</span>}
               </div>
             )}
             {/* F6:挂台纸签在手机也常显可摘(同一套类名,CSS 通用) */}
             {deskRefs.length > 0 && (
-              <div className="create-refs" aria-label="References attached to this station">
+              <div className="create-refs" aria-label={L("References attached to this station", "挂在台上的引用")}>
                 {deskRefs.map((r) => (
                   <span className="create-ref-chip t-ui-sm" key={r.label}>
-                    <span className="create-ref-t">{r.type === "prompt" ? "P" : "C"}</span>
+                    <span className="create-ref-t">{r.type === "prompt" ? L("P", "词") : L("C", "卡")}</span>
                     {r.label}
-                    <button className="create-ref-x" onClick={() => removeRef(r.label)} aria-label={"Remove " + r.label}>×</button>
+                    <button className="create-ref-x" onClick={() => removeRef(r.label)} aria-label={L("Remove ", "摘下") + r.label}>×</button>
                   </span>
                 ))}
               </div>
@@ -2075,14 +2084,14 @@ export default function Create() {
                   }
                 }}
               />
-              <button className="ct-upload" onClick={() => { uploadHintRef.current = ""; fileRef.current && fileRef.current.click(); }} disabled={busy} title="Upload document" aria-label="Upload document">＋</button>
+              <button className="ct-upload" onClick={() => { uploadHintRef.current = ""; fileRef.current && fileRef.current.click(); }} disabled={busy} title={L("Upload document", "上传文档")} aria-label={L("Upload document", "上传文档")}>＋</button>
               <input ref={fileRef} type="file" accept=".txt,.md,.docx" hidden onChange={onUpload} />
-              <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim()}>Send</Button>
+              <Button variant="primary" onClick={send} disabled={busy || !desk.input.trim()}>{L("Send", "发送")}</Button>
             </div>
             <div className="ct-actions">
-              <Button variant="line" onClick={nextCard} disabled={!hasDraft}>Add to station</Button>
-              <Button variant="line" onClick={saveCard} disabled={!hasDraft || savingCard}>{savingCard ? "Saving…" : "Save to library"}</Button>
-              <button className={"ct-morebtn" + (moreOpen ? " is-on" : "")} onClick={() => setMoreOpen((v) => !v)} aria-label="More">⋯ More</button>
+              <Button variant="line" onClick={nextCard} disabled={!hasDraft}>{L("Add to station", "收进本台")}</Button>
+              <Button variant="line" onClick={saveCard} disabled={!hasDraft || savingCard}>{savingCard ? L("Saving…", "收入中…") : L("Save to library", "收入卡库")}</Button>
+              <button className={"ct-morebtn" + (moreOpen ? " is-on" : "")} onClick={() => setMoreOpen((v) => !v)} aria-label={L("More", "更多")}>{L("⋯ More", "⋯ 更多")}</button>
             </div>
           </div>
         </>
@@ -2094,7 +2103,7 @@ export default function Create() {
           {/* G0 board-bar:大标题/kind tabs/台账线全部退役成一条薄工具条——全屏画板从这里往下都是板 */}
           <div className="create-boardbar">
             <div className="create-boardbar-l">
-              <span className="create-boardbar-title t-kai">Create</span>
+              <span className="create-boardbar-title t-kai">{L("Create", "创作")}</span>
               {/* H3:四个「+ 卡」搬去左侧工具 rail,boardbar 瘦身成文件级 */}
             </div>
             <div className="create-boardbar-r">
@@ -2106,18 +2115,18 @@ export default function Create() {
                     className={"create-ledger-link" + (ledgerPop === "bind" ? " is-on" : "")}
                     onClick={() => setLedgerPop((p) => (p === "bind" ? null : "bind"))}
                   >
-                    Bundle · {total} {total === 1 ? "card" : "cards"}{mf.anySecret ? " ⚠" : ""}
+                    {L(<>Bundle · {total} {total === 1 ? "card" : "cards"}</>, <>装订 {total} 卡</>)}{mf.anySecret ? " ⚠" : ""}
                   </button>
                 );
               })()}
-              <button className={"create-chat-btn" + (aiOpen ? " is-on" : "")} onClick={() => setAiOpen((v) => !v)} title="AI chat (or long-press any card / field)">
-                AI chat · {desk.messages.length}
+              <button className={"create-chat-btn" + (aiOpen ? " is-on" : "")} onClick={() => setAiOpen((v) => !v)} title={L("AI chat (or long-press any card / field)", "AI 对话(长按任意卡/字段也能进入)")}>
+                {L("AI chat", "AI 对话")} · {desk.messages.length}
               </button>
-              <Button variant="primary" onClick={openPreview} disabled={!hasChars} title={hasChars ? "Preview and publish to Explore (public)" : "Needs at least one character card"}>Publish · Public</Button>
+              <Button variant="primary" onClick={openPreview} disabled={!hasChars} title={hasChars ? L("Preview and publish to Explore (public)", "预览并发布到探索(公开)") : L("Needs at least one character card", "至少要一张角色卡")}>{L("Publish · Public", "发布 · 公开")}</Button>
               <button
                 className={"create-ledger-more" + (ledgerPop === "menu" ? " is-on" : "")}
                 onClick={() => setLedgerPop((p) => (p === "menu" ? null : "menu"))}
-                aria-label="More actions"
+                aria-label={L("More actions", "更多动作")}
               >
                 ⋯
               </button>
@@ -2125,32 +2134,32 @@ export default function Create() {
               {ledgerPop === "bind" && (() => {
                 const mf = publishManifest();
                 return (
-                  <div className="create-ledger-pop" role="dialog" aria-label="Bundle list">
-                    <div className="create-bind-h t-meta">Bundle · Packed on publish (what you see is what gets published)</div>
+                  <div className="create-ledger-pop" role="dialog" aria-label={L("Bundle list", "装订清单")}>
+                    <div className="create-bind-h t-meta">{L("Bundle · Packed on publish (what you see is what gets published)", "装订 · 发布时打包(看到的=会发的)")}</div>
                     <ul className="create-bind-list t-meta">
                       <li>
-                        Characters ×{mf.chars.length}
-                        {mf.chars.length > 0 && ": " + mf.chars.map((c) => c.name + (c.secret ? " ⚠" : "")).join(", ")}
+                        {L("Characters", "角色卡")} ×{mf.chars.length}
+                        {mf.chars.length > 0 && L(": ", ":") + mf.chars.map((c) => c.name + (c.secret ? " ⚠" : "")).join(L(", ", "、"))}
                       </li>
-                      {mf.worlds > 0 && <li>Lore Card · World Book ×{mf.worlds}</li>}
-                      {mf.players.length > 0 && <li>Player Cards ×{mf.players.length}: {mf.players.join(", ")}</li>}
+                      {mf.worlds > 0 && <li>{L("Lore Card · World Book", "设定卡 · 世界书")} ×{mf.worlds}</li>}
+                      {mf.players.length > 0 && <li>{L(<>Player Cards ×{mf.players.length}: {mf.players.join(", ")}</>, <>演出卡 ×{mf.players.length}:{mf.players.join("、")}</>)}</li>}
                       {mf.story && (
                         <li>
-                          Story Book: {mf.story}
-                          {mf.storyExtra > 0 && ` (${mf.storyExtra} more not published)`}
+                          {L("Story Book: ", "故事书:")}{mf.story}
+                          {mf.storyExtra > 0 && L(` (${mf.storyExtra} more not published)`, `(另 ${mf.storyExtra} 张不发)`)}
                         </li>
                       )}
-                      {!mf.chars.length && <li className="create-bind-empty">No character cards yet. Publishing needs at least one.</li>}
+                      {!mf.chars.length && <li className="create-bind-empty">{L("No character cards yet. Publishing needs at least one.", "还没有角色卡——发布至少要一张")}</li>}
                     </ul>
-                    {mf.anySecret && <div className="create-bind-warn t-meta">⚠ Cards with a hidden truth become public when published. Check before publishing.</div>}
+                    {mf.anySecret && <div className="create-bind-warn t-meta">{L("⚠ Cards with a hidden truth become public when published. Check before publishing.", "⚠ 带「隐藏真相」的卡会随发布公开,发布前核对")}</div>}
                   </div>
                 );
               })()}
               {ledgerPop === "menu" && (
                 <div className="create-ledger-pop create-ledger-menu" role="menu">
-                  <button onClick={() => { setLedgerPop(null); openLib(); }}>Add from Card Library</button>
-                  <button disabled={!hasDraft} onClick={() => { setLedgerPop(null); exportCard(desk.draft); }}>Export draft JSON</button>
-                  <button onClick={() => { setLedgerPop(null); openPresets(); }}>↺ Continue editing a story I published</button>
+                  <button onClick={() => { setLedgerPop(null); openLib(); }}>{L("Add from Card Library", "从卡库补素材")}</button>
+                  <button disabled={!hasDraft} onClick={() => { setLedgerPop(null); exportCard(desk.draft); }}>{L("Export draft JSON", "导出草稿 JSON")}</button>
+                  <button onClick={() => { setLedgerPop(null); openPresets(); }}>{L("↺ Continue editing a story I published", "↺ 从我发布的故事继续改")}</button>
                 </div>
               )}
             </div>
@@ -2183,7 +2192,7 @@ export default function Create() {
               {boardCards.map((bc, seq) => {
                 if (boardFocus && boardFocus.id === bc.id) return null; // H4:聚焦中的卡由聚焦面板顶替,迷你投影隐去
                 const c = (bc.card && bc.card.data) || bc.card || {};
-                const nm = c.name || c.title || (bc.isDraft ? "Untitled draft" : "Untitled");
+                const nm = c.name || c.title || (bc.isDraft ? L("Untitled draft", "未命名草稿") : L("Untitled", "未命名"));
                 const pos = boardCardPos(bc, bc.kSeq); // 落位偏移按 kind 内序号(全局 seq 会把不同台的卡串到一条线上)
                 const on = boardSel && boardSel.id === bc.id;
                 return (
@@ -2211,20 +2220,20 @@ export default function Create() {
                     }}
                     role="button"
                     tabIndex={0}
-                    aria-label={bc.zh + " · " + nm}
+                    aria-label={bc.zh + L(" · ", "·") + nm}
                   >
                     <span className="create-bcard-kind t-meta">
                       {bc.zh}
-                      {bc.isDraft && <span className="create-bcard-live" title="Editing" />}
+                      {bc.isDraft && <span className="create-bcard-live" title={L("Editing", "编辑中")} />}
                     </span>
                     <span className="create-bcard-name t-kai">{nm}</span>
-                    <span className="create-bcard-sub t-meta">{boardSub(bc.card) || (bc.isDraft ? "Brainstorming…" : "On station")}</span>
+                    <span className="create-bcard-sub t-meta">{boardSub(bc.card) || (bc.isDraft ? L("Brainstorming…", "构思中……") : L("On station", "已收进台子"))}</span>
                     {/* H5 信号上卡(template P2:信号=一等可点对象):busy 墨点/火候线→圈选/蓝图徽→批准 */}
                     {bc.isDraft && (() => {
                       const dd = desks[bc.kk];
                       const dPhase = deskPhase(dd);
                       if (bc.kk === kind && busy) {
-                        return <span className="create-bsig-busy" title="AI is writing…" aria-label="AI working" />;
+                        return <span className="create-bsig-busy" title={L("AI is writing…", "AI 正在写……")} aria-label={L("AI working", "AI 处理中")} />;
                       }
                       if (dPhase === "understand" && ((dd.comp || 0) > 0 || (dd.questions || []).length)) {
                         return (
@@ -2232,10 +2241,10 @@ export default function Create() {
                             className="create-bsig"
                             onPointerDown={(e) => e.stopPropagation()}
                             onClick={(e) => { e.stopPropagation(); focusCard(bc); }}
-                            title={"Completeness " + (dd.comp || 0) + " · Open to keep brainstorming"}
+                            title={L("Completeness " + (dd.comp || 0) + " · Open to keep brainstorming", "完整度 " + (dd.comp || 0) + " · 点开继续构思")}
                           >
                             <span className="create-bsig-line"><span style={{ width: (dd.comp || 0) + "%" }} /></span>
-                            <span className="t-meta">Brainstorming · {dd.comp || 0}</span>
+                            <span className="t-meta">{L("Brainstorming", "构思中")} · {dd.comp || 0}</span>
                           </button>
                         );
                       }
@@ -2245,9 +2254,9 @@ export default function Create() {
                             className="create-bsig create-bsig-bp"
                             onPointerDown={(e) => e.stopPropagation()}
                             onClick={(e) => { e.stopPropagation(); focusCard(bc); }}
-                            title="Blueprint ready. Open it to approve and start writing"
+                            title={L("Blueprint ready. Open it to approve and start writing", "蓝图已出,点开批准落笔")}
                           >
-                            Blueprint ready ✦
+                            {L("Blueprint ready ✦", "蓝图待批 ✦")}
                           </button>
                         );
                       }
@@ -2265,7 +2274,7 @@ export default function Create() {
                     onPointerDown={(e) => e.stopPropagation()}
                     onDoubleClick={(e) => e.stopPropagation()}
                     role="menu"
-                    aria-label="Place a card here"
+                    aria-label={L("Place a card here", "在此落一张卡")}
                   >
                     {KINDS.map((t) => (
                       <button key={t.k} className="create-kind-btn" onClick={() => spawnDraftAt(t.k, spawnAt)}>
@@ -2288,22 +2297,22 @@ export default function Create() {
                 const acts = bc.isDraft
                   ? phase === "drafting"
                     ? [
-                        { t: "Edit", fn: () => focusCard(bc) },
-                        { t: "Reference", fn: () => addRef(refFromCard(bc.kk, desks[bc.kk].draft)) },
-                        { t: "Add to station", fn: nextCard },
-                        { t: "Export", fn: () => exportCard(desks[bc.kk].draft, bc.kk) },
+                        { t: L("Edit", "聚焦编辑"), fn: () => focusCard(bc) },
+                        { t: L("Reference", "引用"), fn: () => addRef(refFromCard(bc.kk, desks[bc.kk].draft)) },
+                        { t: L("Add to station", "收进本台"), fn: nextCard },
+                        { t: L("Export", "导出"), fn: () => exportCard(desks[bc.kk].draft, bc.kk) },
                       ]
                     : [
-                        { t: "Brainstorm", fn: () => focusCard(bc) },
-                        { t: "Add notes", fn: openSeed },
-                        { t: "Discard", fn: () => discardDraft(bc.kk), danger: true },
+                        { t: L("Brainstorm", "聚焦构思"), fn: () => focusCard(bc) },
+                        { t: L("Add notes", "挂资料"), fn: openSeed },
+                        { t: L("Discard", "丢弃"), fn: () => discardDraft(bc.kk), danger: true },
                       ]
                   : [
-                      { t: "View", fn: () => focusCard(bc) },
-                      { t: "Reference", fn: () => addRef(refFromCard(bc.kk, bc.card)) },
-                      { t: "Adapt", fn: () => adaptFromBoard(bc) },
-                      { t: "Export", fn: () => exportCard(bc.card, bc.kk) },
-                      { t: "Remove", fn: () => removeBuilt(bc.kk, bc.card && bc.card._bid), danger: true },
+                      { t: L("View", "查看"), fn: () => focusCard(bc) },
+                      { t: L("Reference", "引用"), fn: () => addRef(refFromCard(bc.kk, bc.card)) },
+                      { t: L("Adapt", "改编"), fn: () => adaptFromBoard(bc) },
+                      { t: L("Export", "导出"), fn: () => exportCard(bc.card, bc.kk) },
+                      { t: L("Remove", "移除"), fn: () => removeBuilt(bc.kk, bc.card && bc.card._bid), danger: true },
                     ];
                 return (
                   <div className="create-ctxanchor" style={{ left: pos.x, top: pos.y }}>
@@ -2313,7 +2322,7 @@ export default function Create() {
                       onPointerDown={(e) => e.stopPropagation()}
                       onDoubleClick={(e) => e.stopPropagation()}
                       role="toolbar"
-                      aria-label="Card actions"
+                      aria-label={L("Card actions", "卡片动作")}
                     >
                       {acts.map((a) => (
                         <button key={a.t} className={a.danger ? "is-danger" : ""} onClick={a.fn}>{a.t}</button>
@@ -2325,9 +2334,9 @@ export default function Create() {
               </div>
               {boardCards.length === 0 && (
                 <div className="create-board-empty" onPointerDown={(e) => e.stopPropagation()}>
-                  <span className="create-card-blank-seal t-kai" aria-hidden="true">+</span>
+                  <span className="create-card-blank-seal t-kai" aria-hidden="true">{L("+", "板")}</span>
                   <span className="t-meta">
-                    <StaggeredText text="The board is empty. Start a card:" as="span" segmentBy="chars" delay={16} duration={0.3} direction="bottom" blur={false} respectReducedMotion />
+                    <StaggeredText text={L("The board is empty. Start a card:", "板上还空着——起一张:")} as="span" segmentBy="chars" delay={16} duration={0.3} direction="bottom" blur={false} respectReducedMotion />
                   </span>
                   {/* 修复(主理人审核反馈):新建入口就放在眼前——H3 把「+卡」搬去左 rail 后,
                       空板文案曾指向已不存在的顶部按钮,新用户寸步难行 */}
@@ -2339,32 +2348,32 @@ export default function Create() {
                       </button>
                     ))}
                   </div>
-                  <span className="t-meta">Or double-click any empty spot to place a card, or:</span>
+                  <span className="t-meta">{L("Or double-click any empty spot to place a card, or:", "也可以双击空白任意处落卡,或:")}</span>
                   <div className="create-blank-more t-meta">
-                    <button className="create-blank-link" onClick={() => setTplOpen(true)}>Start from a template</button>
+                    <button className="create-blank-link" onClick={() => setTplOpen(true)}>{L("Start from a template", "从模板起手")}</button>
                     ·
-                    <button className="create-blank-link" onClick={() => setImportOpen({ step: "pick", text: "", err: "" })}>Import existing content</button>
+                    <button className="create-blank-link" onClick={() => setImportOpen({ step: "pick", text: "", err: "" })}>{L("Import existing content", "导入已有内容")}</button>
                     ·
-                    <button className="create-blank-link" onClick={openSeed}>Attach source notes</button>
+                    <button className="create-blank-link" onClick={openSeed}>{L("Attach source notes", "挂参考资料")}</button>
                   </div>
                 </div>
               )}
               {/* 工具 rail=能力总入口(主理人审核拍板):所有已有功能带字可见——
                   工具(选择/抓手)/起手(新建/模板/导入)/内容源(资料/引用/素材/拆回)/产出(导出)。
                   装订/发布/对话留在顶部 boardbar(文件级);快捷键 V/H/1-4/⌘0 不变 */}
-              <div className="create-rail" role="toolbar" aria-label="Board tools" aria-orientation="vertical" onPointerDown={(e) => e.stopPropagation()}>
+              <div className="create-rail" role="toolbar" aria-label={L("Board tools", "画板工具")} aria-orientation="vertical" onPointerDown={(e) => e.stopPropagation()}>
                 {/* 主理人 2026-07-13 拍板:rail 换 react-bits LineSidebar 完整复刻(指针接近=右移染朱砂+线标伸长,等宽序号+项间刻度)。
                     选择/抓手已退役(左键=选择,右键拖=平移);activeIndex=null 让点按不留常亮(全是瞬时动作),导出无草稿禁用 */}
                 <LineSidebar
                   items={[
-                    { label: "New", title: "New card (1-4, or double-click empty board space)" },
-                    { label: "Templates", title: "Start from a template: the skeleton drops straight onto the canvas" },
-                    { label: "Import", title: "Import existing content: paste / upload document / Tavern card" },
-                    { label: "Notes", title: "Attach source notes: the AI consults them every turn" },
-                    { label: "Reference", title: "Reference existing cards / prompts (or type @)" },
-                    { label: "Library", title: "Add cards from my Card Library to this station" },
-                    { label: "Unpack", title: "Unpack a story I published back into the four stations" },
-                    { label: "Export", title: hasDraft ? "Export the current draft as JSON" : "No draft on the canvas yet", disabled: !hasDraft },
+                    { label: L("New", "新建"), title: L("New card (1-4, or double-click empty board space)", "新建一张卡 (1-4,或双击画板空白)") },
+                    { label: L("Templates", "模板"), title: L("Start from a template: the skeleton drops straight onto the canvas", "从模板起手:骨架直落画布") },
+                    { label: L("Import", "导入"), title: L("Import existing content: paste / upload document / Tavern card", "导入已有内容:粘贴/上传文档/酒馆卡") },
+                    { label: L("Notes", "资料"), title: L("Attach source notes: the AI consults them every turn", "挂参考资料:AI 每轮都参考") },
+                    { label: L("Reference", "引用"), title: L("Reference existing cards / prompts (or type @)", "引用已有卡/提示词(输入 @ 也能唤起)") },
+                    { label: L("Library", "素材"), title: L("Add cards from my Card Library to this station", "从我的卡库补素材到本台") },
+                    { label: L("Unpack", "拆回"), title: L("Unpack a story I published back into the four stations", "从我发布的故事整组拆回四台") },
+                    { label: L("Export", "导出"), title: hasDraft ? L("Export the current draft as JSON", "导出当前草稿 JSON") : L("No draft on the canvas yet", "画布上还没有草稿"), disabled: !hasDraft },
                   ]}
                   activeIndex={null}
                   onItemClick={(i) => {
@@ -2392,7 +2401,7 @@ export default function Create() {
                   smoothing={90}
                 />
                 {railNew && (
-                  <div className="create-rail-fly" role="menu" aria-label="New card type">
+                  <div className="create-rail-fly" role="menu" aria-label={L("New card type", "新建卡种")}>
                     {KINDS.map((t, i) => (
                       <button
                         key={t.k}
@@ -2402,7 +2411,7 @@ export default function Create() {
                           e.dataTransfer.effectAllowed = "copy";
                         }}
                         onClick={() => { setRailNew(false); newCardOf(t.k); }}
-                        title={"Click to create, or drag onto the canvas (" + (i + 1) + ")"}
+                        title={L("Click to create, or drag onto the canvas (", "点击新建,或拖到画布上落卡 (") + (i + 1) + ")"}
                         className="create-kind-btn"
                       >
                         <span className="create-kind-nm">+ {t.zh}</span>
@@ -2415,16 +2424,16 @@ export default function Create() {
               {/* 每次进页的操作提示(主理人拍板):左键/右键分工 9s 自动收,× 手动收 */}
               {ctrlHint && (
                 <div className="create-ctrlhint t-meta" role="note" onPointerDown={(e) => e.stopPropagation()}>
-                  <span>Left-click: select / drag cards · Right-drag: pan · Ctrl+scroll: zoom · Double-click empty space: new card</span>
-                  <button aria-label="Dismiss tip" onClick={() => setCtrlHint(false)}>×</button>
+                  <span>{L("Left-click: select / drag cards · Right-drag: pan · Ctrl+scroll: zoom · Double-click empty space: new card", "左键:选卡/拖卡 · 右键拖动:平移画布 · Ctrl+滚轮:缩放 · 双击空白:落新卡")}</span>
+                  <button aria-label={L("Dismiss tip", "收起提示")} onClick={() => setCtrlHint(false)}>×</button>
                 </div>
               )}
               {/* H1 缩放控件:± 板中心锚定;点 % 回 100%;适配=装下全部卡 */}
-              <div className="create-zoomctl t-meta" aria-label="Board zoom" onPointerDown={(e) => e.stopPropagation()}>
-                <button onClick={() => zoomTo(viewRef.current.z / 1.2)} aria-label="Zoom out">−</button>
-                <button className="create-zoomctl-pct" onClick={() => zoomTo(1)} title="Reset to 100%">{Math.round(view.z * 100)}%</button>
-                <button onClick={() => zoomTo(viewRef.current.z * 1.2)} aria-label="Zoom in">＋</button>
-                <button onClick={fitAllCards} title="Fit all cards">Fit</button>
+              <div className="create-zoomctl t-meta" aria-label={L("Board zoom", "画板缩放")} onPointerDown={(e) => e.stopPropagation()}>
+                <button onClick={() => zoomTo(viewRef.current.z / 1.2)} aria-label={L("Zoom out", "缩小")}>−</button>
+                <button className="create-zoomctl-pct" onClick={() => zoomTo(1)} title={L("Reset to 100%", "回到 100%")}>{Math.round(view.z * 100)}%</button>
+                <button onClick={() => zoomTo(viewRef.current.z * 1.2)} aria-label={L("Zoom in", "放大")}>＋</button>
+                <button onClick={fitAllCards} title={L("Fit all cards", "装下全部卡")}>{L("Fit", "适配")}</button>
               </div>
             </div>
 
@@ -2432,14 +2441,14 @@ export default function Create() {
             {/* H4 相机聚焦:overlay 退役——面板落在板内(screen 空间,scale=1 编辑),相机已推进到卡位;
                 无 shade,点板空白/Esc/回画板=拉回原视口。z44 层级消失,抽屉/dock 恢复自然层序。 */}
             {boardFocus && (
-              <div className="create-focuscard" role="region" aria-label="Focused editing">
+              <div className="create-focuscard" role="region" aria-label={L("Focused editing", "聚焦编辑")}>
                 <div className="create-focuscard-in">
                   <div className="create-focus-top">
-                    <button className="create-blank-link" onClick={exitFocus}>← Back to board</button>
+                    <button className="create-blank-link" onClick={exitFocus}>{L("← Back to board", "← 回画板")}</button>
                     {isDraftId(boardFocus) && (
                       <span className="create-focus-acts">
-                        <Button variant="line" onClick={nextCard} disabled={!hasDraft}>Add to station</Button>
-                        <Button variant="line" onClick={saveCard} disabled={!hasDraft || savingCard}>{savingCard ? "Saving…" : "Save to library"}</Button>
+                        <Button variant="line" onClick={nextCard} disabled={!hasDraft}>{L("Add to station", "收进本台")}</Button>
+                        <Button variant="line" onClick={saveCard} disabled={!hasDraft || savingCard}>{savingCard ? L("Saving…", "收入中…") : L("Save to library", "收入卡库")}</Button>
                       </span>
                     )}
                   </div>
@@ -2447,11 +2456,11 @@ export default function Create() {
                     <div className="create-focus-built">
                       {(() => {
                         const card = resolveBuilt(boardFocus);
-                        if (!card) return <div className="create-shelf-empty t-meta">This card is gone (it may have been removed).</div>;
+                        if (!card) return <div className="create-shelf-empty t-meta">{L("This card is gone (it may have been removed).", "这张卡不在了(可能已移除)。")}</div>;
                         const c = (card && card.data) || card || {};
                         return (
                           <>
-                            <div className="create-card-name t-kai">{c.name || c.title || "Untitled"}</div>
+                            <div className="create-card-name t-kai">{c.name || c.title || L("Untitled", "未命名")}</div>
                             <div className="create-card-fields">
                               {cardFields(card).map((f, j) => (
                                 <div className="create-field" key={j}>
@@ -2465,15 +2474,15 @@ export default function Create() {
                       })()}
                     </div>
                   ) : (
-              <section className="create-canvas" aria-label="Card canvas">
-                <div className="create-card-kind t-meta">{KINDS[ki].zh} · {KINDS[ki].sub}{desk.built.length > 0 && ` · ${desk.built.length} built here`}</div>
+              <section className="create-canvas" aria-label={L("Card canvas", "卡画布")}>
+                <div className="create-card-kind t-meta">{KINDS[ki].zh} · {KINDS[ki].sub}{desk.built.length > 0 && L(` · ${desk.built.length} built here`, ` · 本台已建 ${desk.built.length}`)}</div>
                 {/* R3 阶段条(主理人试样拍板):构思→落笔→收尾,由真实门控驱动(phase/comp/60 分线)。
                     骨架路径直通落笔=构思打勾,如实;comp 过线才亮收尾(纯聊构思路径才有 comp)。 */}
                 {isDraftId(boardFocus) && (() => {
                   const stage = phase !== "drafting" ? 0 : (desk.comp || 0) >= COMP_THRESHOLD ? 2 : 1;
-                  const names = ["Brainstorm", "Write", "Finish"];
+                  const names = L(["Brainstorm", "Write", "Finish"], ["构思", "落笔", "收尾"]);
                   return (
-                    <div className="create-phasesteps" aria-label={"Creation stage: " + names[stage]}>
+                    <div className="create-phasesteps" aria-label={L("Creation stage: ", "创作阶段:") + names[stage]}>
                       {names.map((s, i) => (
                         <span key={s} className="create-phasestep-w">
                           <span className={"create-phasestep" + (i < stage ? " is-done" : i === stage ? " is-on" : "")}>
@@ -2491,22 +2500,22 @@ export default function Create() {
                     className="create-card-name create-name-edit t-kai"
                     autoFocus
                     value={editVal}
-                    placeholder="Name it…"
+                    placeholder={L("Name it…", "起个名字…")}
                     onChange={(e) => setEditVal(e.target.value)}
                     onKeyDown={(e) => editKeys(e, true)}
                     onBlur={commitFieldEdit}
-                    aria-label="Card name"
+                    aria-label={L("Card name", "卡名")}
                   />
                 ) : (
-                  <button className="create-card-name create-name-btn t-kai" onClick={startNameEdit} title="Click to rename">
+                  <button className="create-card-name create-name-btn t-kai" onClick={startNameEdit} title={L("Click to rename", "点击改名")}>
                     {draftName}
                     <span className="create-name-hint" aria-hidden="true">✎</span>
                   </button>
                 )}
                 {kind === "characters" && (avatar || portrait) && (
                   <div className="create-pics-preview">
-                    {avatar && <span className="create-pics-av" style={{ backgroundImage: `url("${avatar}")` }} aria-label="Avatar" />}
-                    {portrait && <span className="create-pics-portrait" style={{ backgroundImage: `url("${portrait}")` }} aria-label="Portrait" />}
+                    {avatar && <span className="create-pics-av" style={{ backgroundImage: `url("${avatar}")` }} aria-label={L("Avatar", "头像")} />}
+                    {portrait && <span className="create-pics-portrait" style={{ backgroundImage: `url("${portrait}")` }} aria-label={L("Portrait", "立绘")} />}
                   </div>
                 )}
                 <div className="create-card-fields">
@@ -2522,8 +2531,8 @@ export default function Create() {
                             <span className="create-field-k t-meta">
                               {f.k}
                               <span className="create-entry-note">
-                                <BlurHighlight highlightedBits={["trigger word"]} highlightColor="color-mix(in srgb, var(--accent) 16%, transparent)" blurAmount={5}>
-                                  {f.k0 === "entries" ? "Injected into the AI only when the player mentions a trigger word" : "This beat advances when the player mentions a trigger word"}
+                                <BlurHighlight highlightedBits={[L("trigger word", "触发词")]} highlightColor="color-mix(in srgb, var(--accent) 16%, transparent)" blurAmount={5}>
+                                  {f.k0 === "entries" ? L("Injected into the AI only when the player mentions a trigger word", "玩家聊到触发词,这条才注入给 AI") : L("This beat advances when the player mentions a trigger word", "玩家聊到触发词,这个节拍被推进")}
                                 </BlurHighlight>
                               </span>
                             </span>
@@ -2538,7 +2547,7 @@ export default function Create() {
                                     onPointerDown={(e) => {
                                       if (e.button !== 0 || e.target.closest("input,textarea,button")) return;
                                       lpStart(e.currentTarget, e, () =>
-                                        openAiForField({ k: `${spec.zh} · ${title || "Untitled"}`, k0: f.k0, empty: !(en[spec.bodyKey] || "").trim() })
+                                        openAiForField({ k: L(`${spec.zh} · ${title || "Untitled"}`, `${spec.zh}·${title || "未命名"}`), k0: f.k0, empty: !(en[spec.bodyKey] || "").trim() })
                                       );
                                     }}
                                     onPointerUp={lpCancel}
@@ -2549,25 +2558,25 @@ export default function Create() {
                                       <input
                                         className="create-entry-title"
                                         value={title}
-                                        placeholder={spec.zh + " title"}
-                                        aria-label={spec.zh + " title"}
+                                        placeholder={spec.zh + L(" title", "标题")}
+                                        aria-label={spec.zh + L(" title", "标题")}
                                         onPointerDown={(e) => e.stopPropagation()}
                                         onChange={(e) => patchEntryAt(f.k0, i, { [spec.titleKey]: e.target.value })}
                                       />
                                       {spec.canHide && (
                                         <button
                                           className={"create-entry-vis" + (en.visibility === "hidden" ? " is-hidden" : "")}
-                                          title={en.visibility === "hidden" ? "Hidden entry: secret lore, never injected or shown to players. Click to make public" : "Public entry. Click to hide (secret lore)"}
+                                          title={en.visibility === "hidden" ? L("Hidden entry: secret lore, never injected or shown to players. Click to make public", "隐藏条目:不注入、玩家不可见的暗设定——点改公开") : L("Public entry. Click to hide (secret lore)", "公开条目——点改隐藏(暗设定)")}
                                           onPointerDown={(e) => e.stopPropagation()}
                                           onClick={() => patchEntryAt(f.k0, i, { visibility: en.visibility === "hidden" ? "public" : "hidden" })}
                                         >
-                                          {en.visibility === "hidden" ? "S" : "P"}
+                                          {en.visibility === "hidden" ? L("S", "密") : L("P", "公")}
                                         </button>
                                       )}
                                       <button
                                         className="create-entry-del"
-                                        title={"Delete this " + (f.k0 === "entries" ? "entry" : "beat")}
-                                        aria-label={"Delete " + spec.zh.toLowerCase()}
+                                        title={L("Delete this " + (f.k0 === "entries" ? "entry" : "beat"), "删掉这" + (f.k0 === "entries" ? "条" : "个节拍"))}
+                                        aria-label={L("Delete " + spec.zh.toLowerCase(), "删掉" + spec.zh)}
                                         onPointerDown={(e) => e.stopPropagation()}
                                         onClick={() => delEntryAt(f.k0, i)}
                                       >
@@ -2576,20 +2585,20 @@ export default function Create() {
                                     </div>
                                     <input
                                       className="create-entry-keys"
-                                      key={"keys" + i + ":" + keysArr.join(", ")}
-                                      defaultValue={keysArr.join(", ")}
-                                      placeholder="Trigger words, comma-separated"
-                                      aria-label="Trigger words"
+                                      key={"keys" + i + ":" + keysArr.join(L(", ", "、"))}
+                                      defaultValue={keysArr.join(L(", ", "、"))}
+                                      placeholder={L("Trigger words, comma-separated", "触发词:顿号或逗号分隔")}
+                                      aria-label={L("Trigger words", "触发词")}
                                       onPointerDown={(e) => e.stopPropagation()}
                                       onBlur={(e) => patchEntryAt(f.k0, i, { [spec.keysKey]: splitKeys(e.target.value) })}
                                     />
-                                    {!keysArr.length && <div className="create-entry-warn t-meta">No trigger words, so this will never appear</div>}
+                                    {!keysArr.length && <div className="create-entry-warn t-meta">{L("No trigger words, so this will never appear", "没有触发词,永远不会出场")}</div>}
                                     <textarea
                                       className="create-entry-body"
                                       rows={2}
                                       value={en[spec.bodyKey] || ""}
-                                      placeholder={f.k0 === "entries" ? "What this entry says" : "What happens in this beat"}
-                                      aria-label={spec.zh + " content"}
+                                      placeholder={f.k0 === "entries" ? L("What this entry says", "这条设定的内容") : L("What happens in this beat", "这个节拍发生什么")}
+                                      aria-label={spec.zh + L(" content", "内容")}
                                       onPointerDown={(e) => e.stopPropagation()}
                                       onChange={(e) => patchEntryAt(f.k0, i, { [spec.bodyKey]: e.target.value })}
                                     />
@@ -2597,7 +2606,7 @@ export default function Create() {
                                 );
                               })}
                               <button className="create-entry-add" onClick={() => addEntryAt(f.k0)}>
-                                + Add {f.k0 === "entries" ? "an entry" : "a beat"}
+                                {L(<>+ Add {f.k0 === "entries" ? "an entry" : "a beat"}</>, <>+ 加一{f.k0 === "entries" ? "条" : "个节拍"}</>)}
                               </button>
                             </div>
                           </div>
@@ -2624,7 +2633,7 @@ export default function Create() {
                       >
                         <span className="create-field-k t-meta">
                           {f.k}
-                          {f.hidden && <span className="create-field-seal" title="Hidden truth, not visible to players">S</span>}
+                          {f.hidden && <span className="create-field-seal" title={L("Hidden truth, not visible to players", "隐藏真相,玩家不可见")}>{L("S", "密")}</span>}
                         </span>
                         {editingKey === f.k0 ? (
                           <textarea
@@ -2635,24 +2644,24 @@ export default function Create() {
                             onChange={(e) => setEditVal(e.target.value)}
                             onKeyDown={(e) => editKeys(e)}
                             onBlur={commitFieldEdit}
-                            placeholder={f.list ? "One per line; blank lines are ignored" : undefined}
-                            aria-label={"Edit " + f.k}
+                            placeholder={f.list ? L("One per line; blank lines are ignored", "一行一条,空行不算") : undefined}
+                            aria-label={L("Edit ", "编辑") + f.k}
                           />
                         ) : f.empty || !f.v.trim() ? (
                           <span className="create-field-v create-field-v-empty t-ui-sm">
                             {tplHints[f.k0]
-                              ? tplHints[f.k0] + (f.editable ? " (✦ AI fill / ✎ write it yourself)" : " (fill it in via the AI chat)")
+                              ? tplHints[f.k0] + (f.editable ? L(" (✦ AI fill / ✎ write it yourself)", "(✦ 补写 / ✎ 手写)") : L(" (fill it in via the AI chat)", "(点「聊」到命令条补)"))
                               : f.editable
-                              ? "Empty. Long-press to have the AI fill it in, or ✎ write it yourself"
-                              : "Empty. Long-press to have the AI fill it in"}
+                              ? L("Empty. Long-press to have the AI fill it in, or ✎ write it yourself", "空——长按这一块让 AI 补写,或 ✎ 手写")
+                              : L("Empty. Long-press to have the AI fill it in", "空——长按这一块让 AI 补写")}
                           </span>
                         ) : (
-                          <span className="create-field-v t-ui-sm">{f.hidden ? "(Hidden truth, not visible to players) " + f.v : f.v}</span>
+                          <span className="create-field-v t-ui-sm">{f.hidden ? L("(Hidden truth, not visible to players) ", "(隐藏真相,玩家不可见)") + f.v : f.v}</span>
                         )}
                         {/* P2c 防上帝视角:已知写了、未知空着=提示配对(引擎把两者一起进 prompt,缺「不知道」悬念全漏) */}
                         {kind === "players" && f.k0 === "unknown" &&
                           !!(desk.draft.known_facts || []).length && !(desk.draft.unknown || []).length && (
-                            <div className="create-field-pairwarn t-meta">"Known at start" is filled in but this is empty. Without saying what the player does not know, they start out knowing everything and the suspense leaks away.</div>
+                            <div className="create-field-pairwarn t-meta">{L("\"Known at start\" is filled in but this is empty. Without saying what the player does not know, they start out knowing everything and the suspense leaks away.", "「开局已知」写了,这里还空着——不写「不知道什么」,玩家容易开局全知,悬念漏光")}</div>
                           )}
                         {editingKey !== f.k0 && f.editable && (
                           <span className="create-field-acts">
@@ -2660,8 +2669,8 @@ export default function Create() {
                             <button
                               className="create-field-act"
                               disabled={busy}
-                              title="Edit by hand"
-                              aria-label={"Edit " + f.k}
+                              title={L("Edit by hand", "就地手改")}
+                              aria-label={L("Edit ", "手改") + f.k}
                               onPointerDown={(e) => e.stopPropagation()}
                               onClick={() => startFieldEdit(f)}
                             >
@@ -2682,11 +2691,11 @@ export default function Create() {
                         aria-valuemin={0}
                         aria-valuemax={100}
                         aria-valuenow={desk.comp || 0}
-                        aria-label="Card completeness"
+                        aria-label={L("Card completeness", "这张卡的完整度")}
                       >
                         <span className="create-comp-label t-meta">
-                          Completeness <CountUp to={desk.comp || 0} duration={0.7} />
-                          <span className="create-comp-hint">{(desk.comp || 0) >= COMP_THRESHOLD ? " · Ready to write" : ` · Writing starts at ${COMP_THRESHOLD}`}</span>
+                          {L("Completeness", "完整度")} <CountUp to={desk.comp || 0} duration={0.7} />
+                          <span className="create-comp-hint">{(desk.comp || 0) >= COMP_THRESHOLD ? L(" · Ready to write", " · 过线,可以落笔") : L(` · Writing starts at ${COMP_THRESHOLD}`, ` · 过 ${COMP_THRESHOLD} 才落笔`)}</span>
                         </span>
                         <span className="create-comp-line" aria-hidden="true">
                           <span className="create-comp-fill" style={{ width: `${Math.min(100, desk.comp || 0)}%` }} />
@@ -2694,13 +2703,13 @@ export default function Create() {
                         </span>
                       </div>
                       <div className="create-muse-say">
-                        <span className="create-say-who t-kai">Assistant</span>
+                        <span className="create-say-who t-kai">{L("Assistant", "助手")}</span>
                         {busy ? (
                           <div className="create-muse-tx t-ui create-msg-typing">
                             <span className="create-dot" aria-hidden="true" />
                             <span className="create-dot" aria-hidden="true" />
                             <span className="create-dot" aria-hidden="true" />
-                            Thinking…
+                            {L("Thinking…", "正在想……")}
                           </div>
                         ) : (
                           <div className="create-muse-tx t-ui">{lastAi ? lastAi.show || lastAi.text : ""}</div>
@@ -2727,7 +2736,7 @@ export default function Create() {
                                 {qu.allow_free !== false && (
                                   <input
                                     className="create-quiz-free t-ui-sm"
-                                    placeholder="Other: write your own…"
+                                    placeholder={L("Other: write your own…", "其他,自己写……")}
                                     value={quizFree[qu.id] || ""}
                                     onChange={(e) => {
                                       const v = e.target.value;
@@ -2745,24 +2754,24 @@ export default function Create() {
                               disabled={!(desk.questions || []).some((qu) => quizAnswerOf(qu))}
                               onClick={submitQuiz}
                             >
-                              Submit answers
+                              {L("Submit answers", "就按这些答")}
                             </Button>
-                            <span className="create-quiz-skip t-meta">No need to answer everything. You can also just type below.</span>
+                            <span className="create-quiz-skip t-meta">{L("No need to answer everything. You can also just type below.", "没答全没关系,也可以直接在下面说")}</span>
                           </div>
                         </div>
                       )}
                       {/* E4 蓝图(F8 迁进画布):破折号要点直排纸面;唯一的重元素是那颗批准钮 */}
                       {phase === "blueprint" && (desk.blueprint || []).length > 0 && !busy && (
                         <div className="create-bp">
-                          <div className="create-bp-h t-kai">Blueprint · How this card will be written</div>
+                          <div className="create-bp-h t-kai">{L("Blueprint · How this card will be written", "蓝图 · 这张卡打算这么写")}</div>
                           {desk.blueprint.map((b, i) => (
-                            <div className="create-bp-item t-ui" key={i}>— {b}</div>
+                            <div className="create-bp-item t-ui" key={i}>{L("—", "——")} {b}</div>
                           ))}
                           <input
                             className="create-ask-line t-ui-sm"
                             value={bpNote}
                             disabled={busy}
-                            placeholder="Any last request before writing (optional), e.g. more dialogue, less flowery"
+                            placeholder={L("Any last request before writing (optional), e.g. more dialogue, less flowery", "落笔前补一句要求(可空)——比如:对话多一点,别太文绉绉")}
                             onChange={(e) => setBpNote(e.target.value)}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && !(e.nativeEvent || e).isComposing && !busy) {
@@ -2770,10 +2779,10 @@ export default function Create() {
                                 approveBlueprint();
                               }
                             }}
-                            aria-label="Note before writing"
+                            aria-label={L("Note before writing", "落笔附言")}
                           />
                           <div className="create-bp-foot">
-                            <Button variant="primary" onClick={approveBlueprint}>Approve and write</Button>
+                            <Button variant="primary" onClick={approveBlueprint}>{L("Approve and write", "批准,开始写")}</Button>
                             <button
                               className="create-blank-link"
                               onClick={() => {
@@ -2781,7 +2790,7 @@ export default function Create() {
                                 requestAnimationFrame(() => dockInputRef.current && dockInputRef.current.focus());
                               }}
                             >
-                              Keep chatting
+                              {L("Keep chatting", "再聊聊")}
                             </button>
                           </div>
                         </div>
@@ -2789,14 +2798,14 @@ export default function Create() {
                     </div>
                   ) : (
                     <div className="create-card-blank">
-                      <span className="create-card-blank-seal t-kai" aria-hidden="true">✎</span>
+                      <span className="create-card-blank-seal t-kai" aria-hidden="true">{L("✎", "卡")}</span>
                       <span className="create-card-blank-tx t-meta">
-                        {phase !== "drafting" ? "Brainstorm stage: answer the questions below to raise completeness. At 60 a blueprint is generated; approve it to start writing." : OPENINGS[kind]}
+                        {phase !== "drafting" ? L("Brainstorm stage: answer the questions below to raise completeness. At 60 a blueprint is generated; approve it to start writing.", "构思阶段:回答下方问题提高完整度,达到 60 生成创作蓝图,批准后开始写卡。") : OPENINGS[kind]}
                       </span>
                       {/* 空台引子:起手句进画布空卡里(点了只进输入框,不代发) */}
                       {desk.messages.length <= 1 && !busy && (
                         <div className="create-starters">
-                          <span className="create-starters-h t-meta">Try one</span>
+                          <span className="create-starters-h t-meta">{L("Try one", "起个头")}</span>
                           <div className="create-starters-row">
                             {(SUGGESTS[kind] || []).map((s, i) => (
                               <button
@@ -2814,15 +2823,15 @@ export default function Create() {
                       {/* D1/D2/D3:已有内容优先的入口行——模板起手 / 导入成卡 / 挂参考资料 */}
                       <div className="create-blank-more t-meta">
                         <button className="create-blank-link" onClick={() => setTplOpen(true)}>
-                          Start from a template
+                          {L("Start from a template", "从模板起手")}
                         </button>
                         ·
                         <button className="create-blank-link" onClick={() => setImportOpen({ step: "pick", text: "", err: "" })}>
-                          Import existing content
+                          {L("Import existing content", "导入已有内容")}
                         </button>
                         ·
                         <button className="create-blank-link" onClick={openSeed}>
-                          {desk.seed ? `Source notes · ${seedLenLabel(desk.seed)}` : "Attach source notes"}
+                          {desk.seed ? L(`Source notes · ${seedLenLabel(desk.seed)}`, `参考资料 · ${seedLenLabel(desk.seed)}`) : L("Attach source notes", "挂参考资料")}
                         </button>
                       </div>
                     </div>
@@ -2841,7 +2850,7 @@ export default function Create() {
                 className={"create-ai" + (refDragOver ? " is-dropping" : "")}
                 style={{ transform: `translate(${aiPos.x}px, ${aiPos.y}px)` }}
                 role="complementary"
-                aria-label="AI chat"
+                aria-label={L("AI chat", "AI 对话")}
                 onDragOver={(e) => {
                   if ([...e.dataTransfer.types].includes("application/x-ais-ref")) {
                     e.preventDefault();
@@ -2858,7 +2867,7 @@ export default function Create() {
                     const p = JSON.parse(raw);
                     addRef(refFromCard(p.kk, p.card));
                   } catch {
-                    flash("Couldn't drop this card in (its data is unreadable)");
+                    flash(L("Couldn't drop this card in (its data is unreadable)", "这张卡拖不进来(数据读不出)"));
                   }
                 }}
               >
@@ -2869,43 +2878,43 @@ export default function Create() {
                   onPointerUp={onAiHeadUp}
                   onPointerCancel={onAiHeadUp}
                   onDoubleClick={() => setAiPos({ x: 0, y: 0 })}
-                  title="Drag to move · double-click to reset"
+                  title={L("Drag to move · double-click to reset", "按住拖动·双击回位")}
                 >
-                  <span className="t-kai">AI chat · {KINDS[ki].zh}</span>
-                  <button className="create-modal-x" onClick={() => setAiOpen(false)} aria-label="Close chat">×</button>
+                  <span className="t-kai">{L("AI chat", "AI 对话")} · {KINDS[ki].zh}</span>
+                  <button className="create-modal-x" onClick={() => setAiOpen(false)} aria-label={L("Close chat", "收起对话")}>×</button>
                 </div>
                 {aiCtx && aiCtx.type === "field" && (
-                  <button className="create-ai-chip" onClick={() => setAiCtx(null)} title="Click × to go back to whole-card chat">
-                    {aiCtx.f.empty ? "Filling in" : "Rewriting"}: "{aiCtx.f.k}" ×
+                  <button className="create-ai-chip" onClick={() => setAiCtx(null)} title={L("Click × to go back to whole-card chat", "点 × 回到整卡对话")}>
+                    {L(<>{aiCtx.f.empty ? "Filling in" : "Rewriting"}: "{aiCtx.f.k}" ×</>, <>正在{aiCtx.f.empty ? "补写" : "改写"}:「{aiCtx.f.k}」 ×</>)}
                   </button>
                 )}
                 {aiCtx && aiCtx.type === "built" && (
-                  <div className="create-ai-chip is-note" aria-live="polite">Finished cards cannot be chatted with directly. Use Adapt on the card to make a draft first.</div>
+                  <div className="create-ai-chip is-note" aria-live="polite">{L("Finished cards cannot be chatted with directly. Use Adapt on the card to make a draft first.", "成品卡不能直接聊——卡上「改编」变成草稿后再来。")}</div>
                 )}
                 <div className="create-ai-flow" ref={chatRef}>
                   {desk.messages.map((m, i) => (
                     <div key={i} className={"create-say" + (m.who === "你" ? " is-me" : "")}>
-                      <span className="create-say-who t-kai">{m.who === "你" ? "You" : "Assistant"}</span>
+                      <span className="create-say-who t-kai">{m.who === "你" ? L("You", "你") : L("Assistant", "助手")}</span>
                       <span className="create-say-tx">{m.show || m.text}</span>
                     </div>
                   ))}
                   {busy && (
                     <div className="create-say">
-                      <span className="create-say-who t-kai">Assistant</span>
-                      <span className="create-say-tx create-msg-typing">Thinking…</span>
+                      <span className="create-say-who t-kai">{L("Assistant", "助手")}</span>
+                      <span className="create-say-tx create-msg-typing">{L("Thinking…", "正在想……")}</span>
                     </div>
                   )}
                 </div>
                 {(deskRefs.length > 0 || refDragOver) && (
-                  <div className="create-refs" aria-label="References attached to this station">
+                  <div className="create-refs" aria-label={L("References attached to this station", "挂在台上的引用")}>
                     {deskRefs.map((r) => (
-                      <span className="create-ref-chip t-ui-sm" key={r.label} title={`The AI consults "${r.label}" every turn`}>
-                        <span className="create-ref-t">{r.type === "prompt" ? "P" : "C"}</span>
+                      <span className="create-ref-chip t-ui-sm" key={r.label} title={L(`The AI consults "${r.label}" every turn`, "AI 每轮都会参考「" + r.label + "」")}>
+                        <span className="create-ref-t">{r.type === "prompt" ? L("P", "词") : L("C", "卡")}</span>
                         {r.label}
-                        <button className="create-ref-x" onClick={() => removeRef(r.label)} aria-label={"Remove " + r.label}>×</button>
+                        <button className="create-ref-x" onClick={() => removeRef(r.label)} aria-label={L("Remove ", "摘下") + r.label}>×</button>
                       </span>
                     ))}
-                    {refDragOver && <span className="create-ref-hint t-meta">Release to attach as a reference</span>}
+                    {refDragOver && <span className="create-ref-hint t-meta">{L("Release to attach as a reference", "松手,挂为引用")}</span>}
                   </div>
                 )}
                 <div className="create-composer">
@@ -2916,9 +2925,9 @@ export default function Create() {
                     disabled={busy || (aiCtx && aiCtx.type === "built")}
                     placeholder={
                       aiCtx && aiCtx.type === "field"
-                        ? (aiCtx.f.empty ? `How to fill in "${aiCtx.f.k}" (send empty for the default)` : `How to rewrite "${aiCtx.f.k}" (send empty for the default)`)
+                        ? (aiCtx.f.empty ? L(`How to fill in "${aiCtx.f.k}" (send empty for the default)`, "补写「" + aiCtx.f.k + "」的要求,留空直接发=默认写法") : L(`How to rewrite "${aiCtx.f.k}" (send empty for the default)`, "改写「" + aiCtx.f.k + "」的要求,留空直接发=默认写法"))
                         : aiCtx && aiCtx.type === "built"
-                        ? "Finished cards can't be edited directly. Adapt it into a draft first"
+                        ? L("Finished cards can't be edited directly. Adapt it into a draft first", "成品卡不能直接改——先「改编」成草稿")
                         : KINDS[ki].ph
                     }
                     onChange={(e) => {
@@ -2940,23 +2949,23 @@ export default function Create() {
                   />
                   <div className="create-composer-actions">
                     <button className="create-upload" onClick={() => { uploadHintRef.current = ""; fileRef.current && fileRef.current.click(); }} disabled={busy}>
-                      Upload document
+                      {L("Upload document", "上传文档")}
                     </button>
                     <button
                       className={"create-seed-btn" + (desk.seed ? " has-seed" : "")}
                       onClick={openSeed}
                       disabled={busy}
-                      title={desk.seed ? "View / edit / clear source notes (the AI consults them every turn)" : "Attach existing lore / old card text; the AI will build on it every turn"}
+                      title={desk.seed ? L("View / edit / clear source notes (the AI consults them every turn)", "查看 / 修改 / 清除参考资料(AI 每轮都在参考它)") : L("Attach existing lore / old card text; the AI will build on it every turn", "挂一份已有设定 / 旧卡文本,AI 之后每轮都基于它来完善")}
                     >
-                      {desk.seed ? `Notes · ${seedLenLabel(desk.seed)}` : "Add notes"}
+                      {desk.seed ? L(`Notes · ${seedLenLabel(desk.seed)}`, `参考 · ${seedLenLabel(desk.seed)}`) : L("Add notes", "挂资料")}
                     </button>
                     <button
                       className={"create-seed-btn" + (deskRefs.length ? " has-seed" : "")}
                       onClick={() => (refPanel ? setRefPanel(null) : openRefPanel("desk"))}
                       disabled={busy}
-                      title="Reference existing cards or prompts; the AI consults them every turn (type @ in the input to open this; on desktop you can also drag cards in)"
+                      title={L("Reference existing cards or prompts; the AI consults them every turn (type @ in the input to open this; on desktop you can also drag cards in)", "引用已有的卡或提示词,AI 每轮都会参考(输入框里敲 @ 也能唤起;桌面还可以直接把卡拖进来)")}
                     >
-                      {deskRefs.length ? `@ Reference · ${deskRefs.length}` : "@ Reference"}
+                      {deskRefs.length ? L(`@ Reference · ${deskRefs.length}`, `@ 引用 · ${deskRefs.length}`) : L("@ Reference", "@ 引用")}
                     </button>
                     <Button
                       variant="primary"
@@ -2967,7 +2976,7 @@ export default function Create() {
                         (aiCtx && aiCtx.type === "field" ? false : !desk.input.trim())
                       }
                     >
-                      Send
+                      {L("Send", "发送")}
                     </Button>
                   </div>
                 </div>
@@ -2978,26 +2987,26 @@ export default function Create() {
           {false && (
             <>
               <div className="create-drawer-shade" onClick={() => setChatOpen(false)} />
-              <aside className="create-drawer" role="dialog" aria-label="Chat log">
+              <aside className="create-drawer" role="dialog" aria-label={L("Chat log", "对话手记")}>
                 <div className="create-drawer-h">
-                  <span className="t-kai">Chat log · {KINDS[ki].zh}</span>
-                  <button className="create-modal-x" onClick={() => setChatOpen(false)} aria-label="Close">×</button>
+                  <span className="t-kai">{L("Chat log", "对话手记")} · {KINDS[ki].zh}</span>
+                  <button className="create-modal-x" onClick={() => setChatOpen(false)} aria-label={L("Close", "收起")}>×</button>
                 </div>
                 <div className="create-drawer-flow">
                   {desk.messages.map((m, i) => (
                     <div key={i} className={"create-say" + (m.who === "你" ? " is-me" : "")}>
-                      <span className="create-say-who t-kai">{m.who === "你" ? "You" : "Assistant"}</span>
+                      <span className="create-say-who t-kai">{m.who === "你" ? L("You", "你") : L("Assistant", "助手")}</span>
                       <div className="create-say-tx t-ui">{m.show || m.text}</div>
                     </div>
                   ))}
                   {busy && (
                     <div className="create-say">
-                      <span className="create-say-who t-kai">Assistant</span>
+                      <span className="create-say-who t-kai">{L("Assistant", "助手")}</span>
                       <div className="create-say-tx t-ui create-msg-typing">
                         <span className="create-dot" aria-hidden="true" />
                         <span className="create-dot" aria-hidden="true" />
                         <span className="create-dot" aria-hidden="true" />
-                        Thinking…
+                        {L("Thinking…", "正在想……")}
                       </div>
                     </div>
                   )}
@@ -3026,7 +3035,7 @@ export default function Create() {
                 navigate(to);
               }}
             >
-              Take a look →
+              {L("Take a look →", "去看看 →")}
             </button>
           )}
         </div>
@@ -3038,12 +3047,20 @@ export default function Create() {
           成本明示:每一轮 build_card 都会带上它。 */}
       {seedOpen && (
         <div className="create-modal" onClick={() => setSeedOpen(false)}>
-          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="Source notes" onClick={(e) => e.stopPropagation()}>
-            <button className="create-modal-x" onClick={() => setSeedOpen(false)} aria-label="Close">×</button>
-            <h2 className="t-h2">Source notes · {KINDS[ki].zh}</h2>
+          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label={L("Source notes", "参考资料")} onClick={(e) => e.stopPropagation()}>
+            <button className="create-modal-x" onClick={() => setSeedOpen(false)} aria-label={L("Close", "关闭")}>×</button>
+            <h2 className="t-h2">{L("Source notes", "参考资料")} · {KINDS[ki].zh}</h2>
             <p className="create-seed-note t-meta">
-              Attach existing lore / old card text to this station: every turn, the AI will build on it and ask targeted questions about the gaps.
-              Consulting it every turn makes replies slower and costlier, so clear it when you are done. Only the first 6,000 characters are saved.
+              {L(
+                <>
+                  Attach existing lore / old card text to this station: every turn, the AI will build on it and ask targeted questions about the gaps.
+                  Consulting it every turn makes replies slower and costlier, so clear it when you are done. Only the first 6,000 characters are saved.
+                </>,
+                <>
+                  把已有的设定 / 旧卡文本挂在台上:之后每一轮 AI 都会基于它来完善、对空缺处定向追问。
+                  每轮都参考意味着回复更慢也更贵——用完记得清除。只保存前 6000 字。
+                </>
+              )}
             </p>
             <textarea
               className="create-seed-ta t-ui-sm"
@@ -3051,18 +3068,18 @@ export default function Create() {
               maxLength={8000}
               value={seedText}
               onChange={(e) => setSeedText(e.target.value)}
-              placeholder="Paste existing lore, old card text, worldbuilding notes…"
+              placeholder={L("Paste existing lore, old card text, worldbuilding notes…", "粘贴已有设定、旧卡文本、世界观笔记……")}
             />
             <div className={"create-seed-count t-meta" + (seedText.length > 6000 ? " is-over" : "")}>
               {seedText.length > 6000
-                ? `${seedText.length} chars. Anything past 6,000 won't be saved`
-                : `${seedText.length} / 6000 chars`}
+                ? L(`${seedText.length} chars. Anything past 6,000 won't be saved`, `${seedText.length} 字——超出 6000 字的部分不会保存`)
+                : L(`${seedText.length} / 6000 chars`, `${seedText.length} / 6000 字`)}
             </div>
             <div className="create-seed-actions">
               {(desk.seed || "") && (
-                <Button variant="line" onClick={clearSeed}>Clear</Button>
+                <Button variant="line" onClick={clearSeed}>{L("Clear", "清除")}</Button>
               )}
-              <Button variant="primary" onClick={commitSeed}>Attach</Button>
+              <Button variant="primary" onClick={commitSeed}>{L("Attach", "挂上")}</Button>
             </div>
           </div>
         </div>
@@ -3072,11 +3089,11 @@ export default function Create() {
       {/* F2 引用面板:桌上的卡 / 我的卡库 / 提示词——选一个挂为引用(@ 或按钮唤起) */}
       {refPanel && (
         <div className="create-modal" onClick={() => setRefPanel(null)}>
-          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="References" onClick={(e) => e.stopPropagation()}>
-            <button className="create-modal-x" onClick={() => setRefPanel(null)} aria-label="Close">×</button>
-            <h2 className="t-h2">References · The AI consults these every turn</h2>
+          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label={L("References", "引用")} onClick={(e) => e.stopPropagation()}>
+            <button className="create-modal-x" onClick={() => setRefPanel(null)} aria-label={L("Close", "关闭")}>×</button>
+            <h2 className="t-h2">{L("References · The AI consults these every turn", "引用 · AI 每轮都会参考")}</h2>
             <div className="create-ref-tabs">
-              {[["desk", "On the board"], ["lib", "My Card Library"], ["prompt", "Prompts"]].map(([t, zh]) => (
+              {[["desk", L("On the board", "桌上的卡")], ["lib", L("My Card Library", "我的卡库")], ["prompt", L("Prompts", "提示词")]].map(([t, zh]) => (
                 <button
                   key={t}
                   className={"create-ref-tab t-ui-sm" + (refPanel.tab === t ? " is-on" : "")}
@@ -3089,7 +3106,7 @@ export default function Create() {
             {refPanel.tab === "desk" && (
               <div className="create-ref-list">
                 {KINDS.flatMap((t) => deskCards(t.k).map((c, i) => ({ kk: t.k, zh: t.zh, c, i }))).map(({ kk, zh, c, i }) => {
-                  const nm = c.name || c.title || "Untitled";
+                  const nm = c.name || c.title || L("Untitled", "未命名");
                   return (
                     <button className="create-ref-row" key={kk + i + nm} onClick={() => addRef(refFromCard(kk, c))}>
                       <span className="create-ref-row-t t-ui">{nm}</span>
@@ -3098,7 +3115,7 @@ export default function Create() {
                   );
                 })}
                 {!KINDS.some((t) => deskCards(t.k).length) && (
-                  <div className="create-shelf-empty t-meta">All four stations are empty. Chat something up first, or reference from My Card Library.</div>
+                  <div className="create-shelf-empty t-meta">{L("All four stations are empty. Chat something up first, or reference from My Card Library.", "四个台子都还空着——先聊出点东西,或去「我的卡库」引用。")}</div>
                 )}
               </div>
             )}
@@ -3117,7 +3134,7 @@ export default function Create() {
                 </div>
                 <div className="create-ref-list">
                   {refPanel.loading ? (
-                    <div className="create-shelf-empty t-meta">Loading…</div>
+                    <div className="create-shelf-empty t-meta">{L("Loading…", "翻库中……")}</div>
                   ) : refPanel.err ? (
                     <div className="create-import-err t-meta">{refPanel.err}</div>
                   ) : refPanel.items.length ? (
@@ -3140,7 +3157,7 @@ export default function Create() {
                       </button>
                     ))
                   ) : (
-                    <div className="create-shelf-empty t-meta">No cards of this type in your library yet.</div>
+                    <div className="create-shelf-empty t-meta">{L("No cards of this type in your library yet.", "这一类还没有入库的卡。")}</div>
                   )}
                 </div>
               </>
@@ -3151,7 +3168,7 @@ export default function Create() {
                   <input
                     className="create-ask-line t-ui-sm"
                     value={promptDraft}
-                    placeholder="Save a prompt you use often, e.g. cool tone, short sentences, no idioms"
+                    placeholder={L("Save a prompt you use often, e.g. cool tone, short sentences, no idioms", "写一条常用提示词存起来——比如:文风偏冷,句子短,不用成语")}
                     onChange={(e) => setPromptDraft(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !(e.nativeEvent || e).isComposing && promptDraft.trim()) {
@@ -3169,21 +3186,21 @@ export default function Create() {
                       setPromptDraft("");
                     }}
                   >
-                    Save
+                    {L("Save", "存入")}
                   </button>
                 </div>
                 {prompts.length ? (
                   prompts.map((p) => (
                     <div className="create-ref-row create-prompt-row" key={p.id}>
-                      <button className="create-prompt-use" onClick={() => addRef(makeRef("prompt", "Prompt · " + p.name, p.text))}>
+                      <button className="create-prompt-use" onClick={() => addRef(makeRef("prompt", L("Prompt · ", "提示词·") + p.name, p.text))}>
                         <span className="create-ref-row-t t-ui">{p.name}</span>
                         <span className="create-ref-row-d t-meta">{p.text.slice(0, 46)}</span>
                       </button>
-                      <button className="create-ref-x" onClick={() => setPrompts(removePrompt(p.id))} aria-label={"Delete prompt " + p.name}>×</button>
+                      <button className="create-ref-x" onClick={() => setPrompts(removePrompt(p.id))} aria-label={L("Delete prompt ", "删除提示词") + p.name}>×</button>
                     </div>
                   ))
                 ) : (
-                  <div className="create-shelf-empty t-meta">No saved prompts yet. Write one above and reference it from any station.</div>
+                  <div className="create-shelf-empty t-meta">{L("No saved prompts yet. Write one above and reference it from any station.", "还没存过提示词——上面写一条,以后任何台子都能引用。")}</div>
                 )}
               </div>
             )}
@@ -3193,11 +3210,11 @@ export default function Create() {
 
       {presetsModal && (
         <div className="create-modal" onClick={() => setPresetsModal(null)}>
-          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="Continue from a story" onClick={(e) => e.stopPropagation()}>
-            <button className="create-modal-x" onClick={() => setPresetsModal(null)} aria-label="Close">×</button>
-            <h2 className="t-h2">Continue editing a published story</h2>
+          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label={L("Continue from a story", "从故事继续")} onClick={(e) => e.stopPropagation()}>
+            <button className="create-modal-x" onClick={() => setPresetsModal(null)} aria-label={L("Close", "关闭")}>×</button>
+            <h2 className="t-h2">{L("Continue editing a published story", "从已发布的故事继续改")}</h2>
             <p className="create-seed-note t-meta">
-              Pick one and its characters / Player Cards / World Book / Story Book are added back to the four stations as a set (the original story is untouched; publishing your edits creates a new story).
+              {L("Pick one and its characters / Player Cards / World Book / Story Book are added back to the four stations as a set (the original story is untouched; publishing your edits creates a new story).", "选一条,里面的角色 / 演出 / 世界书 / 故事书会整组追加回四个台子(原故事不动;改完发布=新故事)。")}
             </p>
             <div className="create-lib-list">
               {presetsModal.items.length ? (
@@ -3209,20 +3226,20 @@ export default function Create() {
                       <span className="create-lib-item-tx">
                         <span className="t-ui-sm">
                           {p.name}
-                          {p.official && <span className="create-tpl-badge t-meta">Official</span>}
+                          {p.official && <span className="create-tpl-badge t-meta">{L("Official", "官方")}</span>}
                         </span>
                         <span className="t-meta">
-                          Characters ×{cnt}{d.world ? " · World Book" : ""}{d.story ? " · Story Book" : ""}{(d.playables || []).length || d.player ? " · Player Card" : ""}
+                          {L("Characters ×", "角色×")}{cnt}{d.world ? L(" · World Book", " · 世界书") : ""}{d.story ? L(" · Story Book", " · 故事书") : ""}{(d.playables || []).length || d.player ? L(" · Player Card", " · 演出卡") : ""}
                         </span>
                       </span>
                       <span className="create-lib-item-acts">
-                        <button className="create-shelf-act" onClick={() => unpackPreset(p)}>Unpack to stations</button>
+                        <button className="create-shelf-act" onClick={() => unpackPreset(p)}>{L("Unpack to stations", "拆回四台")}</button>
                       </span>
                     </div>
                   );
                 })
               ) : (
-                <p className="t-ui create-sub">No published stories yet.</p>
+                <p className="t-ui create-sub">{L("No published stories yet.", "还没有已发布的故事。")}</p>
               )}
             </div>
           </div>
@@ -3232,24 +3249,24 @@ export default function Create() {
       {/* D3 模板选择器:骨架铺上画布,空字段自带引导;opener 只进输入框不代发。 */}
       {tplOpen && (
         <div className="create-modal" onClick={() => setTplOpen(false)}>
-          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="Creation templates" onClick={(e) => e.stopPropagation()}>
-            <button className="create-modal-x" onClick={() => setTplOpen(false)} aria-label="Close">×</button>
-            <h2 className="t-h2">Start from a template · {KINDS[ki].zh}</h2>
+          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label={L("Creation templates", "创作模板")} onClick={(e) => e.stopPropagation()}>
+            <button className="create-modal-x" onClick={() => setTplOpen(false)} aria-label={L("Close", "关闭")}>×</button>
+            <h2 className="t-h2">{L("Start from a template", "从模板起手")} · {KINDS[ki].zh}</h2>
             <p className="create-seed-note t-meta">
-              Pick a skeleton to lay on the canvas. Empty fields come with guidance: ✦ lets the AI fill them in, ✎ to write them yourself. The opener goes into the input box so you can review it before sending.
+              {L("Pick a skeleton to lay on the canvas. Empty fields come with guidance: ✦ lets the AI fill them in, ✎ to write them yourself. The opener goes into the input box so you can review it before sending.", "选一套骨架铺上画布:空字段自带引导,✦ 让 AI 补、✎ 自己写;开场指令会放进输入框,过目再发。")}
             </p>
             {/* R3 模板卡叠(主理人试样拍板):点卡面/「换一套」翻下一套,「应用这套」上画布 */}
-            <div className="create-tplstack" aria-label="Template stack">
+            <div className="create-tplstack" aria-label={L("Template stack", "模板卡叠")}>
               {(TEMPLATES[kind] || []).map((t, i) => {
                 const pos = tplOrder.indexOf(i);
                 if (pos < 0) return null;
                 const leaving = tplLeaving && pos === 0;
                 const sk = t.skeleton || {};
                 const chips = Array.isArray(sk.entries) && sk.entries.length
-                  ? sk.entries.map((en) => en.comment || "Entry").slice(0, 4)
+                  ? sk.entries.map((en) => en.comment || L("Entry", "条目")).slice(0, 4)
                   : t.skeleton
                   ? Object.keys(sk).filter((k) => k !== "name" && k !== "title").slice(0, 6).map((k) => LABELS[k] || k)
-                  : ["Guided start only"];
+                  : [L("Guided start only", "纯引导起手")];
                 return (
                   <div
                     key={t.id}
@@ -3264,7 +3281,7 @@ export default function Create() {
                   >
                     <div className="create-tplcard-h">
                       <span className="create-tplcard-nm t-kai">{t.name}</span>
-                      <span className="create-tpl-badge t-meta">{t.skeleton ? `${Object.keys(sk).length} fields` : "Guided only"}</span>
+                      <span className="create-tpl-badge t-meta">{t.skeleton ? L(`${Object.keys(sk).length} fields`, `${Object.keys(sk).length} 字段`) : L("Guided only", "纯引导")}</span>
                     </div>
                     <div className="create-tplcard-hint t-meta">{t.hint}</div>
                     <div className="create-tplcard-chips t-meta">
@@ -3273,9 +3290,9 @@ export default function Create() {
                       ))}
                     </div>
                     <div className="create-tplcard-acts">
-                      <Button variant="primary" onClick={(e) => { e.stopPropagation(); applyTemplate(t); }}>Use this one</Button>
+                      <Button variant="primary" onClick={(e) => { e.stopPropagation(); applyTemplate(t); }}>{L("Use this one", "应用这套")}</Button>
                       {(TEMPLATES[kind] || []).length > 1 && (
-                        <button className="create-blank-link" onClick={(e) => { e.stopPropagation(); cycleTpl(); }}>Next one</button>
+                        <button className="create-blank-link" onClick={(e) => { e.stopPropagation(); cycleTpl(); }}>{L("Next one", "换一套")}</button>
                       )}
                     </div>
                   </div>
@@ -3290,32 +3307,32 @@ export default function Create() {
           酒馆卡(纯前端解析,不入库不耗额度)。两种口径都当面写清。 */}
       {importOpen && (
         <div className="create-modal" onClick={() => setImportOpen(null)}>
-          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label="Import as card" onClick={(e) => e.stopPropagation()}>
-            <button className="create-modal-x" onClick={() => setImportOpen(null)} aria-label="Close">×</button>
-            <h2 className="t-h2">Import as card · {KINDS[ki].zh}</h2>
+          <div className="create-modal-card" role="dialog" aria-modal="true" aria-label={L("Import as card", "导入成卡")} onClick={(e) => e.stopPropagation()}>
+            <button className="create-modal-x" onClick={() => setImportOpen(null)} aria-label={L("Close", "关闭")}>×</button>
+            <h2 className="t-h2">{L("Import as card", "导入成卡")} · {KINDS[ki].zh}</h2>
             {importOpen.step === "pick" ? (
               <>
-                <p className="create-seed-note t-meta">Turn existing content straight into a card, no need to chat from scratch.</p>
+                <p className="create-seed-note t-meta">{L("Turn existing content straight into a card, no need to chat from scratch.", "把已有的内容直接变成一张卡,不用从零聊。")}</p>
                 {/* F5:解析指示(可选)——AI 解析的两条路(粘贴/上传)都会带上;酒馆卡是本地解析,吃不到 */}
                 <input
                   className="create-ask-line t-ui-sm"
                   value={importOpen.hint || ""}
                   onChange={(e) => setImportOpen((m) => ({ ...m, hint: e.target.value }))}
-                  placeholder="Parsing instructions (optional), e.g. focus on personality and speech style, tags in English"
+                  placeholder={L("Parsing instructions (optional), e.g. focus on personality and speech style, tags in English", "解析要求(可空)——比如:重点抽性格和说话风格,标签用中文")}
                 />
                 <div className="create-import-picks">
                   <button className="create-import-pick" onClick={() => setImportOpen((m) => ({ step: "paste", text: "", err: "", hint: (m && m.hint) || "" }))}>
-                    <span className="create-import-pick-t t-ui">Paste text</span>
-                    <span className="create-import-pick-d t-meta">Prose lore / old card text, parsed into a card by the AI (also saved to your Card Library · Private)</span>
+                    <span className="create-import-pick-t t-ui">{L("Paste text", "粘贴文本")}</span>
+                    <span className="create-import-pick-d t-meta">{L("Prose lore / old card text, parsed into a card by the AI (also saved to your Card Library · Private)", "散文设定 / 旧卡文字,AI 解析成卡(会同时收进你的卡库 · 私密)")}</span>
                   </button>
                   <button className="create-import-pick" onClick={() => { uploadHintRef.current = (importOpen && importOpen.hint) || ""; setImportOpen(null); fileRef.current && fileRef.current.click(); }}>
-                    <span className="create-import-pick-t t-ui">Upload document</span>
-                    <span className="create-import-pick-d t-meta">.txt / .md / .docx: the text is extracted, then same as above (≤2MB)</span>
+                    <span className="create-import-pick-t t-ui">{L("Upload document", "上传文档")}</span>
+                    <span className="create-import-pick-d t-meta">{L(".txt / .md / .docx: the text is extracted, then same as above (≤2MB)", ".txt / .md / .docx,抽出文字后同上(≤2MB)")}</span>
                   </button>
                   {kind === "characters" && (
                     <button className="create-import-pick" onClick={() => tavernRef.current && tavernRef.current.click()}>
-                      <span className="create-import-pick-t t-ui">Tavern character card</span>
-                      <span className="create-import-pick-d t-meta">SillyTavern .json / PNG-embedded card. Parsed locally: not saved to the library, no quota used</span>
+                      <span className="create-import-pick-t t-ui">{L("Tavern character card", "酒馆角色卡")}</span>
+                      <span className="create-import-pick-d t-meta">{L("SillyTavern .json / PNG-embedded card. Parsed locally: not saved to the library, no quota used", "SillyTavern 的 .json / PNG 内嵌卡——本地解析,不入库、不耗额度")}</span>
                     </button>
                   )}
                 </div>
@@ -3325,28 +3342,36 @@ export default function Create() {
             ) : (
               <>
                 <p className="create-seed-note t-meta">
-                  Paste prose lore / old card text and the AI will parse it into a {KINDS[ki].zh}. On success the card is also saved to your Card Library (private); you can delete it under Me.
-                  For very long text (over ~20,000 characters), import it in parts or attach it as source notes instead.
+                  {L(
+                    <>
+                      Paste prose lore / old card text and the AI will parse it into a {KINDS[ki].zh}. On success the card is also saved to your Card Library (private); you can delete it under Me.
+                      For very long text (over ~20,000 characters), import it in parts or attach it as source notes instead.
+                    </>,
+                    <>
+                      粘贴散文设定 / 旧卡文字,AI 解析成{KINDS[ki].zh};解析成功会同时把这张卡存进你的卡库(私密),可去「我的」删除。
+                      超长文本(两万字以上)建议分段导入,或改挂「参考资料」。
+                    </>
+                  )}
                 </p>
                 <textarea
                   className="create-seed-ta t-ui-sm"
                   rows={10}
                   value={importOpen.text}
                   onChange={(e) => setImportOpen((m) => ({ ...m, text: e.target.value, err: "" }))}
-                  placeholder="Paste your lore here…"
+                  placeholder={L("Paste your lore here…", "把设定粘进来……")}
                 />
                 <input
                   className="create-ask-line t-ui-sm"
                   value={importOpen.hint || ""}
                   onChange={(e) => setImportOpen((m) => ({ ...m, hint: e.target.value }))}
-                  placeholder="Parsing instructions (optional), e.g. focus on personality and speech style, tags in English"
+                  placeholder={L("Parsing instructions (optional), e.g. focus on personality and speech style, tags in English", "解析要求(可空)——比如:重点抽性格和说话风格,标签用中文")}
                 />
-                <div className="create-seed-count t-meta">{importOpen.text.length} chars</div>
+                <div className="create-seed-count t-meta">{importOpen.text.length}{L(" chars", " 字")}</div>
                 {importOpen.err && <div className="create-import-err t-meta">{importOpen.err}</div>}
                 <div className="create-seed-actions">
-                  <Button variant="line" onClick={() => setImportOpen((m) => ({ step: "pick", text: "", err: "", hint: (m && m.hint) || "" }))}>Back</Button>
+                  <Button variant="line" onClick={() => setImportOpen((m) => ({ step: "pick", text: "", err: "", hint: (m && m.hint) || "" }))}>{L("Back", "返回")}</Button>
                   <Button variant="primary" onClick={importPaste} disabled={busy || !importOpen.text.trim()}>
-                    {busy ? "Parsing…" : "Parse into card"}
+                    {busy ? L("Parsing…", "解析中…") : L("Parse into card", "解析成卡")}
                   </Button>
                 </div>
               </>
@@ -3359,13 +3384,13 @@ export default function Create() {
       {libModal && (
         <div className="create-modal" onClick={() => setLibModal(null)}>
           <div className="create-modal-card" onClick={(e) => e.stopPropagation()}>
-            <button className="create-modal-x" onClick={() => setLibModal(null)} aria-label="Close">×</button>
-            <h2 className="t-h2">Add {KINDS[ki].zh} from Card Library</h2>
+            <button className="create-modal-x" onClick={() => setLibModal(null)} aria-label={L("Close", "关闭")}>×</button>
+            <h2 className="t-h2">{L(<>Add {KINDS[ki].zh} from Card Library</>, <>从卡库补「{KINDS[ki].zh}」素材</>)}</h2>
             <input
               className="create-lib-search"
               value={libQ}
               onChange={(e) => setLibQ(e.target.value)}
-              placeholder="Search library: name / summary…"
+              placeholder={L("Search library: name / summary…", "搜卡库:名字 / 简介…")}
             />
             <div className="create-lib-list">
               {(() => {
@@ -3373,8 +3398,8 @@ export default function Create() {
                 const list = libModal.items.filter(
                   (it) => !s || (libName(it) + " " + libDesc(it)).toLowerCase().includes(s)
                 );
-                if (!libModal.items.length) return <p className="t-ui create-sub">No cards of this type in your library yet.</p>;
-                if (!list.length) return <p className="t-ui create-sub">No matching cards. Try another keyword.</p>;
+                if (!libModal.items.length) return <p className="t-ui create-sub">{L("No cards of this type in your library yet.", "这个分类的卡库还空着。")}</p>;
+                if (!list.length) return <p className="t-ui create-sub">{L("No matching cards. Try another keyword.", "没有匹配的卡。换个关键词。")}</p>;
                 {/* D4:行改双动作(按钮不能嵌按钮,行由 button 改 div)——加入本台=原样;改编成草稿=fork(·改) */}
                 return list.map((it, i) => (
                   <div className="create-lib-item create-lib-item--row" key={i}>
@@ -3383,14 +3408,14 @@ export default function Create() {
                       <span className="t-meta">{libDesc(it).slice(0, 40)}</span>
                     </span>
                     <span className="create-lib-item-acts">
-                      <button className="create-shelf-act" onClick={() => libAdd(it)}>Add to station</button>
+                      <button className="create-shelf-act" onClick={() => libAdd(it)}>{L("Add to station", "加入本台")}</button>
                       <button
                         className="create-shelf-act"
                         onClick={() => {
                           if (forkToDraft(it)) setLibModal(null);
                         }}
                       >
-                        Adapt as draft
+                        {L("Adapt as draft", "改编成草稿")}
                       </button>
                     </span>
                   </div>
@@ -3405,27 +3430,27 @@ export default function Create() {
       {builtView && (
         <div className="create-modal" onClick={() => setBuiltView(false)}>
           <div className="create-modal-card" onClick={(e) => e.stopPropagation()}>
-            <button className="create-modal-x" onClick={() => setBuiltView(false)} aria-label="Close">×</button>
-            <h2 className="t-h2">Built on this station: {KINDS[ki].zh} ({desk.built.length})</h2>
+            <button className="create-modal-x" onClick={() => setBuiltView(false)} aria-label={L("Close", "关闭")}>×</button>
+            <h2 className="t-h2">{L(<>Built on this station: {KINDS[ki].zh} ({desk.built.length})</>, <>本台已建的「{KINDS[ki].zh}」({desk.built.length})</>)}</h2>
             <div className="create-built-list">
               {desk.built.length ? (
                 desk.built.map((card, i) => {
                   const c = (card && card.data) || card || {};
-                  const nm = c.name || c.title || "Untitled";
+                  const nm = c.name || c.title || L("Untitled", "未命名");
                   const entries = worldEntries(card);
                   return (
                     <div className="create-built-card" key={i}>
                       <div className="create-built-head">
                         <span className="create-built-name t-kai">{nm}</span>
-                        {entries && <span className="create-built-count t-meta">{entries.length} {entries.length === 1 ? "entry" : "entries"}</span>}
-                        <button className="create-built-x create-built-export" onClick={() => exportCard(card)} title="Download as JSON">Export</button>
-                        <button className="create-built-x" onClick={() => removeBuilt(kind, card && card._bid)}>Remove</button>
+                        {entries && <span className="create-built-count t-meta">{L(<>{entries.length} {entries.length === 1 ? "entry" : "entries"}</>, <>{entries.length} 条条目</>)}</span>}
+                        <button className="create-built-x create-built-export" onClick={() => exportCard(card)} title={L("Download as JSON", "下载为 JSON")}>{L("Export", "导出")}</button>
+                        <button className="create-built-x" onClick={() => removeBuilt(kind, card && card._bid)}>{L("Remove", "移除")}</button>
                       </div>
                       {entries ? (
                         <div className="create-built-entries">
                           {entries.slice(0, 12).map((e, j) => {
                             const label =
-                              e.comment || (Array.isArray(e.keys) ? e.keys.join(" / ") : e.keys) || `Entry ${j + 1}`;
+                              e.comment || (Array.isArray(e.keys) ? e.keys.join(" / ") : e.keys) || L(`Entry ${j + 1}`, `条目 ${j + 1}`);
                             return (
                               <div className="create-built-entry" key={j}>
                                 <span className="create-built-entry-k t-ui-sm">{label}</span>
@@ -3436,7 +3461,7 @@ export default function Create() {
                             );
                           })}
                           {entries.length > 12 && (
-                            <div className="create-built-more t-meta">…and {entries.length - 12} more</div>
+                            <div className="create-built-more t-meta">{L(<>…and {entries.length - 12} more</>, <>…… 还有 {entries.length - 12} 条</>)}</div>
                           )}
                         </div>
                       ) : (
@@ -3453,7 +3478,7 @@ export default function Create() {
                   );
                 })
               ) : (
-                <p className="t-ui create-sub">No cards built on this station yet. Chat one up, then click Add to station.</p>
+                <p className="t-ui create-sub">{L("No cards built on this station yet. Chat one up, then click Add to station.", "本台还没有已建的卡。聊出一张后点「收进本台」。")}</p>
               )}
             </div>
           </div>
@@ -3463,16 +3488,16 @@ export default function Create() {
       {/* 完善角色卡:立绘大图在上 + 头像圆居中名字在下 + 角色介绍可编辑,确认后 收进本台 / 收入卡库 */}
       {finalize && (
         <div className="create-modal" onClick={() => setFinalize(null)}>
-          <div className="create-modal-card ct-finalize-card" role="dialog" aria-modal="true" aria-label="Finish character card" onClick={(e) => e.stopPropagation()}>
-            <button className="create-modal-x" onClick={() => setFinalize(null)} aria-label="Close">×</button>
-            <h2 className="t-h2">Finish character card</h2>
+          <div className="create-modal-card ct-finalize-card" role="dialog" aria-modal="true" aria-label={L("Finish character card", "完善角色卡")} onClick={(e) => e.stopPropagation()}>
+            <button className="create-modal-x" onClick={() => setFinalize(null)} aria-label={L("Close", "关闭")}>×</button>
+            <h2 className="t-h2">{L("Finish character card", "完善角色卡")}</h2>
             {/* F7b 左右结构(桌面):左=立绘主图;右=头像+名字一行 + 角色介绍。手机保持纵排。 */}
             <div className="ct-finalize-cols">
               <div className="ct-finalize-figure">
                 <div className="ct-finalize-portrait">
                   <ImageCropField
-                    label="Portrait (main image)"
-                    hint="Detail page / board / Chat sidebar"
+                    label={L("Portrait (main image)", "立绘(主图)")}
+                    hint={L("Detail page / board / Chat sidebar", "详情页 / 看板 / 纯聊右侧")}
                     value={desk.draft.image || ""}
                     aspect={2 / 3}
                     output={{ maxW: 768, maxH: 1152, quality: 0.82 }}
@@ -3484,8 +3509,8 @@ export default function Create() {
                 {/* 头像与名字同一行(桌面);手机沿用纵排居中 */}
                 <div className="ct-finalize-avatar">
                   <ImageCropField
-                    label="Avatar"
-                    hint="Round avatar in Chat"
+                    label={L("Avatar", "头像")}
+                    hint={L("Round avatar in Chat", "纯聊圆头像")}
                     value={desk.draft.avatar || ""}
                     aspect={1}
                     round
@@ -3495,9 +3520,9 @@ export default function Create() {
                   <div className="ct-finalize-name t-kai">{draftName}</div>
                 </div>
                 <div className="create-preview-introhead">
-                  <span className="t-h3">Character intro</span>
+                  <span className="t-h3">{L("Character intro", "角色介绍")}</span>
                   <button className="create-gen-btn" disabled={genBusy} onClick={genIntro}>
-                    {genBusy ? "Generating…" : "Auto-generate"}
+                    {genBusy ? L("Generating…", "生成中…") : L("Auto-generate", "自动生成")}
                   </button>
                 </div>
                 {/* F3:生成的口味指示(可空)——回车即生成 */}
@@ -3505,7 +3530,7 @@ export default function Create() {
                   className="create-ask-line t-ui-sm"
                   value={introAsk}
                   disabled={genBusy}
-                  placeholder="Requirements for the intro (optional), e.g. first person, a bit self-deprecating"
+                  placeholder={L("Requirements for the intro (optional), e.g. first person, a bit self-deprecating", "对介绍的要求(可空)——比如:第一人称、带点自嘲")}
                   onChange={(e) => setIntroAsk(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !(e.nativeEvent || e).isComposing && !genBusy) {
@@ -3513,7 +3538,7 @@ export default function Create() {
                       genIntro();
                     }
                   }}
-                  aria-label="Requirements for the character intro"
+                  aria-label={L("Requirements for the character intro", "对角色介绍的要求")}
                 />
                 {/* 角色介绍可直接编辑 */}
                 <textarea
@@ -3522,14 +3547,14 @@ export default function Create() {
                   value={desk.draft.description || ""}
                   onChange={(e) => setDraftDesc(e.target.value)}
                   disabled={genBusy}
-                  placeholder="Write a character intro, or click Auto-generate to have the AI write one from the details filled in."
+                  placeholder={L("Write a character intro, or click Auto-generate to have the AI write one from the details filled in.", "写角色介绍,或点「自动生成」让 AI 按已填设定写一段。")}
                 />
               </div>
             </div>
             {/* 钉在弹窗可视底边:矮屏下内容超出 84vh 时主 CTA 不再沉到折叠线下(YOR-148) */}
             <div className="ct-finalize-footer">
               <Button variant="primary" full onClick={confirmFinalize}>
-                {finalize.action === "desk" ? "Confirm: add to station" : "Confirm: save to library · Private"}
+                {finalize.action === "desk" ? L("Confirm: add to station", "确认收进本台") : L("Confirm: save to library · Private", "确认收入卡库 · 私密")}
               </Button>
             </div>
           </div>
@@ -3540,64 +3565,64 @@ export default function Create() {
       {previewOpen && (
         <div className="create-preview-overlay">
           <div className="create-preview-bar">
-            <span className="t-meta">Preview & publish · Edit the text / upload a cover below, then publish when you are happy</span>
-            <button className="create-preview-close" onClick={closePreview} aria-label="Close">Close ×</button>
+            <span className="t-meta">{L("Preview & publish · Edit the text / upload a cover below, then publish when you are happy", "预览并发布 · 下面可改文字 / 传封面,满意就发布")}</span>
+            <button className="create-preview-close" onClick={closePreview} aria-label={L("Close", "关闭")}>{L("Close ×", "关闭 ×")}</button>
           </div>
           <div className="create-preview-scroll">
             <div className="ct-pub-edit">
-              <label className="ct-pub-label t-ui-sm">Story name</label>
-              <input className="ct-pub-input" value={pub.name} onChange={(e) => setPub((p) => ({ ...p, name: e.target.value }))} placeholder="Give this story a name" />
-              <label className="ct-pub-label t-ui-sm">Cover (optional; if empty, a placeholder with the story name is used)</label>
+              <label className="ct-pub-label t-ui-sm">{L("Story name", "故事名")}</label>
+              <input className="ct-pub-input" value={pub.name} onChange={(e) => setPub((p) => ({ ...p, name: e.target.value }))} placeholder={L("Give this story a name", "给这个故事起个名字")} />
+              <label className="ct-pub-label t-ui-sm">{L("Cover (optional; if empty, a placeholder with the story name is used)", "封面(可空,留空按故事名占位)")}</label>
               <div className="create-pub-cover">
-                <button type="button" className="create-pub-cover-thumb" style={pub.cover ? { backgroundImage: `url("${pub.cover}")` } : undefined} onClick={() => coverRef.current && coverRef.current.click()} title="Upload cover">
-                  {!pub.cover && <span className="t-meta">+ Upload cover</span>}
+                <button type="button" className="create-pub-cover-thumb" style={pub.cover ? { backgroundImage: `url("${pub.cover}")` } : undefined} onClick={() => coverRef.current && coverRef.current.click()} title={L("Upload cover", "上传封面")}>
+                  {!pub.cover && <span className="t-meta">{L("+ Upload cover", "+ 上传封面")}</span>}
                 </button>
                 <input ref={coverRef} type="file" accept="image/*" hidden onChange={onCoverUpload} />
                 {pub.cover && (
-                  <button type="button" className="create-pub-cover-clear t-meta" onClick={() => setPub((p) => ({ ...p, cover: "" }))}>Remove cover</button>
+                  <button type="button" className="create-pub-cover-clear t-meta" onClick={() => setPub((p) => ({ ...p, cover: "" }))}>{L("Remove cover", "清除封面")}</button>
                 )}
               </div>
-              <label className="ct-pub-label t-ui-sm">Synopsis (optional)</label>
-              <textarea className="ct-pub-syn" rows={3} value={pub.synopsis} onChange={(e) => setPub((p) => ({ ...p, synopsis: e.target.value }))} placeholder="Sum up this story in one sentence…" />
-              <label className="ct-pub-label t-ui-sm">Note from the author (optional)</label>
-              <textarea className="ct-pub-syn" rows={3} value={pub.authorNote} onChange={(e) => setPub((p) => ({ ...p, authorNote: e.target.value }))} placeholder="A word to players, what inspired you…" />
+              <label className="ct-pub-label t-ui-sm">{L("Synopsis (optional)", "简介(可空)")}</label>
+              <textarea className="ct-pub-syn" rows={3} value={pub.synopsis} onChange={(e) => setPub((p) => ({ ...p, synopsis: e.target.value }))} placeholder={L("Sum up this story in one sentence…", "一句话介绍这个故事……")} />
+              <label className="ct-pub-label t-ui-sm">{L("Note from the author (optional)", "作者的话(可空)")}</label>
+              <textarea className="ct-pub-syn" rows={3} value={pub.authorNote} onChange={(e) => setPub((p) => ({ ...p, authorNote: e.target.value }))} placeholder={L("A word to players, what inspired you…", "想对玩家说的话、创作初衷……")} />
               {(() => {
                 const mf = publishManifest();
                 return (
                   <div className="ct-pub-manifest">
-                    <div className="ct-pub-manifest-h t-ui-sm">Will be made public (publishing = listed in Explore · Public):</div>
+                    <div className="ct-pub-manifest-h t-ui-sm">{L("Will be made public (publishing = listed in Explore · Public):", "本次将公开(发布 = 进探索 · 公开):")}</div>
                     <ul className="ct-pub-manifest-list t-meta">
                       <li>
-                        Characters ×{mf.chars.length}
-                        {mf.chars.length > 0 && ": " + mf.chars.map((c) => c.name + (c.secret ? " ⚠" : "")).join(", ")}
+                        {L("Characters", "角色卡")} ×{mf.chars.length}
+                        {mf.chars.length > 0 && L(": ", ":") + mf.chars.map((c) => c.name + (c.secret ? " ⚠" : "")).join(L(", ", "、"))}
                       </li>
-                      {mf.worlds > 0 && <li>Lore Card · World Book ×{mf.worlds}</li>}
-                      {mf.players.length > 0 && <li>Player Cards ×{mf.players.length}: {mf.players.join(", ")}</li>}
+                      {mf.worlds > 0 && <li>{L("Lore Card · World Book", "设定卡 · 世界书")} ×{mf.worlds}</li>}
+                      {mf.players.length > 0 && <li>{L(<>Player Cards ×{mf.players.length}: {mf.players.join(", ")}</>, <>演出卡 ×{mf.players.length}:{mf.players.join("、")}</>)}</li>}
                       {mf.story && (
                         <li>
-                          Story Book: {mf.story}
-                          {mf.storyExtra > 0 && ` (only this one is published; ${mf.storyExtra} other Story Book${mf.storyExtra === 1 ? "" : "s"} on the station won't be)`}
+                          {L("Story Book: ", "故事书:")}{mf.story}
+                          {mf.storyExtra > 0 && L(` (only this one is published; ${mf.storyExtra} other Story Book${mf.storyExtra === 1 ? "" : "s"} on the station won't be)`, `(只发这一张;台上另有 ${mf.storyExtra} 张故事书不会发布)`)}
                         </li>
                       )}
                     </ul>
                     {mf.anySecret && (
                       <div className="ct-pub-manifest-warn t-meta">
-                        ⚠ Marked cards contain hidden fields such as Hidden truth, which become public along with the card. Make sure these are all cards you mean to publish; if cards from another story slipped in, remove them via View built cards.
+                        {L("⚠ Marked cards contain hidden fields such as Hidden truth, which become public along with the card. Make sure these are all cards you mean to publish; if cards from another story slipped in, remove them via View built cards.", "⚠ 标记的卡带「隐藏真相」等隐藏字段,会随卡一起公开。确认这些都是本次要发布的卡——若混进了别的故事的卡,回「查看本台已建」移除。")}
                       </div>
                     )}
                   </div>
                 );
               })()}
-              <div className="ct-pub-divider t-meta">↓ Below is the detail page players will see after publishing (updates live as you edit above)</div>
+              <div className="ct-pub-divider t-meta">{L("↓ Below is the detail page players will see after publishing (updates live as you edit above)", "↓ 下面是发布后玩家看到的详情页(实时跟着上面变)")}</div>
             </div>
             <div className="page detail">
               <StoryHero preset={buildPreviewPreset()} onOpenChar={setPreviewChar} />
-              <div className="create-preview-foot t-meta">(After publishing, players pick a character here and jump in)</div>
+              <div className="create-preview-foot t-meta">{L("(After publishing, players pick a character here and jump in)", "(发布后玩家在这里选扮演角色、入局)")}</div>
             </div>
           </div>
           <div className="ct-pub-foot">
             <Button variant="primary" full disabled={busy || !pub.name.trim() || !hasChars} onClick={publish}>
-              {busy ? "Publishing…" : "Publish to Explore · Public"}
+              {busy ? L("Publishing…", "发布中…") : L("Publish to Explore · Public", "发布到探索 · 公开")}
             </Button>
           </div>
           <CharDetailModal model={previewChar} onClose={() => setPreviewChar(null)} />

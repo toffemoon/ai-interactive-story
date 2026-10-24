@@ -155,7 +155,28 @@ def init_pool() -> ConnectionPool:
             max_size,
             checkout_timeout,
         )
+        ensure_users_language_column()
         return _pool
+
+
+_language_column_ready = False
+
+
+def ensure_users_language_column() -> None:
+    """幂等补 users.language(2026-10-23 中英双语;记录见 migrations/2026-10-23-users-language.sql)。
+
+    启动时跑一次,失败只记日志不挡启动:认证热路径不读这列,/api/auth/me 的语言查询自带兜底。
+    """
+    global _language_column_ready
+    if _language_column_ready or _pool is None:
+        return
+    try:
+        with _pool.connection() as conn, conn.cursor() as cur:
+            cur.execute("set local lock_timeout = '3s'")
+            cur.execute("alter table users add column if not exists language text")
+        _language_column_ready = True
+    except Exception as exc:
+        log.warning("ensure users.language failed (non-fatal): %s", type(exc).__name__)
 
 
 def get_pool() -> ConnectionPool:

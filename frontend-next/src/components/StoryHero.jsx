@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Tag, Badge, Card } from "./ui";
 import CardCarousel from "./CardCarousel";
+import { L } from "../lib/i18n";
 import "../routes/StoryDetail.css";
 
 // 故事详情页「门面」共享组件:大封面 + 标题/标签/元信息 + 简介 + 作者的话 + 角色卡曲面轮播。
@@ -9,7 +10,7 @@ import "../routes/StoryDetail.css";
 //   - onOpenChar(model):点居中角色卡时回调(由用处弹角色详情,见 CharDetailModal)。
 export default function StoryHero({ preset, onOpenChar }) {
   const d = (preset && preset.data) || {};
-  const bookName = d.name || (preset && preset.name) || "Untitled story";
+  const bookName = d.name || (preset && preset.name) || L("Untitled story", "未命名故事");
   const synopsis = d.synopsis || (d.story && d.story.premise) || "";
   const tags = d.tags || [];
   const author = d.author || "";
@@ -24,22 +25,22 @@ export default function StoryHero({ preset, onOpenChar }) {
         const intro =
           [
             sec("", cd.anchor),
-            sec("Looks", cd.look),
-            sec("Personality", cd.personality),
-            sec("Conflict", cd.tension),
+            sec(L("Looks", "外貌"), cd.look),
+            sec(L("Personality", "性格"), cd.personality),
+            sec(L("Conflict", "矛盾"), cd.tension),
             sec("", cd.description || cd.persona),
-            sec("Scenario", cd.scenario),
-            (cd.known_public || []).length ? "Known · " + cd.known_public.join("; ") : "",
+            sec(L("Scenario", "情境"), cd.scenario),
+            (cd.known_public || []).length ? L("Known · " + cd.known_public.join("; "), "已知 · " + cd.known_public.join(";")) : "",
           ]
             .filter(Boolean)
-            .join("\n\n") || "This character has no intro yet. You'll learn more once the story begins.";
+            .join("\n\n") || L("This character has no intro yet. You'll learn more once the story begins.", "这个角色还没写简介,入局后逐渐揭晓。");
         return {
           id: (cd.name || "char") + "#" + i,
           kind: "character",
-          title: cd.name || "Character",
+          title: cd.name || L("Character", "角色"),
           cover: cd.image || cd.avatar || "",
           blurb: intro,
-          badge: { label: "Character", tone: "gilt" },
+          badge: { label: L("Character", "角色"), tone: "gilt" },
           tags: (cd.tags || []).slice(0, 3),
           meta: {},
           raw: c,
@@ -63,7 +64,7 @@ export default function StoryHero({ preset, onOpenChar }) {
             {!d.cover && <span className="detail-cover-spine t-kai">{bookName.slice(0, 8)}</span>}
           </div>
           <div className="detail-headmain">
-            <Badge tone="pine">Full story · Play now</Badge>
+            <Badge tone="pine">{L("Full story · Play now", "完整故事 · 可直接玩")}</Badge>
             <h1 className="t-display detail-title">{bookName}</h1>
             {tags.length > 0 && (
               <div className="detail-tags">
@@ -73,17 +74,17 @@ export default function StoryHero({ preset, onOpenChar }) {
               </div>
             )}
             <div className="detail-meta">
-              {author && <span className="detail-meta-i t-meta">Author · {author}</span>}
-              {charModels.length > 0 && <span className="detail-meta-i t-meta">{charModels.length} {charModels.length === 1 ? "character" : "characters"}</span>}
-              <span className="detail-meta-i t-meta">Play instantly</span>
+              {author && <span className="detail-meta-i t-meta">{L("Author", "作者")} · {author}</span>}
+              {charModels.length > 0 && <span className="detail-meta-i t-meta">{charModels.length} {L(charModels.length === 1 ? "character" : "characters", "位角色")}</span>}
+              <span className="detail-meta-i t-meta">{L("Play instantly", "打开即玩")}</span>
             </div>
             <div className="detail-intro">
-              <h2 className="t-h3 detail-sec">Synopsis</h2>
-              <p className="t-read detail-intro-text">{synopsis || "No synopsis yet."}</p>
+              <h2 className="t-h3 detail-sec">{L("Synopsis", "简介")}</h2>
+              <p className="t-read detail-intro-text">{synopsis || L("No synopsis yet.", "暂无简介。")}</p>
             </div>
             {authorNote.trim() && (
               <div className="detail-intro detail-authornote">
-                <h2 className="t-h3 detail-sec">Author's note</h2>
+                <h2 className="t-h3 detail-sec">{L("Author's note", "作者的话")}</h2>
                 <p className="t-read detail-intro-text">{authorNote}</p>
               </div>
             )}
@@ -94,8 +95,8 @@ export default function StoryHero({ preset, onOpenChar }) {
       {/* 角色:DOM 曲面轮播,居中卡点开看完整介绍 */}
       {charModels.length > 0 && (
         <section className="detail-block">
-          <h2 className="t-h3 detail-sec">Characters</h2>
-          <p className="detail-hint t-meta">Drag or scroll to switch characters. Tap the center card to flip it for an intro, or use "Details" for the full profile.</p>
+          <h2 className="t-h3 detail-sec">{L("Characters", "角色")}</h2>
+          <p className="detail-hint t-meta">{L('Drag or scroll to switch characters. Tap the center card to flip it for an intro, or use "Details" for the full profile.', "拖动 / 滚轮换角色,点居中卡翻面看简介,「详情」看完整介绍")}</p>
           <CardCarousel
             items={charModels}
             activeIndex={charActive}
@@ -103,7 +104,7 @@ export default function StoryHero({ preset, onOpenChar }) {
               setCharActive(i);
               setCharFlip(false);
             }}
-            ariaLabel="Character card carousel"
+            ariaLabel={L("Character card carousel", "角色卡轮播")}
             renderItem={(m, { active }) => (
               <Card
                 model={m}

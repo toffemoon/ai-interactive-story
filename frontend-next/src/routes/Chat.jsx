@@ -3,15 +3,22 @@ import { Button } from "../components/ui";
 import { useNavigate } from "../lib/transitionNav";
 import { postJSON, getJSON } from "../lib/api";
 import { useAuth } from "../state/auth";
+import { L, isZh } from "../lib/i18n";
 import "./Chat.css";
 
 // 纯聊 · 微信式一对一(契约固定只 reskin:/api/chat 照搬)。
 // 决策:去掉写死默认联系人(糖沐/萍狗);联系人由用户从卡库加。
 // 微信式:左联系人列表 / 中气泡对话(无右常驻档案栏)/ 右上「···」抽出角色档案(YOR-60/61/63/59)。
-const OPEN_HINTS = [
-  "the first light of morning", "a rain that just stopped", "an evening after the crowds have gone", "a lamp still on late at night",
-  "a chance run-in on a street corner", "an afternoon after finishing your work", "a pause during a trip", "a sudden change in the weather outside",
-];
+const OPEN_HINTS = L(
+  [
+    "the first light of morning", "a rain that just stopped", "an evening after the crowds have gone", "a lamp still on late at night",
+    "a chance run-in on a street corner", "an afternoon after finishing your work", "a pause during a trip", "a sudden change in the weather outside",
+  ],
+  [
+    "清晨的第一缕光线", "一场刚停的雨", "人潮散去的傍晚", "深夜里还亮着的灯",
+    "街角的不期而遇", "忙完手头事的午后", "一段旅途的间隙", "窗外突变的天气",
+  ]
+);
 
 function avatarChar(name) {
   return (name || "?").trim().charAt(0) || "?";
@@ -21,7 +28,10 @@ function avatarChar(name) {
 // 注入到卡的「当前情境(scenario)」→ 进后端 system prompt;只改前端发出的卡副本,不动卡库原卡、不碰引擎。
 // 看板(立绘主页)是面对面对话、不注入这条。
 const PHONE_CHAT_NOTE =
-  "(Chat format: you and the other person are texting each other in a messaging app on your phones, like WhatsApp or iMessage. Follow the habits of instant messaging: keep messages short and casual, say only one or two sentences at a time, and use everyday punctuation or internet slang to show tone. Do not write long narration, and do not write lengthy descriptions of actions or expressions.)";
+  L(
+    "(Chat format: you and the other person are texting each other in a messaging app on your phones, like WhatsApp or iMessage. Follow the habits of instant messaging: keep messages short and casual, say only one or two sentences at a time, and use everyday punctuation or internet slang to show tone. Do not write long narration, and do not write lengthy descriptions of actions or expressions.)",
+    "(聊天形式:你和对方正在用手机上的网络聊天软件打字聊天,就像微信。请贴合手机即时聊天的习惯——消息简短、口语化,一次只说一两句,用日常标点或网络说法表达语气;不要写大段旁白,也不要长篇的动作/神态描写。)"
+  );
 function chatCard(card) {
   if (!card) return card;
   const hasData = card.data && typeof card.data === "object";
@@ -181,7 +191,10 @@ export default function Chat() {
       card: chatCard(active.card),
       session_id: sidFor(nm),
       world: null,
-      user: "(This is a brand-new encounter. You are sending the other person your first message on your phone. Use \"" + hint + "\" as your reason to reach out and start the conversation: say one or two short, natural sentences, then hand the conversation over to me. Do not write long descriptions, and do not mention this instruction.)",
+      user: L(
+        "(This is a brand-new encounter. You are sending the other person your first message on your phone. Use \"" + hint + "\" as your reason to reach out and start the conversation: say one or two short, natural sentences, then hand the conversation over to me. Do not write long descriptions, and do not mention this instruction.)",
+        "（这是一次全新的相遇,你正用手机给对方发第一条消息。请以「" + hint + "」为由头主动开口:简短自然地说一两句,把话头交给我。不要写大段描写,也不要提及这条指令。）"
+      ),
     })
       // 落开场白前先看该会话有没有用户消息:并发竞态下(切到别的联系人使 busy 提前解锁、
       // 用户已给这人发过话)不能整组覆盖,否则会把用户刚发的消息抹掉(YOR-181)。
@@ -189,7 +202,7 @@ export default function Chat() {
         setByKey((m) => {
           const cur = m[nm] || [];
           if (cur.some((x) => x.who === "me")) return m;
-          return { ...m, [nm]: [{ who: nm, text: (r && r.reply) || "(No response)", t: Date.now() }] };
+          return { ...m, [nm]: [{ who: nm, text: (r && r.reply) || L("(No response)", "（无回应）"), t: Date.now() }] };
         })
       )
       .catch((e) => {
@@ -197,7 +210,7 @@ export default function Chat() {
         setByKey((m) => {
           const cur = m[nm] || [];
           if (cur.some((x) => x.who === "me")) return m;
-          return { ...m, [nm]: [{ who: nm, text: "(Couldn't start the chat: " + e.message + ")" }] };
+          return { ...m, [nm]: [{ who: nm, text: L("(Couldn't start the chat: " + e.message + ")", "（开场失败:" + e.message + "）") }] };
         });
       })
       .finally(() => setBusy(false));
@@ -226,9 +239,9 @@ export default function Chat() {
     setInput("");
     try {
       const r = await postJSON("/api/chat", { card: chatCard(active.card), session_id: sidFor(activeName), user: text, world: null });
-      setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: (r && r.reply) || "(No response)", t: Date.now() }] }));
+      setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: (r && r.reply) || L("(No response)", "（无回应）"), t: Date.now() }] }));
     } catch (e) {
-      setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: "(Connection error: " + e.message + ")" }] }));
+      setByKey((m) => ({ ...m, [activeName]: [...(m[activeName] || []), { who: activeName, text: L("(Connection error: " + e.message + ")", "（连接出错:" + e.message + "）") }] }));
     } finally {
       setBusy(false);
     }
@@ -240,7 +253,7 @@ export default function Chat() {
     // 破坏性操作:清空整段记录且不可找回。聊过(有自己发的消息)就先确认,镜像看板重开的 M12 范式;
     // 只有自动开场白的对话不拦(没什么可丢的)。
     const talked = (byKey[nm] || []).some((m) => m.who === "me");
-    if (talked && !window.confirm("Starting a new chat will clear your chat history with " + nm + ". Continue?")) return;
+    if (talked && !window.confirm(L("Starting a new chat will clear your chat history with " + nm + ". Continue?", "新建对话会清空当前和 " + nm + " 的聊天记录,确定?"))) return;
     delete sidsRef.current[nm];
     openedRef.current[nm] = false;
     setByKey((m) => {
@@ -252,7 +265,7 @@ export default function Chat() {
 
   function itemName(it) {
     const d = (it && it.data && it.data.data) || (it && it.data) || {};
-    return d.name || (it && it.name) || "Untitled";
+    return d.name || (it && it.name) || L("Untitled", "未命名");
   }
   async function openAdd() {
     setAddQ("");
@@ -260,7 +273,7 @@ export default function Chat() {
       const items = await getJSON("/api/library/characters");
       const list = Array.isArray(items) ? items : [];
       // 按首字母(拼音)排序(细节①)。
-      list.sort((a, b) => itemName(a).localeCompare(itemName(b), "en"));
+      list.sort((a, b) => itemName(a).localeCompare(itemName(b), isZh ? "zh" : "en"));
       setAddModal({ items: list });
     } catch (e) {
       setAddModal({ items: [], err: e.message });
@@ -278,8 +291,8 @@ export default function Chat() {
       {/* 左:联系人 */}
       <aside className="chat-contacts">
         <div className="chat-contacts-h">
-          <span className="t-kai">Chat</span>
-          <button className="chat-add" onClick={openAdd}>+ Add contact</button>
+          <span className="t-kai">{L("Chat", "纯聊")}</span>
+          <button className="chat-add" onClick={openAdd}>{L("+ Add contact", "+ 添加联系人")}</button>
         </div>
         <div className="chat-contacts-list">
           {roster.length ? (
@@ -296,16 +309,16 @@ export default function Chat() {
                   </span>
                   <span className="chat-contact-tx">
                     <span className="chat-contact-name t-ui-sm">{r.name}</span>
-                    <span className="chat-contact-last t-meta">{last ? last.text : r.persona || "Say hi"}</span>
+                    <span className="chat-contact-last t-meta">{last ? last.text : r.persona || L("Say hi", "打个招呼吧")}</span>
                   </span>
                 </button>
               );
             })
           ) : (
             <div className="chat-contacts-empty t-ui">
-              No contacts yet.
+              {L("No contacts yet.", "还没有联系人。")}
               <br />
-              Tap "Add contact" to pick a character from your Card Library.
+              {L('Tap "Add contact" to pick a character from your Card Library.', "点「添加联系人」从卡库挑一个角色开聊。")}
             </div>
           )}
         </div>
@@ -316,13 +329,13 @@ export default function Chat() {
         {active ? (
           <>
             <header className="chat-conv-h">
-              <button className="chat-back" onClick={() => setMobileView("list")} aria-label="Back to contacts">
+              <button className="chat-back" onClick={() => setMobileView("list")} aria-label={L("Back to contacts", "返回联系人")}>
                 ‹
               </button>
               <span className="chat-conv-name t-kai">{activeName}</span>
               <div className="chat-conv-tools">
-                <button className="chat-iconbtn" onClick={newChat} disabled={busy} title={busy ? "Wait for the reply to finish" : "New chat"}>⟳</button>
-                <button className="chat-iconbtn" onClick={() => setProfileOpen((v) => !v)} title="Character profile">···</button>
+                <button className="chat-iconbtn" onClick={newChat} disabled={busy} title={busy ? L("Wait for the reply to finish", "等回复完再新建") : L("New chat", "新建对话")}>⟳</button>
+                <button className="chat-iconbtn" onClick={() => setProfileOpen((v) => !v)} title={L("Character profile", "角色档案")}>···</button>
               </div>
             </header>
 
@@ -339,13 +352,13 @@ export default function Chat() {
                           className={"chat-avatar sm" + (active.avatar ? " is-photo" : "")}
                           style={active.avatar ? { backgroundImage: `url("${active.avatar}")` } : undefined}
                           onClick={() => active.avatar && setLightbox(active.avatar)}
-                          title={active.avatar ? "View full size" : undefined}
+                          title={active.avatar ? L("View full size", "看大图") : undefined}
                         >
                           {!active.avatar && avatarChar(activeName)}
                         </span>
                       )}
                       <span className={"chat-bubble t-ui" + (m.text === "……" ? " chat-typing" : "")}>
-                        {m.text === "……" ? "Typing…" : m.text}
+                        {m.text === "……" ? L("Typing…", "对方正在输入…") : m.text}
                       </span>
                     </div>
                   </div>
@@ -354,7 +367,7 @@ export default function Chat() {
               {busy && messages.length > 0 && messages[messages.length - 1].who === "me" && (
                 <div className="chat-bubble-row">
                   <span className="chat-avatar sm">{avatarChar(activeName)}</span>
-                  <span className="chat-bubble t-ui chat-typing">Typing…</span>
+                  <span className="chat-bubble t-ui chat-typing">{L("Typing…", "对方正在输入…")}</span>
                 </div>
               )}
             </div>
@@ -363,7 +376,7 @@ export default function Chat() {
               <input
                 value={input}
                 disabled={busy}
-                placeholder={busy ? "Waiting for a reply…" : "Say something…"}
+                placeholder={busy ? L("Waiting for a reply…", "对方正在回复…") : L("Say something…", "说点什么…")}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey && !(e.nativeEvent || e).isComposing && !busy) {
@@ -373,7 +386,7 @@ export default function Chat() {
                 }}
               />
               <Button variant="primary" onClick={send} disabled={busy || !input.trim()}>
-                Send
+                {L("Send", "发送")}
               </Button>
             </div>
 
@@ -381,7 +394,7 @@ export default function Chat() {
             {profileOpen && (
               <div className="chat-profile" onClick={() => setProfileOpen(false)}>
                 <div className="chat-profile-card" onClick={(e) => e.stopPropagation()}>
-                  <button className="chat-profile-x" onClick={() => setProfileOpen(false)} aria-label="Close">×</button>
+                  <button className="chat-profile-x" onClick={() => setProfileOpen(false)} aria-label={L("Close", "收起")}>×</button>
                   {/* 顶部放立绘 / 布偶动画,而非头像(细节⑨) */}
                   <div className="chat-profile-art">
                     {active.anim ? (
@@ -408,8 +421,8 @@ export default function Chat() {
           </>
         ) : (
           <div className="chat-blank t-ui">
-            <p>Pick a contact to start chatting.</p>
-            <Button variant="primary" onClick={openAdd}>Add a contact from Card Library</Button>
+            <p>{L("Pick a contact to start chatting.", "选一个联系人开始聊天。")}</p>
+            <Button variant="primary" onClick={openAdd}>{L("Add a contact from Card Library", "从卡库添加联系人")}</Button>
           </div>
         )}
       </main>
@@ -418,15 +431,15 @@ export default function Chat() {
       {addModal && (
         <div className="chat-modal" onClick={() => setAddModal(null)}>
           <div className="chat-modal-card" onClick={(e) => e.stopPropagation()}>
-            <button className="chat-modal-x" onClick={() => setAddModal(null)} aria-label="Close">×</button>
-            <h2 className="t-h2">Add a contact from Card Library</h2>
+            <button className="chat-modal-x" onClick={() => setAddModal(null)} aria-label={L("Close", "关闭")}>×</button>
+            <h2 className="t-h2">{L("Add a contact from Card Library", "从卡库添加联系人")}</h2>
             {/* 卡库线性增长,平铺翻不动:前端过滤,范式同创作页「补素材」搜索(YOR-169) */}
             {addModal.items.length > 0 && (
               <input
                 className="chat-modal-search"
                 value={addQ}
                 onChange={(e) => setAddQ(e.target.value)}
-                placeholder="Search characters: name / bio…"
+                placeholder={L("Search characters: name / bio…", "搜角色:名字 / 简介…")}
               />
             )}
             <div className="chat-modal-list">
@@ -441,22 +454,22 @@ export default function Chat() {
                 if (!list.length) {
                   // YOR-194:空库/读库失败给可点出路(去创作/重试),不再死胡同;仅搜索无匹配时保持纯文字。
                   if (addModal.items.length) {
-                    return <p className="t-ui">{`No characters match "${addQ.trim()}".`}</p>;
+                    return <p className="t-ui">{L(`No characters match "${addQ.trim()}".`, `没有匹配「${addQ.trim()}」的角色卡。`)}</p>;
                   }
                   return (
                     <div className="chat-modal-empty">
-                      <p className="t-ui">{addModal.err ? "Failed to load the Card Library: " + addModal.err : "No characters in your Card Library yet."}</p>
+                      <p className="t-ui">{addModal.err ? L("Failed to load the Card Library: ", "读库失败:") + addModal.err : L("No characters in your Card Library yet.", "卡库里还没有角色卡。")}</p>
                       {addModal.err ? (
-                        <Button variant="line" onClick={openAdd}>Retry</Button>
+                        <Button variant="line" onClick={openAdd}>{L("Retry", "重试")}</Button>
                       ) : (
-                        <Button variant="primary" onClick={() => { setAddModal(null); navigate("/create"); }}>Create one →</Button>
+                        <Button variant="primary" onClick={() => { setAddModal(null); navigate("/create"); }}>{L("Create one →", "去创作一张 →")}</Button>
                       )}
                     </div>
                   );
                 }
                 return list.map((it, i) => {
                   const raw = (it && it.data && it.data.data) || (it && it.data) || {};
-                  const nm = raw.name || it.name || "Untitled";
+                  const nm = raw.name || it.name || L("Untitled", "未命名");
                   const inRoster = roster.some((r) => r.name === nm);
                   return (
                     <button className="chat-modal-item" key={i} disabled={inRoster} onClick={() => rosterAdd(it)}>
@@ -467,7 +480,7 @@ export default function Chat() {
                         <span className="t-ui-sm">{nm}</span>
                         <span className="t-meta">{(raw.persona || raw.description || "").slice(0, 36)}</span>
                       </span>
-                      <span className="t-meta">{inRoster ? "Added" : "Add →"}</span>
+                      <span className="t-meta">{inRoster ? L("Added", "已添加") : L("Add →", "添加 →")}</span>
                     </button>
                   );
                 });

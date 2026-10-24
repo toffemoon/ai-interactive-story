@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowUpRight, Star } from "lucide-react";
 import { forwardRef, useEffect, useState } from "react";
+import { L } from "../../lib/i18n";
 
 const ShowcaseProjectCard = forwardRef(function ShowcaseProjectCard(
   { model, index, favorite, onOpen, onToggleFavorite, reducedMotion },
@@ -13,8 +14,8 @@ const ShowcaseProjectCard = forwardRef(function ShowcaseProjectCard(
   }, [model.cover]);
 
   const showImage = Boolean(model.cover) && imageState !== "error";
-  const typeLabel = model.kind === "story" ? "Full story" : "Character";
-  const secondary = model.meta?.uploader || model.tags?.[0] || (model.kind === "story" ? "Ready to play" : "Ready to chat");
+  const typeLabel = model.kind === "story" ? L("Full story", "完整故事") : L("Character", "角色卡");
+  const secondary = model.meta?.uploader || model.tags?.[0] || (model.kind === "story" ? L("Ready to play", "可直接进入") : L("Ready to chat", "可以纯聊"));
   const overlayTags = [model.meta?.typeLabel, ...(model.tags || [])].filter(Boolean).slice(0, 2);
 
   return (
@@ -34,7 +35,7 @@ const ShowcaseProjectCard = forwardRef(function ShowcaseProjectCard(
       <button
         type="button"
         className="showcase4-card-open"
-        aria-label={model.kind === "story" ? `View story "${model.title}"` : `View character "${model.title}"`}
+        aria-label={model.kind === "story" ? L(`View story "${model.title}"`, `查看故事《${model.title}》`) : L(`View character "${model.title}"`, `查看角色《${model.title}》`)}
         onClick={() => onOpen(model)}
       >
         <span className="showcase4-card-media">
@@ -90,8 +91,8 @@ const ShowcaseProjectCard = forwardRef(function ShowcaseProjectCard(
       <button
         type="button"
         className={["showcase4-card-favorite", favorite ? "is-active" : ""].filter(Boolean).join(" ")}
-        aria-label={favorite ? `Remove "${model.title}" from favorites` : `Add "${model.title}" to favorites`}
-        title={favorite ? "Remove from favorites" : "Add to favorites"}
+        aria-label={favorite ? L(`Remove "${model.title}" from favorites`, `取消收藏《${model.title}》`) : L(`Add "${model.title}" to favorites`, `收藏《${model.title}》`)}
+        title={favorite ? L("Remove from favorites", "取消收藏") : L("Add to favorites", "收藏")}
         onClick={() => onToggleFavorite(model)}
       >
         <Star size={16} strokeWidth={1.7} fill={favorite ? "currentColor" : "none"} aria-hidden="true" />

@@ -17,6 +17,8 @@
 //       to   : 点后导航的路由(如 /explore)
 //       done : 点后结束 onboarding(落地标记 + 退出引导态)
 
+import { L, isZh } from "../lib/i18n";
+
 export const OB_KEY = "ais_onboarded_v1"; // 首访完成标记(有它 = 老用户,不再引导)
 export const ECHO_KEY = "ais_ob_echo_v1"; // 回声:称呼/口味,身份卡与后续对话复用
 
@@ -62,6 +64,7 @@ export const INTRO_HEAD = [
 // 化用玩家口味原话(截断,避免太长)。
 function tasteQuote(echo) {
   const t = (echo && echo.taste) || "";
+  if (isZh) return t.length > 16 ? t.slice(0, 16) + "…" : t;
   return t.length > 32 ? t.slice(0, 32).replace(/\s+\S*$/, "") + "…" : t;
 }
 
@@ -72,22 +75,22 @@ export const FIRST_BEAT = "name";
 //   - 顺势引到下一步。产出的这句 = 下一拍的开场(替掉静态 line);AI 失败/超时则回退静态 line。
 // beat.ai.scenario 只放「本拍任务」(玩家原话作为 user 传给 /api/chat,不塞进 scenario)。此段属糖沐行为=内容域。
 export const AI_PERSONA =
-  "You are Tangmu, the clerk and resident face of Muyan Bookshop. You're gentle and you love books. You talk like a shop clerk, with a touch of warmth, and you keep it short and natural (two or three sentences at most). Always stay in character and speak in the first person. Don't explain yourself, and never say \"as an AI\".";
+  L("You are Tangmu, the clerk and resident face of Muyan Bookshop. You're gentle and you love books. You talk like a shop clerk, with a touch of warmth, and you keep it short and natural (two or three sentences at most). Always stay in character and speak in the first person. Don't explain yourself, and never say \"as an AI\".", "你是糖沐,沐言书坊的店员、看板娘。温和爱书,店员口吻,话里带点暖意,简短自然(最多两三句)。始终留在角色里,用第一人称,不解释、不说「作为AI」。");
 
 // 导览拍自动连讲的停留时长(ms):到点自动进下一个功能介绍;点「继续」可提前,打字插话会暂停、答完再续。
 export const AUTO_MS = 4600;
 // 导览期玩家插话时,糖沐的回应场景(闲聊,不推进导览)。
 export const CHAT_SCENARIO =
-  "While you were showing the guest around the bookshop, they cut in with a remark or a question. Respond to what they said with a warm sentence or two in your shop-clerk voice (two or three sentences at most), then slip naturally back into the tone of someone carrying on with the tour. Don't rattle off lists, and don't ramble.";
+  L("While you were showing the guest around the bookshop, they cut in with a remark or a question. Respond to what they said with a warm sentence or two in your shop-clerk voice (two or three sentences at most), then slip naturally back into the tone of someone carrying on with the tour. Don't rattle off lists, and don't ramble.", "玩家在你带他熟悉书坊时插了句话、或问了个问题。就着他的话、用店员口吻温和答一两句(最多两三句),答完自然回到接着带他逛的语气。别报菜名、别长篇。");
 
 // 入场演出:进 onboarding 先播这段(背身 → 回头),播完转身正面(tangmu02 好奇)进登记拍。
 // 每帧 { img, line, dur(ms) };line 空则不显气泡(纯立绘演出)。
 export const INTRO = [
   { img: "/home/tangmu11.png", line: "", dur: 1300 }, // 背身,忙店里的活
-  { img: "/home/tangmu12.png", line: "Hm?", dur: 1200 }, // 回头,察觉生面孔
+  { img: "/home/tangmu12.png", line: L("Hm?", "哎?"), dur: 1200 }, // 回头,察觉生面孔
   // 转身正面,开场白第一句:先自报家门 + 点店名(有礼貌、立角色),再引出登记。第二句留给 name 拍(角色滑左 + 淡入卡)。
   // hold:true = 背身/回头自动播到这帧(正面对话)后停下、等点击推进(正面对话起才点击切换)。店主/世界观留到导览或办卡后带出。台词草稿·雨钦润色域。
-  { img: "/home/tangmu02.png", line: "Oh, a new face! I'm Tangmu, the face of Muyan Bookshop. House rules from the owner: first-time guests get registered before anything else.", hold: true },
+  { img: "/home/tangmu02.png", line: L("Oh, a new face! I'm Tangmu, the face of Muyan Bookshop. House rules from the owner: first-time guests get registered before anything else.", "哎,生面孔——我是糖沐,沐言书坊的看板娘。头回来的客人,按店主的规矩得先登记一下。"), hold: true },
 ];
 
 export const BEATS = [
@@ -96,35 +99,35 @@ export const BEATS = [
     emo: "curious",
     showCard: true, // 登记起身份卡常驻画面角,随回声(称呼/口味)逐行成形;cardDone 拍再落章办好。
     // 第二句:此拍进入时角色滑到左边、右侧淡入身份卡(第一句在入场演出第三帧已讲)。
-    line: () => "Here, this is your ID card. With it, you can come and go as you please. First things first: what should I call you?",
+    line: () => L("Here, this is your ID card. With it, you can come and go as you please. First things first: what should I call you?", "喏,这张就是你的身份卡,凭它随便出入这儿。先说,怎么称呼你?"),
     // 从「口味」拍回退到这儿时,糖沐的反悔反应(草稿·待雨钦润色);backEmo=回退时的姿势。
-    backLine: () => "Oh, back again? If you'd like a different name, that's fine. Just tell me the new one.",
+    backLine: () => L("Oh, back again? If you'd like a different name, that's fine. Just tell me the new one.", "咦,又踅回来了?名字想换就换——重新报一个便是。"),
     backEmo: "wry",
     field: "name",
     next: "avatar",
     ai: {
       // 辨别:糖沐判断这句是不是在正经报称呼。[OK]=是(填卡推进) / [CHAT]=闲聊(接话不填、停这拍)。
       scenario: () =>
-        "You're registering a guest who just walked in, with their blank ID card laid out in front of you. The player's message is supposed to be the name they want to go by. First decide whether they're genuinely giving (or making up) a name for themselves:\n" +
-        "· Yes (even a casual one, as long as it works as a name): start your reply with [OK], then naturally confirm it, work the name in lightly, mention that it's now on the card, and smoothly ask whether they'd like to add an avatar to the card (they can upload one, or just use their initial).\n" +
-        "· No (they're asking you something back, making small talk, changing the subject, or it's empty / gibberish / a string of symbols / obvious trolling): start your reply with [CHAT], then chat warmly about what they said for a sentence or two without treating it as a name, and at the end gently steer back to \"So, what should I call you?\"\n" +
-        "Put the tag at the very start, follow it with only the line itself, and don't explain the tag.",
+        L("You're registering a guest who just walked in, with their blank ID card laid out in front of you. The player's message is supposed to be the name they want to go by. First decide whether they're genuinely giving (or making up) a name for themselves:\n", "你正在给刚进门的新客做登记,面前摊着他空白的身份卡。玩家这条消息本该是他报上的称呼。先判断这是不是在正经给自己起/报一个称呼:\n") +
+        L("· Yes (even a casual one, as long as it works as a name): start your reply with [OK], then naturally confirm it, work the name in lightly, mention that it's now on the card, and smoothly ask whether they'd like to add an avatar to the card (they can upload one, or just use their initial).\n", "· 是(哪怕随意,只要能当名字用):回复以 [OK] 开头,随后自然确认、轻轻化用这个称呼、提一句已落到卡上,再顺势问他要不要给卡贴张头像(传一张,或用名字的字头也成)。\n") +
+        L("· No (they're asking you something back, making small talk, changing the subject, or it's empty / gibberish / a string of symbols / obvious trolling): start your reply with [CHAT], then chat warmly about what they said for a sentence or two without treating it as a name, and at the end gently steer back to \"So, what should I call you?\"\n", "· 不是(在反问你、闲聊、岔开话题、或空/乱码/一串符号/明显在捣乱):回复以 [CHAT] 开头,随后就着他的话温和聊一两句、别把这句当成名字,末了轻轻把话头引回「那,我该怎么称呼你」。\n") +
+        L("Put the tag at the very start, follow it with only the line itself, and don't explain the tag.", "标记放在最前面,之后只跟台词本身,别解释标记。"),
     },
-    chips: [{ label: "Make one up for me", fill: "Night Wanderer" }],
+    chips: [{ label: L("Make one up for me", "随便起一个"), fill: L("Night Wanderer", "夜游客") }],
   },
   {
     // 头像拍:起完名字紧接着问头像(「起名字结束后就问头像」)。非 field 拍,靠 chip 传/不传;传了走 avatarLine 回应。
     id: "avatar",
     emo: "spark", // 眼亮期待
     showCard: true,
-    line: (e) => `Got it, ${e.name || "friend"}. Your name's on the card now. Want to add an avatar? Upload one, or just use your initial.`,
+    line: (e) => L(`Got it, ${e.name || "friend"}. Your name's on the card now. Want to add an avatar? Upload one, or just use your initial.`, `记下了,${e.name || "客人"}——卡上有名了。想给卡贴张头像吗? 传一张,或者用你名字的字头也成。`),
     // 玩家上传头像后糖沐的即时回应(Home 在 obCardAvatar 有值时用它替 line,让"传头像"像一段对话)。
-    avatarLine: () => "Ooh, that's a nice one. I've set it into your card.",
-    backLine: (e) => `${e.name || "Friend"}, you can change your avatar whenever you like. Your initial looks clean on its own, too.`,
+    avatarLine: () => L("Ooh, that's a nice one. I've set it into your card.", "诶,这张好看——给你嵌卡上了。"),
+    backLine: (e) => L(`${e.name || "Friend"}, you can change your avatar whenever you like. Your initial looks clean on its own, too.`, `${e.name || "客人"},头像想换就换,不换用字头也清爽。`),
     backEmo: "smile",
     chips: [
-      { label: "+ Upload an avatar", upload: true },
-      { label: "Just use my initial", next: "taste" },
+      { label: L("+ Upload an avatar", "＋ 传张头像"), upload: true },
+      { label: L("Just use my initial", "用名字字头就好"), next: "taste" },
     ],
   },
   {
@@ -132,22 +135,22 @@ export const BEATS = [
     emo: "smile",
     showCard: true,
     line: (e) =>
-      `${e.name || "Friend"}, just one more line on your card. What have you been reading or watching lately? Books, shows, anything goes. If nothing comes to mind, that's fine too. No pressure.`,
+      L(`${e.name || "Friend"}, just one more line on your card. What have you been reading or watching lately? Books, shows, anything goes. If nothing comes to mind, that's fine too. No pressure.`, `${e.name || "客人"},卡上就差最后一行了——最近在看什么? 书、剧都行,随口说说;没有就说没有,不勉强。`),
     // 从「卡办好」拍回退到这儿时的反悔反应(草稿·待雨钦润色)。
-    backLine: (e) => `${e.name || "Friend"}, your card's not finished and you've circled back already? Let's fill in this line again: what have you been into lately?`,
+    backLine: (e) => L(`${e.name || "Friend"}, your card's not finished and you've circled back already? Let's fill in this line again: what have you been into lately?`, `${e.name || "客人"},卡还没办完呢又绕回来了?最近在看什么,这行再补补——`),
     backEmo: "wry",
     field: "taste",
     next: "cardDone",
     ai: {
       // 三分辨别:[OK]=报了口味(填卡) / [NONE]=明说没有/想不起来(推进但卡上记空,背面写暖句、不写书) / [CHAT]=闲聊岔开(接话不填、停这拍)。
       scenario: (e) =>
-        `You're registering a new guest, "${e.name || "Guest"}". Their name is already on the card; only the "Lately into" line is left. The player's message is supposed to be what they've been reading or watching lately, or want to. First decide:\n` +
-        "· They named a book, a show, or some kind of content (even briefly): start your reply with [OK], then naturally pick up on it, add a light comment, mention that you've added it to the card and the card is now done, and wrap up by offering to show them around the bookshop.\n" +
-        "· They clearly say there's nothing / they haven't been reading anything / they can't remember / they'd rather not say: start your reply with [NONE] (this counts as a real answer, so don't press them), then accept it warmly (something like \"Perfect, plenty of time for that\"), say you'll leave this line blank for now and the card is still good to go, and wrap up by offering to show them around the bookshop.\n" +
-        "· They're asking you something back, making small talk, changing the subject, or it's empty / gibberish / obvious trolling: start your reply with [CHAT], then chat about what they said for a sentence or two without treating it as their taste, and at the end steer back to \"So, what have you been into lately?\"\n" +
-        "Put the tag at the very start, followed only by the line itself.",
+        L(`You're registering a new guest, "${e.name || "Guest"}". Their name is already on the card; only the "Lately into" line is left. The player's message is supposed to be what they've been reading or watching lately, or want to. First decide:\n`, `你正在给新客「${e.name || "客人"}」做登记,卡上称呼已填好,就差「最近在看」这一行。玩家这条消息本该是他说的最近在看/想看的东西。先判断:\n`) +
+        L("· They named a book, a show, or some kind of content (even briefly): start your reply with [OK], then naturally pick up on it, add a light comment, mention that you've added it to the card and the card is now done, and wrap up by offering to show them around the bookshop.\n", "· 说了某本书/某部剧/某类内容(哪怕简短):回复以 [OK] 开头,随后自然接住、轻评一句、提补到卡上、卡这便办好,收尾说带他认认书坊。\n") +
+        L("· They clearly say there's nothing / they haven't been reading anything / they can't remember / they'd rather not say: start your reply with [NONE] (this counts as a real answer, so don't press them), then accept it warmly (something like \"Perfect, plenty of time for that\"), say you'll leave this line blank for now and the card is still good to go, and wrap up by offering to show them around the bookshop.\n", "· 明说没有 / 最近没看 / 想不起来 / 不想说:回复以 [NONE] 开头(这也算正经回答,别追问),随后温和接住(如「那正好,来日方长」)、说这行先空着、卡照办,收尾带他认书坊。\n") +
+        L("· They're asking you something back, making small talk, changing the subject, or it's empty / gibberish / obvious trolling: start your reply with [CHAT], then chat about what they said for a sentence or two without treating it as their taste, and at the end steer back to \"So, what have you been into lately?\"\n", "· 在反问你、闲聊、岔开、或空/乱码/明显在捣乱:回复以 [CHAT] 开头,随后就着他的话聊一两句、别把这句当口味,末了把话头引回「那,最近都在看点什么」。\n") +
+        L("Put the tag at the very start, followed only by the line itself.", "标记放在最前面,之后只跟台词本身。"),
     },
-    chips: [{ label: "Nothing lately", set: { taste: "" }, next: "cardDone" }],
+    chips: [{ label: L("Nothing lately", "还没看什么"), set: { taste: "" }, next: "cardDone" }],
   },
   {
     // 卡办好:登记两行齐了,糖沐落章、AI 现场写寄语、可上传头像、提示翻面看背面。card:true → Home 触发办卡收尾态。
@@ -158,11 +161,11 @@ export const BEATS = [
     showCard: true,
     // 头像已在前面的「头像拍」问过,这里只办卡:落章 + 寄语 + 递卡 → 导览。
     line: (e) =>
-      `There we go, ${e.name || "friend"}. One stamp, and this card is yours. I wrote you a little something on the back; flip it over to see. Keep it safe, and let's go learn the ropes.`,
+      L(`There we go, ${e.name || "friend"}. One stamp, and this card is yours. I wrote you a little something on the back; flip it over to see. Keep it safe, and let's go learn the ropes.`, `好——${e.name || "客人"},章一盖,这卡就是你的了。背面我给你写了句话,翻过来能瞧见。收好,咱这就去认认门道。`),
     // AI 寄语(卡背):糖沐亲手给这一位客人写的一句临别赠言(onboarding 现场生成;失败则用卡组件默认暖句)。
     msg: (e) =>
-      `You are Tangmu, the face of Muyan Bookshop. You've just finished registering a new guest, "${e.name || "Guest"}" (they said they've lately been reading or watching, or want to: "${e.taste || "not said yet"}"). Now you're going to handwrite a single parting line for them on the back of their ID card. Requirements: one or two sentences, warm, like something written on the card just for this one person. You may lightly weave in their name or taste, but don't list things or rattle off titles. Output only the line itself: no quotation marks, no narration, no signature.`,
-    chips: [{ label: "Show me around", next: "tourStory" }],
+      L(`You are Tangmu, the face of Muyan Bookshop. You've just finished registering a new guest, "${e.name || "Guest"}" (they said they've lately been reading or watching, or want to: "${e.taste || "not said yet"}"). Now you're going to handwrite a single parting line for them on the back of their ID card. Requirements: one or two sentences, warm, like something written on the card just for this one person. You may lightly weave in their name or taste, but don't list things or rattle off titles. Output only the line itself: no quotation marks, no narration, no signature.`, `你是沐言书坊的看板娘糖沐。你刚给新到店的客人「${e.name || "客人"}」办完入店登记(他说最近在看/想看:「${e.taste || "还没说"}」),现在要在他身份卡的背面,亲手给他写一句临别赠言。要求:就一两句、温暖、像手写在卡上给这一个人的话;可轻轻化用他的称呼或口味,但别罗列、别报菜名。只输出这句话本身,不带引号、不带旁白、不带落款。`),
+    chips: [{ label: L("Show me around", "带我认认这儿"), next: "tourStory" }],
   },
 
   // ---- 功能导览 5 拍 · onboarding 后半段(台词草稿·雨钦润色域)。 ----
@@ -174,54 +177,54 @@ export const BEATS = [
     tour: "explore",
     line: (e) => {
       const t = tasteQuote(e);
-      const hook = t ? `"${t}", huh? Then you've come to the right place. ` : "You've come to the right place. ";
-      return hook + "First, the most important thing: those shelves behind me are full of books. Take one down, push open the door, and you walk right into that story as its lead. Where you go from there is entirely up to you.";
+      const hook = t ? L(`"${t}", huh? Then you've come to the right place. `, `聊到「${t}」——那你可来对地方了。`) : L("You've come to the right place. ", "来对地方了。");
+      return hook + L("First, the most important thing: those shelves behind me are full of books. Take one down, push open the door, and you walk right into that story as its lead. Where you go from there is entirely up to you.", "先说最要紧的:我身后那排书架就是「书」。取一本、推开门,你就走进那个故事里当回主角,往哪儿走全看你。");
     },
-    backLine: () => "Another look at the shelves? Take a book, push the door open, and you're the lead.",
+    backLine: () => L("Another look at the shelves? Take a book, push the door open, and you're the lead.", "书架的门道再看一眼?——取一本推门进去,你就是主角。"),
     backEmo: "spark",
-    chips: [{ label: "And then?", next: "tourChat" }],
+    chips: [{ label: L("And then?", "然后呢"), next: "tourChat" }],
   },
   {
     id: "tourChat",
     emo: "whisper",
     tour: "chat",
     line: () =>
-      "If you just want a one-on-one with someone from a book, without stepping into the whole story, bring them out and sit down together in the café for a proper chat. Tell me who, and I'll call them over.",
-    backLine: () => "Want to talk with someone on their own? Bring them out of their book and sit down for a chat.",
+      L("If you just want a one-on-one with someone from a book, without stepping into the whole story, bring them out and sit down together in the café for a proper chat. Tell me who, and I'll call them over.", "要是只想找书里某个人单独说说话——不进整个故事,就把他请出来,坐咖啡厅慢慢聊。想聊谁,我替你叫。"),
+    backLine: () => L("Want to talk with someone on their own? Bring them out of their book and sit down for a chat.", "想单独找人聊那处?——把书里的人请出来,坐下慢慢说。"),
     backEmo: "whisper",
-    chips: [{ label: "Anything else?", next: "tourCreate" }],
+    chips: [{ label: L("Anything else?", "还有吗"), next: "tourCreate" }],
   },
   {
     id: "tourCreate",
     emo: "proud",
     tour: "create",
     line: () =>
-      "Tired of the stories on our shelves? There's a workshop out back. Make your own characters, write your own worlds, build a whole story, and put it on the shelf for others to read.",
-    backLine: () => "The workshop out back? Make your own characters, write stories, and shelve them for others to read.",
+      L("Tired of the stories on our shelves? There's a workshop out back. Make your own characters, write your own worlds, build a whole story, and put it on the shelf for others to read.", "店里的故事看腻了,后头还有间工坊——自己造角色、写世界、搭一整个故事出来,摆上书架给旁人读。"),
+    backLine: () => L("The workshop out back? Make your own characters, write stories, and shelve them for others to read.", "后头那间工坊?——自己造角色、写故事,摆上架给人读。"),
     backEmo: "proud",
-    chips: [{ label: "Go on", next: "tourExplore" }],
+    chips: [{ label: L("Go on", "继续"), next: "tourExplore" }],
   },
   {
     id: "tourExplore",
     emo: "wave",
     tour: "explore",
     line: () =>
-      "And you don't have to wait for me to recommend something. Browse the Catalog by the door yourself and pick by mood or by taste. The crowd favorites and the hidden gems are all in there.",
-    backLine: () => "The Catalog? Browse it yourself and pick stories to your taste.",
+      L("And you don't have to wait for me to recommend something. Browse the Catalog by the door yourself and pick by mood or by taste. The crowd favorites and the hidden gems are all in there.", "找故事不用干等我推荐——门口那面「书目」你自己翻,按心情、按口味挑,热闹的冷门的都在里头。"),
+    backLine: () => L("The Catalog? Browse it yourself and pick stories to your taste.", "那面书目?——自己翻,按口味挑故事。"),
     backEmo: "wave",
-    chips: [{ label: "Last one", next: "tourForum" }],
+    chips: [{ label: L("Last one", "最后一个"), next: "tourForum" }],
   },
   {
     id: "tourForum",
     emo: "smile",
     tour: "forum",
     line: () =>
-      "There's also the Tea Corner. Readers of the same books meet up there to talk plot, swap story picks, and leave a few words. When you're tired of browsing, go sit for a while and meet some people.",
-    backLine: () => "The Tea Corner? That's where readers meet up to talk plot and swap story picks.",
+      L("There's also the Tea Corner. Readers of the same books meet up there to talk plot, swap story picks, and leave a few words. When you're tired of browsing, go sit for a while and meet some people.", "还有个「茶座」——读一样书的客人在那儿碰头,聊剧情、荐故事、留几句话。逛累了就去坐坐,认识认识人。"),
+    backLine: () => L("The Tea Corner? That's where readers meet up to talk plot and swap story picks.", "那处茶座?——读者碰头,聊剧情、荐故事。"),
     backEmo: "smile",
     chips: [
-      { label: "Take me to my first book", to: "/explore", done: true },
-      { label: "I'll look around myself", done: true },
+      { label: L("Take me to my first book", "带我进第一本书"), to: "/explore", done: true },
+      { label: L("I'll look around myself", "我自己逛逛"), done: true },
     ],
   },
 ];

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
+import { L } from "../lib/i18n";
 import "./PillNav.css";
 
 // React Bits · PillNav(本地 vendored,适配沐言:文字 logo + 吃语义 token + HashRouter)。
@@ -10,7 +11,7 @@ import "./PillNav.css";
 export default function PillNav({
   items = [],
   activeHref,
-  brandText = "M",
+  brandText = L("M", "沐"),
   className = "",
   ease = "power3.easeOut",
   forcePills = false,

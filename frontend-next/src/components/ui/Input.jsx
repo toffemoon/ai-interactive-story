@@ -1,4 +1,5 @@
 import { forwardRef } from "react";
+import { L } from "../../lib/i18n";
 
 // Input — 搜索 / 表单基础输入,含 focus 环。
 export const Input = forwardRef(function Input({ className = "", ...rest }, ref) {
@@ -13,7 +14,7 @@ export function SearchField({ icon = "⌕", className = "", onClear, value, ...r
       <span className="search-icon" aria-hidden="true">{icon}</span>
       <input className="search-input" value={value} {...rest} />
       {onClear && hasValue ? (
-        <button type="button" className="search-clear" onClick={onClear} aria-label="Clear search" title="Clear search">
+        <button type="button" className="search-clear" onClick={onClear} aria-label={L("Clear search", "清除搜索")} title={L("Clear search", "清除搜索")}>
           ×
         </button>
       ) : null}

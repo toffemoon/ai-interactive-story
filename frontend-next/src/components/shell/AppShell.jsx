@@ -5,6 +5,7 @@ import { NAV } from "./nav";
 import ResumeBar from "./ResumeBar";
 import StaggeredMenu from "../StaggeredMenu";
 import PillNav from "../PillNav";
+import { L } from "../../lib/i18n";
 import "./shell.css";
 
 const NAV_ICONS = {
@@ -84,7 +85,7 @@ export default function AppShell({ children }) {
           isFixed
           hoverExpand
           position="left"
-          brandText="Muyan"
+          brandText={L("Muyan", "沐言")}
           items={navItems}
           displaySocials={false}
           displayItemNumbering

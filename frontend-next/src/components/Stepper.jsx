@@ -1,5 +1,6 @@
 import React, { useState, Children } from "react";
 import { motion } from "motion/react";
+import { L } from "../lib/i18n";
 
 import "./Stepper.css";
 
@@ -16,9 +17,9 @@ export default function Stepper({
   footerClassName = "",
   backButtonProps = {},
   nextButtonProps = {},
-  backButtonText = "Back",
-  nextButtonText = "Next",
-  completeText = "Done",
+  backButtonText = L("Back", "上一步"),
+  nextButtonText = L("Next", "下一步"),
+  completeText = L("Done", "完成"),
   disableStepIndicators = false,
   renderStepIndicator,
   ...rest

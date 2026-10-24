@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { L } from "../lib/i18n";
 import "./CardCarousel.css";
 
 // 模拟 React Bits CircularGallery(bend=0)的效果,但用 DOM + 保留我们的 <Card>:
@@ -10,7 +11,7 @@ const SPACING = 198; // 相邻卡水平间距(px)
 const EASE = 0.18; // lerp 缓动(越大切换越快;D4 真机反馈「再快点」0.09→0.18)
 const WAVE_AMP = 16; // 微浪振幅(px),乘滚动速度 → 静止平、滚动起伏
 
-export default function CardCarousel({ items, renderItem, activeIndex, onActiveChange, ariaLabel = "Card carousel" }) {
+export default function CardCarousel({ items, renderItem, activeIndex, onActiveChange, ariaLabel = L("Card carousel", "卡片轮播") }) {
   const list = items || [];
   const n = list.length;
   const [internal, setInternal] = useState(0);
@@ -190,7 +191,7 @@ export default function CardCarousel({ items, renderItem, activeIndex, onActiveC
               key={i}
               type="button"
               className={"ccz-dot" + (i === active ? " is-on" : "")}
-              aria-label={"Card " + (i + 1)}
+              aria-label={L("Card " + (i + 1), "第 " + (i + 1) + " 张")}
               onClick={() => setActive(i)}
             />
           ))}
