@@ -592,7 +592,7 @@
     padding: 0 18px;
   }
   .cx-main {
-    padding: 8px 16px 64px;
+    padding: 8px 16px 104px; /* 底部让出「继续游玩」浮条 */
     gap: 36px;
   }
   .cx-tools {
