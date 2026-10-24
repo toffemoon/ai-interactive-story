@@ -1,144 +1,192 @@
-/* 开局语言选择(2026-10-24 改版,画布方案 01-B):全屏左右分屏,盖在路由(含登录页)之上;Preloader 是 300。
-   窄屏上下堆叠。英文半屏用系统无衬线,中文半屏用中文站的宋 / 楷。 */
+/* 开局语言选择 · C 幕间(2026-10-25):全屏书店夜景,糖沐中英各问一句,右边两个大按钮。
+   盖在路由(含登录页)之上;Preloader 是 300。这时还没定语言,所以颜色字号都直接写死,不吃主题。 */
 .lang-gate {
   position: fixed;
   inset: 0;
   z-index: 400;
-  display: flex;
-  flex-wrap: wrap;
-  overflow-y: auto;
-  background: #221c16;
+  overflow: hidden;
+  background: #0e1320;
+  color: #f3f5fa;
+  font-family: "Noto Sans SC", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
-.lang-gate-seal {
+.lang-gate-bg {
   position: absolute;
-  left: 50%;
-  top: 40px;
-  transform: translateX(-50%);
-  width: 56px;
-  height: 56px;
-  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.lang-gate-shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(14, 19, 32, 0) calc(100% - 320px), rgba(14, 19, 32, 0.85) 100%),
+    linear-gradient(90deg, rgba(14, 19, 32, 0.15) 0%, rgba(14, 19, 32, 0.1) 45%, rgba(14, 19, 32, 0.7) 100%);
+}
+.lang-gate-tangmu {
+  position: absolute;
+  left: 12%;
+  top: 64px;
+  height: 128vh;
+  width: auto;
+  pointer-events: none;
+  user-select: none;
 }
 
-.lang-gate-half {
-  flex: 1 1 380px;
-  min-height: 50vh;
-  box-sizing: border-box;
-  padding: 64px clamp(24px, 6vw, 88px);
+.lang-gate-brand {
+  position: absolute;
+  left: 32px;
+  top: 20px;
+  min-height: 44px;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 22px;
-}
-
-.lang-gate-en {
-  background: #ffffff;
-  color: #1f1f1e;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-}
-
-.lang-gate-zh {
-  background: #221c16;
-  color: #ece3d2;
-  font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
-}
-
-.lang-gate-eyebrow {
-  font-size: 12px;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: #6b6b68;
-}
-.lang-gate-zh .lang-gate-eyebrow {
-  font-size: 13px;
-  letter-spacing: 0.3em;
-  color: #b3a890;
-}
-
-.lang-gate-name {
-  margin: 0;
-  font-size: 64px;
-  font-weight: 700;
-  line-height: 1;
-}
-.lang-gate-zh .lang-gate-name {
-  font-weight: 600;
-}
-
-.lang-gate-desc {
-  margin: 0;
-  max-width: 360px;
-  font-size: 17px;
-  line-height: 1.6;
-  color: #4a4a47;
-}
-.lang-gate-zh .lang-gate-desc {
-  line-height: 1.8;
-  color: #d6ccb8;
-}
-
-.lang-gate-sample {
-  margin: 0;
-  font-size: 14px;
-  letter-spacing: 0.04em;
-  color: #9a9893;
-}
-.lang-gate-zh .lang-gate-sample {
-  font-family: "LXGW WenKai TC", "LXGW WenKai", "Kaiti SC", "STKaiti", serif;
-  font-size: 16px;
-  letter-spacing: 0.12em;
-  color: #a59a85;
-}
-
-.lang-gate-go {
-  align-self: flex-start;
-  min-height: 48px;
-  display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 26px;
-  border: none;
-  border-radius: 10px;
-  background: #8f3c32;
   color: #ffffff;
-  font: inherit;
-  font-size: 16px;
-  cursor: pointer;
-  transition: transform 0.15s ease, filter 0.15s ease;
+  font-size: 19px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
 }
-.lang-gate-zh .lang-gate-go {
-  background: #d15a40;
-  color: #211710;
-}
-.lang-gate-go:hover,
-.lang-gate-go:focus-visible {
-  filter: brightness(1.08);
-  transform: translateX(2px);
-  outline: none;
-}
-.lang-gate-go:focus-visible {
-  box-shadow: 0 0 0 3px rgba(199, 154, 78, 0.6);
-}
-.lang-gate-go:disabled {
-  opacity: 0.6;
-  cursor: default;
-  transform: none;
+.lang-gate-brand img {
+  width: 32px;
+  height: 32px;
 }
 
+.lang-gate-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.lang-gate-pick {
+  position: absolute;
+  right: 8%;
+  top: 30%;
+  width: min(320px, calc(100% - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lang-gate-pick button {
+  min-height: 64px;
+  box-sizing: border-box;
+  padding: 0 26px;
+  display: flex;
+  align-items: center;
+  border: none;
+  border-radius: 12px;
+  background: rgba(14, 19, 32, 0.9);
+  color: #ffffff;
+  font: inherit;
+  font-size: 24px;
+  font-weight: 900;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+.lang-gate-pick button:hover,
+.lang-gate-pick button:focus-visible {
+  background: #f0883e;
+  color: #1a0f05;
+}
+.lang-gate-pick button:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+.lang-gate-pick button:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+/* 糖沐的对白框 */
+.lang-gate-say {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  width: min(1000px, calc(100% - 32px));
+  box-sizing: border-box;
+  padding: 30px 32px 18px;
+  border-radius: 16px;
+  background: rgba(10, 14, 24, 0.93);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lang-gate-plate {
+  position: absolute;
+  left: 28px;
+  top: -18px;
+  padding: 6px 18px;
+  border-radius: 8px;
+  background: #f0883e;
+  color: #1a0f05;
+  font-size: 16px;
+  font-weight: 700;
+}
+.lang-gate-zh {
+  margin: 8px 0 0;
+  font-size: 20px;
+  line-height: 1.8;
+}
+.lang-gate-en {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.7;
+  color: #c3cbdb;
+}
+.lang-gate-later {
+  margin: 8px 0 0;
+  align-self: flex-end;
+  font-size: 13px;
+  color: #a9b3c7;
+}
+
+/* 窄屏:糖沐居中退后;按钮和对白框从下往上排,按钮紧贴在对白框上方 */
 @media (max-width: 760px) {
-  .lang-gate-seal {
-    top: 20px;
-    width: 44px;
-    height: 44px;
+  .lang-gate {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 28px;
+    padding: 84px 16px 16px;
+    box-sizing: border-box;
+    overflow-y: auto;
   }
-  .lang-gate-half {
-    min-height: 0;
-    padding: 72px 24px 40px;
+  .lang-gate-tangmu {
+    left: 50%;
+    transform: translateX(-50%);
+    height: 96vh;
+    opacity: 0.6;
+  }
+  .lang-gate-pick {
+    position: relative;
+    right: auto;
+    top: auto;
+    width: 100%;
+  }
+  .lang-gate-pick button {
+    min-height: 56px;
+    font-size: 21px;
+  }
+  .lang-gate-say {
+    position: relative;
+    left: auto;
+    bottom: auto;
+    transform: none;
+    width: 100%;
+    padding: 26px 20px 14px;
   }
   .lang-gate-zh {
-    padding-top: 40px;
+    font-size: 17px;
   }
-  .lang-gate-name {
-    font-size: 48px;
+  .lang-gate-en {
+    font-size: 15px;
+  }
+  .lang-gate-later {
+    align-self: flex-start;
   }
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../state/auth";
-import { LANG, LANGS, hasChosenLang, setLang } from "../lib/i18n";
+import { LANG, LANGS, ZH_FONTS_HREF, hasChosenLang, setLang } from "../lib/i18n";
 import "./LanguageGate.css";
 
 // 开局语言选择(2026-10-23 中英双语)。规则:
@@ -46,13 +46,13 @@ export default function LanguageGate() {
   // 账户已有语言时不弹(上面的 effect 会直接采用它)。
   const visible = ready && !chosen && !LANGS.includes(acct);
 
-  // 中文半屏要预览中文站的宋 / 楷:选语言前 i18n.js 还没加载中文字体,这里补上(同一个 link id,不会重复)。
+  // 中文那句台词要用中文字体:选语言前 i18n.js 还没加载,这里补上(同一个 link id,不会重复)。
   useEffect(() => {
     if (!visible || document.getElementById("ais-zh-fonts")) return;
     const css = document.createElement("link");
     css.id = "ais-zh-fonts";
     css.rel = "stylesheet";
-    css.href = "https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=LXGW+WenKai+TC:wght@400&display=swap";
+    css.href = ZH_FONTS_HREF;
     document.head.append(css);
   }, [visible]);
 
@@ -64,27 +64,33 @@ export default function LanguageGate() {
     await applyLanguageChoice(lang, signedIn);
   };
 
-  // 2026-10-24 改版(画布方案 01-B):左右分屏,每半屏就是该语言界面的样子(英文系统无衬线,中文宋 / 楷)。
+  // 2026-10-25 改版(设计画布「C 幕间 · 选语言」):书店夜景里糖沐用两种语言问一句,右边两个大按钮。
+  // 这时还没选语言,所以台词中英各一行。
   return (
-    <div className="lang-gate" role="dialog" aria-modal="true" aria-label="Choose your language / 选择语言">
-      <img className="lang-gate-seal" src="/brand/seal-192.png" alt="" />
-      <section className="lang-gate-half lang-gate-en" lang="en">
-        <span className="lang-gate-eyebrow">Narrative Engine</span>
-        <h2 className="lang-gate-name">English</h2>
-        <p className="lang-gate-desc">Stories, characters and AI replies — all in English.</p>
-        <p className="lang-gate-sample" aria-hidden="true">Explore · Chat · Create · Me</p>
-        <button type="button" className="lang-gate-go" disabled={busy} onClick={() => pick("en")}>
-          Continue in English <span aria-hidden="true">→</span>
-        </button>
-      </section>
-      <section className="lang-gate-half lang-gate-zh" lang="zh">
-        <span className="lang-gate-eyebrow">沐言 · 叙事引擎</span>
-        <h2 className="lang-gate-name">中文</h2>
-        <p className="lang-gate-desc">故事、角色与 AI 回复,都使用中文。</p>
-        <p className="lang-gate-sample" aria-hidden="true">探索 · 纯聊 · 创作 · 我的</p>
-        <button type="button" className="lang-gate-go" disabled={busy} onClick={() => pick("zh")}>
-          使用中文继续 <span aria-hidden="true">→</span>
-        </button>
+    <div className="lang-gate" role="dialog" aria-modal="true" aria-labelledby="lang-gate-title">
+      <img className="lang-gate-bg" src="/brand/login-bg.jpg" alt="" />
+      <div className="lang-gate-shade" aria-hidden="true" />
+      <img className="lang-gate-tangmu" src="/home/tangmu01.webp" alt="" />
+      <div className="lang-gate-brand">
+        <img src="/brand/seal-192.png" alt="" />
+        <span lang="zh">沐言</span>
+      </div>
+      <h1 id="lang-gate-title" className="lang-gate-sr">
+        <span lang="zh">选择语言</span> <span lang="en">Choose your language</span>
+      </h1>
+      <div className="lang-gate-pick" role="group" aria-label="语言 Language">
+        <button type="button" lang="zh" disabled={busy} onClick={() => pick("zh")}>中文</button>
+        <button type="button" lang="en" disabled={busy} onClick={() => pick("en")}>English</button>
+      </div>
+      <section className="lang-gate-say" aria-label="糖沐 Tangmu">
+        <span className="lang-gate-plate">
+          <span lang="zh">糖沐</span> <span lang="en">Tangmu</span>
+        </span>
+        <p className="lang-gate-zh" lang="zh">「欢迎来到沐言书坊。开始之前，我们用哪种语言聊？」</p>
+        <p className="lang-gate-en" lang="en">"Welcome to Muyan Bookshop. Before we start, which language shall we use?"</p>
+        <p className="lang-gate-later">
+          <span lang="zh">之后可以在「我的」里修改</span>　<span lang="en">You can change this later in Me</span>
+        </p>
       </section>
     </div>
   );

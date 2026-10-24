@@ -41,6 +41,10 @@ export function setLang(lang, { reload = true } = {}) {
   if (reload) location.reload();
 }
 
+/** 中文字体:宋 / 楷(原有页面)+ Noto Sans SC(C 幕间改版的页面)。LanguageGate 预览中文时也用这一条。 */
+export const ZH_FONTS_HREF =
+  "https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Serif+SC:wght@400;500;600;700&family=LXGW+WenKai+TC:wght@400&display=swap";
+
 (function applyDocumentLang() {
   if (typeof document === "undefined") return;
   document.documentElement.lang = isZh ? "zh" : "en";
@@ -56,8 +60,7 @@ export function setLang(lang, { reload = true } = {}) {
     const css = document.createElement("link");
     css.id = "ais-zh-fonts";
     css.rel = "stylesheet";
-    css.href =
-      "https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=LXGW+WenKai+TC:wght@400&display=swap";
+    css.href = ZH_FONTS_HREF;
     document.head.append(pre1, pre2, css);
   }
   if (isZh) document.title = "沐言 · 叙事引擎";

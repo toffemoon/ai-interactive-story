@@ -46,6 +46,11 @@ body {
     color var(--dur-mid) var(--ease-out);
 }
 
+/* C 页是平的夜蓝底,不叠角落晕染 */
+html[data-theme="c"] body {
+  background-image: none;
+}
+
 /* 移动端 iOS 兼容 + 性能(C1/C6,2026-06-30 真机反馈):
    - C1:background-attachment:fixed 在 iOS Safari 重绘极卡(看板/滚动顿挫)→ 移动端改 scroll;
      晕染在 app 内页本就被壳/内容的不透明 --bg 盖住,视觉几乎无损。

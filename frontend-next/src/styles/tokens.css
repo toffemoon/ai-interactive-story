@@ -25,6 +25,24 @@
   --moon-muted: #b3a890;
   --stage-cinnabar: #d15a40;
   --stage-gilt: #c79a4e;
+  /* 幕间 C(2026-10-25 改版,设计画布「C 幕间」):夜蓝底 + 糖沐橙,视觉小说舞台 */
+  --night: #0e1320;
+  --night-sunk: #0a0f1a;
+  --night-panel: #141b2c;
+  --night-dialog: rgba(10, 14, 24, 0.93);
+  --night-chip: rgba(14, 19, 32, 0.74);
+  --night-tab: #161d30;
+  --night-tab-on: #2a3550;
+  --night-line: rgba(243, 245, 250, 0.1);
+  --night-field: rgba(243, 245, 250, 0.06);
+  --night-field-line: rgba(243, 245, 250, 0.16);
+  --night-soft: rgba(243, 245, 250, 0.12);
+  --starlight: #f3f5fa;
+  --starlight-muted: #c3cbdb;
+  --starlight-dim: #a9b3c7;
+  --tangmu-orange: #f0883e;
+  --tangmu-ink: #1a0f05;
+  --night-link: #9dbcff;
 
   /* —— 卡片书脊占位底色(无立绘类)+ 角标色,来自 卡片-翻转手感.html —— */
   --spine-story: #2e4b44;
@@ -130,9 +148,42 @@
   --scrim: rgba(10, 8, 5, 0.6);
 }
 
+/* 幕间 C:已按画布改版的页面用这一套(App.jsx 的 C_ROUTES 逐批加页)。
+   正文、标题都用无衬线;中文 Noto Sans SC(i18n.js 注入)。 */
+[data-theme="c"] {
+  --bg: var(--night);
+  --sunk: var(--night-sunk);
+  --panel: var(--night-panel);
+  --fg: var(--starlight);
+  --muted: var(--starlight-muted);
+  --line: var(--night-line);
+  --accent: var(--tangmu-orange);
+  --accent-bright: #f59a55;
+  --accent-2: var(--night-link);
+  --accent-3: #e3b16a;
+  --on-accent: var(--tangmu-ink);
+  --badge-pine-bg: rgba(157, 188, 255, 0.16);
+  --badge-pine-fg: #c4d6ff;
+  --badge-gilt-bg: rgba(227, 177, 106, 0.16);
+  --badge-gilt-fg: #f0cf9c;
+  --badge-cinnabar-bg: rgba(240, 136, 62, 0.18);
+  --badge-cinnabar-fg: #f7b585;
+  --shadow-card: 0 16px 34px -18px rgba(0, 0, 0, 0.7);
+  --shadow-pop: 0 24px 60px -20px rgba(0, 0, 0, 0.75);
+  --scrim: rgba(5, 8, 15, 0.62);
+}
+
 /* 中文站恢复原字体:宋 = 叙事 / display,楷 = 引文 / 书名(Google Fonts 由 lib/i18n.js 只在中文下注入)。 */
 html[lang="zh"] {
   --font-serif: "Noto Serif SC", "Songti SC", "SimSun", serif;
   --font-kai: "LXGW WenKai TC", "LXGW WenKai", "Kaiti SC", "STKaiti", serif;
   --font-sans: "Aptos", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+/* C 页正文也用无衬线(放在 html[lang] 之后,同等权重时以此为准) */
+html[data-theme="c"] {
+  --font-serif: var(--font-sans);
+}
+html[lang="zh"][data-theme="c"] {
+  --font-sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-serif: var(--font-sans);
 }

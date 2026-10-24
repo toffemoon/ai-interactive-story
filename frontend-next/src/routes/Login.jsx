@@ -2,17 +2,14 @@ import { useState } from "react";
 import { useNavigate } from "../lib/transitionNav";
 import { authApi } from "../lib/api";
 import { useAuth } from "../state/auth";
-import { Button } from "../components/ui";
 import { applyLanguageChoice } from "../components/LanguageGate";
 import { L, LANG } from "../lib/i18n";
 import "./Login.css";
 
-// 登录页(2026-10-24 改版,画布方案 02-A):左半屏书店图 + 标语逐词升起、句号处盖「沐言」印章;右半屏表单。
+// 登录页(2026-10-25 改版,设计画布「C 幕间 · 登录」):满屏书店夜景,糖沐站在左边,右边一块深色面板放表单。
 // 表单逻辑(登录 / 注册 / 找回密码 / 本地游客)与改版前一致,只换了结构与样式。
 const SEAL = "/brand/seal-192.png";
-const TAGLINE = L(["Stories,", "alive"], ["故事，", "活过来"]);
-const WORD_DELAY = 0.16;
-const STAMP_AT = 0.3 + (TAGLINE.length - 1) * WORD_DELAY + 0.85;
+const TANGMU = "/home/tangmu01.webp";
 
 export default function Login() {
   const { onAuthed, enabled } = useAuth();
@@ -105,10 +102,10 @@ export default function Login() {
     if (e.key === "Enter" && !(e.nativeEvent || e).isComposing) submit();
   };
 
-  const head = {
-    login: [L("Welcome back", "欢迎回来"), L("Sign in to pick up your saves on any device.", "登录后,存档在任何设备上都能接着玩。")],
-    register: [L("Create your account", "创建账号"), L("Sign up with your email to keep your stories.", "用邮箱注册,保存你的故事。")],
-    reset: [L("Reset your password", "重置密码"), L("We'll email you a verification code.", "我们会给你的邮箱发一个验证码。")],
+  const title = {
+    login: L("Welcome back", "欢迎回来"),
+    register: L("Create your account", "创建账号"),
+    reset: L("Reset your password", "重置密码"),
   }[tab];
 
   const codeRow = (
@@ -132,49 +129,22 @@ export default function Login() {
 
   return (
     <div className="login">
-      <section className="login-hero" aria-label={L("Narrative Engine", "叙事引擎")}>
-        <img className="login-hero-bg" src="/brand/login-bg.jpg" alt="" />
-        <div className="login-hero-shade" aria-hidden="true" />
-        <img className="login-hero-seal" src={SEAL} alt="" />
-        <div className="login-hero-copy">
-          <p className="login-tagline">
-            <span className="login-sr">{TAGLINE.join(" ")}</span>
-            {TAGLINE.map((w, i) => {
-              const word = (
-                <span className="login-mask" aria-hidden="true">
-                  <span className="login-word" style={{ animationDelay: `${(0.3 + i * WORD_DELAY).toFixed(2)}s` }}>{w}</span>
-                </span>
-              );
-              if (i < TAGLINE.length - 1) return <span key={i}>{word}</span>;
-              // 最后一个词和印章绑在一起不断行,窄屏上印章不会单独掉到下一行
-              return (
-                <span className="login-last" key={i}>
-                  {word}
-                  <span className="login-stamp" aria-hidden="true">
-                    <span className="login-ink" style={{ animationDelay: `${STAMP_AT.toFixed(2)}s` }} />
-                    <img className="login-stamp-seal" src={SEAL} alt="" style={{ animationDelay: `${STAMP_AT.toFixed(2)}s` }} />
-                  </span>
-                </span>
-              );
-            })}
-          </p>
-          <div className="login-rule" aria-hidden="true" style={{ animationDelay: `${(STAMP_AT + 0.35).toFixed(2)}s` }} />
-          <p className="login-eyebrow" style={{ animationDelay: `${(STAMP_AT + 0.35).toFixed(2)}s` }}>{L("Narrative Engine", "叙事引擎")}</p>
-        </div>
-      </section>
+      <img className="login-bg" src="/brand/login-bg.jpg" alt="" />
+      <div className="login-shade" aria-hidden="true" />
+      <img className="login-tangmu" src={TANGMU} alt="" />
+      <div className="login-brand">
+        <img src={SEAL} alt="" />
+        <span>{L("Muyan", "沐言")}</span>
+      </div>
 
-      <section className="login-panel">
-        <div className="login-form">
+      <main className="login-stage">
+        <section className="login-panel" aria-labelledby="login-title">
           <div className="login-lang" role="group" aria-label={L("Language", "语言")}>
-            <button type="button" lang="en" aria-pressed={LANG === "en"} className={LANG === "en" ? "on" : ""} onClick={() => LANG !== "en" && applyLanguageChoice("en", false)}>English</button>
-            <span aria-hidden="true">·</span>
             <button type="button" lang="zh" aria-pressed={LANG === "zh"} className={LANG === "zh" ? "on" : ""} onClick={() => LANG !== "zh" && applyLanguageChoice("zh", false)}>中文</button>
+            <button type="button" lang="en" aria-pressed={LANG === "en"} className={LANG === "en" ? "on" : ""} onClick={() => LANG !== "en" && applyLanguageChoice("en", false)}>English</button>
           </div>
 
-          <div className="login-head">
-            <h1>{head[0]}</h1>
-            <p>{head[1]}</p>
-          </div>
+          <h1 id="login-title" className="login-title">{title}</h1>
 
           {tab !== "reset" && (
             <div className="login-seg" role="tablist" aria-label={L("Account", "账号")}>
@@ -235,20 +205,17 @@ export default function Login() {
           {hint && <div className="login-hint">{hint}</div>}
           {err && <div className="login-err" role="alert">{err}</div>}
 
-          <Button variant="primary" full className="login-go" onClick={submit} disabled={busy}>
+          <button type="button" className="login-go" onClick={submit} disabled={busy}>
             {busy ? "…" : tab === "login" ? L("Enter", "进入") : tab === "register" ? L("Sign up & enter", "注册并进入") : L("Reset password", "重置密码")}
-          </Button>
+          </button>
 
           {!enabled && (
-            <>
-              <div className="login-or" aria-hidden="true"><span />{L("or", "或")}<span /></div>
-              <button type="button" className="login-guest" onClick={() => navigate("/home")}>
-                {L("Continue as guest", "以游客身份进入")}
-              </button>
-            </>
+            <button type="button" className="login-guest" onClick={() => navigate("/home")}>
+              {L("Continue as guest", "以游客身份进入")}
+            </button>
           )}
-        </div>
-      </section>
+        </section>
+      </main>
     </div>
   );
 }
