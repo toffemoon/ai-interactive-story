@@ -423,7 +423,7 @@ export default function Story() {
   const historyEvents = timeline.filter((e) => e.status === "resolved");
 
   // 舞台:故事封面(没有就用书店夜景)+ 有立绘的角色站在中间(目前只有糖沐有立绘)。
-  const backdrop = game.cover || "/home/background.png";
+  const backdrop = game.cover || "/home/background.webp";
   const castNames = ((deck && deck.characters) || []).map((c) => (c.data && c.data.name) || c.name);
   const art = castNames.includes("糖沐") ? "/home/tangmu01.webp" : null;
   const roundNow = storyTurns.length || (loading ? 1 : 0);
@@ -690,7 +690,7 @@ export default function Story() {
         src={backdrop}
         alt=""
         onError={(e) => {
-          if (!e.currentTarget.src.endsWith("/home/background.png")) e.currentTarget.src = "/home/background.png";
+          if (!e.currentTarget.src.endsWith("/home/background.webp")) e.currentTarget.src = "/home/background.webp";
         }}
       />
       <div className="play-shade" aria-hidden="true" />

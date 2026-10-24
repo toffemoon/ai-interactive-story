@@ -19,7 +19,7 @@ export default function Forum() {
       <TopNav variant="bar" />
       <main className="forum-main">
         <section className="forum-hero" aria-labelledby="forum-h">
-          <img className="forum-hero-bg" src="/home/background.png" alt="" />
+          <img className="forum-hero-bg" src="/home/background.webp" alt="" />
           <div className="forum-hero-shade" aria-hidden="true" />
           <div className="forum-hero-body">
             <h1 id="forum-h">{L("The forum isn't open yet", "论坛还没开")}</h1>

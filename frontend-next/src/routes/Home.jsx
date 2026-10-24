@@ -24,7 +24,7 @@ function todayYmd() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 const TANGMU_IMG = "/home/tangmu01.png";
-const BG_IMG = "/home/background.png";
+const BG_IMG = "/home/background.webp";
 const GREETING_NEW = L(
   "Hi, I'm Tangmu. I work at this bookshop. Every book here is one you can step into and play, and you can write one of your own too. Want to look at the shelves, or chat with me for a bit?",
   "你好呀,我是糖沐,在这家书店打工。这里的书都能走进去玩,你也可以自己写一本。先去书架看看,还是陪我聊两句?"

@@ -334,7 +334,7 @@ export default function StoryDetail() {
     <>
       <div className="page sd">
         <section className="sd-hero" aria-labelledby="sd-title">
-          <img className="sd-hero-bg" src={d.cover || "/home/background.png"} alt="" />
+          <img className="sd-hero-bg" src={d.cover || "/home/background.webp"} alt="" />
           <div className="sd-hero-shade" aria-hidden="true" />
           <div className="sd-hero-fade" aria-hidden="true" />
           <TopNav variant="overlay" />
