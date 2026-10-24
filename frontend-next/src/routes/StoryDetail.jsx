@@ -248,8 +248,10 @@ export default function StoryDetail() {
     const npcs = (d.characters || []).filter(
       (c) => !playerName || ((c.data && c.data.name) || c.name) !== playerName
     );
+    const cover = d.cover || "";
     startGame({
       title: bookName,
+      cover: cover.startsWith("data:") ? `/api/presets/${encodeURIComponent(preset.name)}/cover` : cover,
       characters: npcs,
       world: d.world || null,
       story: d.story || null,

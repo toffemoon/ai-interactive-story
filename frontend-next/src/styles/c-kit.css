@@ -1,5 +1,18 @@
-/* 幕间 C 共用件(画布「C 幕间」各页同一套):实心按钮、故事卡 / 角色卡、收藏星。
+/* 幕间 C 共用件(画布「C 幕间」各页同一套):读屏专用文字、实心按钮、故事卡 / 角色卡、收藏星。
    各页自己的版面放在页面 CSS;这里只放跨页复用、且可能先于该页 chunk 出现的件。 */
+
+/* 只给读屏器的文字(视觉上隐藏) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 .cx-btn {
   min-height: 52px;
