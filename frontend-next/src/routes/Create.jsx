@@ -18,6 +18,8 @@ import CountUp from "../components/react-bits/count-up"; // R2 观感:完整度�
 import ShinyText from "../components/react-bits/shiny-text"; // R2 观感:鎏金扫光(只上 toast 转瞬场合)
 import { L, isZh } from "../lib/i18n";
 import "./Create.css";
+import "./CreateC.css";
+import TopNav from "../components/shell/TopNav";
 
 // 角色卡的用户上传图(头像/立绘)单独保住,别被 AI 重建 draft 覆盖掉。
 function pickPics(d) {
@@ -1890,6 +1892,8 @@ export default function Create() {
 
   return (
     <div className={isMobile ? "ct" : "page create"}>
+      {/* C 幕间外框(2026-10-25):页顶 TopNav,创作页自己挂(C 路由不再有旧侧栏) */}
+      <TopNav variant="bar" />
       {isMobile ? (
         /* ———————————————— 手机:整页定高、只对话滚、输入框/动作钉底 ———————————————— */
         <>
