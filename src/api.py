@@ -32,6 +32,7 @@ from .identify import (
     identify_player,
     identify_storybook,
     identify_worldbook,
+    register_player,
 )
 from .chat import reply
 from .llm import (
@@ -691,6 +692,28 @@ async def api_identify_player(req: TextReq, request: Request, user: dict | None 
     return player.model_dump()
 
 
+class RegisterReq(BaseModel):
+    text: str
+    rules: str
+
+
+@app.post("/api/register_player")
+async def api_register_player(req: RegisterReq, request: Request, user: dict | None = Depends(current_user_dep)):
+    """自创角色按故事创建规则登记:返回 {card, adjustments},前端给玩家看登记卡确认后再入局。"""
+    if not req.text.strip():
+        raise HTTPException(400, L("Character description cannot be empty", "角色描述不能为空"))
+    if not req.rules.strip():
+        raise HTTPException(400, L("This story has no creation rules", "这个故事没有创建规则"))
+    _require_login_when_auth(user)
+    owner = _write_owner(user)
+    card, adjustments = await _guarded_llm(request, lambda: register_player(req.text, req.rules), fail_msg=L("Registration failed", "登记失败"))
+    try:
+        storage.save_library("players", card.name, card.model_dump(), user_id=owner)
+    except Exception:
+        log.exception("register_player 入库失败")
+    return {"card": card.model_dump(), "adjustments": adjustments}
+
+
 @app.post("/api/build_card")
 async def api_build_card(req: BuildCardReq, request: Request, user: dict | None = Depends(current_user_dep)):
     """对话式建卡一轮:返回 {reply, draft(Card V2 data), next_question, done, filled};
@@ -1163,6 +1186,8 @@ class PresetReq(BaseModel):
     author: str = ""         # 作者
     author_note: str = ""    # 作者的话(发布时填,详情页显示;Yufei 域元数据,2026-06-25 加,经 yufei 批,知会 Gengyue)
     tags: list[str] = []     # 分类标签
+    creation_rules: str = ""  # 自创角色的创建规则(有则详情页走 /api/register_player 登记卡;空 = 旧的 identify 直接入局)
+    allow_observer: bool = True  # False = 详情页不给「以旁观者开始」
 
 
 @app.get("/api/presets")
