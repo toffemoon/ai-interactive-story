@@ -1,0 +1,540 @@
+/* 新手引导 · 柜台两边。整屏一层盖在首页上:左(手机上为上)她那边,右(下)你这边;
+   一张 WebGL 画布垫在两边下面,两个镜头各画一边。类名都带 ob3d-,场景脚本只切 off / flip / under / quiet / pulse 这几个修饰。 */
+/* 引导期间页面本身不滚(Home 给 <html> 挂 ais-onboarding);站点给 <html> 留了滚动条槽(scrollbar-gutter: stable),
+   这时也收起来,不然整屏层右边会漏出一条页面底色。 */
+html.ais-onboarding {
+  scrollbar-gutter: auto;
+}
+html.ais-onboarding,
+html.ais-onboarding body {
+  overflow: hidden;
+}
+.ob3d {
+  --ob-ground: #0e1320;
+  --ob-text: #f3f5fa;
+  --ob-muted: #a9b3c7;
+  --ob-chip: rgba(10, 14, 24, 0.8);
+  --ob-paper: #f7f0e3;
+  --ob-ink: #2b2118;
+  --ob-ink-soft: #6b5a40;
+  --ob-accent: #f0883e;
+  --ob-accent-ink: #1a0f05;
+  --ob-seam: rgba(0, 0, 0, 0.55);
+  --ob-say: Georgia, "Times New Roman", serif;
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  overflow: hidden;
+  background: var(--ob-ground);
+  color: var(--ob-text);
+  color-scheme: dark;
+}
+.ob3d.is-zh {
+  --ob-say: "Noto Serif SC", "Songti SC", "SimSun", serif;
+}
+.ob3d [hidden] {
+  display: none !important;
+}
+.ob3d-gl {
+  position: absolute;
+  inset: 0;
+}
+.ob3d-gl canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.ob3d-app {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  height: 100vh;
+  height: var(--vvh, 100dvh);
+}
+.ob3d-view {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: manipulation;
+}
+.ob3d-view::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(120% 95% at 50% 50%, rgba(14, 19, 32, 0) 55%, rgba(8, 10, 18, 0.5) 100%);
+}
+/* the two sides meet like two windows onto one counter */
+.ob3d-desk {
+  box-shadow: inset 12px 0 22px -12px var(--ob-seam);
+  border-left: 1px solid rgba(0, 0, 0, 0.6);
+}
+.ob3d-grain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  background-size: 160px 160px;
+}
+
+.ob3d-brand {
+  position: absolute;
+  left: max(20px, env(safe-area-inset-left, 0px));
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 19px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+.ob3d-brand img {
+  width: 32px;
+  height: 32px;
+}
+.ob3d-ghost {
+  position: absolute;
+  right: 16px;
+  top: calc(14px + env(safe-area-inset-top, 0px));
+  min-height: 40px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 999px;
+  background: var(--ob-chip);
+  color: var(--ob-muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.ob3d-ghost:hover {
+  color: var(--ob-text);
+}
+
+/* what she says: a paper bubble beside her face, one line at a time */
+.ob3d-bubble {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  padding: 10px 14px 12px;
+  border-radius: 14px;
+  background: var(--ob-paper);
+  color: var(--ob-ink);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+.ob3d-bubble.off {
+  opacity: 0;
+}
+.ob3d-bubble::after {
+  content: "";
+  position: absolute;
+  top: 22px;
+  right: -9px;
+  border: 9px solid transparent;
+  border-right: 0;
+  border-left-color: var(--ob-paper);
+}
+.ob3d-bubble.flip::after {
+  right: auto;
+  left: -9px;
+  border-left: 0;
+  border-right: 9px solid var(--ob-paper);
+}
+/* no room beside her: the bubble goes under her, its tail pointing up at her face */
+.ob3d-bubble.under::after {
+  top: -9px;
+  right: auto;
+  left: var(--tail, 50%);
+  transform: translateX(-50%);
+  border: 9px solid transparent;
+  border-top: 0;
+  border-bottom-color: var(--ob-paper);
+}
+.ob3d-bubble .who {
+  display: inline-block;
+  margin-bottom: 4px;
+  padding: 0 8px;
+  border-radius: 5px;
+  background: var(--ob-accent);
+  color: var(--ob-accent-ink);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.7;
+}
+.ob3d-bubble p {
+  margin: 0;
+  font-family: var(--ob-say);
+  font-size: clamp(14px, 1.15vw, 17px);
+  font-weight: 500;
+  line-height: 1.75;
+  text-wrap: pretty;
+}
+.ob3d-bubble .rest {
+  visibility: hidden;
+}
+.ob3d-narr {
+  position: absolute;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 40px);
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--ob-chip);
+  color: var(--ob-muted);
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: center;
+  transition: opacity 0.5s ease;
+}
+.ob3d-narr.off {
+  opacity: 0;
+}
+
+/* your side: small labels that sit on the counter beside what they name */
+.ob3d-chip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  margin: 0;
+  padding: 5px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: var(--ob-chip);
+  color: var(--ob-text);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  box-shadow: 0 0 0 3px rgba(240, 136, 62, 0.45);
+  pointer-events: none;
+  transform: translate(-50%, 0);
+}
+.ob3d-chip.pulse {
+  animation: ob3d-pulse 1.6s ease-in-out infinite;
+}
+@keyframes ob3d-pulse {
+  50% {
+    box-shadow: 0 0 0 7px rgba(240, 136, 62, 0.12);
+  }
+}
+.ob3d-chip.quiet {
+  box-shadow: none;
+  color: var(--ob-muted);
+}
+button.ob3d-chip {
+  min-height: 32px;
+  border: none;
+  font-family: inherit;
+  pointer-events: auto;
+  cursor: pointer;
+}
+/* the name is typed into this, but what you see is the handwriting on the page under it */
+.ob3d-name {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  outline: none;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  font-family: inherit;
+  font-size: 16px;
+}
+.ob3d-name::selection {
+  background: transparent;
+}
+.ob3d-name:focus-visible {
+  box-shadow: 0 0 0 2px rgba(240, 136, 62, 0.75);
+}
+.ob3d-sticky {
+  position: absolute;
+  left: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  min-height: 44px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 3px;
+  background: #f3dc78;
+  color: #3a2f10;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  transform: rotate(-3deg);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+.ob3d-sticky:hover {
+  transform: rotate(-1deg) translateY(-2px);
+}
+/* the end: two bookmarks pushed across the counter */
+.ob3d-marks {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 18px;
+  padding: 0 16px;
+}
+.ob3d-mark {
+  --r: 0deg;
+  position: relative;
+  flex: 0 1 190px;
+  min-height: 92px;
+  padding: 22px 14px 14px;
+  border: none;
+  border-radius: 4px;
+  background: var(--ob-paper);
+  color: var(--ob-ink);
+  font-family: var(--ob-say);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.45;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+  transform: rotate(var(--r));
+  animation: ob3d-slide 0.55s cubic-bezier(0.2, 0.8, 0.25, 1) both;
+}
+.ob3d-mark small {
+  display: block;
+  margin-top: 4px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ob-ink-soft);
+}
+.ob3d-mark::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 8px;
+  border-radius: 4px 4px 0 0;
+  background: var(--ob-accent);
+}
+.ob3d-mark.one {
+  --r: -3deg;
+}
+.ob3d-mark.two {
+  --r: 2deg;
+  animation-delay: 0.12s;
+}
+.ob3d-mark.two::before {
+  background: #6d7a96;
+}
+.ob3d-mark:hover {
+  transform: rotate(var(--r)) translateY(-6px);
+}
+@keyframes ob3d-slide {
+  from {
+    opacity: 0;
+    transform: translateY(60px) rotate(var(--r));
+  }
+}
+.ob3d button:focus-visible {
+  outline: 2px solid var(--ob-accent);
+  outline-offset: 2px;
+}
+.ob3d-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* while the scene loads: the shop's seal on the dark ground */
+.ob3d-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: var(--ob-ground);
+  color: var(--ob-muted);
+  font-size: 14px;
+}
+.ob3d-loading img {
+  width: 64px;
+  height: 64px;
+  animation: ob3d-breathe 1.8s ease-in-out infinite;
+}
+@keyframes ob3d-breathe {
+  50% {
+    opacity: 0.45;
+    transform: scale(0.94);
+  }
+}
+
+/* without WebGL: her picture, her line, and a flat register card */
+.ob3d-flat {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: calc(24px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  overflow-y: auto;
+  background: var(--ob-ground) center / cover no-repeat url("/home/background.webp");
+}
+.ob3d-flat-her {
+  height: min(38vh, 340px);
+  width: auto;
+}
+.ob3d-flat-line {
+  max-width: 520px;
+  margin: 0;
+  padding: 10px 14px 12px;
+  border-radius: 14px;
+  background: var(--ob-paper);
+  color: var(--ob-ink);
+  font-family: var(--ob-say);
+  font-size: 15px;
+  line-height: 1.7;
+}
+.ob3d-flat-line .who {
+  display: block;
+  width: max-content;
+  margin-bottom: 4px;
+  padding: 0 8px;
+  border-radius: 5px;
+  background: var(--ob-accent);
+  color: var(--ob-accent-ink);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+.ob3d-flat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(420px, 100%);
+  box-sizing: border-box;
+  padding: 18px 20px;
+  border-radius: 6px;
+  background: var(--ob-paper);
+  color: var(--ob-ink);
+}
+.ob3d-flat-card h2 {
+  margin: 0;
+  font-family: var(--ob-say);
+  font-size: 20px;
+}
+.ob3d-flat-date,
+.ob3d-flat-card label {
+  margin: 0;
+  color: var(--ob-ink-soft);
+  font-size: 13px;
+}
+.ob3d-flat-card input {
+  min-height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-bottom: 2px solid #8a7454;
+  background: transparent;
+  color: var(--ob-ink);
+  font-size: 18px;
+}
+.ob3d-flat-row {
+  display: flex;
+  gap: 10px;
+}
+.ob3d-flat-row button {
+  flex: 1;
+  min-height: 44px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(43, 33, 24, 0.1);
+  color: var(--ob-ink);
+  font-family: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+.ob3d-flat-row button.is-go {
+  background: var(--ob-accent);
+  color: var(--ob-accent-ink);
+  font-weight: 700;
+}
+.ob3d-flat-seal {
+  align-self: flex-end;
+  width: 72px;
+  height: 72px;
+  transform: rotate(-8deg);
+}
+.ob3d-flat .ob3d-marks {
+  position: static;
+  padding: 0;
+}
+
+/* phone, or any tall window: her side on top, your side underneath */
+@media (max-width: 720px), (max-aspect-ratio: 4/5) {
+  .ob3d-app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 46fr) minmax(0, 54fr);
+  }
+  .ob3d-desk {
+    box-shadow: inset 0 12px 22px -12px var(--ob-seam);
+    border-left: none;
+    border-top: 1px solid rgba(0, 0, 0, 0.6);
+  }
+  .ob3d-brand {
+    left: max(14px, env(safe-area-inset-left, 0px));
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    font-size: 17px;
+  }
+  .ob3d-brand img {
+    width: 28px;
+    height: 28px;
+  }
+  .ob3d-bubble {
+    padding: 8px 12px 10px;
+  }
+  .ob3d-bubble p {
+    font-size: 14px;
+    line-height: 1.65;
+  }
+  .ob3d-narr {
+    bottom: 12px;
+  }
+  .ob3d-mark {
+    min-height: 80px;
+    padding: 20px 10px 12px;
+    font-size: 15px;
+  }
+  .ob3d-marks {
+    gap: 12px;
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ob3d-chip.pulse,
+  .ob3d-mark,
+  .ob3d-loading img {
+    animation: none;
+  }
+}
