@@ -22,7 +22,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import Header, HTTPException
 
 from .db import get_pool
-from . import email_send
+from . import email_send, email_templates
 from .lang import L
 
 _PBKDF2_ITER = 600_000          # OWASP 2023 建议下限
@@ -376,10 +376,9 @@ def send_email_code(email: str, purpose: str = "register") -> dict:
             "insert into email_otp (email, code_hash, purpose, expires_at) values (%s, %s, %s, %s)",
             (email, _otp_hash(email, code), purpose, expires),
         )
-    email_send.send_email(email, L("Your verification code", "你的验证码"),
-                          L(f"Your verification code is {code}. It is valid for {_OTP_TTL_MIN} minutes. "
-                            "If you did not request this, please ignore this email.",
-                            f"你的验证码是 {code},{_OTP_TTL_MIN} 分钟内有效。如非本人操作请忽略。"))
+    # 语言 = 用户在网站上选的那种(请求带的 X-Lang,模板里用 L() 取);注册 / 重置各一套文案。
+    subject, text, html = email_templates.otp_email(code, purpose, _OTP_TTL_MIN)
+    email_send.send_email(email, subject, text, html=html)
     out = {"sent": True}
     if not email_send.configured() and dev:
         out["dev_code"] = code  # 仅 AUTH_DEV_OTP=1(本地测试)才回码;生产永不回
