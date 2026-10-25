@@ -1,5 +1,5 @@
 // 中英双语(2026-10-23)。语言是开局常量:读 localStorage,切换 = 写入 + 整页 reload,
-// 所以 L() 在模块顶层(nav.js / createTemplates.js / onboardingScript.js 的常量)也能直接用。
+// 所以 L() 在模块顶层(nav.js / createTemplates.js 的常量)也能直接用。
 // 没选过语言时 LANG 先按 en 渲染,App 里的 LanguageGate 会盖住全屏让用户选。
 // 本模块被导入时就把 <html lang> 定好,并且只在中文下加载宋 / 楷的 Google Fonts(英文用系统无衬线,见 tokens.css)。
 

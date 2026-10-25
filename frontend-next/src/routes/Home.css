@@ -25,11 +25,8 @@
   inset: 0;
   background: linear-gradient(180deg, rgba(14, 19, 32, 0.72) 0%, rgba(14, 19, 32, 0) 20%, rgba(14, 19, 32, 0) 50%, rgba(14, 19, 32, 0.8) 100%);
 }
-.home.is-ob .home-shade {
-  background: linear-gradient(180deg, rgba(14, 19, 32, 0.6) 0%, rgba(14, 19, 32, 0) 22%, rgba(14, 19, 32, 0) 50%, rgba(14, 19, 32, 0.8) 100%);
-}
 
-/* 立绘:双层交叉溶解,居中;登记段(右侧有纸)整体往左让 */
+/* 立绘:双层交叉溶解,居中 */
 .home-portrait {
   position: absolute;
   inset: 0;
@@ -38,9 +35,6 @@
   align-items: center;
   justify-content: center;
   transition: transform 0.62s var(--ease-out);
-}
-.home.has-paper .home-portrait {
-  transform: translateX(-12%);
 }
 .home-portrait-img {
   position: absolute;
@@ -77,59 +71,6 @@
   right: 0;
   top: 0;
   z-index: 6;
-}
-
-/* 登记用的纸 */
-.home-paper {
-  position: absolute;
-  z-index: 4;
-  animation: homePaperIn 0.5s var(--ease-out) 0.2s both;
-}
-.home-paper--a {
-  right: 7%;
-  top: 104px;
-  width: min(440px, 86%);
-  transform: rotate(-3deg);
-}
-.home-paper--b {
-  right: 6%;
-  top: 96px;
-  width: min(500px, 88%);
-  transform: rotate(2deg);
-}
-@keyframes homePaperIn {
-  from {
-    opacity: 0;
-    translate: 0 14px;
-  }
-}
-/* /test/onboarding:A / B 对比切换 */
-.home-paper-switch {
-  position: absolute;
-  z-index: 8;
-  right: 32px;
-  top: 22px;
-  display: flex;
-  gap: 4px;
-  padding: 3px;
-  border-radius: var(--r-pill);
-  background: rgba(14, 19, 32, 0.8);
-}
-.home-paper-switch button {
-  min-height: 38px;
-  padding: 0 14px;
-  border: none;
-  border-radius: var(--r-pill);
-  background: transparent;
-  color: var(--fg);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-.home-paper-switch button.is-on {
-  background: #f3f5fa;
-  color: #0e1320;
-  font-weight: 700;
 }
 
 /* ———— 对白框 ———— */
@@ -188,22 +129,6 @@
   opacity: 0.35;
   cursor: default;
 }
-.home-box-skip {
-  position: absolute;
-  right: 18px;
-  top: 10px;
-  min-height: 44px;
-  padding: 0 12px;
-  border: none;
-  background: none;
-  color: #c3cbdb;
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-}
-.home-box-skip:hover:not(:disabled) {
-  color: #ffffff;
-}
 .home-box-line {
   margin: 8px 0 0;
   padding-right: 160px;
@@ -212,23 +137,8 @@
   line-height: 1.8;
   color: #f3f5fa;
 }
-.home-box--ob .home-box-line {
-  padding-right: 72px;
-}
 .home-line-reveal {
   display: inline;
-}
-.home-box-hint {
-  margin: -8px 0 0;
-  text-align: right;
-  font-size: 13px;
-  color: #a9b3c7;
-  animation: homeHintBlink 1.6s ease-in-out infinite;
-}
-@keyframes homeHintBlink {
-  50% {
-    opacity: 0.35;
-  }
 }
 .home-box-actions {
   display: flex;
@@ -335,22 +245,6 @@
 .home-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-/* 入场演出:整屏透明捕获层,点任意处推进(VN 式),在对白框之上 */
-.home-ob-introcatch {
-  position: absolute;
-  inset: 0;
-  z-index: 7;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-.home-ob-introcatch:focus-visible {
-  outline: 2px solid rgba(240, 136, 62, 0.7);
-  outline-offset: -6px;
 }
 
 /* 全屏(截图态):只留背景 + 立绘;点任意处 / Esc / 角标退出 */
@@ -555,15 +449,6 @@
 }
 
 /* ———— 响应式 ———— */
-/* 纸在窄屏不显示(画布做法);登记照常进行,头像上传也照常 */
-@media (max-width: 860px) {
-  .home-paper {
-    display: none;
-  }
-  .home.has-paper .home-portrait {
-    transform: none;
-  }
-}
 @media (max-width: 720px) {
   .home-box {
     left: 8px;
@@ -586,15 +471,11 @@
     width: 40px;
     height: 40px;
   }
-  .home-box-line,
-  .home-box--ob .home-box-line {
+  .home-box-line {
     margin-top: 22px;
     padding-right: 0;
     font-size: 17px;
     line-height: 1.75;
-  }
-  .home-box--ob .home-box-line {
-    margin-top: 14px;
   }
   .home-pill {
     min-height: 44px;
@@ -617,19 +498,13 @@
     top: 96px;
     height: 112%;
   }
-  .home-paper-switch {
-    right: 12px;
-    top: 12px;
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   .home-portrait,
   .home-portrait-img {
     transition: opacity 0.18s linear;
   }
-  .home-portrait-img.is-on,
-  .home-paper,
-  .home-box-hint {
+  .home-portrait-img.is-on {
     animation: none;
   }
 }
