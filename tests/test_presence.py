@@ -171,6 +171,30 @@ def test_cast_declared_in_reasoning_brings_a_character_on(monkeypatch):
     assert S._char_id(chars[3], 3) in fact["knowers"]
 
 
+def test_moving_away_leaves_people_behind(monkeypatch):
+    """玩家换地点:回合开始在场、没跟来的人不再在场,也不是新地点那些事的知情者;
+    reasoning.cast 里顺手列了她也不把她加回来。"""
+    chars = _deck(5)
+    out_json = json.dumps({
+        "reasoning": {"cast": ["Bram Cole", "Cora Lind"], "note": "walk to the harbour office"},
+        "narration": "Pell leaves Bram at the attic and walks to the harbour office, where Cora Lind looks up.",
+        "messages": [{"name": "Cora Lind", "text": "Yes?"}],
+        "choices": [{"id": "a", "label": "Ask for work", "intent": "ask"}],
+        "state_update": {"time_advance": 30, "scene": {"location": "Harbour office", "present_characters": ["Cora Lind"]}},
+        "memory_write": [{"kind": "fact", "text": "Pell asked Cora for work at the harbour office.", "entity": "player"}],
+        "triggered_events": [],
+    })
+    monkeypatch.setattr(memory, "ensure_loading", lambda: None)
+    story = _story(["Pell Ward", "Bram Cole"])
+    with in_memory_storage() as store, llm.scripted_backend(lambda *a, **k: out_json):
+        out = asyncio.run(S.story_turn(session_id="t-move", characters=chars, user="Walk to the harbour office",
+                                       story=story, player=PLAYER, mode="standard"))
+        data = store.load_session("t-move")
+    assert out.state.scene.present_characters == ["Cora Lind"]
+    fact = [m for m in data["long_memory"] if m.get("text", "").startswith("Pell asked Cora")][0]
+    assert set(fact["knowers"]) == {S._PLAYER_ENTITY, S._char_id(chars[2], 2)}  # 留在阁楼的 Bram 不知道
+
+
 # ── 实体键覆盖全部卡 ─────────────────────────────────────
 
 def test_roster_covers_every_card_and_short_names():

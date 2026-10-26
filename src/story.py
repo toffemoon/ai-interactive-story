@@ -60,6 +60,8 @@ SMALL_CAST = 3                 # 卡数 ≤ 此值:开局全员在场、卡全�
                                # 不在场的卡只留一行、不能开口,进出场靠模型改写 present_characters(2026-10-27 诡秘长测)
 RECAP_FULL_MSGS = 4            # 近期原文保底:最近这么多条(2 回合)全文进 recap,不受预算和单条截断限制。
                                # 10 张卡的骨架 5 万字远超预算时,旧逻辑只剩 1400 字、每回合截 600 字,台词整段丢失
+RECAP_MIN_CHARS = 8000         # recap 预算下限:骨架再大也给近期原文留这么多(保底两回合之外再多几回合,压住中程自相矛盾)
+RECAP_PER_LINE = 1200          # 保底两回合之外,更早回合每条截到这么长(原 600 截掉了叙述后面的台词)
 RECALL_QUERY_ACTION_ONLY = False  # 实验门控:向量召回 query 强制仅用当前问句(默认 False:按 _is_fact_query 条件化)
 MISS_DIST = 0.45               # abstention:具体事实查询时 top1 余弦距离 > 此值 = 检索无相关记录(硬 NOT_FOUND 兜底)
 PHASE1_FIXES = True            # Phase 1 总开关(runner 置 False 跑 baseline 对照 / 也是 prod kill-switch):
@@ -1066,6 +1068,34 @@ def _clamp_time_advance(raw: Any, action: str, skip: Any = None) -> int:
     else:
         ceiling = NATURAL_MAX_ADVANCE
     return max(MIN_TIME_ADVANCE, min(adv, ceiling))
+
+
+_DAY_PARTS = [  # (起始小时, 英文, 中文)
+    (0, "deep night — dark outside", "深夜,外面一片黑"),
+    (4, "the small hours before dawn — still dark, the first grey may show", "黎明前,天还黑,东边可能刚泛灰"),
+    (6, "early morning", "清晨"),
+    (9, "morning", "上午"),
+    (12, "midday", "中午"),
+    (14, "afternoon", "下午"),
+    (17, "evening", "傍晚"),
+    (19, "dusk into night", "入夜"),
+    (21, "night", "夜里"),
+]
+
+
+def _day_part_line(minutes: int) -> str:
+    """把权威时钟说成人话,压住正文里自编的钟点(诡秘长测:02:21 时角色说"三点了",01:52 就写天灰白)。"""
+    m = max(0, int(minutes)) % 1440
+    h, mm = divmod(m, 60)
+    part_en, part_zh = next((en, zh) for start, en, zh in reversed(_DAY_PARTS) if h >= start)
+    h12 = (h % 12) or 12
+    ampm = "a.m." if h < 12 else "p.m."
+    return L(
+        f"In words: {h12}:{mm:02d} {ampm}, {part_en}. Any time a character states, or a clock in the scene shows, must be this time "
+        "(within ten minutes); the light and street life must fit this time of day. If unsure, don't state a time at all.",
+        f"换成话说:{h:02d}:{mm:02d},{part_zh}。角色说出的钟点、场景里钟面上的时间都必须是这个时间(误差十分钟内);"
+        "天色和街上的动静要符合这个时段。拿不准就别写具体钟点。",
+    )
 
 
 def _fmt_clock(minutes: int) -> str:
@@ -2207,10 +2237,13 @@ async def _save_turn(
     entity_labels: list[str] | None = None,
 ) -> StoryTurn:
     # Phase 3 + 在场:本回合进场的人也见证了本回合 → knowers / [当时在场] = 回合开始在场 ∪ 回合结束在场。
+    # 换了地点的回合只算回合结束时在场的人:留在原地的人不知道新地点发生的事(诡秘长测:留在家的 Melissa 成了黑荆棘那些事的知情者)。
     if PHASE3_KNOWERS and state.scene.cast_tracked:
+        moved = state.scene.location != data.get("_turn_start_location", state.scene.location)
         end_names = [n for n in state.scene.present_characters if n]
-        data["_present_names"] = list(dict.fromkeys(list(data.get("_present_names") or []) + end_names))
-        keys = set(data.get("_present_keys") or [])
+        start_names = [] if moved else list(data.get("_present_names") or [])
+        data["_present_names"] = list(dict.fromkeys(start_names + end_names))
+        keys = {k for k in (data.get("_present_keys") or []) if not moved or k == _PLAYER_ENTITY}
         for n in end_names:
             k = _roster_key(n, roster or {})
             if k and k != _PLAYER_ENTITY:
@@ -2504,6 +2537,7 @@ async def _story_turn_impl(
     if PHASE3_KNOWERS:
         data["_present_keys"] = sorted(wanted_keys)
         data["_present_names"] = _on_stage(state, characters)
+        data["_turn_start_location"] = state.scene.location
         if state.scene.cast_tracked and not messages and not (story and story.events and story.events[0].characters):
             # 开场回合、开局名单是"全员"这个缺省值:谁真在场要等模型这回合写出来,知情者只取回合结束时的名单。
             data["_present_keys"] = sorted(k for k in wanted_keys if k == _PLAYER_ENTITY)
@@ -2515,8 +2549,8 @@ async def _story_turn_impl(
     avail = max(2000, CONTEXT_BUDGET_CHARS - len(skeleton) - len(action_prompt))
 
     # L1 近期原文 recap:在预算内从最近往前尽量塞;窗口大小随骨架/对话长度自适应。
-    recap_budget = int(avail * RECAP_RATIO)
-    recap, start_idx = _recent_recap(messages, recap_budget)
+    recap_budget = max(int(avail * RECAP_RATIO), RECAP_MIN_CHARS)
+    recap, start_idx = _recent_recap(messages, recap_budget, per_line=RECAP_PER_LINE)
     older = messages[:start_idx]
 
     # L2 滚动摘要:recap 窗口之外的更早回合(两个模式共用,长局连续性的基座)。
@@ -2598,7 +2632,7 @@ async def _story_turn_impl(
         f"main plot idle for {state.idle_minutes} in-story minutes. Give the in-story minutes that pass this turn in state_update.time_advance.",
         f"当前:{_fmt_clock(state.clock_minutes)}(累计 {state.clock_minutes} 故事分钟);"
         f"主线静默 {state.idle_minutes} 故事分钟。本轮在 state_update.time_advance 给出经过的故事分钟数。",
-    )
+    ) + "\n" + _day_part_line(state.clock_minutes)
     # 后台注入:运营者经 /api/operator/inject(需 operator 权限/require_role)发的内容,本回合放进 AI 上下文。
     # 每条可选 sticky:once(默认,送达即清)/ sticky(持续到手动 DELETE 清)。兼容旧的纯字符串=once。
     _oi = data.get("operator_inject") or []
@@ -2716,7 +2750,10 @@ async def _story_turn_impl(
         implicit = _narrated_arrivals(str(obj.get("narration", "")), obj.get("messages"), characters,
                                       start_cast + _canon_cast(_as_text_list(_sc.get("present_characters")), characters) + declared,
                                       _pname)
-        arrivals = [n for n in declared + implicit if not _is_player_char(n, _pname)]
+        # 只把"本回合新来的人"补进名单;回合开始就在场的人去留以模型写的名单为准
+        # (诡秘长测:Klein 早上出门去黑荆棘,reasoning.cast 里还列着回合前半段在家的 Melissa,并进来她就"跟去了")。
+        arrivals = [n for n in declared + implicit
+                    if not _is_player_char(n, _pname) and not _card_on_stage(n, start_cast)]
         allowed = _canon_cast(start_cast + _as_text_list(_sc.get("present_characters")), characters) + arrivals
         if implicit:  # 留痕:模型写了人进场却没进名单,引擎替它补上
             data.setdefault("gate_log", []).append({"turn": len(messages) // 2 + 1, "implicit_entry": implicit})
