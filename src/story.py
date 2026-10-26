@@ -1147,6 +1147,57 @@ _JUMP_FLOOR_NIGHT = re.compile(r"一夜|过夜|睡了一觉|一觉|天亮|入夜
                                re.IGNORECASE)
 
 
+_EN_HOURS = {w: i for i, w in enumerate(
+    "twelve one two three four five six seven eight nine ten eleven".split())}
+_CN_HOURS = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9,
+             "十": 10, "十一": 11, "十二": 12}
+_TARGET_EN = re.compile(
+    r"\b(?:(?:sleep|wait|rest|lie (?:down|in)|stay|bed)\b[^.?!]{0,50}?\b(?:until|till)"
+    r"|(?:sleep|rest|bed|lie down)\b[^.?!]{0,50}?\bat)\s+(?:about\s+|around\s+|the\s+)?"
+    r"(?:(half past|quarter past|quarter to)\s+)?(\d{1,2}|" + "|".join(_EN_HOURS) + r")"
+    r"(?::(\d{2}))?(?:\s*o'clock)?(?:\s*(a\.?m\.?|p\.?m\.?))?\b", re.I)
+_TARGET_ZH = re.compile(r"(?:睡到|等到|歇到|躺到)\s*(?:早上|上午|下午|晚上)?\s*(\d{1,2}|十[一二]?|[一二两三四五六七八九])\s*点\s*(半)?")
+
+
+def _target_clock_advance(action: str, now: int) -> int | None:
+    """玩家点名睡到/等到某个钟点 → 走到那个钟点要的分钟数(下一次到这个钟点;12 小时制按最近的一次算)。
+    诡秘长测:"Sleep until Melissa's knock at six" 在 03:40 被"sleep until"当成一夜硬推 8 小时,时钟到了 11:40。"""
+    a = action or ""
+    m = _TARGET_EN.search(a)
+    hour = minute = None
+    pm = None
+    if m:
+        word, num, mins, ampm = m.group(1), m.group(2), m.group(3), m.group(4)
+        hour = int(num) if num.isdigit() else _EN_HOURS[num.lower()]
+        minute = int(mins) if mins else 0
+        if word:
+            w = word.lower()
+            minute = 30 if w == "half past" else 15 if w == "quarter past" else 45
+            if w == "quarter to":
+                hour -= 1
+        if ampm:
+            pm = ampm.lower().startswith("p")
+    else:
+        z = _TARGET_ZH.search(a)
+        if z:
+            num = z.group(1)
+            hour = int(num) if num.isdigit() else _CN_HOURS.get(num)
+            minute = 30 if z.group(2) else 0
+            pm = True if any(w in a for w in ("下午", "晚上")) else None
+    if hour is None or not (0 <= hour <= 24):
+        return None
+    cur = now % 1440
+    candidates = [hour % 24 * 60 + minute]
+    if pm is None and hour <= 12:  # 没说上午下午:两个都算,取最近的一次
+        candidates.append((hour % 12 + 12) % 24 * 60 + minute)
+    elif pm and hour < 12:
+        candidates = [(hour + 12) * 60 + minute]
+    best = min(((c - cur) % 1440 for c in candidates), default=None)
+    if best is None or best > SKIP_MAX_ADVANCE:  # 要跳十几个小时以上多半是回指("did it happen at two?"),不认
+        return None
+    return max(MIN_TIME_ADVANCE, best)
+
+
 def _parse_num(s: str) -> float:
     return float(s) if s.isdigit() else float(_CN_NUM.get(s, _EN_NUM.get(s.lower(), 1)))
 
@@ -2257,9 +2308,13 @@ async def _save_turn(
         action,
         turn.state_update.get("time_skip") if isinstance(turn.state_update, dict) else None,
     )
-    floor = _explicit_jump_floor(action)  # 玩家显式声明优先:即便模型估小了,也至少跳到声明的时长
-    if floor > advance:
-        advance = min(floor, JUMP_MAX_ADVANCE)
+    target = _target_clock_advance(action, state.clock_minutes)
+    if target is not None:  # 玩家点名了钟点("睡到六点"):正好走到那个钟点,不按"一夜 = 8 小时"硬推
+        advance = target
+    else:
+        floor = _explicit_jump_floor(action)  # 玩家显式声明优先:即便模型估小了,也至少跳到声明的时长
+        if floor > advance:
+            advance = min(floor, JUMP_MAX_ADVANCE)
     state.clock_minutes += advance
     if turn.triggered_events:
         state.idle_minutes = 0
