@@ -171,6 +171,9 @@ class SceneState(BaseModel):
     time: str = Field(default_factory=lambda: L("Unknown time", "未定时间"))
     atmosphere: str = ""
     present_characters: list[str] = Field(default_factory=list)
+    # 大卡组(卡数 > story.SMALL_CAST)由引擎记在场:present_characters 是权威名单,空 = 除玩家外没人;
+    # False = 旧行为(名单空时回退全部卡),小卡组和旧会话走这条。
+    cast_tracked: bool = False
     objects: list[str] = Field(default_factory=list)
     exits: list[str] = Field(default_factory=list)
 

@@ -55,6 +55,11 @@ SUMMARY_RECOMPUTE_EVERY = 4    # 更早消息每多这么多条,重算一次滚�
 DEEP_WARMUP_AT = 0.65          # 深度模式:上下文用量超此比例,后台预热 embedding 模型
 DEEP_RECALL_AT = 0.80          # 深度模式:超此比例且模型就绪,启用向量召回
 DEEP_AUTO_CHAR_COUNT = 5       # 角色卡数 > 此值(即 ≥6,群像剧)自动进深度模式:上下文消耗大,需滚动摘要/consolidation/向量召回兜底
+SMALL_CAST = 3                 # 卡数 ≤ 此值:开局全员在场、卡全量注入、谁都能开口(旧行为,三张卡的老故事不变)。
+                               # 卡数 > 此值:在场由引擎记(scene.cast_tracked)——开局按故事书第一个事件的角色,
+                               # 不在场的卡只留一行、不能开口,进出场靠模型改写 present_characters(2026-10-27 诡秘长测)
+RECAP_FULL_MSGS = 4            # 近期原文保底:最近这么多条(2 回合)全文进 recap,不受预算和单条截断限制。
+                               # 10 张卡的骨架 5 万字远超预算时,旧逻辑只剩 1400 字、每回合截 600 字,台词整段丢失
 RECALL_QUERY_ACTION_ONLY = False  # 实验门控:向量召回 query 强制仅用当前问句(默认 False:按 _is_fact_query 条件化)
 MISS_DIST = 0.45               # abstention:具体事实查询时 top1 余弦距离 > 此值 = 检索无相关记录(硬 NOT_FOUND 兜底)
 PHASE1_FIXES = True            # Phase 1 总开关(runner 置 False 跑 baseline 对照 / 也是 prod kill-switch):
@@ -82,6 +87,7 @@ OUTPUT_LANGUAGE_RULE = (
 MIN_TIME_ADVANCE = 1           # 每轮至少推进的故事分钟,防时钟冻住
 NATURAL_MAX_ADVANCE = 180      # 自然推进上限(3 故事小时);玩家没显式跳时间时按此 clamp,防乱估
 JUMP_MAX_ADVANCE = 60 * 1440   # 玩家显式跳时间时的单轮上限(60 故事天;够跳"一个月后"这类声明)
+SKIP_MAX_ADVANCE = 16 * 60     # 模型写明 time_skip(等到天亮、赶一段长路)时的单轮上限
 # 玩家显式声明时间跳跃的词:命中则允许大跳(取模型估计,clamp 到 JUMP_MAX)。
 _JUMP_WORDS = re.compile(
     r"第二天|第三天|次日|翌日|隔天|过了一?[天夜晚]|明天|明日|昨天|前一?天|"
@@ -121,7 +127,7 @@ def _entity_roster(characters: list[CharacterCard],
     """
     roster: dict[str, str] = {}
     labels: list[str] = []
-    for i, c in enumerate(characters[:3]):
+    for i, c in enumerate(characters):  # 全部卡都发实体键(原先只取前三张,十张卡的卡组有七个角色不进知情系统)
         cid = _char_id(c, i)
         roster[_norm_entity(cid)] = cid
         if c.data.name:
@@ -135,13 +141,119 @@ def _entity_roster(characters: list[CharacterCard],
     return roster, labels
 
 
+def _on_stage(state: RuntimeState, characters: list[CharacterCard], player_name: str = "") -> list[str]:
+    """此刻在场(除玩家)的名字。引擎记在场时名单就是权威(空 = 没人);否则名单空回退全部卡(旧行为)。"""
+    names = list(state.scene.present_characters)
+    if not names and not state.scene.cast_tracked:
+        names = [c.data.name for c in characters]
+    return [n for n in names if n and not _is_player_char(n, player_name)]
+
+
+def _card_on_stage(name: str, on_stage: list[str]) -> bool:
+    """卡上的名字在不在在场名单里(容忍名/姓简写:Dunn ↔ Dunn Smith)。"""
+    if _name_in_present(name, set(on_stage)):
+        return True
+    parts = {t for t in name.split() if len(t) >= 3}
+    return any(p in parts for p in on_stage)
+
+
+def _opening_cast(characters: list[CharacterCard], player: PlayerCard | None, story: StoryBook | None) -> list[str]:
+    """大卡组开局在场:故事书第一个事件列出的、有卡的角色(去掉玩家)。事件没列角色时返回空,由调用方回退。"""
+    player_name = (player.name or "").strip() if player else ""
+    first = story.events[0] if story and story.events else None
+    listed = list(first.characters) if first else []
+    out = []
+    for c in characters:
+        nm = c.data.name
+        if nm and not _is_player_char(nm, player_name) and _card_on_stage(nm, listed):
+            out.append(nm)
+    return out
+
+
+def _canon_cast(names: list[str], characters: list[CharacterCard]) -> list[str]:
+    """在场名单规整:卡上角色一律换成卡上的名字(模型常写 ID「melissa-moretti」或简称「Dunn」),
+    卡外的路人(警长、房东)原样保留;去重保序。"""
+    out: list[str] = []
+    for n in names:
+        n = str(n or "").strip()
+        if not n:
+            continue
+        hit = next((c.data.name for i, c in enumerate(characters)
+                    if c.data.name and (_norm_entity(n) in {_norm_entity(c.data.name), _norm_entity(_char_id(c, i))}
+                                        or _card_on_stage(c.data.name, [n]))), None)
+        name = hit or n
+        if name not in out:
+            out.append(name)
+    return out
+
+
+_SPEECH_EN = r"(?:said|says|asked|asks|replied|replies|answered|answers|added|adds|murmured|murmurs|snapped|snaps|whispered|whispers|called|calls)"
+_NAME_TITLES = {"Old", "Young", "Mr", "Mr.", "Mrs", "Mrs.", "Miss", "Ms", "Sir", "Lady", "Lord", "Dr", "Dr.",
+                "Captain", "Father", "Mother", "Uncle", "Aunt", "Madam", "Master"}
+
+
+def _narrated_arrivals(narration: str, raw_messages: Any, characters: list[CharacterCard],
+                       on_stage: list[str], player_name: str = "") -> list[str]:
+    """正文里已经在场景中、却没写进在场名单的卡上角色(诡秘长测:警察半夜进门,Dunn 的话写在旁白里,名单一直只有 Melissa)。
+    只认强证据:直接引语的说话人(「'…,' Dunn said」「Dunn asked: '…'」「邓恩说:」),或本回合给他写了台词且正文里出现了他。
+    「Benson always said …」这类转述不算(后面没有引号)。"""
+    text = narration or ""
+    speakers = set()
+    for item in raw_messages or []:
+        if isinstance(item, dict):
+            speakers.add(_norm_entity(item.get("name") or item.get("character_id") or ""))
+    found: list[str] = []
+    for i, c in enumerate(characters):
+        nm = c.data.name
+        if not nm or _is_player_char(nm, player_name) or _card_on_stage(nm, on_stage):
+            continue
+        tokens = [t for t in nm.split() if t not in _NAME_TITLES]  # Old Neil → Neil,Dunn Smith → Dunn
+        forms = [nm] + [t for t in tokens[:1] if len(t) >= 3 and t != nm]
+        alt = "|".join(re.escape(f) for f in forms)
+        quote = "['\"‘’“”]"
+        direct = (re.search(rf"{quote}[,.!?—–\s]*\s*(?:{alt})\s+{_SPEECH_EN}\b", text)
+                  or re.search(rf"\b{_SPEECH_EN}\s+(?:{alt})\b[,.]?\s*{quote}", text)
+                  or re.search(rf"(?:{alt})\s+{_SPEECH_EN}\b[,:]?\s*{quote}", text)
+                  or re.search(rf"(?:{alt})[^。！？\n]{{0,12}}(?:说|问|道|答)[:：]?\s*[「“\"]", text))
+        has_line = _norm_entity(nm) in speakers or _norm_entity(_char_id(c, i)) in speakers or any(
+            s and (s in _norm_entity(nm).split()) for s in speakers)
+        if direct or (has_line and re.search(rf"(?:{alt})", text)):
+            found.append(nm)
+    return found
+
+
+def _offstage_line(card: CharacterCard, cid: str) -> str:
+    """不在场的卡只留一行:名字 + ID + 公开简介第一句(description 是详情页公开字段;秘密在 speech_rules,不进这一行)。"""
+    d = card.data
+    desc = re.split(r"(?<=[.!?。！？])\s*", (d.description or "").strip(), maxsplit=1)[0]
+    if len(desc) > 160:
+        desc = desc[:160].rstrip() + "…"
+    return f"- {d.name} ({cid})" + (f": {desc}" if desc else "")
+
+
+def _roster_key(name: str, roster: dict[str, str]) -> str | None:
+    """名字 → 实体键。先精确(名字/ID),再容忍简称(名单里写 Dunn → 卡上 Dunn Smith)。"""
+    n = _norm_entity(name)
+    if not n:
+        return None
+    if n in roster:
+        return roster[n]
+    for alias, key in roster.items():
+        if key == _PLAYER_ENTITY or not alias:
+            continue
+        if n in alias.split() or alias in n.split():  # Dunn ↔ dunn smith
+            return key
+        if len(n) >= 2 and not n.isascii() and (n in alias or alias in n):  # 悟空 ↔ 孙悟空
+            return key
+    return None
+
+
 def _present_entity_keys(state: RuntimeState, characters: list[CharacterCard],
                          roster: dict[str, str]) -> set[str]:
-    """本轮在场实体的规范键集合:present_characters(角色名)解析成 cid;空时回退到全部角色卡。"""
-    present_names = state.scene.present_characters or [c.data.name for c in characters[:3]]
+    """本轮在场实体的规范键集合:在场名单(角色名)解析成 cid。"""
     keys: set[str] = set()
-    for n in present_names:
-        k = roster.get(_norm_entity(n))
+    for n in _on_stage(state, characters):
+        k = _roster_key(n, roster)
         if k and k != _PLAYER_ENTITY:
             keys.add(k)
     return keys
@@ -264,7 +376,77 @@ def _json_obj(raw: str) -> dict[str, Any]:
         candidate = raw[start:end + 1]
         candidate = candidate.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
         candidate = re.sub(r",\s*([}\]])", r"\1", candidate)
-        return json.loads(candidate)
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            fixed = _rejoin_split_root(candidate) or _close_truncated(raw[start:])
+            if fixed is not None:
+                return fixed
+            raise
+
+
+def _rejoin_split_root(text: str) -> dict[str, Any] | None:
+    """模型把根对象提前关了、又接着写成员({...choices]},"state_update":{...}...)→ 拼回一个对象。
+    诡秘案第三回合就是这种(Extra data),旧逻辑救不回来,整回合掉进精简重写。"""
+    dec = json.JSONDecoder()
+    try:
+        obj, idx = dec.raw_decode(text)
+    except json.JSONDecodeError:
+        return None
+    rest = text[idx:].strip()
+    if not isinstance(obj, dict) or not rest.startswith(","):
+        return None
+    tail = "{" + rest[1:].lstrip()
+    try:
+        more = json.loads(tail)
+    except json.JSONDecodeError:
+        more = _close_truncated(tail, need_body=False)
+    if not isinstance(more, dict):
+        return None
+    for k, v in more.items():
+        obj.setdefault(k, v)
+    return obj
+
+
+def _close_truncated(text: str, need_body: bool = True) -> dict[str, Any] | None:
+    """输出写到一半断了:退回到最近一个完整成员,补齐括号。need_body=True 时只在正文、台词、选项都已写完时才算救回
+    (断在 state_update / memory_write 里最常见);断在正文中间的不硬救,交给 LLM 修复和重写。"""
+    stack: list[str] = []
+    in_str = esc = False
+    cuts: list[tuple[int, tuple[str, ...]]] = []
+    for i, ch in enumerate(text):
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch in "{[":
+            stack.append(ch)
+        elif ch in "}]":
+            if stack:
+                stack.pop()
+            cuts.append((i + 1, tuple(stack)))
+        elif ch == ",":
+            cuts.append((i, tuple(stack)))
+    for pos, st in reversed(cuts[-80:]):
+        if not st:
+            continue
+        attempt = text[:pos] + "".join("}" if c == "{" else "]" for c in reversed(st))
+        try:
+            obj = json.loads(attempt)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(obj, dict):
+            continue
+        if need_body and not (str(obj.get("narration", "")).strip() and obj.get("choices")):
+            return None
+        return obj
+    return None
 
 
 async def _repair_json(raw: str) -> dict[str, Any]:
@@ -293,8 +475,9 @@ async def _repair_json(raw: str) -> dict[str, Any]:
 
 
 def _speaker_for_action(action: str, state: RuntimeState, characters: list[CharacterCard]) -> tuple[str, str]:
-    names = [c.data.name for c in characters if c.data.name]
-    present = state.scene.present_characters or names
+    present = _on_stage(state, characters)
+    if state.scene.cast_tracked and not present:  # 除玩家外没人在场:保底回合只写旁白,不拉一个不在场的人来说话
+        return "narrator", L("Narrator", "旁白")
     for name in present:
         if name and name in action:
             card = next((c for c in characters if c.data.name == name), None)
@@ -315,7 +498,7 @@ def _local_continuation_turn_zh(action: str, state: RuntimeState, characters: li
     location = state.scene.location or "现场"
     objects = state.scene.objects or ["周围的环境", "在场者的神情", "眼前的线索"]
     focus = objects[0]
-    present = "、".join(state.scene.present_characters[:4]) or name
+    present = "、".join(_on_stage(state, characters)[:4]) or name
 
     if any(word in action for word in ("看法", "怎么想", "意见", "反应")):
         narration = f"在{location},你的视线转向在场者。{present}的反应,一瞬间比眼前的事更值得留意。"
@@ -332,7 +515,7 @@ def _local_continuation_turn_zh(action: str, state: RuntimeState, characters: li
 
     return StoryTurn(
         narration=narration,
-        messages=[StoryMessage(character_id=cid, name=name, text=text)],
+        messages=[] if cid == "narrator" else [StoryMessage(character_id=cid, name=name, text=text)],
         choices=[
             StoryChoice(id="clarify_fact", label="要求对方把已知信息讲清楚", intent="ask", description="把问题落到确定的事实"),
             StoryChoice(id="watch_reaction", label="观察在场者的反应", intent="observe", description="寻找犹豫或隐瞒"),
@@ -355,7 +538,7 @@ def _local_continuation_turn_en(action: str, state: RuntimeState, characters: li
     location = state.scene.location or "the scene"
     objects = state.scene.objects or ["the surroundings", "the faces of those present", "the clue in front of you"]
     focus = objects[0]
-    present = ", ".join(state.scene.present_characters[:4]) or name
+    present = ", ".join(_on_stage(state, characters)[:4]) or name
     low = action.lower()
 
     if any(word in action or word in low for word in ("看法", "怎么想", "意见", "反应", "think", "opinion", "view", "react")):
@@ -373,7 +556,7 @@ def _local_continuation_turn_en(action: str, state: RuntimeState, characters: li
 
     return StoryTurn(
         narration=narration,
-        messages=[StoryMessage(character_id=cid, name=name, text=text)],
+        messages=[] if cid == "narrator" else [StoryMessage(character_id=cid, name=name, text=text)],
         choices=[
             StoryChoice(id="clarify_fact", label="Ask them to spell out what they know", intent="ask", description="Pin the question to established facts"),
             StoryChoice(id="watch_reaction", label="Watch how everyone reacts", intent="observe", description="Look for hesitation or concealment"),
@@ -397,6 +580,16 @@ def _init_state(characters: list[CharacterCard], player: PlayerCard | None, stor
     state = RuntimeState()
     state.scene.present_characters = first_names
     state.scene.location = L("Opening scene", "故事开场")
+    if len(characters) > SMALL_CAST:
+        # 大卡组:开局不再全员在场(诡秘 10 张卡曾让奥黛丽、阿尔杰也"在"莫雷蒂家,第一条事实的知情者全错)。
+        # 第一个事件写了在场角色就照它(诡秘:开场只有克莱恩);没写(自建卡组、旧故事书)就照旧全员,
+        # 由开场回合模型写的 present_characters 收窄,知情者只记回合结束时在场的人(见 story_turn)。
+        state.scene.cast_tracked = True
+        first = story.events[0] if story and story.events else None
+        if first and first.characters:
+            state.scene.present_characters = _opening_cast(characters, player, story)
+            if first.location:
+                state.scene.location = first.location
     if characters and characters[0].data.scenario:
         state.scene.atmosphere = characters[0].data.scenario[:300]
     if story:
@@ -586,6 +779,7 @@ def _apply_state_update(state: RuntimeState, update: dict[str, Any], player_name
         scene = {"location": scene}
     elif not isinstance(scene, dict):
         scene = {}
+    moved = bool(scene.get("location")) and str(scene.get("location")) != state.scene.location
     for key in ("location", "atmosphere"):  # time 不再由 LLM 写,统一在 _save_turn 由权威时钟渲染(根治显示倒退)
         if scene.get(key):
             setattr(state.scene, key, str(scene[key]))
@@ -595,6 +789,11 @@ def _apply_state_update(state: RuntimeState, update: dict[str, Any], player_name
             values = [v for v in values if not _is_player_char(v, player_name)]
         if values:
             setattr(state.scene, key, values)
+        elif (key == "present_characters" and state.scene.cast_tracked and moved
+              and isinstance(scene.get(key), list)):
+            # 引擎记在场时:换了地点又明确写了空名单 = 新地点除玩家外没人(否则旧名单会跟着玩家走)。
+            # 没换地点的空名单当作"没填",保持原名单(模型常把 schema 里的 [] 原样抄回来)。
+            state.scene.present_characters = []
 
     player = update.get("player") or {}
     if not isinstance(player, dict):
@@ -846,10 +1045,12 @@ def _state_digest(state: RuntimeState) -> dict[str, Any]:
     }
 
 
-def _clamp_time_advance(raw: Any, action: str) -> int:
+def _clamp_time_advance(raw: Any, action: str, skip: Any = None) -> int:
     """把模型估的 time_advance(分钟)clamp 成合理值。
 
     自然推进锁在 [MIN, NATURAL_MAX] 防乱估;玩家显式说"第二天/三小时后"等跳跃词时放开到 JUMP_MAX;
+    模型在 state_update.time_skip 写明了跳过的理由(玩家同意等到天亮、长途赶路)时放开到 SKIP_MAX——
+    否则正文写到第二天早上、时钟却卡在 +3 小时(诡秘长测:正文吃早饭,时钟凌晨四点)。
     每轮至少 +MIN_TIME_ADVANCE,防时钟冻住。
     """
     try:
@@ -858,7 +1059,12 @@ def _clamp_time_advance(raw: Any, action: str) -> int:
         adv = MIN_TIME_ADVANCE
     if adv < 0:
         adv = MIN_TIME_ADVANCE
-    ceiling = JUMP_MAX_ADVANCE if _JUMP_WORDS.search(action or "") else NATURAL_MAX_ADVANCE
+    if _JUMP_WORDS.search(action or ""):
+        ceiling = JUMP_MAX_ADVANCE
+    elif skip and str(skip).strip().lower() not in {"false", "no", "none", "0"}:
+        ceiling = SKIP_MAX_ADVANCE
+    else:
+        ceiling = NATURAL_MAX_ADVANCE
     return max(MIN_TIME_ADVANCE, min(adv, ceiling))
 
 
@@ -904,8 +1110,10 @@ _JUMP_FLOOR_PATTERNS += [
 ]
 _JUMP_FLOOR_NEXTDAY = re.compile(r"第二天|次日|翌日|隔天|明天|明日|\bnext (?:day|morning)\b|\bthe following (?:day|morning)\b|\btomorrow\b",
                                  re.IGNORECASE)
-_JUMP_FLOOR_NIGHT = re.compile(r"一夜|当晚|过夜|睡了一觉|一觉|天亮|入夜|黎明|清晨|\bovernight\b|\bthat night\b|\bfor the night\b|"
-                               r"\bslept\b|\bsleep (?:through|until|till)\b|\buntil (?:dawn|morning|daybreak)\b|\bat dawn\b|\bnightfall\b",
+# 只认向前的说法。"that night / slept / 当晚"多半是回指("那天晚上你听到了什么"),
+# 诡秘长测里一句 "what she heard that night" 就把时钟硬推了 8 小时。
+_JUMP_FLOOR_NIGHT = re.compile(r"一夜|过夜|睡了一觉|一觉|天亮|入夜|黎明|清晨|\bovernight\b|\bfor the night\b|"
+                               r"\bsleep (?:through|until|till)\b|\buntil (?:dawn|morning|daybreak)\b|\bnightfall\b",
                                re.IGNORECASE)
 
 
@@ -973,11 +1181,17 @@ def _prompt_zh(
 ) -> str:
     entity_memory = entity_memory or {}
     player_name = (player.name or "").strip() if player else ""
+    tracked = state.scene.cast_tracked
+    present = _on_stage(state, characters, player_name)  # bug#6:在场可发言集排除玩家扮演的角色
     char_blocks = []
+    offstage_lines = []
     for i, card in enumerate(characters):
         d = card.data
         cid = _char_id(card, i)
         if _is_player_char(d.name, player_name):   # bug#6:玩家扮演的角色不作为可发言 NPC 块,引擎不替其发言
+            continue
+        if tracked and not _card_on_stage(d.name, present):  # 不在场:只留一行,不给整张卡(也不给它的秘密和知情块)
+            offstage_lines.append(_offstage_line(card, cid))
             continue
         rules = "\n".join(f"- {r}" for r in d.speech_rules)
         block = (
@@ -1000,16 +1214,33 @@ def _prompt_zh(
         char_blocks.append(block)
     # 单角色"场景":判断依据是本轮实际在场的角色数(运行时),不是上传了几张卡。
     # 多角色卡组里和某个角色单独相处的段落也会触发——那种段落最容易退化成一问一答的聊天。
-    present = [p for p in (state.scene.present_characters or [c.data.name for c in characters])
-               if p and not _is_player_char(p, player_name)]  # bug#6:在场可发言集排除玩家扮演的角色
     solo_directive = ""
-    if len(set(present)) <= 1:
+    if tracked and not present:
+        solo_directive = (
+            "本轮场景里除玩家外没有任何角色在场。narration 要写足(至少 3-5 句、有画面感),写场景、玩家动作的后果和世界本身的反应。"
+            "messages 可以是空列表(这一条优先于『至少一条角色台词』的要求),不要凭空拉一个不在场的角色来说话;"
+            "只有剧情本轮给出具体理由(有人到来、敲门、被叫来、玩家走过去),才写出他到场并把他的名字写进 present_characters。\n"
+        )
+    elif len(set(present)) <= 1:
         solo_directive = (
             "本轮场景里除玩家外只有一个角色在场,没有其他角色的对白来填充内容。"
             "因此 narration 要写足(至少 3-5 句、有画面感):把场景、气氛、玩家这一轮动作带来的"
             "物理/环境后果、以及世界本身的反应(光线、声音、物件、距离、温度、时间流逝)都描写出来,"
             "不要只写一两句就交给对白。让单角色场景依然有沉浸感和节奏,而不是一问一答。\n"
         )
+    offstage_block = ""
+    if offstage_lines:
+        offstage_block = (
+            "# 不在场的角色(此刻不在这个场景里)\n"
+            "他们在别处:本轮不能说话、不能行动、看不见也听不到这里发生的事,也不会知道这里发生了什么。"
+            "只有剧情本轮给出具体理由(到来、敲门、被叫来、玩家去找他)才能让他进场:在本轮 narration 里写出他到场,"
+            "并把他的名字原样写进 state_update.scene.present_characters;否则绝不给他台词。"
+            "来的人如果就是下面某个角色(比如上门调查的人),就用卡上的名字写他、把他加进名单,不要把他写成一个不具名的陌生人。\n"
+            + "\n".join(offstage_lines) + "\n\n"
+        )
+    present_note = ""
+    if tracked:
+        present_note = ("(在场名单:" + ("、".join(present) if present else "除玩家外没有人") + ")\n")
     story_block = "\n".join(
         f"- {e.title}({e.event_id}): {e.summary}\n  选项提示:{'; '.join(e.choices_hint)}\n  后果:{'; '.join(e.consequences)}"
         for e in story_hits
@@ -1096,9 +1327,11 @@ def _prompt_zh(
         "玩家持续投入时,调查要真的产出新结论、新位置、新关系或新揭示,而不是无限细分同一个发现、反复确认同一件事、"
         "或让角色用换皮的同义台词把玩家原地留住。一条线索调查充分了就给出它的结论并打开下一步,别在原地空转。\n"
         "每轮必须先生成故事正文,再给 3-4 个玩家行动选项;选项不能替代正文。"
+        "选项只写玩家角色凭他此刻所知能想到的行动:不要在选项里点破别人的真实身份、头衔或任何玩家角色在剧情里还没得知的事。"
         "narration 必须非空,messages 至少包含一条角色对玩家本轮输入的反应。"
         "玩家可能使用口语、玩梗或不严肃报价,仍要当作故事内行动处理,由角色自然回应。\n\n"
-        f"# 活跃角色\n{chr(10).join(char_blocks)}\n\n"
+        + (f"# 活跃角色(此刻在场)\n{present_note}{chr(10).join(char_blocks) or '无'}\n\n" + offstage_block if tracked
+           else f"# 活跃角色\n{chr(10).join(char_blocks)}\n\n") +
         f"# 玩家设定\n{json.dumps(player.model_dump(), ensure_ascii=False) if player else '未提供'}{player_mem_block}\n\n"
         f"# 故事书总览\n{story_overview}\n\n"
         f"# 当前运行状态\n{json.dumps(_state_digest(state), ensure_ascii=False)}\n\n"
@@ -1109,6 +1342,8 @@ def _prompt_zh(
         "# 状态维护(每轮必做,直接决定玩家看到的状态面板,不要省略)\n"
         "- 场景:玩家移动或环境变化时,必须在 state_update.scene 写新值。scene 必须是对象,"
         "至少含 location;同时按需更新 time / atmosphere / present_characters / objects。绝不要把 scene 写成一个字符串。\n"
+        + ("- 在场:state_update.scene.present_characters 写本轮【结束时】仍在场景里的全部角色(不含玩家),名字照卡上原样;"
+           "本轮到来的加进去、离开的去掉。只有这份名单上的人(或【活跃角色】里的人)能有台词。\n" if tracked else "") +
         "- 关系:本轮与玩家有互动或态度变化的每个在场角色,必须在 state_update.relationships 里给一条:"
         "character_id 用上面【活跃角色】括号里的 ID 原文(例如写 大黑塔,不要写成 黑塔);"
         "trust / tension / affection 填本轮 -10~10 的增量(没变化填 0);notes 一句话写原因。"
@@ -1129,9 +1364,14 @@ def _prompt_zh(
         "2. 角色 OOC 风险(角色侧):本轮角色的实力 / 阵营立场 / 心智状态有没有【无前置依据】的突变"
         "(被无理由神化或恶堕)。只在 reasoning.ooc_risk 里简短记录、并据此让角色保持一致;"
         "不要为此强行打断或拒绝玩家的正常行动,灰色地带给玩家自由。\n"
+        + ("3. 在场(写正文前先定):在 reasoning.cast 里列出本轮结束时除玩家外实际在场景里的所有人(卡上角色用卡上的名字),"
+           "从【活跃角色】开头的在场名单出发,加上本轮到来的、去掉离开的;正文、台词和 present_characters 都要与它一致。\n" if tracked else "") +
         "# 世界时钟(每轮必做)\n"
         "- 在 state_update.time_advance 填本轮经过的【故事内分钟数】:平常对话/调查给小值(几分钟到一两小时);"
         "玩家明确跳时间就给对应大值并在叙事里真的跳过去:一夜≈600,一天=1440,三天=4320,一周=10080,一个月≈43200。\n"
+        "- 玩家没明说跳时间、但剧情顺理成章要跳过一段(玩家已同意等到天亮、赶一段长路)时,在 state_update.time_skip 写一句理由,"
+        "time_advance 照实给(最多 16 小时);没写 time_skip 的回合引擎把推进封顶在 180 分钟,那就别在正文里写『第二天早上』这类跳跃。"
+        "正文里提到的钟点要和【故事内时钟】对得上。\n"
         "- 已到点/主线停滞而被列入【该主动恶化登场的事件】的,要让世界或相关角色主动把它推到玩家面前"
         "(催促、施压、事态升级),别等玩家来碰;玩家本轮正面处理了就把它推进或标 resolved。\n"
         "- 当主线核心问题已解决、或某结局触发条件已满足:state_update 标 main_resolved:true,"
@@ -1152,17 +1392,19 @@ def _prompt_zh(
         "- 玩家已达成的目标放进 state_update.player.completed_goals(会从当前目标里移除)。\n\n"
         "# 记忆挂载(memory_write,关乎长期一致性)\n"
         "本轮若玩出了会长期生效的新事实/关系/承诺/能力变化,写进 memory_write。每条尽量挂到它主要关乎的实体上:\n"
-        "- entity 只能从上面【活跃角色】括号里的角色 ID 原文里选(例如 写 大黑塔 的 ID),关乎玩家就填'玩家';\n"
+        "- entity 只能从上面【活跃角色】" + ("或【不在场的角色】" if tracked else "") + "括号里的角色 ID 原文里选(例如 写 大黑塔 的 ID),关乎玩家就填'玩家';\n"
         "  挂不上名册里任何具体实体(纯氛围/无关琐事)就把 entity 留成空字符串\"\"。不要自己发明名册外的实体名。\n"
         "- 这条挂载决定了【该实体下次在场时,这条记忆会被必然取回注入】,所以关乎某角色长期设定/状态的事实务必挂上它。\n\n"
         "输出严格 JSON,只输出这一个对象,格式:\n"
         "{"
-        '"reasoning":{"hard_violation":false,"violation_detail":"","world_counter":"","ooc_risk":"","recall_check":"","note":"一句话推演"},'
+        '"reasoning":{"hard_violation":false,"violation_detail":"","world_counter":"","ooc_risk":"","recall_check":"",'
+        + ('"cast":["本轮结束时在场的角色"],' if tracked else '') +
+        '"note":"一句话推演"},'
         '"narration":"场景/动作/气氛,简洁",'
         '"messages":[{"character_id":"角色ID","name":"角色名","text":"带动作神情的台词"}],'
         '"choices":[{"id":"短ID","label":"玩家可点选行动","intent":"ask|act|move|observe|custom","description":"影响/风险"}],'
         '"state_update":{'
-        '"time_advance":本轮经过的故事内分钟数,'
+        '"time_advance":本轮经过的故事内分钟数,"time_skip":"",'
         '"scene":{"location":"当前地点","time":"","atmosphere":"","present_characters":[],"objects":[]},'
         '"player":{"location":"","status":"","inventory":[],"active_goals":[],"completed_goals":[],"flags":[]},'
         '"relationships":[{"character_id":"角色ID","trust":0,"tension":0,"affection":0,"notes":["原因"]}],'
@@ -1229,11 +1471,17 @@ def _prompt_en(
 ) -> str:
     entity_memory = entity_memory or {}
     player_name = (player.name or "").strip() if player else ""
+    tracked = state.scene.cast_tracked
+    present = _on_stage(state, characters, player_name)  # bug#6:在场可发言集排除玩家扮演的角色
     char_blocks = []
+    offstage_lines = []
     for i, card in enumerate(characters):
         d = card.data
         cid = _char_id(card, i)
         if _is_player_char(d.name, player_name):   # bug#6:玩家扮演的角色不作为可发言 NPC 块,引擎不替其发言
+            continue
+        if tracked and not _card_on_stage(d.name, present):  # 不在场:只留一行,不给整张卡(也不给它的秘密和知情块)
+            offstage_lines.append(_offstage_line(card, cid))
             continue
         rules = "\n".join(f"- {r}" for r in d.speech_rules)
         block = (
@@ -1257,16 +1505,36 @@ def _prompt_en(
         char_blocks.append(block)
     # 单角色"场景":判断依据是本轮实际在场的角色数(运行时),不是上传了几张卡。
     # 多角色卡组里和某个角色单独相处的段落也会触发——那种段落最容易退化成一问一答的聊天。
-    present = [p for p in (state.scene.present_characters or [c.data.name for c in characters])
-               if p and not _is_player_char(p, player_name)]  # bug#6:在场可发言集排除玩家扮演的角色
     solo_directive = ""
-    if len(set(present)) <= 1:
+    if tracked and not present:
+        solo_directive = (
+            "No character besides the player is in this scene right now. Write the narration in full (at least 3-5 vivid sentences): "
+            "the setting, the consequences of the player's action, and the world's own response. "
+            "messages may be an empty list this turn (this overrides the 'at least one character line' rule) — don't pull an absent character in just to have someone talk. "
+            "Only if the story gives a concrete reason this turn (someone arrives, knocks, is sent for, the player goes to them) do you narrate their arrival "
+            "and put their name in present_characters.\n"
+        )
+    elif len(set(present)) <= 1:
         solo_directive = (
             "Only one character besides the player is present in this scene, so there is no other character's dialogue to fill the turn. "
             "Write the narration in full (at least 3-5 vivid sentences): describe the setting, the mood, the physical/environmental "
             "consequences of the player's action this turn, and the world's own response (light, sound, objects, distance, temperature, the passage of time). "
             "Don't write one or two sentences and hand off to dialogue. Keep a solo scene immersive and well paced, not a Q&A.\n"
         )
+    offstage_block = ""
+    if offstage_lines:
+        offstage_block = (
+            "# Offstage characters (NOT in this scene right now)\n"
+            "They are elsewhere: this turn they cannot speak, act, be seen or overhear anything here, and they don't learn what happens here. "
+            "Bring one in only when the story gives a concrete reason this turn (they arrive, knock, are sent for, the player goes to them): "
+            "narrate the arrival in this turn's narration and put their exact name in state_update.scene.present_characters. Otherwise never give them lines. "
+            "If the person who turns up is one of the characters below (say, the investigator at the door), call them by the name on their card and add them — "
+            "never bring them in as an unnamed stranger.\n"
+            + "\n".join(offstage_lines) + "\n\n"
+        )
+    present_note = ""
+    if tracked:
+        present_note = "(In the scene now: " + (", ".join(present) if present else "nobody besides the player") + ")\n"
     story_block = "\n".join(
         f"- {e.title}({e.event_id}): {e.summary}\n  Choice hints: {'; '.join(e.choices_hint)}\n  Consequences: {'; '.join(e.consequences)}"
         for e in story_hits
@@ -1354,9 +1622,12 @@ def _prompt_en(
         "When the player keeps investing, the investigation must actually yield a new conclusion, a new location, a new relationship or a new reveal — not an endlessly subdivided single finding, "
         "repeated confirmation of the same thing, or characters holding the player in place with reskinned, equivalent lines. Once a clue has been investigated enough, give its conclusion and open the next step.\n"
         "Every turn must first produce the story body, then 3-4 player action choices; choices cannot replace the body. "
+        "Choices are only what the player's character could think to do with what they know right now: never spell out someone's true identity, title "
+        "or any fact the player's character hasn't learned in the story yet. "
         "narration must not be empty, and messages must contain at least one character's reaction to the player's input this turn. "
         "The player may use slang, memes or unserious offers — still treat them as in-story actions and have the characters respond naturally.\n\n"
-        f"# Active characters\n{chr(10).join(char_blocks)}\n\n"
+        + (f"# Active characters (in the scene right now)\n{present_note}{chr(10).join(char_blocks) or 'None'}\n\n" + offstage_block if tracked
+           else f"# Active characters\n{chr(10).join(char_blocks)}\n\n") +
         f"# Player profile\n{json.dumps(player.model_dump(), ensure_ascii=False) if player else 'Not provided'}{player_mem_block}\n\n"
         f"# Story book overview\n{story_overview}\n\n"
         f"# Current runtime state\n{json.dumps(_state_digest(state), ensure_ascii=False)}\n\n"
@@ -1367,6 +1638,8 @@ def _prompt_en(
         "# State maintenance (required every turn — it directly drives the status panel the player sees; don't omit it)\n"
         "- Scene: when the player moves or the environment changes, you must write the new value in state_update.scene. scene must be an object "
         "with at least location; also update time / atmosphere / present_characters / objects as needed. Never write scene as a string.\n"
+        + ("- Presence: state_update.scene.present_characters lists everyone (besides the player) who is in the scene at the [end] of this turn, names exactly as on the cards: "
+           "add whoever arrived this turn, remove whoever left. Only people on that list (or under [Active characters]) may have lines.\n" if tracked else "") +
         "- Relationships: for every present character who interacted with the player or changed attitude this turn, add one entry in state_update.relationships: "
         "character_id must be the ID text exactly as given in parentheses under [Active characters] above (copy it verbatim — e.g. if the ID is 大黑塔, write 大黑塔, not 黑塔 and not a translation); "
         "trust / tension / affection are this turn's deltas from -10 to 10 (0 if unchanged); notes is one sentence explaining why. "
@@ -1387,9 +1660,15 @@ def _prompt_en(
         "2. Character OOC risk (character side): does a character's power / allegiance / mental state shift abruptly this turn [with no prior basis] "
         "(deified or corrupted for no reason)? Just note it briefly in reasoning.ooc_risk and keep the character consistent; "
         "don't interrupt or refuse the player's normal actions because of it — give the player freedom in gray areas.\n"
+        + ("3. Cast (decide before writing): in reasoning.cast list everyone besides the player who is physically in the scene by the end of this turn "
+           "(card characters by the name on their card) — start from the [In the scene now] list, add whoever arrives, remove whoever leaves; "
+           "narration, lines and present_characters must all agree with it.\n" if tracked else "") +
         "# World clock (required every turn)\n"
         "- Fill state_update.time_advance with the [in-story minutes] that pass this turn: small values for ordinary dialogue/investigation (a few minutes to an hour or two); "
         "when the player explicitly skips time, give the matching large value and actually skip it in the narration: one night≈600, one day=1440, three days=4320, one week=10080, one month≈43200.\n"
+        "- When the player didn't say to skip time but the story naturally skips ahead (the player agreed to wait until morning, a long walk across town), "
+        "write a one-line reason in state_update.time_skip and give the real minutes in time_advance (up to 16 hours). Without time_skip the engine caps the turn at 180 minutes — "
+        "then don't narrate a bigger jump (no 'next morning'). Any clock time you mention in the prose must match the [In-story clock].\n"
         "- Events listed under [Events that should escalate on their own] (they are due, or the main plot has stalled) must be pushed in front of the player by the world or the relevant characters "
         "(urging, pressure, escalation) — don't wait for the player to touch them; if the player deals with one head-on this turn, advance it or mark it resolved.\n"
         "- When the main plot's core problem is solved, or an ending's trigger conditions are met: set main_resolved:true in state_update, "
@@ -1410,18 +1689,20 @@ def _prompt_en(
         "- Goals the player has achieved go into state_update.player.completed_goals (they will be removed from the active goals).\n\n"
         "# Memory attachment (memory_write — matters for long-term consistency)\n"
         "If this turn produced a new fact / relationship / promise / ability change with lasting effect, write it into memory_write. Attach each item to the entity it mainly concerns:\n"
-        "- entity may only be one of the character IDs in parentheses under [Active characters] above, copied verbatim; if it concerns the player, write 'player';\n"
+        "- entity may only be one of the character IDs in parentheses under [Active characters]" + (" or [Offstage characters]" if tracked else "") + " above, copied verbatim; if it concerns the player, write 'player';\n"
         "  if it can't be attached to any specific entity on the roster (pure atmosphere / unrelated trivia), leave entity as an empty string \"\". Don't invent entity names outside the roster.\n"
         "- This attachment means [the memory will always be retrieved and injected the next time that entity is present], so facts about a character's lasting setting/state must be attached to them.\n\n"
         "Output strict JSON — only this one object, in this format "
         "(every prose value in English; keys, IDs, names and enum values exactly as specified):\n"
         "{"
-        '"reasoning":{"hard_violation":false,"violation_detail":"","world_counter":"","ooc_risk":"","recall_check":"","note":"one-line reasoning"},'
+        '"reasoning":{"hard_violation":false,"violation_detail":"","world_counter":"","ooc_risk":"","recall_check":"",'
+        + ('"cast":["everyone in the scene at the end of this turn"],' if tracked else '') +
+        '"note":"one-line reasoning"},'
         '"narration":"scene / action / atmosphere, concise",'
         '"messages":[{"character_id":"character ID (verbatim)","name":"character name (verbatim from the card)","text":"the line, with action and expression"}],'
         '"choices":[{"id":"short ID","label":"an action the player can click","intent":"ask|act|move|observe|custom","description":"effect / risk"}],'
         '"state_update":{'
-        '"time_advance":in-story minutes passed this turn,'
+        '"time_advance":in-story minutes passed this turn,"time_skip":"",'
         '"scene":{"location":"current location","time":"","atmosphere":"","present_characters":[],"objects":[]},'
         '"player":{"location":"","status":"","inventory":[],"active_goals":[],"completed_goals":[],"flags":[]},'
         '"relationships":[{"character_id":"character ID","trust":0,"tension":0,"affection":0,"notes":["reason"]}],'
@@ -1487,26 +1768,48 @@ def _action_prompt(*args, **kwargs):
     return (_action_prompt_zh if is_zh() else _action_prompt_en)(*args, **kwargs)
 
 
+RETRY_RECAP_CHARS = 3000       # 精简重写带的近期原文上限(取 recap 末尾,上一回合全文为主)
+
+
+def _retry_cast(characters: list[CharacterCard], state: RuntimeState, player_name: str) -> tuple[list[str], list[str]]:
+    """精简重写用的(在场, 不在场)名单。引擎记在场时照实给;否则沿用旧行为(全部卡都算在场)。
+    诡秘案:旧的精简提示把 10 张卡全写成"在场",模型就让没进门的 Benson、Dunn 开口。"""
+    names = [c.data.name for c in characters if c.data.name and not _is_player_char(c.data.name, player_name)]
+    if not state.scene.cast_tracked:
+        return names, []
+    on = _on_stage(state, characters, player_name)
+    present = [n for n in names if _card_on_stage(n, on)]
+    return present, [n for n in names if n not in present]
+
+
 def _compact_retry_messages_zh(
     action: str,
     characters: list[CharacterCard],
     state: RuntimeState,
     world_hits: list[str],
     story_hits: list[StoryEvent],
+    recap: str = "",
+    clock: str = "",
+    player_name: str = "",
 ) -> list[dict[str, str]]:
-    char_names = "、".join(c.data.name for c in characters if c.data.name) or "角色"
+    present, absent = _retry_cast(characters, state, player_name)
+    char_names = "、".join(present) or ("除玩家外没有人" if state.scene.cast_tracked else "角色")
     event_titles = "；".join(e.title for e in story_hits[:3] if e.title) or "无"
     world_text = "\n".join(world_hits[:3])[:1200] or "无"
+    recent = recap[-RETRY_RECAP_CHARS:] if recap else ""
     return [
         {
             "role": "system",
             "content": (
                 "你是互动故事引擎。上一轮输出为空或不完整,现在用更短格式重写这一回合。"
                 "必须输出严格 JSON 对象,不得输出空白。"
-                "必须有非空 narration、至少一条 messages、3 个 choices。"
+                "必须有非空 narration、3 个 choices;messages 至少一条,除非除玩家外没有人在场。"
                 "先在 reasoning 里快速判断玩家本轮是否明确违背已确立硬设定(偏松,绝大多数为 false);"
                 "若违背则用设定内逻辑让它失败/反噬、不配合演成得逞,并把反制写进 reasoning.world_counter 再据此写正文。"
                 "不要替玩家做决定,不要编造未给出的事实。角色台词要带简短动作或神情。"
+                "只有在场角色能说话;不在场的人只有本轮写出他到来、并把名字写进 state_update.scene.present_characters 才能开口。"
+                "接着【最近剧情】往下写,不要重复它,也不要和它矛盾(谁已经在屋里、现在几点)。"
+                + (f"玩家扮演【{player_name}】,不要替他说话。" if player_name else "")
             ),
         },
         {
@@ -1514,15 +1817,19 @@ def _compact_retry_messages_zh(
             "content": (
                 f"玩家输入:{action}\n"
                 f"当前地点:{state.scene.location}\n"
-                f"在场角色:{char_names}\n"
-                f"场景氛围:{state.scene.atmosphere[:300]}\n"
+                + (f"{clock}\n" if clock else "")
+                + f"在场角色:{char_names}\n"
+                + (f"不在场(本轮不能说话):{'、'.join(absent)}\n" if absent else "")
+                + f"场景氛围:{state.scene.atmosphere[:300]}\n"
                 f"可交互对象:{'、'.join(state.scene.objects[:6])}\n"
                 f"命中事件:{event_titles}\n"
                 f"命中设定:{world_text}\n"
-                '返回 JSON: {"reasoning":{"hard_violation":false,"world_counter":"","note":"一句话推演"},'
+                + (f"最近剧情:\n{recent}\n" if recent else "")
+                + '返回 JSON: {"reasoning":{"hard_violation":false,"world_counter":"","note":"一句话推演"},'
                 '"narration":"...","messages":[{"character_id":"...","name":"...","text":"..."}],'
                 '"choices":[{"id":"...","label":"...","intent":"ask|act|move|observe|custom","description":"..."}],'
-                '"state_update":{},"memory_write":[],"triggered_events":[]}'
+                '"state_update":{"time_advance":0,"scene":{"location":"...","present_characters":["本轮结束时在场的角色"]}},'
+                '"memory_write":[],"triggered_events":[]}'
             ),
         },
     ]
@@ -1534,20 +1841,28 @@ def _compact_retry_messages_en(
     state: RuntimeState,
     world_hits: list[str],
     story_hits: list[StoryEvent],
+    recap: str = "",
+    clock: str = "",
+    player_name: str = "",
 ) -> list[dict[str, str]]:
-    char_names = ", ".join(c.data.name for c in characters if c.data.name) or "characters"
+    present, absent = _retry_cast(characters, state, player_name)
+    char_names = ", ".join(present) or ("nobody besides the player" if state.scene.cast_tracked else "characters")
     event_titles = "; ".join(e.title for e in story_hits[:3] if e.title) or "none"
     world_text = "\n".join(world_hits[:3])[:1200] or "none"
+    recent = recap[-RETRY_RECAP_CHARS:] if recap else ""
     return [
         {
             "role": "system",
             "content": (
                 "You are an interactive story engine. The previous output was empty or incomplete; rewrite this turn in a shorter format. "
                 "You must output a strict JSON object, never blank output. "
-                "It must have a non-empty narration, at least one messages entry, and 3 choices. "
+                "It must have a non-empty narration and 3 choices; at least one messages entry unless nobody besides the player is present. "
                 "First judge quickly in reasoning whether the player's action clearly violates an established hard setting (be lenient; almost always false); "
                 "if it does, use in-setting logic to make it fail/backfire instead of playing along, write the counter into reasoning.world_counter, then write the body from it. "
                 "Don't decide for the player and don't invent facts that weren't given. Character lines need a brief action or expression. "
+                "Only characters present may speak; someone absent may speak only if this turn narrates their arrival and puts their name in state_update.scene.present_characters. "
+                "Continue from [Recent story] — don't repeat it and don't contradict it (who is already in the room, what time it is). "
+                + (f"The player plays [{player_name}]; never speak for them. " if player_name else "")
                 + OUTPUT_LANGUAGE_RULE
             ),
         },
@@ -1556,15 +1871,19 @@ def _compact_retry_messages_en(
             "content": (
                 f"Player input: {action}\n"
                 f"Current location: {state.scene.location}\n"
-                f"Characters present: {char_names}\n"
-                f"Scene atmosphere: {state.scene.atmosphere[:300]}\n"
+                + (f"{clock}\n" if clock else "")
+                + f"Characters present: {char_names}\n"
+                + (f"Not present (cannot speak this turn): {', '.join(absent)}\n" if absent else "")
+                + f"Scene atmosphere: {state.scene.atmosphere[:300]}\n"
                 f"Interactive objects: {', '.join(state.scene.objects[:6])}\n"
                 f"Matched events: {event_titles}\n"
                 f"Matched lore: {world_text}\n"
-                'Return JSON: {"reasoning":{"hard_violation":false,"world_counter":"","note":"one-line reasoning"},'
+                + (f"Recent story:\n{recent}\n" if recent else "")
+                + 'Return JSON: {"reasoning":{"hard_violation":false,"world_counter":"","note":"one-line reasoning"},'
                 '"narration":"...","messages":[{"character_id":"...","name":"...","text":"..."}],'
                 '"choices":[{"id":"...","label":"...","intent":"ask|act|move|observe|custom","description":"..."}],'
-                '"state_update":{},"memory_write":[],"triggered_events":[]}'
+                '"state_update":{"time_advance":0,"scene":{"location":"...","present_characters":["everyone present at the end of this turn"]}},'
+                '"memory_write":[],"triggered_events":[]}'
             ),
         },
     ]
@@ -1604,9 +1923,14 @@ def _known_speaker_index(characters: list[CharacterCard], world: "WorldBook | No
 
 def _normalize_messages(items: Any, characters: list[CharacterCard],
                         world: "WorldBook | None" = None, story: "StoryBook | None" = None,
-                        player: "PlayerCard | None" = None) -> list[StoryMessage]:
+                        player: "PlayerCard | None" = None, allowed: list[str] | None = None,
+                        dropped: list[str] | None = None) -> list[StoryMessage]:
+    """allowed:引擎记在场时的可发言名单(回合开始在场 ∪ 本回合进场);None = 不按在场拦(小卡组旧行为)。
+    卡上角色不在名单里 → 台词丢弃,名字记进 dropped。"""
     out = []
     fallback = characters[0] if characters else None
+    if allowed is not None:  # 无署名台词不再默认归第一张卡(那张卡可能根本不在场)
+        fallback = next((c for c in characters if _card_on_stage(c.data.name, allowed)), None)
     fallback_name = fallback.data.name if fallback else L("Narrator", "旁白")
     fallback_id = _char_id(fallback, 0) if fallback else "narrator"
     # 硬兜底(bug#6):玩家扮演的角色,引擎绝不替其发言。PR#27 已在 present/prompt 软排除 + 软指令,
@@ -1646,7 +1970,10 @@ def _normalize_messages(items: Any, characters: list[CharacterCard],
                     if name in rnm or rnm in name:
                         hit = (rid, rnm)
                         break
-            if hit:  # roster 命中(按 id/name/部分名)→ 归一到规范 id/name
+            if hit and allowed is not None and not _card_on_stage(hit[1], allowed):
+                if dropped is not None:  # 认识但不在场(诡秘案:Benson / Dunn 没进门就开口)→ 丢弃
+                    dropped.append(hit[1])
+            elif hit:  # roster 命中(按 id/name/部分名)→ 归一到规范 id/name
                 out.append(StoryMessage(character_id=hit[0], name=hit[1], text=text))
             elif name and len(name) >= 2 and name in canon_text:
                 # ④ 涌现 canon 实体:故事/世界书声明过 → 放行,归一到稳定 id 便于 state 一致跟踪
@@ -1717,10 +2044,13 @@ def _normalize_reasoning(value: Any) -> dict[str, Any]:
     return out
 
 
-def _ensure_story_body(turn: StoryTurn, action: str, characters: list[CharacterCard]) -> StoryTurn:
+def _ensure_story_body(turn: StoryTurn, action: str, characters: list[CharacterCard],
+                       on_stage: list[str] | None = None) -> StoryTurn:
     if turn.narration.strip() or turn.messages:
         return turn
     fallback = characters[0] if characters else None
+    if on_stage is not None:  # 引擎记在场:兜底台词只给在场的人,没人在场就只留旁白
+        fallback = next((c for c in characters if _card_on_stage(c.data.name, on_stage)), None)
     fallback_name = fallback.data.name if fallback else L("Narrator", "旁白")
     fallback_id = _char_id(fallback, 0) if fallback else "narrator"
     turn.narration = L("Your words settle over the scene. No conclusion comes right away, but everyone present has to face them, and their attention turns to you.",
@@ -1730,7 +2060,7 @@ def _ensure_story_body(turn: StoryTurn, action: str, characters: list[CharacterC
         name=fallback_name,
         text=L(f"{fallback_name} doesn't dodge your words, pausing a moment before speaking: \"We can talk this through. Let's sort out what we can confirm first, then decide what to do next.\"",
                f"{fallback_name}没有回避你的话,顿了一下才开口:「这事可以往下说。先把眼前能确认的理清楚,再谈接下来怎么办。」"),
-    )]
+    )] if (fallback or on_stage is None) else []
     turn.memory_write.append(MemoryWrite(kind="note", text=L("Player action: ", "玩家行动:") + action, importance=2))
     return turn
 
@@ -1761,8 +2091,9 @@ def _recent_recap(messages: list[Any], char_budget: int, per_line: int = 600,
         content = str(m.get("content", "")).strip()
         if not content:
             continue
-        line = (L("Player: ", "玩家:") if m["role"] == "user" else L("Story: ", "剧情:")) + content[:per_line]
-        if picked and (used + len(line) > char_budget or taken >= max_msgs):
+        full = taken < RECAP_FULL_MSGS  # 最近两回合保底:全文(含台词),不截断、不受预算挤压
+        line = (L("Player: ", "玩家:") if m["role"] == "user" else L("Story: ", "剧情:")) + (content if full else content[:per_line])
+        if picked and not full and (used + len(line) > char_budget or taken >= max_msgs):
             break
         picked.append(line)
         used += len(line)
@@ -1875,12 +2206,23 @@ async def _save_turn(
     roster: dict[str, str] | None = None,
     entity_labels: list[str] | None = None,
 ) -> StoryTurn:
+    # Phase 3 + 在场:本回合进场的人也见证了本回合 → knowers / [当时在场] = 回合开始在场 ∪ 回合结束在场。
+    if PHASE3_KNOWERS and state.scene.cast_tracked:
+        end_names = [n for n in state.scene.present_characters if n]
+        data["_present_names"] = list(dict.fromkeys(list(data.get("_present_names") or []) + end_names))
+        keys = set(data.get("_present_keys") or [])
+        for n in end_names:
+            k = _roster_key(n, roster or {})
+            if k and k != _PLAYER_ENTITY:
+                keys.add(k)
+        data["_present_keys"] = sorted(keys)
     # 世界时钟推进(第5组 5b,所有路径统一在这做,含保底回合也至少 +MIN 防冻住):
     # 模型估的 time_advance 放在 state_update,代码 clamp(玩家显式跳时间才放大);
     # 本轮推进了主线(有 triggered_events)则 idle 清零,否则按推进量累计,喂 escalate_after_idle。
     advance = _clamp_time_advance(
         turn.state_update.get("time_advance") if isinstance(turn.state_update, dict) else None,
         action,
+        turn.state_update.get("time_skip") if isinstance(turn.state_update, dict) else None,
     )
     floor = _explicit_jump_floor(action)  # 玩家显式声明优先:即便模型估小了,也至少跳到声明的时长
     if floor > advance:
@@ -2104,6 +2446,11 @@ async def _story_turn_impl(
     # 重 roll = 恢复这份镜像 + 用相同输入重跑;覆盖 messages/state/short_memory/long_memory/摘要/累计用量等。
     pre_snapshot = copy.deepcopy({k: v for k, v in data.items() if k != "_reroll"})
     state = _safe_state(data, characters, player, story)
+    if len(characters) > SMALL_CAST and not state.scene.cast_tracked:
+        # 旧会话的大卡组:从这一轮起由引擎记在场。名单空(旧语义=全员)就先补成全部卡,之后靠模型改写收窄。
+        state.scene.cast_tracked = True
+        if not state.scene.present_characters:
+            state.scene.present_characters = [c.data.name for c in characters]
     messages = data.get("messages", [])
     if not isinstance(messages, list):
         messages = []
@@ -2156,8 +2503,11 @@ async def _story_turn_impl(
     # Phase 3:暂存本轮在场(turn 开始时的在场集)→ knowers(实体键)+ 向量轮在场标注(角色名)。
     if PHASE3_KNOWERS:
         data["_present_keys"] = sorted(wanted_keys)
-        data["_present_names"] = [p for p in (state.scene.present_characters
-                                              or [c.data.name for c in characters]) if p]
+        data["_present_names"] = _on_stage(state, characters)
+        if state.scene.cast_tracked and not messages and not (story and story.events and story.events[0].characters):
+            # 开场回合、开局名单是"全员"这个缺省值:谁真在场要等模型这回合写出来,知情者只取回合结束时的名单。
+            data["_present_keys"] = sorted(k for k in wanted_keys if k == _PLAYER_ENTITY)
+            data["_present_names"] = []
 
     # 骨架:角色 + 命中世界书/事件 + 故事总览 + 状态摘要 + 指令。先建好用于度量预算,召回/历史另行追加。
     skeleton = _prompt(characters, player, story, world_hits, event_hits, [], [], state, entity_memory)
@@ -2300,7 +2650,8 @@ async def _story_turn_impl(
     if not raw.strip():
         try:
             retry_raw = await achat_messages(
-                _compact_retry_messages(action, characters, state, world_hits, event_hits),
+                _compact_retry_messages(action, characters, state, world_hits, event_hits,
+                                        recap=recap, clock=clock_line, player_name=player.name if player else ""),
                 json_mode=True,
                 max_tokens=1200,
                 model=get_adapter().select_model("retry"),
@@ -2329,7 +2680,8 @@ async def _story_turn_impl(
         reason = L("JSON parse failed or not an object", "JSON 解析失败或非对象")
         try:
             raw2 = await achat_messages(
-                _compact_retry_messages(action, characters, state, world_hits, event_hits),
+                _compact_retry_messages(action, characters, state, world_hits, event_hits,
+                                        recap=recap, clock=clock_line, player_name=player.name if player else ""),
                 json_mode=True,
                 max_tokens=1500,
                 model=get_adapter().select_model("retry"),
@@ -2350,16 +2702,39 @@ async def _story_turn_impl(
             return await _save_turn(session_id, data, messages, short_memory, state, action, turn, mode,
                             player_input=(raw_user or raw_choice), roster=roster, entity_labels=ent_labels)
 
+    # 发言门(大卡组):卡上的角色只有回合开始在场、或本回合进场才能开口。进场的三个来源:
+    # state_update 里的在场名单、写正文前 reasoning.cast 定下的名单、正文里的强证据(直接引语的说话人)。
+    allowed = None
+    arrivals: list[str] = []
+    _pname = player.name if player else ""
+    if state.scene.cast_tracked:
+        _su = obj.get("state_update") if isinstance(obj.get("state_update"), dict) else {}
+        _sc = _su.get("scene") if isinstance(_su.get("scene"), dict) else {}
+        _rs = obj.get("reasoning") if isinstance(obj.get("reasoning"), dict) else {}
+        start_cast = _on_stage(state, characters, _pname)
+        declared = _canon_cast(_as_text_list(_rs.get("cast")), characters)
+        implicit = _narrated_arrivals(str(obj.get("narration", "")), obj.get("messages"), characters,
+                                      start_cast + _canon_cast(_as_text_list(_sc.get("present_characters")), characters) + declared,
+                                      _pname)
+        arrivals = [n for n in declared + implicit if not _is_player_char(n, _pname)]
+        allowed = _canon_cast(start_cast + _as_text_list(_sc.get("present_characters")), characters) + arrivals
+        if implicit:  # 留痕:模型写了人进场却没进名单,引擎替它补上
+            data.setdefault("gate_log", []).append({"turn": len(messages) // 2 + 1, "implicit_entry": implicit})
+    gate_dropped: list[str] = []
     turn = StoryTurn(
         narration=str(obj.get("narration", "")),
-        messages=_normalize_messages(obj.get("messages"), characters, world, story, player),
+        messages=_normalize_messages(obj.get("messages"), characters, world, story, player,
+                                     allowed=allowed, dropped=gate_dropped),
         choices=_normalize_choices(obj.get("choices")),
         state_update=obj.get("state_update") if isinstance(obj.get("state_update"), dict) else {},
         memory_write=_normalize_memory_write(obj.get("memory_write"), roster),
         triggered_events=[str(x) for x in obj.get("triggered_events", [])],
         reasoning=_normalize_reasoning(obj.get("reasoning")),
     )
-    turn = _ensure_story_body(turn, action, characters)
+    if gate_dropped:  # 留痕:被发言门拦下的不在场角色(重玩/排查用)
+        data.setdefault("gate_log", []).append({"turn": len(messages) // 2 + 1, "dropped": gate_dropped})
+        data["gate_log"] = data["gate_log"][-20:]
+    turn = _ensure_story_body(turn, action, characters, on_stage=allowed)
     # ③ 不回写编造:具体事实查询且(检索硬 miss 或模型已 in-character 认忘)→ 丢弃本轮 fact/quest delta,
     # 掐断"编造→落库→自我强化"。叙事/event/note 保留(它们记的是"发生了什么",不是断言某事实值)。
     _recall_miss = isinstance(turn.reasoning, dict) and str(turn.reasoning.get("recall_check", "")).strip().lower().startswith("miss")
@@ -2373,9 +2748,15 @@ async def _story_turn_impl(
         ]
 
     state = _apply_state_update(state, turn.state_update, player.name if player else "")
+    if state.scene.cast_tracked:  # 名单规整成卡上的名字,再补上本回合进场却漏写的人
+        end_cast = _canon_cast(state.scene.present_characters, characters)
+        for n in arrivals:
+            if not _card_on_stage(n, end_cast):
+                end_cast.append(n)
+        state.scene.present_characters = [n for n in end_cast if not _is_player_char(n, _pname)]
     _progress_events(state, turn.triggered_events)
     _check_ending_predicates(story, state)  # 谓词齐备即代码侧客观达成结局(无谓词的故事回退模型判定)
     state.turn_count += 1
     turn.state = state
     return await _save_turn(session_id, data, messages, short_memory, state, action, turn, mode,
-                            player_input=(raw_user or raw_choice))
+                            player_input=(raw_user or raw_choice), roster=roster, entity_labels=ent_labels)
