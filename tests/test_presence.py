@@ -31,10 +31,11 @@ def _deck(n=5):
 PLAYER = PlayerCard(name="Pell Ward")
 
 
-def _story(first_chars):
+def _story(opening_cast):
     return StoryBook(title="Harbour", premise="A harbour town at night.",
+                     opening_cast=opening_cast, opening_location="Pell's attic room",
                      events=[StoryEvent(event_id="wake", title="Waking", summary="Pell wakes alone.",
-                                        location="Pell's attic room", characters=first_chars)])
+                                        location="Pell's attic room", characters=opening_cast)])
 
 
 # ── 开局 ────────────────────────────────────────────────
@@ -46,19 +47,31 @@ def test_small_deck_keeps_old_opening():
     assert st.scene.present_characters == [c.data.name for c in chars]
 
 
-def test_big_deck_opens_with_first_event_cast_only():
+def test_big_deck_opens_with_the_story_opening_cast():
     chars = _deck(5)
     st = S._init_state(chars, PLAYER, _story(["Pell Ward", "Bram"]))
     assert st.scene.cast_tracked is True
-    assert st.scene.present_characters == ["Bram Cole"]  # 事件里的简称也认;玩家不算
+    assert st.scene.present_characters == ["Bram Cole"]  # 简称也认;玩家不算
     assert st.scene.location == "Pell's attic room"
 
 
-def test_big_deck_without_opening_cast_falls_back_to_everyone():
+def test_big_deck_without_opening_cast_lets_the_opening_turn_decide():
     chars = _deck(5)
-    st = S._init_state(chars, PLAYER, None)  # 自建卡组没有故事书:开局照旧全员,由开场回合收窄
-    assert st.scene.cast_tracked is True
-    assert st.scene.present_characters == [c.data.name for c in chars]
+    st = S._init_state(chars, PLAYER, None)  # 自建卡组没有故事书:开局没人上场,开场回合由模型决定谁在
+    assert st.scene.cast_tracked is True and st.scene.present_characters == []
+    p = S._prompt_en(chars, PLAYER, None, [], [], [], [], st, {})
+    assert "opening scene: you decide who is here" in p
+    assert all(f"## {c.data.name} (" in p for c in chars)   # 开场回合给全量卡,好让模型挑
+    assert "# Offstage characters" not in p
+
+
+def test_first_event_is_not_taken_as_the_opening():
+    """诡秘第二段的第一个事件是灰雾之上的塔罗会:不能因此把住在别的城市的人放进开场。"""
+    chars = _deck(5)
+    story = StoryBook(title="Harbour", events=[StoryEvent(event_id="fog", title="Above the fog",
+                                                          location="Above the gray fog", characters=["Pell Ward", "Eli Rook"])])
+    st = S._init_state(chars, PLAYER, story)
+    assert st.scene.present_characters == [] and st.scene.location != "Above the gray fog"
 
 
 def test_default_opening_cast_does_not_become_knowers(monkeypatch):
@@ -79,6 +92,7 @@ def _tracked_state(present):
     st = RuntimeState()
     st.scene.cast_tracked = True
     st.scene.present_characters = present
+    st.turn_count = 3  # 游戏中途(第 0 回合没写 opening_cast 时是开场挑人)
     return st
 
 

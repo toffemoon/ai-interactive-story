@@ -160,10 +160,10 @@ def _card_on_stage(name: str, on_stage: list[str]) -> bool:
 
 
 def _opening_cast(characters: list[CharacterCard], player: PlayerCard | None, story: StoryBook | None) -> list[str]:
-    """大卡组开局在场:故事书第一个事件列出的、有卡的角色(去掉玩家)。事件没列角色时返回空,由调用方回退。"""
+    """大卡组开局在场:故事书 opening_cast 里有卡的角色(去掉玩家)。
+    不拿第一个事件当开场——诡秘第二段的第一个事件是灰雾之上的塔罗会,会把奥黛丽、阿尔杰放进廷根。"""
     player_name = (player.name or "").strip() if player else ""
-    first = story.events[0] if story and story.events else None
-    listed = list(first.characters) if first else []
+    listed = list(story.opening_cast) if story else []
     out = []
     for c in characters:
         nm = c.data.name
@@ -173,6 +173,11 @@ def _opening_cast(characters: list[CharacterCard], player: PlayerCard | None, st
 
 
 _CAST_NOTE_RE = re.compile(r"\s*[(（][^)）]*(?:unnamed|not a card|card character|minor|npc|无名|路人|非卡)[^)）]*[)）]", re.I)
+
+
+def _opening_pick(state: RuntimeState, story: StoryBook | None) -> bool:
+    """大卡组开场回合、故事书没写 opening_cast:谁在场由这一回合的模型决定(卡全给,但谁都还没上场)。"""
+    return state.scene.cast_tracked and state.turn_count == 0 and not (story and story.opening_cast)
 
 
 def _canon_cast(names: list[str], characters: list[CharacterCard]) -> list[str]:
@@ -588,14 +593,12 @@ def _init_state(characters: list[CharacterCard], player: PlayerCard | None, stor
     state.scene.location = L("Opening scene", "故事开场")
     if len(characters) > SMALL_CAST:
         # 大卡组:开局不再全员在场(诡秘 10 张卡曾让奥黛丽、阿尔杰也"在"莫雷蒂家,第一条事实的知情者全错)。
-        # 第一个事件写了在场角色就照它(诡秘:开场只有克莱恩);没写(自建卡组、旧故事书)就照旧全员,
-        # 由开场回合模型写的 present_characters 收窄,知情者只记回合结束时在场的人(见 story_turn)。
+        # 故事书写了 opening_cast 就照它;没写(自建卡组、旧故事书)开局先不放人上场,
+        # 开场回合由模型按前提和时间线决定谁真的在(_opening_pick),知情者只记回合结束时在场的人(见 story_turn)。
         state.scene.cast_tracked = True
-        first = story.events[0] if story and story.events else None
-        if first and first.characters:
-            state.scene.present_characters = _opening_cast(characters, player, story)
-            if first.location:
-                state.scene.location = first.location
+        state.scene.present_characters = _opening_cast(characters, player, story)
+        if story and story.opening_location:
+            state.scene.location = story.opening_location
     if characters and characters[0].data.scenario:
         state.scene.atmosphere = characters[0].data.scenario[:300]
     if story:
@@ -1267,6 +1270,7 @@ def _prompt_zh(
     entity_memory = entity_memory or {}
     player_name = (player.name or "").strip() if player else ""
     tracked = state.scene.cast_tracked
+    opening_pick = _opening_pick(state, story)
     present = _on_stage(state, characters, player_name)  # bug#6:在场可发言集排除玩家扮演的角色
     char_blocks = []
     offstage_lines = []
@@ -1275,7 +1279,7 @@ def _prompt_zh(
         cid = _char_id(card, i)
         if _is_player_char(d.name, player_name):   # bug#6:玩家扮演的角色不作为可发言 NPC 块,引擎不替其发言
             continue
-        if tracked and not _card_on_stage(d.name, present):  # 不在场:只留一行,不给整张卡(也不给它的秘密和知情块)
+        if tracked and not opening_pick and not _card_on_stage(d.name, present):  # 不在场:只留一行,不给整张卡(也不给它的秘密和知情块)
             offstage_lines.append(_offstage_line(card, cid))
             continue
         rules = "\n".join(f"- {r}" for r in d.speech_rules)
@@ -1300,7 +1304,9 @@ def _prompt_zh(
     # 单角色"场景":判断依据是本轮实际在场的角色数(运行时),不是上传了几张卡。
     # 多角色卡组里和某个角色单独相处的段落也会触发——那种段落最容易退化成一问一答的聊天。
     solo_directive = ""
-    if tracked and not present:
+    if opening_pick:
+        solo_directive = ""
+    elif tracked and not present:
         solo_directive = (
             "本轮场景里除玩家外没有任何角色在场。narration 要写足(至少 3-5 句、有画面感),写场景、玩家动作的后果和世界本身的反应。"
             "messages 可以是空列表(这一条优先于『至少一条角色台词』的要求),不要凭空拉一个不在场的角色来说话;"
@@ -1415,7 +1421,12 @@ def _prompt_zh(
         "选项只写玩家角色凭他此刻所知能想到的行动:不要在选项里点破别人的真实身份、头衔或任何玩家角色在剧情里还没得知的事。"
         "narration 必须非空,messages 至少包含一条角色对玩家本轮输入的反应。"
         "玩家可能使用口语、玩梗或不严肃报价,仍要当作故事内行动处理,由角色自然回应。\n\n"
-        + (f"# 活跃角色(此刻在场)\n{present_note}{chr(10).join(char_blocks) or '无'}\n\n" + offstage_block if tracked
+        + (("# 角色(开场:谁在场由你决定)\n"
+            "这是故事的开场,还没有人上场。根据故事前提、时间线和每个人此刻该在哪里,决定开场时除玩家外真正在这个场景里的人;"
+            "只有这些人能行动、开口,把他们的名字写进 reasoning.cast 和 state_update.scene.present_characters。"
+            "其余的人此刻在别处(比如住在别的城市的人不会出现在这里)。\n"
+            f"{chr(10).join(char_blocks)}\n\n") if opening_pick
+           else f"# 活跃角色(此刻在场)\n{present_note}{chr(10).join(char_blocks) or '无'}\n\n" + offstage_block if tracked
            else f"# 活跃角色\n{chr(10).join(char_blocks)}\n\n") +
         f"# 玩家设定\n{json.dumps(player.model_dump(), ensure_ascii=False) if player else '未提供'}{player_mem_block}\n\n"
         f"# 故事书总览\n{story_overview}\n\n"
@@ -1557,6 +1568,7 @@ def _prompt_en(
     entity_memory = entity_memory or {}
     player_name = (player.name or "").strip() if player else ""
     tracked = state.scene.cast_tracked
+    opening_pick = _opening_pick(state, story)
     present = _on_stage(state, characters, player_name)  # bug#6:在场可发言集排除玩家扮演的角色
     char_blocks = []
     offstage_lines = []
@@ -1565,7 +1577,7 @@ def _prompt_en(
         cid = _char_id(card, i)
         if _is_player_char(d.name, player_name):   # bug#6:玩家扮演的角色不作为可发言 NPC 块,引擎不替其发言
             continue
-        if tracked and not _card_on_stage(d.name, present):  # 不在场:只留一行,不给整张卡(也不给它的秘密和知情块)
+        if tracked and not opening_pick and not _card_on_stage(d.name, present):  # 不在场:只留一行,不给整张卡(也不给它的秘密和知情块)
             offstage_lines.append(_offstage_line(card, cid))
             continue
         rules = "\n".join(f"- {r}" for r in d.speech_rules)
@@ -1591,7 +1603,9 @@ def _prompt_en(
     # 单角色"场景":判断依据是本轮实际在场的角色数(运行时),不是上传了几张卡。
     # 多角色卡组里和某个角色单独相处的段落也会触发——那种段落最容易退化成一问一答的聊天。
     solo_directive = ""
-    if tracked and not present:
+    if opening_pick:
+        solo_directive = ""
+    elif tracked and not present:
         solo_directive = (
             "No character besides the player is in this scene right now. Write the narration in full (at least 3-5 vivid sentences): "
             "the setting, the consequences of the player's action, and the world's own response. "
@@ -1711,7 +1725,12 @@ def _prompt_en(
         "or any fact the player's character hasn't learned in the story yet. "
         "narration must not be empty, and messages must contain at least one character's reaction to the player's input this turn. "
         "The player may use slang, memes or unserious offers — still treat them as in-story actions and have the characters respond naturally.\n\n"
-        + (f"# Active characters (in the scene right now)\n{present_note}{chr(10).join(char_blocks) or 'None'}\n\n" + offstage_block if tracked
+        + (("# Characters (opening scene: you decide who is here)\n"
+            "This is the opening of the story and nobody has been placed yet. From the premise, the timeline and where each of them would be right now, "
+            "decide who besides the player is actually in this scene when the story opens. Only they may act or speak; put their names in reasoning.cast and "
+            "state_update.scene.present_characters. Everyone else is elsewhere (someone who lives in another city won't be here).\n"
+            f"{chr(10).join(char_blocks)}\n\n") if opening_pick
+           else f"# Active characters (in the scene right now)\n{present_note}{chr(10).join(char_blocks) or 'None'}\n\n" + offstage_block if tracked
            else f"# Active characters\n{chr(10).join(char_blocks)}\n\n") +
         f"# Player profile\n{json.dumps(player.model_dump(), ensure_ascii=False) if player else 'Not provided'}{player_mem_block}\n\n"
         f"# Story book overview\n{story_overview}\n\n"
@@ -2621,7 +2640,7 @@ async def _story_turn_impl(
         data["_present_keys"] = sorted(wanted_keys)
         data["_present_names"] = _on_stage(state, characters)
         data["_turn_start_location"] = state.scene.location
-        if state.scene.cast_tracked and not messages and not (story and story.events and story.events[0].characters):
+        if _opening_pick(state, story):
             # 开场回合、开局名单是"全员"这个缺省值:谁真在场要等模型这回合写出来,知情者只取回合结束时的名单。
             data["_present_keys"] = sorted(k for k in wanted_keys if k == _PLAYER_ENTITY)
             data["_present_names"] = []

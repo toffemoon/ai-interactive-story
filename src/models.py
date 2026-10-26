@@ -163,6 +163,9 @@ class StoryBook(BaseModel):
     clock_start: int = Field(0, description="In-story clock at the start (minutes), the starting point for the world clock")
     pacing: list[str] = Field(default_factory=list, description="Global pacing/time hints, used as a reference by the clock scheduler")
     character_boundaries: list[CharacterBoundary] = Field(default_factory=list, description="Information boundaries for each character")
+    # 开场时谁在场(卡上的名字;只写玩家 = 开场除玩家外没人)。不写:卡多的故事开场由模型按前提和时间线决定谁在。
+    opening_cast: list[str] = Field(default_factory=list, description="Who is in the scene when the story opens (card names)")
+    opening_location: str = Field("", description="Where the story opens")
     needs_confirm: list[str] = Field(default_factory=list, description="Notes on fields inferred by the AI that the author should confirm")
 
 
