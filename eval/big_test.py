@@ -94,6 +94,10 @@ async def run_big(fixture: dict, *, total_turns: int, mode: str = "standard",
                   adapter: str = "deepseek", session_id: str = "big-test"):
     """跑大规模多场景长对局。返回 (playthrough, player_usage_total)。"""
     set_adapter(adapter)
+    # 2026-10-23 站点默认改英文后,这里没设语言就整局出英文,而探针 token / 认忘标记都是中文 → 记忆、认忘、召回恒判 0。
+    # 压测夹具都是中文,按夹具语言跑(缺省中文)。
+    from src.lang import set_lang
+    set_lang(fixture.get("lang", "zh"))
     roster = fixture["characters"]
     scenes = fixture["scenes"]
     persona = fixture.get("player_persona", "一个好奇、爱探索、偶尔调皮的开拓者")
