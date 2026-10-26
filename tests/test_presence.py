@@ -183,7 +183,8 @@ def test_moving_away_leaves_people_behind(monkeypatch):
         "messages": [{"name": "Cora Lind", "text": "Yes?"}],
         "choices": [{"id": "a", "label": "Ask for work", "intent": "ask"}],
         "state_update": {"time_advance": 30, "scene": {"location": "Harbour office", "present_characters": ["Cora Lind"]}},
-        "memory_write": [{"kind": "fact", "text": "Pell asked Cora for work at the harbour office.", "entity": "player"}],
+        "memory_write": [{"kind": "fact", "text": "Pell asked Cora for work at the harbour office.", "entity": "player"},
+                         {"kind": "fact", "text": "Bram sent Pell to the harbour office with a letter.", "entity": "player"}],
         "triggered_events": [],
     })
     monkeypatch.setattr(memory, "ensure_loading", lambda: None)
@@ -195,6 +196,16 @@ def test_moving_away_leaves_people_behind(monkeypatch):
     assert out.state.scene.present_characters == ["Cora Lind"]
     fact = [m for m in data["long_memory"] if m.get("text", "").startswith("Pell asked Cora")][0]
     assert set(fact["knowers"]) == {S._PLAYER_ENTITY, S._char_id(chars[2], 2)}  # 留在阁楼的 Bram 不知道
+    sent = [m for m in data["long_memory"] if m.get("text", "").startswith("Bram sent")][0]
+    assert S._char_id(chars[1], 1) in sent["knowers"]  # 点到 Bram 的那条(他派的活)他自己知道
+
+
+def test_bystanders_on_the_list_may_speak_and_unnamed_lines_go_to_the_narrator():
+    chars = _deck(5)
+    items = [{"name": "Constable", "text": "Move along."}, {"text": "Someone mutters."},
+             {"name": "Mr. Ives", "text": "Not me."}]
+    out = S._normalize_messages(items, chars, allowed=["Bram Cole", "constable at No. 15"], dropped=[])
+    assert [(m.character_id, m.name) for m in out] == [("constable", "Constable"), ("narrator", "Narrator")]
 
 
 # ── 实体键覆盖全部卡 ─────────────────────────────────────

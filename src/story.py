@@ -2014,8 +2014,13 @@ def _normalize_messages(items: Any, characters: list[CharacterCard],
     卡上角色不在名单里 → 台词丢弃,名字记进 dropped。"""
     out = []
     fallback = characters[0] if characters else None
-    if allowed is not None:  # 无署名台词不再默认归第一张卡(那张卡可能根本不在场)
-        fallback = next((c for c in characters if _card_on_stage(c.data.name, allowed)), None)
+    bystanders: list[str] = []
+    if allowed is not None:
+        # 无署名台词归旁白,不再塞给某张卡(诡秘长测:货运处职员的话被记在 Melissa 名下)。
+        fallback = None
+        # 在场名单里写了的卡外路人(警员、房东、职员)可以开口;名单外的陌生名字照旧当幻觉丢弃。
+        card_names = [c.data.name for c in characters]
+        bystanders = [a for a in allowed if a and not any(_card_on_stage(n, [a]) for n in card_names)]
     fallback_name = fallback.data.name if fallback else L("Narrator", "旁白")
     fallback_id = _char_id(fallback, 0) if fallback else "narrator"
     # 硬兜底(bug#6):玩家扮演的角色,引擎绝不替其发言。PR#27 已在 present/prompt 软排除 + 软指令,
@@ -2060,6 +2065,9 @@ def _normalize_messages(items: Any, characters: list[CharacterCard],
                     dropped.append(hit[1])
             elif hit:  # roster 命中(按 id/name/部分名)→ 归一到规范 id/name
                 out.append(StoryMessage(character_id=hit[0], name=hit[1], text=text))
+            elif name and len(name) >= 3 and any(
+                    name.lower() in b.lower() or b.lower() in name.lower() for b in bystanders):
+                out.append(StoryMessage(character_id=storage.slug(name, "npc"), name=name, text=text))
             elif name and len(name) >= 2 and name in canon_text:
                 # ④ 涌现 canon 实体:故事/世界书声明过 → 放行,归一到稳定 id 便于 state 一致跟踪
                 out.append(StoryMessage(character_id=storage.slug(name, "canon"), name=name, text=text))
@@ -2230,6 +2238,16 @@ async def _rolling_summary(session_id: str, data: dict[str, Any], older_messages
     return summary
 
 
+def _name_mentioned(name: str, text: str) -> bool:
+    """事实文本里有没有点到这个人(全名,或去掉称谓后的名;中文名直接子串)。"""
+    if not name or not text:
+        return False
+    if name in text:
+        return True
+    tokens = [t for t in name.split() if t not in _NAME_TITLES and len(t) >= 3]
+    return bool(tokens) and re.search(rf"\b{re.escape(tokens[0])}\b", text) is not None
+
+
 def _store_memory_writes(session_id: str, data: dict[str, Any], turn: StoryTurn) -> None:
     # Phase 3:本轮在场实体 + 玩家 = 这条事实的见证者(knowers)。建 prompt 时已算好暂存进 data["_present_keys"]
     # (= turn 开始时的在场集,正是"谁见证了本轮")。离场角色自然不在里头 → 缺席=不知道。
@@ -2247,7 +2265,10 @@ def _store_memory_writes(session_id: str, data: dict[str, Any], turn: StoryTurn)
             d["derived"] = True       # #3:玩出来的派生事实(上传 canon 在骨架里、不进此处、不被覆盖)
             d.setdefault("superseded", False)
             if knowers is not None:   # Phase 3:记下"建立这刻谁在场"=谁知道这条
-                d["knowers"] = knowers
+                # 换地点的回合:留在原地的人只认点到他名字的那几条(Dunn 派的活他自己知道,家里的 Melissa 不知道黑荆棘的事)
+                named = [k for nm, k in (data.get("_present_left") or [])
+                         if k and _name_mentioned(nm, item.text)]
+                d["knowers"] = sorted(set(knowers) | set(named))
             data["long_memory"].append(d)
         elif isinstance(item, dict):
             text = str(item.get("text", "")).strip()
@@ -2297,6 +2318,9 @@ async def _save_turn(
         moved = state.scene.location != data.get("_turn_start_location", state.scene.location)
         end_names = [n for n in state.scene.present_characters if n]
         start_names = [] if moved else list(data.get("_present_names") or [])
+        # 留在原地的人:逐条事实看有没有点到他(_store_memory_writes 里用)
+        data["_present_left"] = [[n, _roster_key(n, roster or {})] for n in (data.get("_present_names") or [])
+                                 if moved and n not in end_names]
         data["_present_names"] = list(dict.fromkeys(start_names + end_names))
         keys = {k for k in (data.get("_present_keys") or []) if not moved or k == _PLAYER_ENTITY}
         for n in end_names:
