@@ -163,6 +163,9 @@ class StoryBook(BaseModel):
     clock_start: int = Field(0, description="In-story clock at the start (minutes), the starting point for the world clock")
     pacing: list[str] = Field(default_factory=list, description="Global pacing/time hints, used as a reference by the clock scheduler")
     character_boundaries: list[CharacterBoundary] = Field(default_factory=list, description="Information boundaries for each character")
+    # 开场时谁在场(卡上的名字;只写玩家 = 开场除玩家外没人)。不写:卡多的故事开场由模型按前提和时间线决定谁在。
+    opening_cast: list[str] = Field(default_factory=list, description="Who is in the scene when the story opens (card names)")
+    opening_location: str = Field("", description="Where the story opens")
     needs_confirm: list[str] = Field(default_factory=list, description="Notes on fields inferred by the AI that the author should confirm")
 
 
@@ -171,6 +174,9 @@ class SceneState(BaseModel):
     time: str = Field(default_factory=lambda: L("Unknown time", "未定时间"))
     atmosphere: str = ""
     present_characters: list[str] = Field(default_factory=list)
+    # 大卡组(卡数 > story.SMALL_CAST)由引擎记在场:present_characters 是权威名单,空 = 除玩家外没人;
+    # False = 旧行为(名单空时回退全部卡),小卡组和旧会话走这条。
+    cast_tracked: bool = False
     objects: list[str] = Field(default_factory=list)
     exits: list[str] = Field(default_factory=list)
 
