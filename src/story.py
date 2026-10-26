@@ -172,12 +172,16 @@ def _opening_cast(characters: list[CharacterCard], player: PlayerCard | None, st
     return out
 
 
+_CAST_NOTE_RE = re.compile(r"\s*[(（][^)）]*(?:unnamed|not a card|card character|minor|npc|无名|路人|非卡)[^)）]*[)）]", re.I)
+
+
 def _canon_cast(names: list[str], characters: list[CharacterCard]) -> list[str]:
     """在场名单规整:卡上角色一律换成卡上的名字(模型常写 ID「melissa-moretti」或简称「Dunn」),
     卡外的路人(警长、房东)原样保留;去重保序。"""
     out: list[str] = []
     for n in names:
-        n = str(n or "").strip()
+        # 去掉模型给路人加的注释「(unnamed, not a card character)」——名单会显示在玩家的状态面板上
+        n = _CAST_NOTE_RE.sub("", str(n or "")).strip()
         if not n:
             continue
         hit = next((c.data.name for i, c in enumerate(characters)

@@ -128,6 +128,8 @@ def test_speaker_gate_off_for_small_decks():
 def test_cast_list_is_normalised_to_card_names():
     chars = _deck(5)
     assert S._canon_cast(["ada-vale", "Dunn", "Sergeant Holt", "Ada Vale"], chars) == ["Ada Vale", "Dunn Smith", "Sergeant Holt"]
+    assert S._canon_cast(["the man at the door (unnamed, not a card character)", "Mrs. Holt (baker)"], chars) == \
+        ["the man at the door", "Mrs. Holt (baker)"]
 
 
 def test_direct_speech_in_narration_counts_as_arrival():
