@@ -25,6 +25,9 @@ from typing import Protocol, runtime_checkable
 from .llm import achat_messages, achat_messages_stream
 from .lang import L
 
+THINK_EXTRA_TOKENS = 8000      # 思考回合额外给的输出额度(DeepSeek 的思考 token 计入 max_tokens)
+THINK_TIMEOUT_SECONDS = 180.0  # 思考回合单独的超时
+
 
 @dataclass
 class ContextBundle:
@@ -64,8 +67,8 @@ class ModelAdapter(Protocol):
         ...
 
     async def complete_main(self, bundle: ContextBundle, *, json_mode: bool,
-                            max_tokens: int, on_delta=None) -> str:
-        """跑主回合 LLM 调用(流式),返回原始文本。"""
+                            max_tokens: int, on_delta=None, think: bool = False) -> str:
+        """跑主回合 LLM 调用(流式),返回原始文本。think=True:这一回合让模型先思考再写(支持的适配器才生效)。"""
         ...
 
 
@@ -123,11 +126,19 @@ class DeepSeekAdapter:
         return [{"role": "system", "content": system}, {"role": "user", "content": b.action_prompt}]
 
     async def complete_main(self, bundle: ContextBundle, *, json_mode: bool,
-                            max_tokens: int, on_delta=None) -> str:
+                            max_tokens: int, on_delta=None, think: bool = False) -> str:
         messages = self.format_main(bundle)
+        extra, timeout = None, None
+        if think:
+            # 开思考:中档。思考 token 算在 max_tokens 里,不加额度 JSON 会被截断;
+            # 思考回合最慢测到 63 秒,线上默认 60 秒超时会掉进保底,所以单独放宽(2026-10-27 对比测试)。
+            extra = {"thinking": {"type": "enabled"}, "reasoning_effort": "medium"}
+            max_tokens += THINK_EXTRA_TOKENS
+            timeout = THINK_TIMEOUT_SECONDS
         return await achat_messages_stream(
             messages, json_mode=json_mode, max_tokens=max_tokens,
             on_delta=on_delta, model=self.select_model("main_turn"),
+            extra_body=extra, timeout=timeout,
         )
 
 
@@ -176,8 +187,8 @@ class ClaudeAdapter:
         return messages
 
     async def complete_main(self, bundle: ContextBundle, *, json_mode: bool,
-                            max_tokens: int, on_delta=None) -> str:
-        messages = self.format_main(bundle)
+                            max_tokens: int, on_delta=None, think: bool = False) -> str:
+        messages = self.format_main(bundle)  # think 对这个演示适配器不生效
         return await achat_messages_stream(
             messages, json_mode=json_mode, max_tokens=max_tokens,
             on_delta=on_delta, model=self.select_model("main_turn"),

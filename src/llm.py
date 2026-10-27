@@ -286,11 +286,13 @@ async def achat_messages(messages: list[dict], *, model: str | None = None,
 
 async def achat_messages_stream(messages: list[dict], *, model: str | None = None,
                                 max_tokens: int = 1024, json_mode: bool = False,
-                                on_delta=None) -> str:
+                                on_delta=None, extra_body: dict | None = None,
+                                timeout: float | None = None) -> str:
     """流式异步 chat。逐块到达时 await on_delta(文本块),累计后返回完整文本。
 
     用于故事主回合:前端可逐字看叙事先冒出来。usage 靠 stream_options.include_usage 在末块返回。
     on_delta 为 None 时等价于非流式(只累计不回调),仍走流式协议拿 usage。
+    extra_body:提供商专有参数(如 DeepSeek 的思考开关);timeout:本次调用单独的超时(思考回合更长)。
     """
     fn = _scripted_backend.get()
     if fn is not None:
@@ -308,6 +310,10 @@ async def achat_messages_stream(messages: list[dict], *, model: str | None = Non
     }
     if json_mode:
         kwargs["response_format"] = {"type": "json_object"}
+    if extra_body:
+        kwargs["extra_body"] = extra_body
+    if timeout:
+        kwargs["timeout"] = timeout
     parts: list[str] = []
     usage = None
     stream = await _aclient.chat.completions.create(**kwargs)

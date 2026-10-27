@@ -10,6 +10,7 @@ import asyncio
 import copy
 import hashlib
 import json
+import os
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -42,6 +43,10 @@ from .models import (
     StoryTurn,
     WorldBook,
 )
+
+# 开场的前几回合让模型先思考再写(临时方案,2026-10-27 定):对比测试里开思考的开场文笔 6 次排名都是第一,
+# 但每回合 30 秒对 11 秒、18 步准确率持平,所以只用在第一印象上。设 0 = 关闭。
+OPENING_THINK_TURNS = int(os.getenv("OPENING_THINK_TURNS", "2"))
 
 RECENT_MESSAGES = 24            # recap 的硬上限条数;实际窗口由下面的预算动态决定
 SHORT_MEMORY_FLUSH = 5
@@ -2285,7 +2290,8 @@ async def _story_turn_impl(
     try:
         # 2400 给三角色满状态回合留出余量:1800 时大场面会把 JSON 截断在中途,导致解析失败掉保底。
         # 流式:逐块 await on_delta(供前端逐字显示叙事);on_delta 为 None 时纯累计,逻辑与非流式一致。
-        raw = await adapter.complete_main(bundle, json_mode=True, max_tokens=2400, on_delta=on_delta)
+        raw = await adapter.complete_main(bundle, json_mode=True, max_tokens=2400, on_delta=on_delta,
+                                          think=state.turn_count < OPENING_THINK_TURNS)
     except DeferredLLMControl:
         raise
     except Exception as e:
